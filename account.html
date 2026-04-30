@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Account — Real Anime Reviews</title>
+  <script>window.APP_VERSION="1.3.4"</script>
+  <link rel="canonical" href="https://realanimereviews.com/account">
+
+<meta property="og:title" content="Real Anime Reviews — My Account">
+<meta property="og:description" content="Manage your profile, favorites, watchlist, and activity.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://realanimereviews.com/account">
+<meta property="og:image" content="https://realanimereviews.com/assets/preview.jpg">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Real Anime Reviews — My Account">
+<meta name="twitter:description" content="Manage your profile, favorites, watchlist, and activity.">
+<meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
+<meta property="og:site_name" content="Real Anime Reviews">
+
+  <meta name="description" content="Manage your profile and your collections." /> 
+                                                                                                               <link rel="stylesheet" href="style.css?v=1.3.4" />
+                                                                                                                <link rel="stylesheet" href="style.css?v=1.3.4" />
+                                                                                                                <link rel="stylesheet" href="mobile.css?v=1.3.4" media="(max-width: 900px)" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+
+        <div class="toolbar">
+          <button type="button" id="view-all-btn" class="inline-header-btn" onclick="location.href='index.html#all'">View All Animes</button>
+          <button id="filter-btn" class="inline-header-btn" disabled style="opacity:.5;cursor:not-allowed;">Filter</button>
+        </div>
+      </div>
+
+      <!-- same search+topline structure as index so it styles identically -->
+      <nav class="nav-links">
+        <div class="nav-topline">
+  <button type="button" id="notif-btn" class="as-link notif-btn" aria-label="Notifications" aria-expanded="false">
+    <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.1-1.6-5.6-4.5-6.3V4c0-.8-.7-1.5-1.5-1.5S10.5 3.2 10.5 4v.7C7.6 5.4 6 7.9 6 11v5l-2 2v1h16v-1l-2-2z"/>
+</svg>
+    <span id="notif-dot" class="notif-dot" hidden></span>
+  </button>
+
+  <button type="button" id="auth-open" class="as-link">My Account</button>
+</div>
+
+<div id="notif-menu" class="notif-menu" hidden aria-label="Notifications dropdown"></div>
+
+
+        <form id="search-form" class="search-wrap" role="search" autocomplete="off" novalidate
+              onsubmit="event.preventDefault(); location.href='index.html#all'">
+          <input id="site-search" type="search" placeholder="Search anime…" aria-label="Search anime" />
+          <button type="submit" class="search-btn" aria-label="Search">Search</button>
+          <button type="button" class="clear-btn" aria-label="Clear" onclick="document.getElementById('site-search').value=''">✕</button>
+        </form>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ===== Account content ===== -->
+  <main class="account-wrap" aria-labelledby="acct-hello">
+    <div class="account-hello">
+      <h2 id="acct-hello">HELLO, <span id="acct-name">—</span>!</h2>
+      <button id="acct-signout" class="signout-pill" type="button" title="Sign out">Sign out ↪</button>
+    </div>
+
+    <div class="account-grid">
+      <!-- sidebar -->
+      <aside class="account-side">
+        <ul class="side-nav" role="tablist" aria-orientation="vertical">
+          <li><button data-tab="profile"   class="side-link is-active" role="tab" aria-selected="true">Profile</button></li>
+          <li><button data-tab="watchlist" class="side-link"          role="tab" aria-selected="false">Watchlist</button></li>
+          <li><button data-tab="favorites" class="side-link"          role="tab" aria-selected="false">Favorites</button></li>
+          <li><button data-tab="activity"  class="side-link"          role="tab" aria-selected="false">My Activity</button></li>
+        </ul>
+      </aside>
+
+      <!-- tab panels -->
+      <section class="account-cards">
+        <!-- PROFILE -->
+        <article class="account-card" id="card-profile">
+  <h3 class="card-title">Personal Information</h3>
+
+  <div class="card-body form-grid">
+    <!-- Email -->
+    <div class="form-row">
+      <label>Email address</label>
+      <input id="prof-email" type="email" disabled />
+      <p id="prof-email-verify" class="muted"></p>
+      <div class="action-row">
+        <button id="acct-verify-email" class="inline-header-btn small" type="button" style="display:none;">Send verification email</button>
+        <button id="acct-resend-verify" class="linky" type="button" style="display:none;">Resend</button>
+      </div>
+    </div>
+
+    <!-- Display name -->
+    <div class="form-row"> 
+      <label>Display name</label>
+      <input id="prof-name" type="text" maxlength="40" />
+    </div>
+    <!-- Avatar upload -->
+    <div class="form-row">
+    <label>Choose an avatar</label>
+   <button type="button" id="avatar-pick" class="avatar-preview" aria-label="Upload avatar"></button>
+    <input type="file" id="avatar-file" accept="image/*" hidden />
+    </div>
+
+
+    <!-- Password (never show the real password; just a masked placeholder) -->
+    <div class="form-row password-row" style="grid-column: 1 / -1;">
+      <label>Password</label>
+      <div class="password-wrap">
+        <input id="prof-password" type="password" value="••••••••" disabled />
+        <button id="acct-change-pass" class="inline-header-btn small" type="button">Change</button>
+        <button id="acct-reset-pass" class="linky" type="button">Send reset email</button>
+      </div>
+      <p class="muted">To change your password, you’ll re-enter your current password to confirm.</p>
+    </div>
+  </div>
+
+  <div class="card-actions">
+    <button id="profile-save" class="inline-header-btn" type="button">Save changes</button>
+    <span id="profile-status" class="muted" role="status"></span>
+  </div>
+  <div id="profile-error" role="alert" style="color:#ffbdbd;margin-top:6px;"></div>
+</article>
+
+
+        <!-- WATCHLIST -->
+        <article class="account-card is-tab" id="tab-watchlist">
+  <h3>Your Watchlist</h3>
+
+  <!-- scrollable area -->
+  <div class="tab-scroll">
+  <ul class="saved-list" id="watchlistList"></ul>
+  <div class="muted saved-empty" id="watchlist-empty" hidden>No watchlist yet.</div>
+  </div>
+
+
+  <!-- pinned footer -->
+  <div class="tab-footer">
+    <button class="inline-header-btn" type="button" onclick="location.href='index.html#all'">
+      Browse anime
+    </button>
+  </div>
+</article>
+
+
+        <!-- FAVORITES -->
+        <article class="account-card is-tab" id="tab-favorites">
+  <h3>Your Favorites</h3>
+
+  <!-- scrollable area -->
+  <div class="tab-scroll">
+  <ul class="saved-list" id="favoritesList"></ul>
+  <div class="muted saved-empty" id="favorites-empty" hidden>No favorites yet.</div>
+</div>
+
+
+  <!-- pinned footer -->
+  <div class="tab-footer">
+    <button class="inline-header-btn" type="button" onclick="location.href='index.html#all'">
+      Find anime
+    </button>
+  </div>
+</article>
+
+
+
+        <!-- ACTIVITY -->
+        <article class="account-card is-tab" id="tab-activity" hidden>
+        <h3 class="card-title">My Activity</h3>
+        <p class="muted">Your latest comments and community reviews will appear here.</p>
+
+  <p id="activity-empty" class="muted saved-empty">Loading...</p>
+  <ul id="activity-list" class="saved-list activity-list" aria-label="Recent activity"></ul>
+</article>
+
+      </section>
+    </div>
+  </main>
+
+    <!-- Footer (About + Credits) -->
+  <footer>
+    <div class="footer-wrap">
+
+      <!-- About / Contact -->
+      <div class="footer-box">
+        <h3 class="footer-heading">About Me:</h3>
+        <p class="footer-text">
+          Hey people I'm Blake and this has been a pet project of mine for a couple months now and I'm super happy that it's finally out. 
+        This orignally started off as a place where I would "just leave my reviews" for my friends/family to look at so they know which 
+        anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I was praying for chatGPT to
+        practically vibe code the entire website for me. All that aside I'm SUPER happy with how this turned out. If any information is 
+        wrong feel free to reach out to me via Instagram or discord. I plan to continue updating this little site and I hope to see y'all around.
+        </p>
+
+        <h3 class="footer-heading">Contact Me:</h3>
+        <p>
+          <a href="https://www.instagram.com/wolters.blake" target="_blank" rel="noopener noreferrer" class="instagram-link">
+            <img src="assets/instagram-icon.png" class="instagram-icon" alt="Instagram">Instagram
+          </a>
+        </p>
+      </div>
+
+      <!-- Credits -->
+      <div class="credit-box" aria-label="Credits">
+        <div class="credit-head">
+          <div class="credit-title">
+            <div class="credit-kicker">CREDITS <span class="jp-mini">感謝</span></div>
+            <div class="credit-sub">Special thanks</div>
+          </div>
+        </div>
+
+        <div class="credit-body">
+          <div class="credit-main">A big thank you to Jax and Jayce.</div>
+          <div class="credit-mini">My little cousins who I enslaved for a lil bit</div>
+        </div>
+      </div>
+
+    </div>
+  </footer>
+
+
+  <script>
+  const v = window.APP_VERSION || "1.0.1";
+  document.write(`<script src="animeData.js?v=${v}"><\/script>`);
+  document.write(`<script>window.__ANIME_DATA__ = animeData;<\/script>`);
+  document.write(`<script type="module" src="firebase.js?v=${v}"><\/script>`);
+  document.write(`<script type="module" src="account.js?v=${v}"><\/script>`);
+</script>
+
+</body>
+</html>

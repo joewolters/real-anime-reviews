@@ -1,0 +1,121 @@
+/* mobile.css — overrides only (loaded on <= 900px) */
+:root{
+  --m-pad: 14px;
+  --m-gap: 14px;
+}
+
+/* ===== Header becomes stacked & full-width ===== */
+.header-inner{
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px var(--m-pad);
+}
+
+.header-left{
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+header h1{
+  line-height: 1.1;
+  font-size: 2rem;
+  text-align: center;
+}
+
+/* Buttons wrap instead of overflowing */
+.toolbar{
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Slightly tighter buttons on mobile */
+.inline-header-btn{
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+
+/* Right side becomes centered + search becomes full width */
+.nav-links{
+  width: 100%;
+  align-items: stretch;
+}
+
+.nav-topline{
+  justify-content: center;
+  gap: 10px;
+}
+
+/* iPhone: prevent tap-zoom by making inputs 16px */
+#site-search{
+  width: 100%;
+  max-width: none;
+  font-size: 16px;
+}
+
+/* ===== Side widgets: stop absolute positioning on phones ===== */
+.side-widget{
+  position: static;
+  width: auto;
+  max-width: min(560px, 92vw);
+  margin: 12px auto;
+}
+
+.featured-drop,
+.changelog-drop{
+  left: auto;
+  right: auto;
+}
+
+/* ===== Main card grid: 2 columns (1 on tiny phones) ===== */
+.card-container{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 14px;
+  padding: 0 var(--m-pad);
+}
+
+.card{
+  width: 100%;
+}
+
+@media (max-width: 420px){
+  .card-container{ grid-template-columns: 1fr; }
+}
+
+/* ===== Touch behavior fixes ===== */
+@media (hover: none), (pointer: coarse){
+  /* no hover scaling weirdness */
+  .card:hover{ transform: none; }
+  .card:hover::after{ opacity: 0; }
+
+  /* card action icons MUST be usable on touch */
+  .card .icon-row{
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
+
+/* ===== Filter panel: full-screen friendly ===== */
+#filter-panel{
+  top: 10px;
+  left: 50%;
+  width: calc(100vw - 20px);
+  max-height: calc(100vh - 20px);
+  border-radius: 16px;
+}
+
+.filter-grid{
+  grid-template-columns: 1fr;
+}
+
+/* keep action buttons visible while scrolling filter list */
+.filter-actions{
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}

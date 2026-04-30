@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI." />
+  <title>Real Anime Reviews</title>
+  <script>window.APP_VERSION="1.3.4"</script>
+  <!-- Social preview (Discord / iMessage / etc) -->
+<link rel="canonical" href="https://realanimereviews.com/">
+
+<meta property="og:title" content="Real Anime Reviews">
+<meta property="og:description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://realanimereviews.com/">
+<meta property="og:image" content="https://realanimereviews.com/assets/preview.jpg">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Real Anime Reviews">
+<meta name="twitter:description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI.">
+<meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
+<meta property="og:site_name" content="Real Anime Reviews">
+
+                                                                                                                  <link rel="stylesheet" href="style.css?v=1.3.4"> 
+                                                                                                                  <link rel="stylesheet" href="style.css?v=1.3.4">
+                                                                                                                  <link rel="stylesheet" href="mobile.css?v=1.3.4" media="(max-width: 900px)">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="/" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+
+        <!-- Toolbar holds the buttons and anchors the dropdown -->
+        <div class="toolbar">
+          <button type="button" id="view-all-btn" class="inline-header-btn">View All Animes</button>
+          <button type="button" id="random-btn" class="inline-header-btn random-btn" aria-label="Random anime">
+            <svg class="dice-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3" y="3" width="18" height="18" rx="4" ry="4" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <circle cx="8" cy="8" r="1.6" fill="currentColor"></circle>
+            <circle cx="16" cy="8" r="1.6" fill="currentColor"></circle>
+            <circle cx="12" cy="12" r="1.6" fill="currentColor"></circle>
+            <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
+            <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
+            </svg>
+            <span>Random</span>
+            </button>
+
+          <button id="filter-btn" class="inline-header-btn" aria-expanded="false" aria-controls="filter-panel">Filter</button>
+
+        
+          <!-- Filter dropdown panel (anchored to .toolbar) -->
+          <div id="filter-panel" aria-label="Filter anime" aria-modal="false">
+            <form id="filter-form">
+              <div class="filter-header">
+                <h3>Filter Animes</h3>
+                <span class="filter-summary" id="filter-summary">No filters</span>
+              </div>
+
+              <div class="filter-body">
+                <div class="filter-grid">
+                  <!-- GENRES -->
+                  <div class="filter-group">
+                    <h4>Genres</h4>
+                    <div class="filter-items" id="genre-list"><!-- populated by JS --></div>
+                  </div>
+
+                  <!-- TAGS -->
+                  <div class="filter-group">
+                    <h4>Tags</h4>
+                    <div class="filter-items" id="tag-list"><!-- populated by JS --></div>
+                  </div>
+
+                  <!-- STUDIOS -->
+                  <div class="filter-group">
+                    <h4>Studios</h4>
+                    <div class="filter-items" id="studio-list"><!-- populated by JS --></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="filter-actions">
+                <button type="button" id="filter-clear">Clear</button>
+                <button type="button" id="filter-apply">Confirm</button>
+              </div>
+
+            </form>
+          </div>
+          <!-- /#filter-panel -->
+        </div>
+        <!-- /.toolbar -->
+      </div>
+      <!-- /.header-left -->
+
+      <nav class="nav-links">
+  <!-- top line (right side) -->
+  <div class="nav-topline">
+  <button type="button" id="notif-btn" class="as-link notif-btn" aria-label="Notifications" aria-expanded="false">
+    <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.1-1.6-5.6-4.5-6.3V4c0-.8-.7-1.5-1.5-1.5S10.5 3.2 10.5 4v.7C7.6 5.4 6 7.9 6 11v5l-2 2v1h16v-1l-2-2z"/>
+</svg>
+
+    <span id="notif-dot" class="notif-dot" hidden></span>
+  </button>
+
+  <button type="button" id="auth-open" class="as-link">My Account</button>
+</div>
+
+<div id="notif-menu" class="notif-menu" hidden aria-label="Notifications dropdown"></div>
+
+
+  <!-- search bar below -->
+  <form id="search-form" class="search-wrap" role="search" autocomplete="off" novalidate>
+    <input id="site-search" type="search" placeholder="Search anime…" aria-label="Search anime" />
+    <button type="submit" class="search-btn" aria-label="Search">Search</button>
+    <button type="button" id="clear-search" class="clear-btn" aria-label="Clear">✕</button>
+  </form>
+</nav>
+
+
+
+    </div>
+    <!-- /.header-inner -->
+  </header>
+
+  <!-- Homepage View -->
+  <main id="home-view">
+    
+    <!-- Featured Anime (latest review) -->
+<aside id="featured-drop" class="side-widget featured-drop" aria-label="Latest anime drop">
+  <div class="side-widget-head">
+    <span class="blink-dot blink-dot-purple" aria-hidden="true"></span>
+
+    <div class="side-widget-title">
+      <div class="side-widget-kicker">
+        LATEST ANIME DROP! <span class="jp-mini">最新</span>
+      </div>
+      <div class="side-widget-sub">Now Featuring:</div>
+    </div>
+  </div>
+
+  <button type="button" id="featured-drop-card" class="featured-card" aria-label="Open featured anime">
+    <!-- JS fills this -->
+  </button>
+</aside>
+
+<!-- Changelog / Updates -->
+<aside id="changelog-drop" class="side-widget changelog-drop" aria-label="Changelog / updates">
+  <div class="side-widget-head">
+    <span class="blink-dot" aria-hidden="true"></span>
+
+    <div class="side-widget-title">
+      <div class="side-widget-kicker">
+        UPDATE LOG <span class="jp-mini">更新</span>
+      </div>
+      <div class="side-widget-sub">Latest changes:</div>
+    </div>
+  </div>
+
+  <!-- EDIT THIS ANYTIME: version title + bullet points -->
+  <div class="changelog-box">
+    <div class="changelog-title">
+      <span class="changelog-tag" id="changelog-version">v1.0.1</span>
+     Minor Update
+    </div>
+
+    <ul class="changelog-list">
+      <li>Added an “Anime by Genre” shuffle control to refresh the displayed genres</li>
+      <li>Added previous/next arrows for the Top 10 section so users can browse instantly instead of waiting for the auto-scroll</li>
+      <li>Upgraded search bar styling to match the new button theme</li>
+      <li>Implemented various bug fixes and stability improvements across the site</li>
+      <li>Redesigned the “My Top 10” section for a more premium look and better visual hierarchy</li>
+      <li>Added an “Anime by Genre” shuffle control to refresh the displayed genres without reloading the page</li>
+    </ul>
+  </div>
+</aside>
+
+
+    <section class="preview-section">
+      <h2 id="top10-heading" class="section-heading" data-kicker="トップ10">
+        <button id="top10-prev" type="button" aria-label="Previous Top 10 anime">&#8249;</button>
+        My Top 10 Favorite Anime
+        <button id="top10-next" type="button" aria-label="Next Top 10 anime">&#8250;</button>
+      </h2>
+      <p class="section-subtext">A personal hall-of-fame — ranked, updated, and showcased.</p>
+      <div id="spotlight-carousel" class="spotlight-stack">
+        <!-- Cards will stack and animate here -->
+      </div>
+    </section>
+
+    <section class="preview-section">
+      <div class="section-heading-row">
+        <h2 class="section-heading" data-kicker="ジャンル別">Anime By Genre</h2>
+        <button id="genreShuffleBtn" type="button" aria-label="Shuffle genres">
+          <span class="genre-shuffle-icon" aria-hidden="true">&#x21bb;</span>
+        </button>
+      </div>
+      <p class="section-subtext">Curated picks by genre — each column rotates independently.</p>
+      <div id="recommended-row" class="preview-row">
+        <!-- Recommended anime will go here -->
+      </div>
+    </section>
+  </main> <!-- /#home-view -->
+
+  <!-- All Anime View (hidden by default) -->
+<section id="all-anime-view" style="display: none;">
+  <div class="card-container"></div>
+</section>
+
+  <!-- Modal and Overlay -->
+  <div id="modal-overlay" class="modal-overlay"></div>
+  <div id="anime-modal" class="modal">
+    <div class="modal-content"></div>
+  </div>
+  <!-- Auth Modal + Overlay (reuses .modal / .modal-overlay styles) -->
+<div id="auth-overlay" class="modal-overlay"></div>
+<div id="auth-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-button" aria-label="Close">&times;</span>
+    <h2 id="auth-title" class="modal-title">Sign in</h2>
+
+    <form id="auth-form">
+      <div class="form-row" id="row-username" style="display:none;">
+  <label for="auth-username">Username</label>
+  <input id="auth-username" type="text" autocomplete="username" />
+</div>
+
+<div class="form-row">
+  <label for="auth-email">Email</label>
+  <input id="auth-email" type="email" autocomplete="email" required />
+</div>
+
+<div class="form-row">
+  <label for="auth-password">Password</label>
+  <input id="auth-password" type="password" autocomplete="current-password" required minlength="6" />
+</div>
+
+
+      <button class="inline-header-btn" id="auth-submit" type="submit">Continue</button>
+    </form>
+
+    <p id="auth-switch" style="margin-top:10px;">
+      New here? <a href="#" data-mode="signup">Create an account</a>
+    </p>
+    <p><a href="#" id="reset-link">Forgot password?</a></p>
+
+    <div id="auth-error" role="alert" style="color:#ffbdbd;margin-top:6px;"></div>
+  </div>
+</div>
+<!-- Profile Modal + Overlay (reuses .modal / .modal-overlay styles) -->
+<div id="profile-overlay" class="modal-overlay"></div>
+<div id="profile-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-button" aria-label="Close">&times;</span>
+    <h2 class="modal-title">Profile</h2>
+
+    <form id="profile-form" novalidate>
+      <div class="form-row">
+        <label for="prof-email">Email</label>
+        <input id="prof-email" type="email" disabled />
+        <p id="email-verify-msg" class="muted"></p>
+      </div>
+
+      <div class="form-row">
+        <label for="prof-name">Display name</label>
+        <input id="prof-name" type="text" maxlength="40" />
+      </div>
+
+      <div class="form-row">
+        <label for="prof-photo">Avatar URL (optional)</label>
+        <input id="prof-photo" type="url" placeholder="https://…" />
+      </div>
+
+      <div class="avatar-row" style="margin:8px 0 12px;">
+        <div class="avatar-preview" id="prof-avatar-preview">?</div>
+      </div>
+
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="submit" id="profile-save" class="inline-header-btn">Save</button>
+      </div>
+
+      <div id="profile-error" role="alert" style="color:#ffbdbd;margin-top:6px;"></div>
+      <div id="profile-success" role="status" style="color:#b7ffbf;margin-top:6px;display:none;">Saved.</div>
+    </form>
+  </div>
+</div>
+
+
+  <footer>
+  <div class="footer-wrap">
+
+    <!-- About / Contact -->
+    <div class="footer-box">
+      <h3 class="footer-heading">About Me:</h3>
+      <p class="footer-text">
+        Hey people I'm Blake and this has been a pet project of mine for a couple months now and I'm super happy that it's finally out. 
+        This orignally started off as a place where I would "just leave my reviews" for my friends/family to look at so they know which 
+        anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I was praying for chatGPT to
+        practically vibe code the entire website for me. All that aside I'm SUPER happy with how this turned out. If any information is 
+        wrong feel free to reach out to me via Instagram or discord. I plan to continue updating this little site and I hope to see y'all around. 
+      </p>
+
+      <h3 class="footer-heading">Contact Me:</h3>
+      <p>
+        <a href="https://www.instagram.com/wolters.blake" target="_blank" rel="noopener noreferrer" class="instagram-link">
+          <img src="assets/instagram-icon.png" class="instagram-icon" alt="Instagram">Instagram
+        </a>
+      </p>
+    </div>
+
+    <!-- Credits -->
+    <div class="credit-box" aria-label="Credits">
+      <div class="credit-head">
+        <span class="credit-dot" aria-hidden="true"></span>
+        <div class="credit-title">
+          <div class="credit-kicker">CREDITS <span class="jp-mini">感謝</span></div>
+          <div class="credit-sub">Special thanks</div>
+        </div>
+      </div>
+
+      <div class="credit-body">
+        <div class="credit-main">A big thank you to Jax and Jayce.</div>
+        <div class="credit-mini">My little cousins who I enslaved for a lil bit.</div>
+      </div>
+    </div>
+
+  </div>
+</footer>
+
+
+
+  <script>
+  const v = window.APP_VERSION || "1.0.1";
+  document.write(`<script src="animeData.js?v=${v}"><\/script>`);
+  document.write(`<script type="module" src="firebase.js?v=${v}"><\/script>`);
+  document.write(`<script type="module" src="script.js?v=${v}"><\/script>`);
+</script>
+
+
+
+</body>
+</html>
