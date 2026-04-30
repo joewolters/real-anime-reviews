@@ -11,6 +11,16 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-04-30 -->
+## v1.3.9 — PATCH (2026-04-30)
+
+Closed a deploy-config security gap. `AUDIT_2026-04-30.md` (the working audit doc from Step 3.5) was gitignored but **not** in `firebase.json`'s `ignore` array, so the v1.3.8 deploy uploaded it to Firebase Hosting. It was publicly fetchable at `realanimereviews.com/AUDIT_2026-04-30.md` between the v1.3.8 release and this fix.
+
+- Added `AUDIT_*.md` to the `ignore` array in `firebase.json`.
+- Redeploy purges the file from Hosting; verified `/AUDIT_2026-04-30.md` returns 404 after release.
+
+**This is a recurring class of bug, not a one-off.** It's the same shape as v1.3.5 (commit `46b3291`), where `PERSONAL.md` was gitignored but not firebase-ignored and would have leaked the same way. The general rule: **any file added to `.gitignore` that lives in the deploy root also needs an entry in `firebase.json`'s `ignore` array** — the two ignore mechanisms are independent, and `firebase deploy` happily uploads gitignored files. To be codified as a `CLAUDE.md` rule next session so future Code instances catch the pattern before it ships.
+
+<!-- author: Code | date: 2026-04-30 -->
 ## v1.3.8 — PATCH (2026-04-30)
 
 Step 3.6 closing batch — bundled fixes from `AUDIT_2026-04-30.md`.

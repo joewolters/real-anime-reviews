@@ -6,7 +6,8 @@
       "**/.*",
       "**/node_modules/**",
       "PERSONAL.md",
-      "UpdateLog/**"
+      "UpdateLog/**",
+      "AUDIT_*.md"
     ],
     "cleanUrls": true,
     "trailingSlash": false,

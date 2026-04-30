@@ -62,7 +62,7 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 ## Current state
 
-The site is live at [realanimereviews.com](https://realanimereviews.com), running v1.3.8. Foundation work is done:
+The site is live at [realanimereviews.com](https://realanimereviews.com), running v1.3.9. Foundation work is done:
 
 - Private GitHub repo with formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end
