@@ -82,3 +82,9 @@ desktop.ini
 # Local notes / scratch (uncomment if you ever add these)
 # TODO.local.md
 # scratch/
+
+# Personal/secrets - never commit these
+PERSONAL.md
+.env
+.env.*
+!.env.example
