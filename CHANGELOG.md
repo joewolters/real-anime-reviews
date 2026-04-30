@@ -10,6 +10,15 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+## v1.3.5 — PATCH (2026-04-30)
+
+Closed a deploy-config security gap. `firebase.json`'s `ignore` array didn't match `.gitignore`, so Firebase Hosting would have published `PERSONAL.md` (Firebase login email, admin UID, DNS values) at `realanimereviews.com/PERSONAL.md` on the next deploy.
+
+- Added `PERSONAL.md` and `UpdateLog/**` to the ignore array in `firebase.json`
+- Verified on a preview channel before production deploy: `/PERSONAL.md` returns 404 as expected
+
+Commit: `46b3291`.
+
 ## v1.3.4 — PATCH (2026-04-30)
 
 Cleaned up the changelog widget on the homepage so what visitors see actually matches the current version:

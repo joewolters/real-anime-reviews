@@ -4,7 +4,7 @@
 
 ## Current state
 
-The site is live at [realanimereviews.com](https://realanimereviews.com), running v1.3.4. The infrastructure side just got a major upgrade: the project is now version-controlled in a private GitHub repo, has a formal documentation system (this file is part of it), and follows a `local → preview channel → production` deploy ladder.
+The site is live at [realanimereviews.com](https://realanimereviews.com), running v1.3.5. The infrastructure side just got a major upgrade: the project is now version-controlled in a private GitHub repo, has a formal documentation system (this file is part of it), and follows a `local → preview channel → production` deploy ladder.
 
 **Up next:** v1.4.0 — the first feature release on the new infrastructure.
 
