@@ -7,7 +7,13 @@
       "**/node_modules/**",
       "PERSONAL.md",
       "UpdateLog/**",
-      "AUDIT_*.md"
+      "AUDIT_*.md",
+      "tests/**",
+      "playwright.config.js",
+      "package.json",
+      "package-lock.json",
+      "playwright-report/**",
+      "test-results/**"
     ],
     "cleanUrls": true,
     "trailingSlash": false,

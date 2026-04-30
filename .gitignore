@@ -47,6 +47,12 @@ build/Release
 # Dependency directories
 node_modules/
 
+# Playwright test artifacts (binaries auto-installed; reports/results are ephemeral)
+# Keep tracked: tests/, playwright.config.js, package.json, package-lock.json
+playwright-report/
+test-results/
+.playwright/
+
 # Optional npm cache directory
 .npm
 

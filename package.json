@@ -1,0 +1,12 @@
+{
+  "name": "real-anime-reviews",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local tooling for realanimereviews.com (test runner only — site code is plain HTML/JS).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

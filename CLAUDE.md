@@ -52,6 +52,15 @@ These apply to every change Code makes:
 
 6. **Every code-and-data change updates the website's CHANGELOG widget.** Internal CHANGELOG.md and the runtime widget stay in sync.
 
+7. **Run tests before production-facing commits.** Before any commit that changes production-facing code (HTML, JS, CSS, `animeData.js`), Code runs `npm test` (Playwright) locally and reports results. Only after all tests pass does Code surface the change for human review.
+
+   Exceptions (no test required):
+   - Docs-only changes (README/CHANGELOG/ROADMAP/ARCHITECTURE/DEPLOYMENT/CLAUDE.md edits with no code touched)
+   - Internal tooling files (`firebase.json` deploy-config, `.gitignore`, `package.json` metadata)
+   - The `CLAUDE.md` file itself
+
+   When tests fail, surface the failure — do not auto-fix. Decide with Blake whether the test is wrong or the code is wrong.
+
 ---
 
 ## Operational gotchas (learned the hard way)
@@ -79,6 +88,18 @@ The `'@` close of a here-string does NOT include the newline that visually appea
 ### The `Read` tool normalizes display
 
 Some terminal Read tools display curly quotes as straight, hiding the actual file content. Always confirm with byte-level inspection if quote characters matter.
+
+### `.gitignore` and `firebase.json` ignore arrays must mirror for sensitive files
+
+Any file added to `.gitignore` in `Current Version/` must also have a matching entry in `firebase.json`'s `ignore` array (or be already covered by an existing pattern like `**/.*` for dotfiles).
+
+The two systems are independent — `.gitignore` only affects git, `firebase.json` only affects Firebase Hosting deploys. **A file gitignored but not firebase-ignored will be uploaded to the public site.**
+
+Precedents (both are the same shape of bug):
+- v1.3.5 (commit `46b3291`) — `PERSONAL.md` would have leaked Firebase login email + admin UID + DNS values; fixed by adding `PERSONAL.md` and `UpdateLog/**` to `firebase.json` ignore.
+- v1.3.9 (commit `6167da5`) — `AUDIT_2026-04-30.md` (full internal codebase critique) was uploaded to production by the v1.3.8 deploy; fixed by adding `AUDIT_*.md`.
+
+When creating any new gitignored file in the deploy root, also update `firebase.json` in the same change. Verify post-deploy with a curl check returning 404.
 
 ---
 

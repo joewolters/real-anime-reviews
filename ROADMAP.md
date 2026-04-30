@@ -62,7 +62,9 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 ## Current state
 
-The site is live at [realanimereviews.com](https://realanimereviews.com), running v1.3.9. Foundation work is done:
+**Phase C shipped (v1.4.0 MINOR).** Playwright test infrastructure in place + 7 initial tests covering homepage, search, modal open/close, modal-leak regression (§1.2), deep-link first-load regression (§1.3), account page, and 404 path. Two new project rules codified in `CLAUDE.md`: tests required before production-facing commits; `.gitignore` ↔ `firebase.json` mirror requirement. Reordered ahead of Phase A so subsequent code changes are protected from day one.
+
+The site is live at [realanimereviews.com](https://realanimereviews.com), running v1.4.0. Foundation work is done:
 
 - Private GitHub repo with formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end

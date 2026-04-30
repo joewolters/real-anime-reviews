@@ -11,6 +11,38 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-04-30 -->
+## v1.4.0 — MINOR (2026-04-30)
+
+**Phase C kickoff — verification scaffolding.** Playwright test infrastructure installed and the initial test suite in place. All future production-facing changes will run tests locally before shipping (per the new project rule below).
+
+### Test infrastructure
+- Installed `@playwright/test` (^1.59.1) as a dev dependency. Chromium browser binary installed in user-local cache (`~/AppData/Local/ms-playwright/`), not in `node_modules` — keeps the project tree at ~15 MB instead of ~165 MB.
+- `playwright.config.js` runs tests against a local Python `http.server` on `127.0.0.1:8765` (the same pattern used during deploy verification). 0 retries in CI, 1 retry locally; screenshots on failure; single Chromium project.
+- `npm test` is the canonical entry point.
+
+### Initial test suite (7 tests in `tests/`)
+- `homepage-loads.spec.js` — brand text, search input, View All button, Top 10 + Anime By Genre headings, no console errors.
+- `search-works.spec.js` — typing "charlotte" and submitting filters the card grid; clearing and re-clicking View All restores the original count.
+- `anime-modal-opens-and-closes.spec.js` — clicking a card opens the modal with title + rating; close button hides it.
+- `modal-leak-check.spec.js` — 6 open/close cycles complete without console errors and the page stays responsive. Validates the v1.3.8 §1.2 fix (`activeOfficialUnsub` cleanup moved into `closeModal()`).
+- `deep-link-first-load.spec.js` — `?open=charlotte` opens the modal on first load and the URL is cleaned. Validates the v1.3.8 §1.3 fix (deep-link handler hoisted out of `visibilitychange`).
+- `account-page-loads.spec.js` — `/account.html` returns 200 with expected static structure (raw HTTP fetch via Playwright's `request` fixture — avoids race with `account.js`'s auth redirect).
+- `404-page.spec.js` — non-existent paths return HTTP 404.
+
+### Two new project rules codified in `CLAUDE.md`
+
+**Rule A (Project rules §7) — Run tests before production-facing commits.** Before any commit that changes production-facing code (HTML, JS, CSS, `animeData.js`), Code runs `npm test` locally and reports results. Only after all tests pass does Code surface the change for review. Docs-only and tooling-config changes are exempt.
+
+**Rule B (Operational gotchas) — `.gitignore` and `firebase.json` ignore arrays must mirror for sensitive files.** The two systems are independent — a file gitignored but not firebase-ignored will still be uploaded by `firebase deploy`. Precedents:
+- v1.3.5 (commit `46b3291`) — `PERSONAL.md` would have leaked Firebase login email + admin UID + DNS values; fixed by adding `PERSONAL.md` and `UpdateLog/**` to `firebase.json` ignore.
+- v1.3.9 (commit `6167da5`) — `AUDIT_2026-04-30.md` (full internal codebase critique) was actually exposed at production for the duration of v1.3.8; fixed by adding `AUDIT_*.md`.
+
+### Notes
+- This is Phase C of the original roadmap, reordered ahead of Phase A so subsequent code changes are protected by tests from day one rather than retrofitted later.
+- New `firebase.json` ignore entries for tooling: `tests/**`, `playwright.config.js`, `package.json`, `package-lock.json`, `playwright-report/**`, `test-results/**`. None of this should ship to production.
+- New `.gitignore` entries for ephemeral test artifacts: `playwright-report/`, `test-results/`, `.playwright/`. Test source files (`tests/`, `playwright.config.js`, `package.json`, `package-lock.json`) remain tracked.
+
+<!-- author: Code | date: 2026-04-30 -->
 ## v1.3.9 — PATCH (2026-04-30)
 
 Closed a deploy-config security gap. `AUDIT_2026-04-30.md` (the working audit doc from Step 3.5) was gitignored but **not** in `firebase.json`'s `ignore` array, so the v1.3.8 deploy uploaded it to Firebase Hosting. It was publicly fetchable at `realanimereviews.com/AUDIT_2026-04-30.md` between the v1.3.8 release and this fix.
