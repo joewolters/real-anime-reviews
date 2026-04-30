@@ -371,7 +371,7 @@ const animeData = [
     Review: "Do not let the title fool you. This is very different from all the other romance/slice of life animes out there. The pacing is realistic and patient. The MCs are intelligent and relatable. They show genuine emotion, restraint, and introspection to their situation. The anime avoids cliches and handles complex emotions with subtlety. There's a contemplative nature to every episode and I just haven't seen this before in an anime. The background music is always soothing, almost meditative allowing the scenes to be fleshed out and contemplated.",
     Tags: ["romance","school","drama","fan-service","live-together","thought-provoking","soundtrack","calming","personal-growth"],
     Studio: "Studio DEEN",
-    Platforms: ["Crunchyroll","Days with My Stepsister","hianime","9anime","aniwave"],
+    Platforms: ["Crunchyroll","hianime","9anime","aniwave"],
     Trailer: "https://www.youtube.com/embed/_laWs_MfqN8"
   },
   {
@@ -581,7 +581,7 @@ const animeData = [
     Tags: ["assassin","op-mc","revenge","magic","dark-fantasy","anti-hero","power-system","combat","survival","stealth"],
     Studio: "Studio Sunrise",
     Platforms: ["Crunchyroll","Prime Video","Apple TV","hianime","9anime","aniwave"],
-    Trailer: "https://www.youtube.com/gZQjg_YLxPw"
+    Trailer: "https://www.youtube.com/embed/gZQjg_YLxPw"
   },
 ];
 

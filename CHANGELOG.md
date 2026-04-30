@@ -11,6 +11,18 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-04-30 -->
+## v1.3.7 — PATCH (2026-04-30)
+
+Content and asset fixes from the Step 3.5 audit (see `AUDIT_2026-04-30.md`).
+
+- **Duplicate stylesheet link removed** on `index.html` and `account.html` — both pages were loading `style.css` twice on every page (audit §1.1).
+- **Status Assassin trailer URL fixed** in `animeData.js` — was missing `/embed/`, iframe was failing to load (audit §1.4).
+- **Days with My Stepsister platforms cleaned up** — the title string had been pasted into the platforms array and was rendering as a fake platform chip (audit §1.6).
+- **"About Me" text** on both `index.html` and `account.html` no longer mentions "or discord" — Instagram is the listed contact (audit §2.2).
+
+The Call of the Night trailer (audit §1.5) is **deferred** — the corrupted YouTube ID can't be safely guessed; will be resolved in a separate PATCH once the right trailer is picked.
+
+<!-- author: Code | date: 2026-04-30 -->
 ## v1.3.6 — PATCH (2026-04-30)
 
 Rewrote ROADMAP.md to capture the two-mode end goal and added project-wide rules for any AI working on this codebase.

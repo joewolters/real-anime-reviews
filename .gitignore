@@ -88,3 +88,6 @@ PERSONAL.md
 .env
 .env.*
 !.env.example
+
+# Working audit reports (Step 3.5) — review docs, not committed
+AUDIT_*.md
