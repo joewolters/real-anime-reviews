@@ -11,6 +11,36 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-04-30 -->
+## v1.3.8 — PATCH (2026-04-30)
+
+Step 3.6 closing batch — bundled fixes from `AUDIT_2026-04-30.md`.
+
+**Trailer:**
+- *Call of the Night* trailer URL replaced (audit §1.5). The previous corrupted ID has been swapped for the original-series launch trailer.
+
+**Content typos** (audit §6 — 14 corrections in `animeData.js`):
+- Charlotte: physiological → psychological; quicky → quirky.
+- Eminence in Shadow: Sonada → Sonata; devolved → developed.
+- Call of the Night: seveal → several; "iv seems" → "I've seen".
+- DanDaDan: consquences → consequences.
+- *The Girl I Like Forget Her Glasses* → *Forgot* (matches existing image filename).
+- My Stepmom's Daughter: continently → consistently.
+- Magical Girl: passed → past (season 1).
+- Gachiakuta: tangable → tangible; fanatastic → fantastic; philosphical → philosophical.
+
+**Account page UI cleanup:**
+- Removed the disabled Filter button on the account page (audit §1.10) — visible-disabled buttons confuse the UI; account page doesn't need filter controls.
+- Hid the redundant "My Account" header button on the account page itself (audit §1.11) — the page already shows account context.
+
+**Behavior fixes:**
+- Fixed a memory leak in the anime modal (audit §1.2): the `activeOfficialUnsub` Firestore listener cleanup block was at module top-level after `closeModal()`, so it ran once on script load and never on close. Listener leaked on every modal open. Cleanup now runs inside `closeModal()` alongside the other live-listener teardowns.
+- Fixed the `?open=<animeId>` deep link from the account page (audit §1.3): the handler was nested inside the `visibilitychange` event listener, so it only fired when the user backgrounded and refocused the tab. Hoisted into `init()` so it runs once on page load.
+
+**Dead code removed:**
+- `captureOpenState()` and its `openIds` Set in `script.js` (audit §1.13) — the captured state was never read.
+- `signoutBtn` declaration and its listener in `account.js` (audit §1.14) — referenced an ID that doesn't exist on the account page.
+
+<!-- author: Code | date: 2026-04-30 -->
 ## v1.3.7 — PATCH (2026-04-30)
 
 Content and asset fixes from the Step 3.5 audit (see `AUDIT_2026-04-30.md`).

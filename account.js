@@ -26,7 +26,6 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const nameOut    = $('#acct-name');
 const signoutA   = $('#acct-signout');     // the pill in the page header
-const signoutBtn = $('#signout-btn');      // header copy
 
 const verifyBtn = document.querySelector('#acct-verify-email');
 const resendBtn = document.querySelector('#acct-resend-verify');
@@ -709,7 +708,6 @@ async function doSignOut() {
   finally { location.href = 'index.html'; }
 }
 signoutA?.addEventListener('click', doSignOut);
-signoutBtn?.addEventListener('click', doSignOut);
 
 // Save profile
 saveBtn.addEventListener('click', async () => {

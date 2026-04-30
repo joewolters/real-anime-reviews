@@ -1647,17 +1647,6 @@ function setVoteUI(li, value) {
 
   let lastRows = [];
 
-let openIds = new Set();
-
-function captureOpenState() {
-  openIds = new Set(
-    Array.from(listEl.querySelectorAll('.review-row .row-toggle[aria-expanded="true"]'))
-      .map(btn => btn.closest('.review-row')?.dataset?.id)
-      .filter(Boolean)
-  );
-}
-
-
   function renderRows(rows) {
     const mode = (sortEl?.value || 'newest');
     const sorted = rows.slice();
@@ -1683,7 +1672,6 @@ sortEl?.addEventListener('change', onSortChange);
 
 
   const unsubMain = onSnapshot(qref, (snap) => {
-    captureOpenState();
     // stop previous per-author listeners
     try { subscribeComments._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     subscribeComments._authorUnsubs = [];
@@ -3405,15 +3393,15 @@ function closeModal() {
     try { activeReviewsUnsub(); } catch (_) {}
     activeReviewsUnsub = null;
   }
+  if (typeof activeOfficialUnsub === 'function') {
+    try { activeOfficialUnsub(); } catch (_) {}
+    activeOfficialUnsub = null;
+  }
 
   // Ensure Top 10 auto-cycle resumes after closing modal on Home view.
   if (SHOULD_CYCLE && top10Count > 1 && homeView.style.display !== "none") {
     startSpotlightCycle();
   }
-}
-if (typeof activeOfficialUnsub === 'function') {
-  try { activeOfficialUnsub(); } catch (_) {}
-  activeOfficialUnsub = null;
 }
 
 
@@ -3878,6 +3866,23 @@ function onScrollHeader() {
     updateFilterUI();
     filterPanel?.classList.remove("open");
 
+    // Query routes:
+    // - ?open=<animeId> -> open modal (sent from account page)
+    try {
+      const usp = new URLSearchParams(location.search);
+      const openId = usp.get('open');
+      if (openId) {
+        // clean URL
+        history.replaceState({}, '', location.pathname);
+
+        const found = (animeData || []).find(a => slug(a.Title) === openId);
+        if (found) {
+          showAll();
+          openModal(found);
+        }
+      }
+    } catch (_) {}
+
 
     // Hash routes:
 // - index.html#all                -> show All Anime view
@@ -3969,22 +3974,6 @@ if (!window.__RAR_SELECT_HOVER_FIX__) {
   } else if (homeView.style.display !== "none") {
     if (SHOULD_CYCLE && !isSpotlightHovered) startSpotlightCycle();
     railsControllers.forEach((r) => r.start());
-        // If arriving from Account page with ?open=<animeId>, open the modal
-    try {
-      const usp = new URLSearchParams(location.search);
-      const openId = usp.get('open');
-      if (openId) {
-        // clean URL
-        history.replaceState({}, '', location.pathname);
-
-        const found = (animeData || []).find(a => slug(a.Title) === openId);
-        if (found) {
-          showAll();
-          openModal(found);
-        }
-      }
-    } catch (_) {}
-
   }
 });
 
