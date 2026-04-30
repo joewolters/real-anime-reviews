@@ -10,6 +10,21 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-04-30 -->
+## v1.3.6 — PATCH (2026-04-30)
+
+Rewrote ROADMAP.md to capture the two-mode end goal and added project-wide rules for any AI working on this codebase.
+
+The end goal is now explicit:
+
+- **Mode 1** — assisted review creation: human-initiated. Blake writes the review and rating; AI fills in metadata (description, genres, tags, streaming, trailer, thumbnail, seasons, episodes) and handles the version bump + commit + deploy
+- **Mode 2** — autonomous site caretaker: AI-initiated, scheduled. Handles routine data maintenance, health monitoring, content quality watching, and reporting back to Blake. Capped at PATCH-tier changes
+
+New rules added cover: Excel as the canonical anime data source; attribution markers (this very entry uses one) on every CHANGELOG entry and commit; strict Mode 1 vs Mode 2 separation; Mode 2 capped at PATCH-tier changes only; the `local → preview → production` deploy ladder is non-negotiable; and the homepage CHANGELOG widget must stay in sync with this file.
+
+This commit also retroactively marks all prior CHANGELOG entries as `human (Blake)`. Going forward, any AI-authored entry will carry a `<!-- author: Code -->` marker.
+
+<!-- author: human (Blake) | date: 2026-04-30 -->
 ## v1.3.5 — PATCH (2026-04-30)
 
 Closed a deploy-config security gap. `firebase.json`'s `ignore` array didn't match `.gitignore`, so Firebase Hosting would have published `PERSONAL.md` (Firebase login email, admin UID, DNS values) at `realanimereviews.com/PERSONAL.md` on the next deploy.
@@ -19,6 +34,7 @@ Closed a deploy-config security gap. `firebase.json`'s `ignore` array didn't mat
 
 Commit: `46b3291`.
 
+<!-- author: human (Blake) | date: 2026-04-30 -->
 ## v1.3.4 — PATCH (2026-04-30)
 
 Cleaned up the changelog widget on the homepage so what visitors see actually matches the current version:
@@ -30,18 +46,22 @@ Cleaned up the changelog widget on the homepage so what visitors see actually ma
 
 Commit: `fe0dc4a`. This was a meta-fix — the changelog *display* itself was stale.
 
+<!-- author: human (Blake) | date: pre-2026-04-30 -->
 ## v1.3.3 — PATCH
 
 - Fixed Top 10 list
 
+<!-- author: human (Blake) | date: pre-2026-04-30 -->
 ## v1.3.2 — PATCH
 
 - Redid Top 10 list
 
+<!-- author: human (Blake) | date: pre-2026-04-30 -->
 ## v1.3.1 — PATCH
 
 - Added a new anime card
 
+<!-- author: human (Blake) | date: pre-2026-04-30 -->
 ## v1.3.0 — MINOR
 
 - Added an "Anime by Genre" shuffle control — refresh genre rails without reloading the page
@@ -50,6 +70,7 @@ Commit: `fe0dc4a`. This was a meta-fix — the changelog *display* itself was st
 - Redesigned the "My Top 10" section with cleaner visual hierarchy
 - Various bug fixes and stability improvements across the site
 
+<!-- author: human (Blake) | date: pre-2026-04-30 -->
 ## v1.2.0 — MINOR
 
 - Added the Random anime button (dice icon) — opens a truly random anime in a modal
@@ -59,6 +80,7 @@ Commit: `fe0dc4a`. This was a meta-fix — the changelog *display* itself was st
 - Fixed the shimmer "vertical line" artifact across buttons / search
 - Smoothed the header hover background — no more harsh black line
 
+<!-- author: human (Blake) | date: pre-2026-04-30 -->
 ## v1.0.1 — PATCH ("Content corrections only")
 
 No new features — just polish.
