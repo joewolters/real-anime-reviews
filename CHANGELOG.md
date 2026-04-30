@@ -11,6 +11,24 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-04-30 -->
+## v1.4.1 — PATCH (2026-04-30)
+
+Documentation-only update. No code changes.
+
+**`ROADMAP.md` rewritten in full.** Tonight's planning conversation produced enough corrections that a surgical edit would have left an inconsistent doc. The rewrite captures:
+- Corrected version numbering after Phase C shipped as v1.4.0 — Phase A (Excel sync) is now v1.5.0, not v1.4.0.
+- Mode 1 reframed as an upgrade arc across v1.6.0 → v1.6.3 instead of one bundled release: v1.6.0 baseline form, v1.6.1 live preview as you type, v1.6.2 "More Information" panel mirroring the Community Tab, v1.6.3 suggestion-box integration.
+- Suggestion box folded into v1.6.3 (was originally a standalone v1.4.0 plan; that standalone is no longer scheduled).
+- Project rules grew from 6 to 9: rule #7 (run tests before production-facing commits) and rule #8 (`.gitignore` ↔ `firebase.json` mirror) reference back to `CLAUDE.md`; rule #9 codifies image curation as a human-only step.
+- Audit progress noted (~25 of 56 Step 3.5 findings closed). Remaining items grouped into suggested v1.4.x polish bundles (content/UX, image optimization, code modernization).
+- Phase B-side split out — v1.7.0 backfill and v1.8.0 AniList tab on cards distinguished from Mode 1 capability work.
+- "What's NOT on this roadmap" extended to make AniWave/streaming-scraper integration and AI image curation explicit non-goals.
+
+**`README.md`** gains a "Design philosophy" section between About Me and Credits, documenting the *Call of the Night*-inspired visual identity (night sky, illuminated panels-as-apartment-windows, "would this fit in *Call of the Night*?" as the guiding design question).
+
+No production-facing code touched. Tests not required per the docs-only exception in `CLAUDE.md` rule #7 (HTML version-string bumps for the version-bump checklist are mechanical metadata, not behavior changes).
+
+<!-- author: Code | date: 2026-04-30 -->
 ## v1.4.0 — MINOR (2026-04-30)
 
 **Phase C kickoff — verification scaffolding.** Playwright test infrastructure installed and the initial test suite in place. All future production-facing changes will run tests locally before shipping (per the new project rule below).

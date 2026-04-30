@@ -55,6 +55,12 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for preview channels and producti
 
 Hey people, I'm Blake and this has been a pet project of mine for a couple months now and I'm super happy that it's finally out. This originally started off as a place where I would "just leave my reviews" for my friends and family to look at so they know which anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I was praying for ChatGPT to practically vibe code the entire website for me. All that aside I'm SUPER happy with how this turned out. If any information is wrong feel free to reach out to me via Instagram. I plan to continue updating this little site and I hope to see y'all around.
 
+## Design philosophy
+
+The site's visual identity is intentionally inspired by *Call of the Night*. The deep navy-purple night sky over the silhouetted city skyline, the scattered window glow through the dark buildings, the cool mood with warm accent pops — that's the show's atmosphere translated into a website. The illuminated panels (Update Log, Top 10, Latest Drop) are meant to feel like apartment windows in the cityscape, glowing against the dark backdrop.
+
+When making design decisions, the guiding question is: *would this fit in Call of the Night?* If no, it's probably not the right move for this site.
+
 ## Credits
 
 A big thank you to Jax and Jayce — my little cousins who I enslaved for a lil bit.
