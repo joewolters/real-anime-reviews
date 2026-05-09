@@ -10,6 +10,21 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-05-09 -->
+## v1.4.2 — PATCH (2026-05-09)
+
+**Repository visibility changed from private to public; owning account renamed from `ReaIGodzilla` to `joewolters`.** No code changes — repo metadata only.
+
+The repo is now public at https://github.com/joewolters/real-anime-reviews and is referenced as a portfolio link from Joe's CV (`Joe Wolters CV 2026 v3.pdf` in the parent `CV Builder` folder). GitHub auto-redirects the old `https://github.com/ReaIGodzilla/real-anime-reviews` URL to the new one (web + git access), but new references should use `joewolters` directly — old-name redirects are not guaranteed indefinitely, especially if the `ReaIGodzilla` handle is later reclaimed by another user.
+
+**Pre-publication audit (passed all checks):**
+- `.gitignore` correctly excludes `PERSONAL.md`, `.env`, `.env.*` (with `!.env.example` exception), and `AUDIT_*.md`. Confirmed against the file at this commit.
+- `git log --all --full-history -- PERSONAL.md` returned empty — `PERSONAL.md` has never been committed in any branch's history.
+- `git log --all -p` searched for `password|api_secret|admin_uid|service_account|private_key`. The only matches were UI code in `index.html`, `script.js`, and `account.js` for the auth modal (sign-in / password-reset form labels and Firebase SDK function names like `updatePassword`, `sendPasswordResetEmail`). No actual secrets in history.
+- Firebase web API key in `firebase.js` is intentionally public per `docs/ARCHITECTURE.md` §"firebase.js (30 lines)" — Firebase web API keys identify the project, not authenticate access; security comes from Firestore rules.
+
+**Note for future AI assistants and future-Blake:** as of 2026-05-09 this repo is **public**. Treat anything you commit as world-readable. The `.gitignore` ↔ `firebase.json` ignore-array mirror rule (codified in v1.3.9) and the project-rules in `CLAUDE.md` continue to apply, and matter even more now that anything that slips through is publicly fetchable from `realanimereviews.com/<filename>` until a corrective deploy purges it.
+
 <!-- author: Code | date: 2026-04-30 -->
 ## v1.4.1 — PATCH (2026-04-30)
 

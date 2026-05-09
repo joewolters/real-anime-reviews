@@ -71,13 +71,15 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 ## Current state
 
-**Live at v1.4.0** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete:
+**Live at v1.4.2** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete:
 
-- Private GitHub repo with formal documentation system (this file is part of it)
+- **Public** GitHub repo at `https://github.com/joewolters/real-anime-reviews` (went public + owner renamed from `ReaIGodzilla` → `joewolters` in v1.4.2 on 2026-05-09); formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end
 - Two security gaps closed (`PERSONAL.md` in v1.3.5, `AUDIT_*.md` in v1.3.9)
 - Step 3.5 audit complete (56 findings); Step 3.6 first batches shipped (~25 findings closed across v1.3.7 and v1.3.8)
 - Phase C verification scaffolding shipped in v1.4.0: Playwright test infrastructure + 7 initial flow tests + two new project rules in `CLAUDE.md`
+- v1.4.1 (2026-04-30) — `ROADMAP.md` rewritten to current shape; `README.md` gained the "Design philosophy" (Call of the Night–inspired) section. Docs-only.
+- v1.4.2 (2026-05-09) — repo public + owner rename. No code changes; metadata only.
 
 **Up next:** Phase A — Excel sync (v1.5.0), then Mode 1 baseline (v1.6.0), then Mode 1 upgrade arc (v1.6.1+).
 
