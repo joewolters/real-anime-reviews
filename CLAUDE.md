@@ -8,9 +8,9 @@ This file is read automatically at the start of every Code session. Keep it shor
 
 Blake Wolters. Self-described "very basic" coder. Builds personal projects step-by-step with AI guidance. Can copy/paste, test, follow exact instructions — but needs explicit, surgical guidance: which file, which line, what to replace, what the change does. Does not assume he knows coding terms, project structure, or terminal commands unless they've been explained in this session.
 
-GitHub username: `ReaIGodzilla` (the 4th character is U+0049 capital I (looks visually identical to lowercase L in many fonts — the username is NOT 'RealGodzilla')).
+GitHub username: `joewolters` (renamed from `ReaIGodzilla` in v1.4.2 on 2026-05-09 — see CHANGELOG for context). Repo URL: `https://github.com/joewolters/real-anime-reviews`.
 
-Commits authored as `Blake Wolters <196413457+ReaIGodzilla@users.noreply.github.com>`. Don't change this without asking.
+Commits authored as `Blake Wolters <196413457+joewolters@users.noreply.github.com>`. The numeric `196413457` is Blake's stable GitHub user ID (does not change on rename); the username portion was updated when the account was renamed. Don't change this without asking.
 
 ---
 

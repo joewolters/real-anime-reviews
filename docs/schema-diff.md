@@ -1,7 +1,7 @@
 <!-- author: Code | date: 2026-05-09 -->
 # Schema Diff — Excel ↔ animeData.js ↔ AniList
 
-> **Status:** PARTIAL. The animeData.js side is fully documented from source. The pre-Excel notes side is documented from `Master List/All anime reviews .txt`. The Excel side is **pending** — the Cowork sandbox couldn't open `Anime_Master_Table.xlsx` in this session due to a FUSE mount restriction. Section 3 below has a specific question for Blake to fill the gap.
+> **Status:** COMPLETE (2026-05-09). All three sources documented. Excel side resolved by Blake exporting a CSV copy after the Cowork sandbox couldn't open `.xlsx` directly. Schema-diff is now ready to inform `scripts/sync-excel-to-js.js` design (v1.5.0).
 >
 > **Why this doc exists:** Phase A pre-work step 2. Before writing the v1.5.0 Excel → animeData.js sync script, we need to know exactly what columns Excel has, what fields animeData.js has, and where they disagree. This doc surfaces those disagreements so the sync script doesn't have to guess.
 >
@@ -58,19 +58,60 @@ The .txt isn't canonical and isn't part of the deploy pipeline — it's historic
 
 ---
 
-## 3 · `Anime_Master_Table.xlsx` — PENDING (need Blake input)
+## 3 · `Anime_Master_Table.xlsx` — documented (read from CSV export 2026-05-09)
 
-**Blocked:** the Cowork sandbox can't open `.xlsx` files from `Master List/` in this session — the FUSE mount accepts the directory listing but rejects file open with `FileNotFoundError`. Possibly a timing issue (mount lag after the recent project move), possibly a permission setting on the Master List folder.
+Blake exported a CSV copy at `Master List/Anime_Master_Table_for_claude.csv` to bypass a Cowork sandbox restriction on reading `.xlsx` from `Master List/`. The column structure below is from row 1 of that CSV. The `.xlsx` itself remains canonical; the CSV is a one-time read aid for designing the sync script.
 
-**Question for Blake (one of these would unblock):**
+**Excel columns (in order):**
 
-1. **Open the Excel file in Excel and tell me the column headers** (just the row 1 cell values) — that's the minimum information I need to design the sync script. Format: comma-separated list, e.g. `Title, Genre, Rating, Episodes, ...`
-2. **Save a copy as CSV** at `Master List/Anime_Master_Table.csv` — text files in that folder ARE readable from this environment (verified with the .txt). I can then read columns + a few sample rows directly.
-3. **Take a screenshot of the first 3 rows** and paste it in chat. I can read that.
+| # | Column | Real data? | Notes |
+|---|---|---|---|
+| 1 | `Title` | yes | Anime title — direct match to animeData.js `Title` |
+| 2 | `Rating` | yes | Like `7/10`, `9/10` — direct match to animeData.js `Rating` |
+| 3 | `Seasons` | yes | Like `2 seasons, specials`, `5 seasons`, `1 season` — direct match to `Seasons` |
+| 4 | `Genre` | yes | Like `Shonen/Action` — direct match to `Genre` |
+| 5 | `Description` | yes | 1-2 sentence factual blurb — direct match to `Description` |
+| 6 | `Review` | yes | Paragraph review (some entries span multiple lines via quoted CSV) — direct match to `Review` |
+| 7 | `Tags` | yes | **Format mismatch** — Excel uses `#action #animation #comedy` (hashtag-prefixed, space-separated string); animeData.js uses `["action", "animation", "comedy"]` (array of kebab-case strings, no `#`). Sync needs to strip `#`, lowercase, replace spaces with hyphens. |
+| 8 | `Watch` | yes | **Name mismatch + format mismatch** — Excel calls this `Watch`, animeData.js calls it `Platforms`. Excel: comma-separated string. animeData.js: array. Sync needs to split-on-comma + trim + array. |
+| 9 | `Studio` | yes | Sometimes multiple studios comma-joined (`Madhouse, J.C Staff`). animeData.js stores as single string. Decision needed (see §5). |
+| 10 | `Trailer` | yes | **Format inconsistency** — most entries have correct `youtube.com/embed/` URL, but some have the `youtu.be/` share URL with `?si=` tracking params (e.g., Demon Slayer). Sync needs to normalize. |
+| 11 | `FORMAT:` | NO | Reference column with format instructions (e.g., `https://www.youtube.com/embed/VIDEO_ID` as a template reminder). **Sync script must ignore this column.** |
+| 12 | `EXAMPLE:` | NO | Reference column with example content. **Sync script must ignore this column.** |
 
-Whichever is easiest. Once I have the column structure, I can finish this doc and then build the sync script with confidence.
+**Total real data columns: 10.** Two extra reference columns to ignore.
 
-**Best-guess Excel structure (based on `animeData.js` shape):** at minimum the same 12 fields. Probably also has additional bookkeeping columns Blake added for tracking — could include things like watch date, streaming service watched on, recommendation flags, source platform (Crunchyroll/Netflix/etc), or audience rating. *This guess is unverified — don't use it for code.*
+**Fields in animeData.js but NOT in Excel:**
+
+- `image` — Excel has no image column. animeData.js has `image: "charlotte.png"`. Per the updated rule #9 (hybrid image curation, 2026-05-09), Mode 1 derives this either from AniList's cover URL (downloaded into `assets/`) or from Blake's manual override.
+- `Top10Rank` — Excel doesn't track Top 10. This is a separate Blake curation.
+
+**Decision needed for Top10Rank:**
+
+- (a) Add a `Top10Rank` column to Excel; sync writes it through; only the ~10 entries in the Top 10 have a value.
+- (b) Keep Top 10 in a separate file (`Master List/top10.csv` or hardcoded in `script.js`).
+- **Recommendation:** (a) — keeps the single-source-of-truth principle (Excel canonical), and Top 10 management becomes a column edit in Excel.
+
+---
+
+## 3.1 · Data quality observations (from CSV scan)
+
+Worth flagging — these don't block the sync script but Blake might want to clean them up in Excel either before or after Phase A ships:
+
+1. **Trailer URL format inconsistency.** Most entries use `https://www.youtube.com/embed/VIDEO_ID` (correct, ready for the iframe). But some entries use the share URL `https://youtu.be/VIDEO_ID?si=tracking`. Examples:
+   - One Punch Man: correct `/embed/` format
+   - Demon Slayer: `https://youtu.be/VQGCKyvzIM4?si=zrdbFJO6sgvV-uJL` (needs normalizing to `https://www.youtube.com/embed/VQGCKyvzIM4`)
+   - **The sync script will normalize these automatically** — Blake doesn't have to fix them by hand. But the validation report will list each one for awareness.
+
+2. **`Watch` column comma-spacing.** Some entries have missing commas between platforms — e.g., One Punch Man has `Amazon Video, Hulu, Netflix hianime, 9anime, aniwave,` (note "Netflix hianime" with no comma between). Sync script will surface these as warnings but auto-split on comma.
+
+3. **Genre typo: Solo Leveling has `Shoen/Action`** (missing the 'n' in Shonen). Genre dropdown filtering on the site might miss this entry. Worth fixing in Excel.
+
+4. **Trailing comma in `Watch`.** Most entries end with a trailing comma (`...aniwave,`). Harmless — split-and-filter will handle it.
+
+5. **Studio with multiple values** (e.g., `Madhouse, J.C Staff` for One Punch Man). Currently animeData.js has only single-string studios. Decision needed in §5 about whether to keep as comma-joined string or split.
+
+6. **Newlines inside Review cells.** Some Review entries have actual newlines mid-paragraph (visible in the raw CSV as multi-line quoted fields). Valid CSV, but sync script needs to use a proper CSV parser, not naive line-splitting.
 
 ---
 
@@ -135,16 +176,31 @@ Before writing `scripts/sync-excel-to-js.js`:
 
 ---
 
-## 6 · Open question for Blake
+## 6 · Resolved questions and next steps
 
-Before I can finish this doc and start the sync script:
+**Resolved (2026-05-09):**
+- ✅ Excel column structure documented from CSV export (see §3)
+- ✅ Field mapping table built (see §4)
+- ✅ Data quality issues catalogued (see §3.1)
+- ✅ Decisions for sync script enumerated (see §5)
 
-**Send me the column headers from row 1 of `Anime_Master_Table.xlsx`** (just the cell values, comma-separated).
+**Open decisions Blake needs to make before sync script code is written:**
 
-Easiest: open the file in Excel, look at row 1, type out the headers in chat. Takes 30 seconds.
+1. **Top10Rank location** — add a column to Excel (recommended, see §3) or keep separate?
+2. **Studio field** — when Excel has `Madhouse, J.C Staff`, should animeData.js store it as one string `"Madhouse, J.C Staff"` (current behavior) or split into an array? (Recommendation: keep as comma-joined string — minimal site change.)
+3. **Description: who's authoritative — Excel (Blake-written) or AniList (auto-fetched)?** Decision needed before Mode 1 ships, but the sync script (v1.5.0) only reads from Excel so this can wait until v1.6.0.
+4. **`AniListId`, `IdMal`, `AniListScore`, `AniListColor` columns** — add to Excel before v1.5.0 ships, or after Mode 1 starts populating them? (Recommendation: add now as empty columns; v1.5.0 sync ignores empty values; v1.6.0 starts populating.)
 
-Once I have those, I can:
-- Finish §3 of this doc with the actual Excel structure
-- Build the explicit field mapping table for the sync script
-- Confirm whether the new fields proposed in §4 are already there or genuinely new
-- Then start `scripts/sync-excel-to-js.js`
+**Next concrete step (when Blake green-lights):**
+
+Build `scripts/sync-excel-to-js.js` per the v1.5.0 spec in `ROADMAP.md`. The script will:
+- Read `Master List/Anime_Master_Table.xlsx` directly (using `xlsx` Node library — adds one dev dependency)
+- Apply the field mapping in §4
+- Run validation rules from §5 (item 4)
+- Normalize trailer URLs to `/embed/` format
+- Strip `#` prefix and lowercase tags
+- Skip the `FORMAT:` and `EXAMPLE:` reference columns
+- Output a `--dry-run` mode that shows the diff before any write
+- On real run, regenerate `Current Version/animeData.js` with the new entries
+
+Estimated session: 1-2 hours of careful work + your review of the dry-run output.

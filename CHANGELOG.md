@@ -11,6 +11,54 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-05-09 -->
+## v1.5.0 — MINOR (2026-05-09)
+
+**Phase A complete: Excel → animeData.js sync ships.** `Anime_Master_Table.xlsx` is now genuinely canonical for anime data per project rule #1. The hand-copy workflow that's been in place since launch is replaced by a single command: `npm run sync` reads Excel, transforms, validates, regenerates `animeData.js`. v1.5.0 is the foundation that makes Mode 1 (v1.6.0+) possible.
+
+**New tooling:**
+- `scripts/sync-excel-to-js.js` — Node script with `--dry-run`, `--validate`, and `--check` modes. Reads `.xlsx` via the `xlsx` Node library. Documented in `docs/SKILLS/release-skill.md` and `docs/schema-diff.md`.
+- `xlsx@^0.18.5` added as a dev dependency. Run `npm install` once after pulling. The `npm audit` warning about `xlsx` is for malicious-user-input scenarios; not relevant when processing your own master file.
+- `npm run sync`, `npm run sync:check`, `npm run bump`, `npm run anilist` shortcuts added to `package.json`.
+
+**Excel structure: 12 existing columns + 5 new:**
+- Existing: `Title, Rating, Seasons, Genre, Description, Review, Tags, Watch, Studio, Trailer, FORMAT:, EXAMPLE:`
+- Added 2026-05-09: `Top10Rank, AniListId, IdMal, AniListScore, AniListColor` (last four empty until Mode 1 starts populating in v1.6.0)
+- `FORMAT:` and `EXAMPLE:` are reference-only and ignored by the sync script
+
+**Transformations the sync script applies:**
+- `Tags`: Excel format `#action #fan service #OP MC` → JS array `["action", "fan-service", "op-mc"]`
+- `Watch` → `Platforms`: comma-split with auto-detection of merged platform names (e.g., `Netflix hianime` → `["Netflix", "hianime"]`)
+- `Trailer` URL normalization: `youtu.be/X?si=...`, `youtube.com/watch?v=X`, and bare `youtube.com/X` all auto-normalize to `https://www.youtube.com/embed/X`. Sync no longer fails on share URLs.
+
+**Fuzzy title matching** preserves existing image filenames despite drift between hand-typed `animeData.js` and Excel: case-insensitive, curly apostrophes (`’`) normalized to straight (`'`), Unicode dashes (`−` `–` `—`) normalized to hyphen-minus (`-`), whitespace collapsed. 41 of 44 entries matched on first run; remaining 3 resolved via in-Excel typo fixes and one manual post-sync image patch.
+
+**Validation rules** (sync FAILS on any of these):
+- Title required, no duplicates
+- Rating matches `X/10` or `X.Y/10`
+- Trailer matches `https://www.youtube.com/embed/<id>` after normalization
+- Genre, Description, Review, Tags, Watch all non-empty
+
+**Image curation per project rule #9 (hybrid):**
+- Existing entries: image filename preserved from current `animeData.js` via fuzzy title match
+- Genuinely new entries: `placeholder.png` + warning logged. Mode 1 (v1.6.0) will auto-download covers from AniList.
+- v1.5.0 ship: Apocalypse Bringer Mynoghra received a manual one-line image patch after sync (subtitle change made the fuzzy match miss; existing `apocalypse-bringer.png` re-linked)
+
+**44 anime resynced.** `animeData.js` regenerated end-to-end. File diff: −860 bytes (script writes consistent JSON-style escaping vs prior hand-edits). All 7 Playwright tests pass against the new file. Web server log shows every cover image returning HTTP 200.
+
+**Three Excel typos fixed by Blake during this ship:**
+- Solo Leveling: `Shoen/Action` → `Shonen/Action`
+- Frieren: Beyond Journey's End: `Fantasty/Drama` → `Fantasy/Drama`
+- The Dangers in My Heart: `Romance/Slife of Life` → `Romance/Slice of Life`
+
+Plus one DanDanDan → DanDaDan correction (the official transliteration of ダンダダン uses 2 n's, not 3).
+
+**Top 10 list now editable in Excel** via the `Top10Rank` column (1-10 integer; empty = not in top 10). Position #8 currently empty by Blake's choice.
+
+**Tests required and passed** (Tier A — production code change). Per project rule #7.
+
+**What's next:** Phase B begins. v1.6.0 ships Mode 1 baseline (form-based new-anime creation with AniList prefill, admin UID gate). `docs/anilist-spike.md`, `docs/CODE-PROMPTS.md §1`, `docs/SKILLS/release-skill.md`, and `scripts/anilist-fetch.js` are all ready inputs.
+
+<!-- author: Code | date: 2026-05-09 -->
 ## v1.4.3 — PATCH (2026-05-09)
 
 **Tooling and docs infrastructure ship.** No production-facing code touched. Tests not required per docs-only/tooling exception in `CLAUDE.md` rule #7.

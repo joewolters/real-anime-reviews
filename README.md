@@ -41,7 +41,7 @@ Current Version/
 ## Quick start (local dev)
 
 ```
-git clone https://github.com/ReaIGodzilla/real-anime-reviews.git
+git clone https://github.com/joewolters/real-anime-reviews.git
 cd "real-anime-reviews"
 ```
 
