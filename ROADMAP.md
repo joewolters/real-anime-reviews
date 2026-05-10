@@ -71,7 +71,7 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 ## Current state
 
-**Live at v1.5.0** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped:
+**Live at v1.5.1** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped:
 
 - **Public** GitHub repo at `https://github.com/joewolters/real-anime-reviews` (went public + owner renamed from `ReaIGodzilla` → `joewolters` in v1.4.2 on 2026-05-09); formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end
@@ -82,6 +82,7 @@ These rules apply to every AI system that touches the project — Code (the buil
 - v1.4.2 (2026-05-09) — repo public + owner rename. No code changes; metadata only.
 - v1.4.3 (2026-05-09) — project relocated to `C:\Users\Owner\PROJECTS\Real Anime Reviews\`; tooling additions (`.gitattributes`, `scripts/bump-version.js`); new docs (`anilist-spike.md`, `AI-PRIMER.md`, `CODE-PROMPTS.md`, `DECISIONS.md`); project rule #9 updated to hybrid image curation. Docs/tooling only.
 - v1.5.0 (2026-05-09) — **Phase A complete.** `scripts/sync-excel-to-js.js` ships; `Anime_Master_Table.xlsx` is now genuinely canonical. `npm run sync` regenerates `animeData.js` from Excel in one command, with validation, transformation, and fuzzy title matching to preserve image references. 5 new Excel columns (Top10Rank + 4 AniList placeholders) added in same ship. 44 anime resynced; all 7 Playwright tests pass.
+- v1.5.1 (2026-05-09) — Top 10 rank #1 fix (Eminence in Shadow, was Farming Life). First real-world use of the v1.5.0 sync pipeline for a content edit.
 
 **Up next:** Phase B — Mode 1 baseline (v1.6.0): admin "new anime" page gated by admin UID, AniList prefill, image preview slot with override (per hybrid rule #9), full ship pipeline on save (CHANGELOG → animeData.js → Excel → commit → preview deploy → approval → prod). See Phase B section below for the full upgrade arc through v1.6.3.
 

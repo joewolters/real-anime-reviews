@@ -11,6 +11,11 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-05-09 -->
+## v1.5.1 — PATCH (2026-05-09)
+
+**Top 10 rank #1 corrected.** Excel had Farming Life in Another World listed as #1 (typo); should have been The Eminence in Shadow. Fixed in `Anime_Master_Table.xlsx`, propagated to `animeData.js` via the v1.5.0 sync pipeline. First real-world use of `npm run sync` for a content update — pipeline worked as designed.
+
+<!-- author: Code | date: 2026-05-09 -->
 ## v1.5.0 — MINOR (2026-05-09)
 
 **Phase A complete: Excel → animeData.js sync ships.** `Anime_Master_Table.xlsx` is now genuinely canonical for anime data per project rule #1. The hand-copy workflow that's been in place since launch is replaced by a single command: `npm run sync` reads Excel, transforms, validates, regenerates `animeData.js`. v1.5.0 is the foundation that makes Mode 1 (v1.6.0+) possible.
