@@ -1,0 +1,40 @@
+# Real Anime Reviews — line-ending normalization
+#
+# Why this file exists:
+# Without this, Windows tools save files with CRLF line endings while some
+# editors (or git itself) sometimes save with LF. Git treats every line as
+# "changed" when only the invisible end-of-line bytes differ, which produces
+# huge phantom diffs (every line of every file flagged as modified).
+#
+# This file tells git: detect text files automatically and normalize their
+# line endings to LF in the repo, then convert back to the platform's
+# native convention on checkout. Result: clean diffs forever, no churn.
+
+* text=auto
+
+# Force certain files to always use LF regardless of platform (good practice
+# for shell scripts, config files that may run in WSL/Linux contexts).
+*.sh text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Force certain files to always use CRLF (Windows batch files need CRLF
+# or they may misbehave when run from cmd.exe).
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Mark binary files explicitly so git never tries to do line-ending
+# conversion on them (that would corrupt them).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.docx binary
+*.zip binary

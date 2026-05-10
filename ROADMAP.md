@@ -65,13 +65,13 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 8. **`.gitignore` and `firebase.json` ignore arrays must mirror for sensitive files.** See `CLAUDE.md` for full rule. Codified in v1.4.0 after v1.3.5 and v1.3.9 leak incidents.
 
-9. **Image curation is a human step.** Blake drops poster images into `assets/` manually. Mode 1 references the filename Blake provides; it does not search the web for images or judge image quality. This intentionally keeps the most subjective part of new-anime creation in human hands.
+9. **Image curation is hybrid: AniList default with manual override.** Mode 1 fetches the AniList cover image and pre-populates it on the new-anime form as the default. Blake can either (a) accept the AniList default with one click, or (b) replace it by dropping a custom image into `assets/` and selecting it from the file dropdown. Mode 1 never silently changes images; the form always shows what's about to ship and Blake confirms before save. Mode 2 is NOT permitted to swap images on existing anime — image changes are always Blake-initiated. *(Updated 2026-05-09 from earlier "always human" rule.)*
 
 ---
 
 ## Current state
 
-**Live at v1.4.2** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete:
+**Live at v1.4.3** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete:
 
 - **Public** GitHub repo at `https://github.com/joewolters/real-anime-reviews` (went public + owner renamed from `ReaIGodzilla` → `joewolters` in v1.4.2 on 2026-05-09); formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end
@@ -80,6 +80,7 @@ These rules apply to every AI system that touches the project — Code (the buil
 - Phase C verification scaffolding shipped in v1.4.0: Playwright test infrastructure + 7 initial flow tests + two new project rules in `CLAUDE.md`
 - v1.4.1 (2026-04-30) — `ROADMAP.md` rewritten to current shape; `README.md` gained the "Design philosophy" (Call of the Night–inspired) section. Docs-only.
 - v1.4.2 (2026-05-09) — repo public + owner rename. No code changes; metadata only.
+- v1.4.3 (2026-05-09) — project relocated to `C:\Users\Owner\PROJECTS\Real Anime Reviews\`; tooling additions (`.gitattributes`, `scripts/bump-version.js`); new docs (`anilist-spike.md`, `AI-PRIMER.md`, `CODE-PROMPTS.md`, `DECISIONS.md`); project rule #9 updated to hybrid image curation. Docs/tooling only.
 
 **Up next:** Phase A — Excel sync (v1.5.0), then Mode 1 baseline (v1.6.0), then Mode 1 upgrade arc (v1.6.1+).
 
@@ -116,16 +117,17 @@ Mode 1 is a capability, not a single version. It ships in v1.6.0 as a baseline a
 The first AI mode goes live. Minimum viable Mode 1.
 
 **Includes:**
-- AniList API wrapper (Node module that fetches description, genres, tags, streaming, trailer, episode count, seasons, related anime by title)
+- AniList API wrapper (Node module that fetches description, genres, tags, streaming, trailer, episode count, seasons, related anime, and **cover image URL** by title)
 - Admin "new anime" page (gated by admin UID, returns 404 to non-admins)
-- Form fields: title input, fetch button, review textarea, rating widget (matching the existing community rating widget style), image filename selector
+- Form fields: title input, fetch button, review textarea, rating widget (matching the existing community rating widget style), **image preview slot showing the AniList default with an "Override" button** (clicking Override reveals the file dropdown so Blake can pick a custom file from `assets/`)
 - On save, full Mode 1 flow runs: version bump → CHANGELOG entry → animeData.js update → Excel update → commit → push → preview deploy → human approval gate → prod deploy
+- If Blake accepted the AniList default, Mode 1 downloads the cover URL into `assets/` with a slug-based filename (`{slug-of-title}.png`) before commit, so the deployed site serves it locally
 
 **Explicitly NOT in v1.6.0** (saved for upgrade arc):
 - Live preview as you type (v1.6.1)
 - "More Information" panel on anime cards (v1.6.2)
 - Suggestion box integration (v1.6.3)
-- Image curation automation (out of scope by design — see Project rule #9)
+- Mode 2 swapping images on existing anime (out of scope by design — see Project rule #9)
 
 **Design note:** the admin panel uses the existing visual language — same purple-glow panel style as the homepage trio (Update Log / Top 10 / Latest Drop), same input styles as the search bar, same button styles, same modal patterns. Admin panel should feel like another illuminated window in the cityscape, not a separate utilitarian tool.
 

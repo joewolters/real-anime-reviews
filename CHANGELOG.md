@@ -11,6 +11,27 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-05-09 -->
+## v1.4.3 — PATCH (2026-05-09)
+
+**Tooling and docs infrastructure ship.** No production-facing code touched. Tests not required per docs-only/tooling exception in `CLAUDE.md` rule #7.
+
+**Repository relocated.** Project moved from `C:\Users\Owner\Real Anime Reviews\` to `C:\Users\Owner\PROJECTS\Real Anime Reviews\` (next to other projects like CV Builder, PickleClipper). Same-drive Windows move, atomic. All 896 files preserved including `.git`, `Master List/`, `node_modules/`. Git remote URL updated separately during the move session from `ReaIGodzilla/real-anime-reviews.git` to `joewolters/real-anime-reviews.git` (consistent with the v1.4.2 owner-rename).
+
+**New tooling:**
+- `.gitattributes` — line-ending normalization (`* text=auto` plus per-extension overrides for `.sh`, `.json`, `.bat`, etc., and `binary` markers for images and Office docs). Permanently prevents the CRLF↔LF phantom-diff churn that surfaced earlier in this session — 9 files showed thousands of "changed" lines that were actually identical when whitespace was ignored.
+- `scripts/bump-version.js` — Node script that updates the 7 version strings documented in `CLAUDE.md`'s "Version bump checklist" in one command. Modes: `node scripts/bump-version.js 1.5.0` to bump, `--dry-run` to preview, `--check` to verify all 7 strings agree (catches drift). Real-world test: this version bump (1.4.1 → 1.4.3) was the script's first live use.
+
+**New documentation in `docs/`:**
+- `anilist-spike.md` — full AniList GraphQL API reference with ready-to-paste queries, schema mapping to current `animeData.js`, and design recommendations for Phase A (v1.5.0) and Mode 1 (v1.6.0). Closes Phase A pre-work step 1.
+- `AI-PRIMER.md` — 60-second orientation for any new AI session. Distills CLAUDE.md, ROADMAP.md, ARCHITECTURE.md, and DEPLOYMENT.md into the minimum context needed to start work without re-deriving everything.
+- `CODE-PROMPTS.md` — 8 copy-paste prompts for common Code (CLI tool) tasks: add new anime, fix audit item, investigate bug, ship PATCH bundle, docs-only change, verify-only pass, preview deploy, audit-first cleanup. Each baked with show-don't-do, surgical-edits, version-bump-checklist discipline.
+- `DECISIONS.md` — the WHY behind 18+ project decisions that aren't obvious from code (Excel-canonical, Mode 1/2 separation, image-curation rule, no-monetization, vanilla-no-framework, etc.). Future Blake and future AIs both forget the why fast; this preserves it.
+
+**Project rule #9 updated — hybrid image curation.** SUPERSEDES the 2026-04-30 "always human" rule. New rule: Mode 1 fetches the AniList cover image and pre-populates it on the new-anime form as the default. Blake can either accept the AniList default with one click, or override by dropping a custom image into `assets/` and selecting it from the file dropdown. Mode 1 never silently changes images; the form always shows what's about to ship and Blake confirms before save. Mode 2 is NOT permitted to swap images on existing anime — image changes are always Blake-initiated. Mode 1 v1.6.0 spec in `ROADMAP.md` updated to match (image preview slot + Override button instead of always-required file selector). Full reasoning preserved in `DECISIONS.md`.
+
+**Why these changes ship together as v1.4.3:** the move + tooling + docs + rule update were one continuous session (2026-05-09), all docs/tooling-only, no deployed-site code touched. Bundling them as one PATCH version mirrors the v1.4.1 docs-only-ship pattern. Version bump runs the new script through its first real use; CHANGELOG widget on the live site will display "v1.4.3" once a deploy happens (none required for this release per rule-7 exemption — next deploy will pick it up).
+
+<!-- author: Code | date: 2026-05-09 -->
 ## v1.4.2 — PATCH (2026-05-09)
 
 **Repository visibility changed from private to public; owning account renamed from `ReaIGodzilla` to `joewolters`.** No code changes — repo metadata only.
