@@ -10,6 +10,19 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-05-11 -->
+## v1.6.2 — PATCH (2026-05-11)
+
+**Prevention follow-up to Bug 10.** Mode 1 server now smoke-checks `runCmd` at startup — runs `npm --version` and `git --version` through the same code path the pipeline uses, before `app.listen()`. If either spawn throws (e.g., `spawn EINVAL`), the server exits with an error message that names Bug 10 by name, points at the WHY comment above `runCmd`, and (for `EINVAL` specifically) suggests the most likely regression cause.
+
+- `scripts/mode1-server.js` — new `smokeCheckSpawn()` (~20 lines) placed near the existing pre-flight helpers; called via `.then()` before the `app.listen()` block.
+- `docs/DECISIONS.md` — new entry "When you touch a pipeline's plumbing, re-run the pipeline at the commit you're shipping (lessons from Bug 10)" capturing the meta-lesson: pre-ship testing on prior-state code doesn't validate the post-edit code. The spawn config was the surface bug; the verification discipline is the structural fix.
+- `docs/NEXT.md` — added "Playwright test for Mode 1 server using `?skipPush=1`" under Polish + tech debt (queued behind v1.6.3 live preview).
+
+Tier B — Mode 1 server is tooling, not deployed to production. Tests not required per `CLAUDE.md` rule #7 (tooling exception). Manual verification before ship: ran the synthetic Mode 1 pipeline against AniList ID 21507 (Mob Psycho 100, fetched by ID since AniList search has been flaky) with `?skipPush=1` — smoke check ran cleanly at startup, all 9 pipeline steps completed green, no public footprint (synthetic ship rolled back).
+
+Roadmap cascade: previously-queued v1.6.2 (live preview as you type) → v1.6.3, v1.6.3 (More Information panel) → v1.6.4, v1.6.4 (Suggestion Box) → v1.6.5.
+
 <!-- author: Code | date: 2026-05-10 -->
 ## v1.6.1 — PATCH (2026-05-10)
 

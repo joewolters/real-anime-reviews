@@ -21,9 +21,9 @@
 
 ## 4 · Where the project is right now
 
-- **Live at v1.6.1** (Mode 1 baseline + local "one-click ship" server, both shipped 2026-05-10; v1.6.1 is a same-day hotfix for Bug 10 — `spawn EINVAL` on Windows + Node ≥20.12.2 broke the local pipeline). Phase A (Excel sync, v1.5.0) and Phase B baseline both done.
+- **Live at v1.6.2** (Mode 1 baseline + local "one-click ship" server shipped 2026-05-10 as v1.6.0; v1.6.1 was a same-day hotfix for Bug 10 — `spawn EINVAL` on Windows + Node ≥20.12.2 broke the local pipeline; v1.6.2 is the next-day prevention ship — startup smoke check + `docs/DECISIONS.md` lesson on testing pipeline plumbing at the commit you're shipping). Phase A (Excel sync, v1.5.0) and Phase B baseline both done.
 - **What Mode 1 is** (already shipped, use it): admin "+ Add Anime" floating button bottom-right of every page (visible only to admin UID); opens an admin form at `/admin/new-anime` with AniList prefill; if `npm run mode1` is running locally, the form auto-detects the server and "Submit & Ship" runs the full 9-step pipeline (Excel backup + append → image download → sync → widget update → version bump → CHANGELOG entry → tests → git commit + push → Firebase deploy) with SSE-streamed progress, paused for explicit confirmation before the production deploy.
-- **Up next:** v1.6.2 — Mode 1 polish (live preview as you type: search-as-you-type AniList dropdown + live card preview). Requires extracting the homepage card-render function from `script.js`.
+- **Up next:** v1.6.3 — Mode 1 polish (live preview as you type: search-as-you-type AniList dropdown + live card preview). Requires extracting the homepage card-render function from `script.js`.
 - **Full backlog:** see `docs/NEXT.md` for everything queued (Phase B remaining, Phase D Mode 2 stages, audit polish bundles, polish + tech debt, big-vision ideas, deferred items).
 - **Mode 2 (long-term):** autonomous site caretaker, weekly schedule. Phase D — not started yet. Mode 1 needs to be in active use first to inform Mode 2's design.
 - **Long-term end goal:** two AI modes — Mode 1 (Blake-initiated, shipped) and Mode 2 (AI-initiated, future). See `ROADMAP.md` for the full arc.

@@ -9,11 +9,12 @@
 
 ## Recently shipped
 
+- **v1.6.2** (2026-05-11) — Bug 10 prevention: Mode 1 server smoke-checks `runCmd` at startup (`smokeCheckSpawn` in `scripts/mode1-server.js`); new entry in `docs/DECISIONS.md` ("re-run the pipeline at the commit you're shipping"). See CHANGELOG.
 - **v1.6.1** (2026-05-10) — Hotfix: spawn EINVAL on Windows + Node ≥20.12.2 (Bug 10). Reverted `runCmd` to `shell: true` for npm/npx/firebase wrappers in `scripts/mode1-server.js`. See CHANGELOG.
 
 ---
 
-## Immediate next ship — v1.6.2 (Mode 1 polish)
+## Immediate next ship — v1.6.3 (Mode 1 polish)
 
 **Live preview as you type.** Search-as-you-type AniList lookup with debounced dropdown of matching titles + live preview of how the anime card will look on the homepage. Requires extracting the homepage card-render function from `script.js` so the admin form can mirror it.
 
@@ -25,8 +26,8 @@ Per `docs/mode1-design.md` §7. Estimated 2-3 hours including the refactor.
 
 | Version | What | Notes |
 |---|---|---|
-| v1.6.3 | "More Information" panel on anime cards | Left-side panel mirroring Community Tab — prequels, sequels, related anime, per-episode names, AniList & MAL scores per episode. |
-| v1.6.4 | Suggestion Box + admin viewer | Public form (no sign-in, basic spam protection) → admin queue → "Add this anime" handoff into the Mode 1 form. Folded into Mode 1 from the originally-planned standalone v1.4.0 spec. |
+| v1.6.4 | "More Information" panel on anime cards | Left-side panel mirroring Community Tab — prequels, sequels, related anime, per-episode names, AniList & MAL scores per episode. |
+| v1.6.5 | Suggestion Box + admin viewer | Public form (no sign-in, basic spam protection) → admin queue → "Add this anime" handoff into the Mode 1 form. Folded into Mode 1 from the originally-planned standalone v1.4.0 spec. |
 | v1.6.x | Real one-click AI integration | Replace the current paste-back AI panel with a true one-click. See `docs/ai-integration-design.md` — recommended path is a Firebase Cloud Function. |
 | v1.6.x | One-click full automation | Drop the explicit deploy confirmation gate after enough trust is built up. Mode 1 server option. |
 
@@ -69,6 +70,7 @@ Step 3.5 audit had 56 findings; ~25 closed in v1.3.7 + v1.3.8. Remaining items g
 - **Investigate deploy file-count drift** — quick `find . -type f -not -path './.git/*' \| wc -l` diagnostic
 - **Excel `Image` column** — currently sync derives image from slug fallback. Adding an explicit Image column would make the contract more obvious.
 - **Mode 1 `customBullets` field on form** — let Blake write user-facing bullets per ship instead of always defaulting to "Added: <Title>"
+- **Playwright test for Mode 1 server using `?skipPush=1`** — automate the synthetic-anime-via-AniList-ID smoke run that's been done manually around Bug 10 / Bug 9 verifications. Spawn the server, POST to `/api/submit?skipDeploy=1&skipPush=1`, assert all 9 SSE step events come through `done`, then revert+restore. Catches the v1.6.0-class regression class structurally, not just at server startup. Estimated 2-3 hour ship; queued behind v1.6.3 live preview.
 
 ## Big-vision ideas (no version, no immediate plan)
 

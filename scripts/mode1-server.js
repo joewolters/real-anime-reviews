@@ -150,6 +150,28 @@ async function checkDuplicateTitle(title) {
   }
 }
 
+// Pre-flight (server startup): smoke-check that runCmd can actually invoke
+// npm and git on this machine. Catches Bug-10-class breakage at startup,
+// before Blake clicks Submit & Ship and watches the pipeline hang mid-flight.
+async function smokeCheckSpawn() {
+  for (const cmd of ['npm', 'git']) {
+    try {
+      const code = await runCmd(cmd, ['--version'], {}, () => {});
+      if (code !== 0) throw new Error(`${cmd} --version exited with code ${code}`);
+    } catch (err) {
+      const isEinval = err.code === 'EINVAL' || /EINVAL/.test(err.message || '');
+      const hint = isEinval
+        ? `Likely cause: someone changed shell:true back to shell:false for the .cmd wrappers in runCmd. Read the WHY comment above runCmd in scripts/mode1-server.js — that's Bug 10 territory (CVE-2024-27980 mitigation in Node ≥20.12.2 blocks .bat/.cmd via shell:false).`
+        : `Check that ${cmd} is installed and on your PATH.`;
+      console.error(`${C.red}[mode1] spawn smoke check failed: runCmd cannot invoke ${cmd}${C.reset}`);
+      console.error(`  Error:  ${err.message}`);
+      console.error(`  See:    scripts/mode1-server.js (the runCmd function, ~line 60)`);
+      console.error(`  ${hint}`);
+      process.exit(3);
+    }
+  }
+}
+
 async function appendExcelRow(rowData) {
   if (!fs.existsSync(EXCEL_PATH)) throw new Error(`Excel file not found at ${EXCEL_PATH}`);
   const wb = XLSX.readFile(EXCEL_PATH);
@@ -439,10 +461,12 @@ app.post('/api/deploy', async (req, res) => {
   finally { res.end(); }
 });
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log('');
-  console.log(`${C.bold}${C.green}Mode 1 server ready${C.reset}`);
-  console.log(`  ${C.gray}URL:${C.reset}  http://localhost:${PORT}/admin/new-anime`);
-  console.log(`  ${C.gray}Stop:${C.reset} Ctrl+C`);
-  console.log('');
+smokeCheckSpawn().then(() => {
+  app.listen(PORT, '127.0.0.1', () => {
+    console.log('');
+    console.log(`${C.bold}${C.green}Mode 1 server ready${C.reset}`);
+    console.log(`  ${C.gray}URL:${C.reset}  http://localhost:${PORT}/admin/new-anime`);
+    console.log(`  ${C.gray}Stop:${C.reset} Ctrl+C`);
+    console.log('');
+  });
 });

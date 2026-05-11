@@ -9,6 +9,16 @@
 
 ---
 
+## 2026-05-11 · When you touch a pipeline's plumbing, re-run the pipeline at the commit you're shipping (lessons from Bug 10)
+
+**Decision:** when an edit changes a low-level utility used by an automated pipeline (e.g. Mode 1's `runCmd`), the verification standard is "re-run the pipeline end-to-end *at the exact commit being shipped*" — not "the change looks right" or "earlier-state pre-ship testing already passed."
+
+**Why:** Bug 10 (v1.6.0 → v1.6.1 hotfix) was a `spawn EINVAL` in `runCmd` that crashed every Mode 1 ship at the `npm test` step. The spawn-config edit looked correct in isolation. But the v1.6.0 pre-ship test session (Vinland Saga, end-to-end) was conducted *before* the spawn change landed in the working tree. After the change was made, the pipeline was never re-run before commit + push + deploy — the v1.6.0 ship trusted earlier-state testing. The spawn config was the surface bug; the deeper failure was treating "we tested *something* end-to-end" as equivalent to "we tested *this code* end-to-end." They were different commits. v1.6.2 adds a startup smoke check (`smokeCheckSpawn`) that catches the specific class of regression at server startup, but the structural lesson is the verification discipline, not the smoke check.
+
+**Applies:** every change to `scripts/mode1-server.js`'s plumbing helpers (`runCmd`, `runShipSequence`, `downloadFile`, `appendExcelRow`, the pre-flight checks) and every Mode 2 ship when Mode 2 exists. The rule: if you edit any of these, end-to-end test through the pipeline you just edited *with the edit in place* — not "the test we ran earlier on the previous code."
+
+---
+
 ## 2026-05-09 · Repo went public
 
 **Decision:** GitHub repo flipped from private to public; account renamed `ReaIGodzilla` → `joewolters`.
