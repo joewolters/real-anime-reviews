@@ -21,10 +21,12 @@
 
 ## 4 · Where the project is right now
 
-- **Live at v1.4.2** (last ship: 2026-05-09 — repo public + owner rename, no code changes).
-- **Recent shipped work:** Phase C (Playwright tests + verification rules) shipped as v1.4.0 on 2026-04-30; v1.4.1 was a docs-only roadmap rewrite.
-- **Up next:** Phase A — Excel → animeData.js sync, ships as v1.5.0. Pre-work (AniList API spike) is complete (`docs/anilist-spike.md`).
-- **Long-term end goal:** two AI modes — **Mode 1** (Blake-initiated assisted review creation) and **Mode 2** (autonomous site caretaker, weekly schedule). See `ROADMAP.md` for the full arc.
+- **Live at v1.6.1** (Mode 1 baseline + local "one-click ship" server, both shipped 2026-05-10; v1.6.1 is a same-day hotfix for Bug 10 — `spawn EINVAL` on Windows + Node ≥20.12.2 broke the local pipeline). Phase A (Excel sync, v1.5.0) and Phase B baseline both done.
+- **What Mode 1 is** (already shipped, use it): admin "+ Add Anime" floating button bottom-right of every page (visible only to admin UID); opens an admin form at `/admin/new-anime` with AniList prefill; if `npm run mode1` is running locally, the form auto-detects the server and "Submit & Ship" runs the full 9-step pipeline (Excel backup + append → image download → sync → widget update → version bump → CHANGELOG entry → tests → git commit + push → Firebase deploy) with SSE-streamed progress, paused for explicit confirmation before the production deploy.
+- **Up next:** v1.6.2 — Mode 1 polish (live preview as you type: search-as-you-type AniList dropdown + live card preview). Requires extracting the homepage card-render function from `script.js`.
+- **Full backlog:** see `docs/NEXT.md` for everything queued (Phase B remaining, Phase D Mode 2 stages, audit polish bundles, polish + tech debt, big-vision ideas, deferred items).
+- **Mode 2 (long-term):** autonomous site caretaker, weekly schedule. Phase D — not started yet. Mode 1 needs to be in active use first to inform Mode 2's design.
+- **Long-term end goal:** two AI modes — Mode 1 (Blake-initiated, shipped) and Mode 2 (AI-initiated, future). See `ROADMAP.md` for the full arc.
 
 ## 5 · Project rules — apply to every change
 
@@ -38,19 +40,29 @@
 8. **`.gitignore` and `firebase.json` ignore arrays must mirror** for sensitive files. Adding a file to one always means adding it to the other.
 9. **Image curation is hybrid: AniList default + manual override.** Mode 1 pre-populates the new-anime form with the AniList cover image. Blake can accept it (one click) or override by dropping a custom file into `assets/`. Mode 2 is NOT permitted to change images on existing anime.
 
-## 6 · Where things live (5-line file map)
+## 6 · Where things live (file map)
 
 ```
 PROJECTS/Real Anime Reviews/
 ├── Current Version/      ← THE PROJECT. Run all commands from here.
-│   ├── index.html, account.html, 404.html, script.js (~4000 lines), account.js, firebase.js, animeData.js
-│   ├── style.css, mobile.css, assets/, docs/, tests/ (Playwright), scripts/
-│   ├── README.md, CHANGELOG.md, ROADMAP.md, CLAUDE.md
-│   └── PERSONAL.md (gitignored — never commit; Firebase login, admin UID, DNS)
-└── Master List/          ← Anime_Master_Table.xlsx (canonical anime data)
+│   ├── index.html, account.html, 404.html       ← public site
+│   ├── admin/new-anime.{html,css,js}             ← Mode 1 form (admin-only)
+│   ├── admin-fab.{js,css}                        ← floating "Admin" pill (every page)
+│   ├── script.js (~4000 lines), account.js, firebase.js, animeData.js (auto-generated)
+│   ├── style.css, mobile.css, assets/
+│   ├── scripts/
+│   │   ├── mode1-server.js                       ← `npm run mode1` (one-click ship)
+│   │   ├── sync-excel-to-js.js                   ← `npm run sync` (Excel → JS)
+│   │   ├── bump-version.js                       ← bumps 14 version strings
+│   │   └── anilist-fetch.js                      ← AniList CLI for ad-hoc queries
+│   ├── tests/ (Playwright), docs/, README.md, CHANGELOG.md, ROADMAP.md, CLAUDE.md
+│   └── PERSONAL.md (gitignored — never commit; Firebase login, admin UID)
+└── Master List/
+    ├── Anime_Master_Table.xlsx                   ← CANONICAL anime data
+    └── Anime_Master_Table.bak.*.xlsx             ← Mode 1 server auto-backups
 ```
 
-`README.md` for project overview. `CHANGELOG.md` for what shipped (newest first). `ROADMAP.md` for what's coming + project rules in full. `docs/ARCHITECTURE.md` for Firestore schema + script.js section map. `docs/DEPLOYMENT.md` for the local → preview → production deploy ladder.
+`README.md` for project overview. `CHANGELOG.md` for what shipped (newest first). `ROADMAP.md` for what's coming + project rules in full. `docs/ARCHITECTURE.md` for Firestore schema + script.js section map. `docs/DEPLOYMENT.md` for the local → preview → production deploy ladder. `docs/mode1-design.md` for the Mode 1 form + server architecture. `docs/ai-integration-design.md` for the planned one-click AI integration (v1.6.x). `docs/SKILLS/release-skill.md` for the full release workflow any AI can follow.
 
 ## 7 · The well-known gotchas (don't re-discover these)
 

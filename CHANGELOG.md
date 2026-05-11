@@ -11,6 +11,19 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-05-10 -->
+## v1.6.1 — PATCH (2026-05-10)
+
+**Hotfix: Mode 1 local server crashed at `npm test` on Windows + Node ≥20.12.2 with `spawn EINVAL`.** Reverted v1.6.0's `shell: false` + `.cmd`-extension change in `runCmd` back to `shell: true` for npm/npx/firebase.
+
+- `scripts/mode1-server.js:60-72` — `runCmd` reverted to original spawn pattern; added a 17-line WHY comment naming Bug 10 and explaining DEP0190 doesn't apply (every `args[]` in this file is a static string literal — no user input flows into npm/firebase/npx).
+
+This slipped through because v1.6.0's pre-ship Playwright suite ran via the `Bash` tool, not via the Mode 1 server pipeline — `runCmd` was never exercised. Caught immediately during the post-deploy "Mob Psycho 100" sanity test, before any user-visible damage. (The Bug 9 image-registration fix was confirmed working in the same test run.)
+
+Tests not required per `CLAUDE.md` rule #7 (tooling exception — Mode 1 server isn't deployed to production). `npm test` was run anyway as a sanity check that the test pipeline itself isn't broken: 7/7 passed in 11.4s.
+
+Bundled in this commit: `docs/SKILLS/hotfix-skill.md` (this skill, used to ship the hotfix it documents); `docs/NEXT.md` (persistent backlog file added by Cowork); `docs/AI-PRIMER.md` updated to current state; ROADMAP cascade — what was queued as v1.6.1 (live preview), v1.6.2 (More Information panel), v1.6.3 (Suggestion Box) shifts to v1.6.2 / v1.6.3 / v1.6.4 respectively.
+
+<!-- author: Code | date: 2026-05-10 -->
 ## v1.6.0 — MINOR (2026-05-10)
 
 **Phase B begins: Mode 1 baseline + local "one-click ship" server.** Adding a new anime drops from "edit JS by hand, copy to Excel manually, hope you got the format right, run sync, run tests, bump version, commit, push, deploy" down to **type a title, write a review, click Submit & Ship.** The local Node server orchestrates the whole pipeline in ~30 seconds with a real-time progress stream.

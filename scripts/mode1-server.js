@@ -55,15 +55,28 @@ function stripAnsi(s) {
 }
 
 // Run a shell command, stream stdout/stderr lines to the SSE callback.
-// Platform-aware: on Windows, npm/npx/firebase are .cmd wrappers so we
-// invoke them via the explicit `.cmd` extension WITHOUT `shell: true`.
-// This avoids Node 22's DEP0190 deprecation warning for shell-true with args.
+//
+// `shell: true` for npm/npx/firebase is INTENTIONAL despite DEP0190.
+// DO NOT "fix" the deprecation warning by going back to shell:false + .cmd —
+// that's exactly what Bug 10 (v1.6.0 → v1.6.1 hotfix) was. Read the why:
+//
+//   These three are .cmd batch wrappers on Windows, not real .exe binaries.
+//   Two alternatives both fail on modern Node:
+//     - spawn('npm', [...], { shell: true })       → DEP0190 warning (cosmetic)
+//     - spawn('npm.cmd', [...], { shell: false })  → spawn EINVAL on Node
+//       ≥20.12.2 (CVE-2024-27980 mitigation blocks .bat/.cmd via shell:false)
+//   We pick shell:true. DEP0190 warns about argument-injection risk via the
+//   shell; that risk is NIL here because every args[] passed in this file is
+//   a static string literal — no user input ever reaches npm/firebase/npx
+//   (titles/reviews go to git commit -m and Excel cells, both shell:false).
+//   The deprecation warning is cosmetic noise for our usage.
+//
+// Git/node are real .exe binaries — shell:false works and is preferred
+// (using shell with them mangles args containing spaces).
 function runCmd(cmd, args, opts, onLine) {
-  const isWin = process.platform === 'win32';
-  const wrappedCmds = ['npm', 'npx', 'firebase'];
-  const resolvedCmd = (isWin && wrappedCmds.includes(cmd)) ? `${cmd}.cmd` : cmd;
+  const needsShell = ['npm', 'npx', 'firebase'].includes(cmd);
   return new Promise((resolve, reject) => {
-    const child = spawn(resolvedCmd, args, { cwd: PROJECT_ROOT, shell: false, ...opts });
+    const child = spawn(cmd, args, { cwd: PROJECT_ROOT, shell: needsShell, ...opts });
     let stdoutBuf = '', stderrBuf = '';
     child.stdout.on('data', (chunk) => {
       stdoutBuf += chunk.toString();
