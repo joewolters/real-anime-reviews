@@ -9,13 +9,14 @@
 
 ## Recently shipped
 
+- **v1.6.4** (2026-05-11) — Update log widget upgrade. Shipped-on dates on every change, date-grouped sections (`<div class="version-section">` + MM/DD/YYYY headers), cap raised 5 → 10, internal scroll containment via `.changelog-content { max-height: 300px; overflow-y: auto; }`. Widget skill (`widget-update-skill.md`) rewritten in the same ship: per-change granularity, MM/DD/YYYY format mandatory, backfill-consolidation rule removed. AniList `Media(search:)` recovered partway through this session — v1.6.5 is unblocked. See CHANGELOG.
 - **v1.6.3** (2026-05-11) — Polish bundle + first widget update under the new visitor-first skill. `/api/health` reads `APP_VERSION` dynamically, `release-skill` and `hotfix-skill` cross-reference `widget-update-skill`, AI-PRIMER lists all three skill files, one combined backfill bullet on the homepage widget covers v1.6.1 + v1.6.2 + v1.6.3. Originally scheduled for live preview; deferred to v1.6.4 because of the AniList outage. See CHANGELOG.
 - **v1.6.2** (2026-05-11) — Bug 10 prevention: Mode 1 server smoke-checks `runCmd` at startup (`smokeCheckSpawn` in `scripts/mode1-server.js`); new entry in `docs/DECISIONS.md` ("re-run the pipeline at the commit you're shipping"). See CHANGELOG.
 - **v1.6.1** (2026-05-10) — Hotfix: spawn EINVAL on Windows + Node ≥20.12.2 (Bug 10). Reverted `runCmd` to `shell: true` for npm/npx/firebase wrappers in `scripts/mode1-server.js`. See CHANGELOG.
 
 ---
 
-## Immediate next ship — v1.6.4 (Mode 1 polish)
+## Immediate next ship — v1.6.5 (Mode 1 polish)
 
 **Live preview as you type.** Search-as-you-type AniList lookup with debounced dropdown of matching titles + live preview of how the anime card will look on the homepage. Requires extracting the homepage card-render function from `script.js` so the admin form can mirror it.
 
@@ -23,7 +24,7 @@ Per `docs/mode1-design.md` §7. Estimated 2-3 hours including the refactor.
 
 **Design note (added 2026-05-11 after AniList search outage):** Live preview + ID-import (`b+` approach): build ID-input as first-class entry point alongside search-as-you-type, not as a fallback. AniList search outage exposed that ID-import is durable infrastructure, not a workaround.
 
-**Currently blocked on:** AniList's `Media(search:)` endpoint has been returning `Not Found` for 30+ hours (rate-limit headers healthy, ID-based fetches still work — server-side search index issue). Live-preview UX literally requires search-as-you-type; ship lands when AniList recovers, or sooner if the `b+` ID-import path is built first as the recoverable foundation.
+**Status:** AniList `Media(search:)` recovered partway through the v1.6.4 ship after ~36 hours down (verified against six titles). Search-as-you-type path is functional again. The `b+` ID-import-as-first-class-entry-point design decision still applies — search recovery doesn't change that ID-import is durable infrastructure.
 
 ---
 
@@ -31,8 +32,8 @@ Per `docs/mode1-design.md` §7. Estimated 2-3 hours including the refactor.
 
 | Version | What | Notes |
 |---|---|---|
-| v1.6.5 | "More Information" panel on anime cards | Left-side panel mirroring Community Tab — prequels, sequels, related anime, per-episode names, AniList & MAL scores per episode. |
-| v1.6.6 | Suggestion Box + admin viewer | Public form (no sign-in, basic spam protection) → admin queue → "Add this anime" handoff into the Mode 1 form. Folded into Mode 1 from the originally-planned standalone v1.4.0 spec. |
+| v1.6.6 | "More Information" panel on anime cards | Left-side panel mirroring Community Tab — prequels, sequels, related anime, per-episode names, AniList & MAL scores per episode. |
+| v1.6.7 | Suggestion Box + admin viewer | Public form (no sign-in, basic spam protection) → admin queue → "Add this anime" handoff into the Mode 1 form. Folded into Mode 1 from the originally-planned standalone v1.4.0 spec. |
 | v1.6.x | Real one-click AI integration | Replace the current paste-back AI panel with a true one-click. See `docs/ai-integration-design.md` — recommended path is a Firebase Cloud Function. |
 | v1.6.x | One-click full automation | Drop the explicit deploy confirmation gate after enough trust is built up. Mode 1 server option. |
 

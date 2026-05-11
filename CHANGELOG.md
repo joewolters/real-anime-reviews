@@ -11,6 +11,21 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-05-11 -->
+## v1.6.4 — MINOR (2026-05-11)
+
+**Update log widget upgrade — first feature ship under the new visitor-first widget skill.** The homepage update log gains shipped-on dates on every change, date-grouped sections (replacing the old flat list), capacity raised from 5 to 10 most-recent entries, and internal scroll containment so the widget no longer pushes the rest of the homepage down when content accumulates. The widget skill is updated in the same ship to codify the new rules.
+
+- `index.html` — widget content area restructured from a flat `<ul class="changelog-list">` into nested `<div class="changelog-content">` → `<div class="version-section">` blocks, each with an `MM/DD/YYYY` `<div class="version-header">` above its bullets. Existing five production bullets retroactively distributed under their ship-date headers (`05/10/2026` for the four v1.6.0 entries; `05/11/2026` for the v1.6.3 backfill).
+- `style.css` — added `.changelog-content` (max-height 300px + overflow-y auto + custom purple-gradient scrollbar matching the project palette), `.version-section`, `.version-header` (muted soft-white at 55% opacity, ~0.78rem Montserrat). No upstream changes to existing widget rules.
+- `docs/SKILLS/widget-update-skill.md` — six surgical edits: cap raised 5 → 10, new "date header" rule item, granularity callout added to the curation table, multi-piece-ship example added to Good vs Bad, structural HTML example refreshed to match the actual widget (the old example referenced classes that didn't exist), backfill-consolidation section removed entirely, "Why this skill exists" trade-off paragraph updated for the new cap. Voice guidelines section unchanged.
+- `index.html` widget content (per the new per-change rule) — four bullets stamped `05/11/2026`: "Added shipped-on dates to the update log," "Grouped the update log so changes appear by date," "Made the update log show 10 entries instead of 5," "Made the update log scroll inside its panel."
+- `ROADMAP.md`, `docs/NEXT.md`, `docs/AI-PRIMER.md` — cascade for the deferred live-preview ship: live preview + ID-import → v1.6.5, More Information panel → v1.6.6, Suggestion Box → v1.6.7, TBD upgrades → v1.6.8+.
+
+**AniList recovery note:** AniList's `Media(search:)` endpoint recovered partway through this session after ~36 hours down (verified against six titles including Vinland Saga, Naruto, Frieren). v1.6.5 (live preview + ID-import per the `b+` design) is unblocked once this widget upgrade ships.
+
+Tier A — `index.html`, `style.css`, and the widget bullets are all visitor-facing. `npm test` ran clean (Playwright 7/7).
+
+<!-- author: Code | date: 2026-05-11 -->
 ## v1.6.3 — PATCH (2026-05-11)
 
 **Polish bundle + first widget update under the new visitor-first skill.** Originally scheduled for the live-preview-as-you-type Mode 1 feature, but that's deferred to v1.6.4 — AniList's `Media(search:)` endpoint has been returning `Not Found` for 30+ hours and the live-preview UX literally requires it. Shipped instead: small overdue items.

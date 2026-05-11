@@ -15,18 +15,22 @@ Every ship updates two things on the website's homepage CHANGELOG widget:
 
 1. **The version line** — `<span id="changelog-version">vX.Y.Z</span>` in `index.html` and `account.html`. Bumped automatically by `scripts/bump-version.js` (it's one of the 14 targets). No manual action required as long as the bump script runs.
 
-2. **The bullet list** — typically a rolling list of ~5 most-recent bullets in the widget; oldest drops off when new ones are prepended. This requires curation per ship per the decision tree below. **Curation never gets skipped — even for tooling/hotfix ships.** If there's nothing user-facing to say, the bullet is generic ("Behind-the-scenes improvements") but it still exists.
+2. **The bullet list** — a rolling list of up to 10 most-recent bullets, grouped under MM/DD/YYYY date headers (one section per ship date). Oldest drops off when prepending new bullets pushes the total past 10. This requires curation per ship per the decision tree below. **Curation never gets skipped — even for tooling/hotfix ships.** If there's nothing user-facing to say, the bullet is generic ("Behind-the-scenes improvements") but it still exists.
+
+3. **The date header** — every ship's bullets land under an `MM/DD/YYYY` date header inside `<div class="version-section">`. Today's bullets prepend to today's section if one already exists; otherwise create a new section above the previous most-recent one. The widget body is internally scrollable (`max-height: 300px`); long ship histories don't push the rest of the homepage down.
 
 ---
 
 ## Bullet curation by ship type
 
+**Granularity rule:** one bullet per change made in the ship. A multi-piece ship (e.g. fix + skill update + new doc + widget refactor) gets multiple bullets — one per piece, all stamped with the same date and grouped under the same date header. **No consolidation across ships:** each ship's bullets are written for that ship's date section. **No backfill consolidation either:** if a past ship reached production without bullets, that's a bug to surface in this ship's CHANGELOG, not a pattern to perpetuate by lumping the missed ships together.
+
 | Ship type | Tier | What to do |
 |---|---|---|
-| User-facing feature | A | Curate 1–3 visitor-friendly bullets describing what visitors will see. |
+| User-facing feature | A | One bullet per visitor-visible change. Multi-piece features get multiple bullets, one per piece. |
 | Content update (new anime, typo fix, image swap) | A | One bullet per meaningful change. |
-| Hotfix to user-visible code | A | One bullet — "Fixed a bug where..." or "Improved..." |
-| Tooling / docs / infrastructure | B | One generic bullet — e.g. "Behind-the-scenes improvements (v1.6.2)." Do **not** expose internal terms (Mode 1, smoke check, spawn EINVAL, Tier B, etc.). |
+| Hotfix to user-visible code | A | One bullet per fix. "Fixed a bug where..." / "Improved..." |
+| Tooling / docs / infrastructure | B | One generic bullet per change. Do **not** expose internal terms (Mode 1, smoke check, spawn EINVAL, Tier B, etc.) and do **not** name the version in the bullet. Phrasing like "Made some behind-the-scenes improvements" works for changes visitors won't notice. |
 | Metadata only (repo visibility, owner rename) | C | Version line bumps via script; bullet curation skipped is acceptable. Note in the CHANGELOG entry that the widget bullets were intentionally not touched. |
 
 ---
@@ -63,34 +67,50 @@ Concrete rules that follow from this:
 - "Spawn EINVAL hotfix." *(complete jargon)*
 - "Made the site's developer tools more reliable across v1.6.1 and v1.6.2." *(visitor doesn't know what v1.6.1 was)*
 
+**Good multi-piece ship** (per-change granularity — one ship, multiple bullets, all stamped with the same date):
+- "Added shipped-on dates to the update log."
+- "Made the update log show 10 entries instead of 5."
+- "Reorganized the update log so changes group by date."
+
+*(Three bullets, all under the same `MM/DD/YYYY` section header. Each stands alone for a first-time visitor; none names the version.)*
+
 ---
 
 ## Where the bullets live in code
 
-`Current Version/index.html` — search for `id="changelog-version"` or the existing bullet `<li>` elements inside the widget. Note: `account.html` does NOT host the widget despite earlier versions of this skill saying it did; only `index.html` needs bullet curation. The bump-version script bumps the `APP_VERSION` and stylesheet cache-busts in both files, but the widget itself is index-only.
+`Current Version/index.html` — search for `id="changelog-version"` or the existing `<div class="version-section">` blocks inside the widget. Note: `account.html` does NOT host the widget despite earlier versions of this skill saying it did; only `index.html` needs bullet curation. The bump-version script bumps the `APP_VERSION` and stylesheet cache-busts in both files, but the widget itself is index-only.
 
-Typical widget structure:
+Actual widget structure (v1.6.4 onward):
 
 ```html
-<div class="changelog-widget">
-  <h3>Update Log <span id="changelog-version">v1.6.2</span></h3>
-  <ul id="changelog-bullets">
-    <li>Newest bullet here</li>
-    <li>...</li>
-    <li>Oldest visible bullet</li>
-  </ul>
+<div class="changelog-box">
+  <div class="changelog-title">
+    <span class="changelog-tag" id="changelog-version">vX.Y.Z</span>
+    Minor Update
+  </div>
+  <div class="changelog-content">
+    <div class="version-section">
+      <div class="version-header">MM/DD/YYYY</div>
+      <ul class="changelog-list">
+        <li>Newest bullet here</li>
+      </ul>
+    </div>
+    <div class="version-section">
+      <div class="version-header">MM/DD/YYYY</div>
+      <ul class="changelog-list">
+        <li>Bullets from a previous ship date</li>
+      </ul>
+    </div>
+  </div>
 </div>
 ```
 
-When adding a new bullet, **prepend** (new bullets go at the top). When the list exceeds 5 items, drop the oldest.
+When adding a new bullet:
 
----
-
-## Backfill for past ships missing widget bullets
-
-If a ship reached production without curating widget bullets (e.g., v1.6.1 hotfix and v1.6.2 prevention both bumped the version number without curating bullets), backfill on the **next** widget update — don't ship a standalone "fix the widget" PATCH. The backfill should be a single combined generic bullet rather than one per missed version, to avoid burying user-relevant news. **Crucially, the backfill bullet still follows the first-time-visitor voice rule — don't reference the missed versions by name.**
-
-Example backfill bullet covering multiple missed tooling ships: "Made some behind-the-scenes improvements to how the site is built. Nothing visible changes." (Visitor reads this and understands it without needing to know which versions are being backfilled.)
+1. **Check today's date header.** If a `.version-section` for today's `MM/DD/YYYY` already exists at the top, prepend the new `<li>` to its `<ul>`. Multi-piece ships add multiple `<li>` elements under the same date header.
+2. **Otherwise, create a new section** above the previous most-recent one — a new `<div class="version-section">` with today's date header and the new bullet(s) inside.
+3. **Cap is 10 bullets total** across all visible sections. If prepending a new bullet pushes the total past 10, drop bullets from the oldest section first; remove the entire `.version-section` when its last bullet is dropped.
+4. **Date format is always `MM/DD/YYYY` with the year shown** — even for current-year ships. No `May 11`, `5/11`, or `2026-05-11` shorthand. The format is canonical so the widget doesn't drift.
 
 ---
 
@@ -98,4 +118,4 @@ Example backfill bullet covering multiple missed tooling ships: "Made some behin
 
 Project rule #6 says the widget stays in sync with `CHANGELOG.md`. In practice, hotfix and tooling ships have historically updated only the version number, leaving bullets static. Blake's intent (codified 2026-05-11) is for visitors to see the widget *change* on every ship — even tooling ones — as a sign of life. This skill operationalizes that intent.
 
-The trade-off: a rolling 5-bullet widget means tooling-ship bullets push out previous user-facing bullets. Mitigation is the "generic phrasing for tooling ships" rule above — so tooling bullets feel alive without burying the more interesting user-facing news under tooling noise.
+The trade-off was previously: a rolling 5-bullet widget meant tooling-ship bullets pushed out previous user-facing bullets. Mitigation was the "generic phrasing for tooling ships" rule. As of v1.6.4 the cap is raised to 10 with date-grouped sections and an internally scrollable widget body, so tooling-ship bullets coexist with user-facing news rather than displacing it. The "generic phrasing for tooling" rule still applies — it keeps the widget readable for first-time visitors regardless of cap.

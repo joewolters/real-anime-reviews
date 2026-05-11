@@ -706,7 +706,38 @@ body.modal-open {
 
 .changelog-list li{ margin: 6px 0; }
 
-
+/* v1.6.4 — dated section groupings + internal scroll containment */
+.changelog-content{
+  max-height: 300px;
+  overflow-y: auto;
+  /* Native scrollbar visible only when content overflows — serves as the
+     "more below" hint without adding visual chrome. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(187,134,252,0.45) rgba(15,5,28,0.45);
+}
+.changelog-content::-webkit-scrollbar{ width: 8px; }
+.changelog-content::-webkit-scrollbar-track{
+  background: rgba(15,5,28,0.45);
+  border-radius: 6px;
+}
+.changelog-content::-webkit-scrollbar-thumb{
+  background: linear-gradient(180deg, rgba(140,70,220,0.55), rgba(70,0,110,0.85));
+  border-radius: 6px;
+}
+.version-section + .version-section{
+  margin-top: 0.6rem;
+}
+.version-header{
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.02em;
+  margin: 0 0 4px;
+}
+.version-section .changelog-list{
+  margin-top: 0;
+}
 
 
 .side-widget-head{
