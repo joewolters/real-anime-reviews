@@ -418,7 +418,17 @@ app.use(express.json({ limit: '10mb' }));
 // `extensions: ['html']` mirrors Firebase Hosting's `cleanUrls: true`
 app.use(express.static(PROJECT_ROOT, { index: 'index.html', extensions: ['html'] }));
 
-app.get('/api/health', (req, res) => res.json({ ok: true, server: 'mode1', version: '1.6.1' }));
+app.get('/api/health', async (req, res) => {
+  // Read APP_VERSION dynamically — bump-version.js doesn't touch this file, so
+  // hardcoding was the silent-staleness sibling of Bug 10. Reuses the existing
+  // readCurrentVersion() helper (defined above for the bump pipeline).
+  try {
+    const version = await readCurrentVersion();
+    res.json({ ok: true, server: 'mode1', version });
+  } catch {
+    res.json({ ok: true, server: 'mode1', version: 'unknown' });
+  }
+});
 
 app.post('/api/submit', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');

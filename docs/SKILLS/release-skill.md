@@ -91,6 +91,14 @@ The HTML comment marker is REQUIRED per project rule #2. Author values: `Code`, 
 
 For Tier B and C releases, also note in the entry: "Tests not required per docs-only/tooling exception in `CLAUDE.md` rule #7."
 
+### Step 4.5 — Update the widget bullets
+
+Per project rule #6 ("every code-and-data change updates the website's CHANGELOG widget") and `docs/SKILLS/widget-update-skill.md`, every release — including Tier B tooling and Tier C metadata ships — curates the homepage widget bullets in `index.html` (the widget lives there only, despite what the bump-version script's coverage of both `index.html` and `account.html` might suggest).
+
+The skill carries the full curation rules. Quick summary: write for a first-time visitor (no version numbers, no internal terms, no "we"); use generic phrasing for tooling ships ("Made some behind-the-scenes improvements..."); cap the visible list at 5 (oldest drops). Confirm bullets pass the first-time-visitor test before saving.
+
+Mode 1 server's pipeline (step 5 of 9) handles widget curation automatically for new-anime ships — exempt from this manual step. Every other ship type goes through the skill.
+
 ### Step 5 — Update ROADMAP "Current state"
 
 Open `ROADMAP.md`. Find the "Current state" section. Update:

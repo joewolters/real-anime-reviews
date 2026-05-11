@@ -11,6 +11,22 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-05-11 -->
+## v1.6.3 — PATCH (2026-05-11)
+
+**Polish bundle + first widget update under the new visitor-first skill.** Originally scheduled for the live-preview-as-you-type Mode 1 feature, but that's deferred to v1.6.4 — AniList's `Media(search:)` endpoint has been returning `Not Found` for 30+ hours and the live-preview UX literally requires it. Shipped instead: small overdue items.
+
+- `scripts/mode1-server.js` — `/api/health` reads `APP_VERSION` dynamically via the existing `readCurrentVersion()` helper instead of hardcoding (was stuck at `"1.6.1"` after v1.6.2 bumped past it). Drift class closed.
+- `docs/SKILLS/release-skill.md` — new Step 4.5 ("Update the widget bullets") between the CHANGELOG step and the ROADMAP step, referencing `widget-update-skill.md`.
+- `docs/SKILLS/hotfix-skill.md` — new decision #6 ("Widget bullets are required even for hotfixes"), names v1.6.1 as the precedent for the gap that v1.6.3 backfills.
+- `docs/AI-PRIMER.md` — "For deeper context" section now lists all three skill files so new sessions find the procedure docs from the primer.
+- `index.html` — homepage widget bullets updated under the new skill. One combined backfill bullet ("Made some behind-the-scenes improvements to how the site is built. Nothing visible changes.") covers v1.6.1 + v1.6.2 + v1.6.3 — all three tooling ships that didn't curate bullets at ship time. Per the skill's first-time-visitor rule, bullet doesn't reference any version. (Note: `account.html` not edited — the widget lives only in `index.html`, contrary to what the original `widget-update-skill.md` claimed; see next bullet.)
+- `docs/SKILLS/widget-update-skill.md` — corrected a factual error in the "Where the bullets live" section: only `index.html` hosts the widget, not both files as the initial version of the skill claimed. Caught at gate 6 prep while reading the actual file structure — literally the verification discipline the v1.6.2 DECISIONS entry advocates, applied to the very skill being introduced.
+
+Roadmap cascade: live preview as you type → v1.6.4 (with ID-import as first-class entry point — AniList outage exposed that ID-import is durable infrastructure, not a workaround), More Information panel → v1.6.5, Suggestion Box → v1.6.6.
+
+Tier A — widget bullet in `index.html` is visitor-facing. `npm test` ran clean (gate 6).
+
+<!-- author: Code | date: 2026-05-11 -->
 ## v1.6.2 — PATCH (2026-05-11)
 
 **Prevention follow-up to Bug 10.** Mode 1 server now smoke-checks `runCmd` at startup — runs `npm --version` and `git --version` through the same code path the pipeline uses, before `app.listen()`. If either spawn throws (e.g., `spawn EINVAL`), the server exits with an error message that names Bug 10 by name, points at the WHY comment above `runCmd`, and (for `EINVAL` specifically) suggests the most likely regression cause.

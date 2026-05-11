@@ -74,6 +74,8 @@ When using either path above, hotfix shape differs from a normal release in a fe
 
 5. **Author marker is still required** per project rule #2. `<!-- author: Code | date: YYYY-MM-DD -->` on the line above every CHANGELOG entry and meaningful doc change.
 
+6. **Widget bullets are required even for hotfixes.** Per project rule #6 and `docs/SKILLS/widget-update-skill.md`, every ship — even hotfixes — updates the homepage widget in `index.html`. For Tier B hotfixes (tooling), the bullet is generic per the skill's rules ("Made some behind-the-scenes improvements..."). For Tier A hotfixes (visitor-visible code), write what the visitor will notice ("Fixed a bug where..."). Don't ship the version bump without curating the widget — the v1.6.1 hotfix did this and required v1.6.3 to backfill.
+
 ---
 
 ## Hotfix CHANGELOG format

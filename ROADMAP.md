@@ -24,7 +24,7 @@ Blake writes the review and rating. The AI does everything else.
 
 **Trust gate:** Manual approval before production. Same discipline as the current local → preview → production ladder, just compressed and triggered by clicking save.
 
-**Mode 1 is a *capability*, not a single version.** It ships in v1.6.0 as a baseline (form-based workflow) and gets upgraded across v1.6.3+ as new sub-features land. See Phase B for the upgrade arc.
+**Mode 1 is a *capability*, not a single version.** It ships in v1.6.0 as a baseline (form-based workflow) and gets upgraded across v1.6.4+ as new sub-features land. See Phase B for the upgrade arc.
 
 ### Mode 2 — Autonomous site caretaker *(AI-initiated, scheduled)*
 
@@ -71,7 +71,7 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 ## Current state
 
-**Live at v1.6.2** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped; Mode 1 baseline + server shipped (v1.6.0); spawn-EINVAL hotfix shipped (v1.6.1); Bug 10 prevention ship — startup smoke check + DECISIONS lesson — shipped (v1.6.2):
+**Live at v1.6.3** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped; Mode 1 baseline + server shipped (v1.6.0); spawn-EINVAL hotfix shipped (v1.6.1); Bug 10 prevention ship — startup smoke check + DECISIONS lesson — shipped (v1.6.2); polish bundle + first widget update under the new visitor-first skill shipped (v1.6.3):
 
 - **Public** GitHub repo at `https://github.com/joewolters/real-anime-reviews` (went public + owner renamed from `ReaIGodzilla` → `joewolters` in v1.4.2 on 2026-05-09); formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end
@@ -86,8 +86,9 @@ These rules apply to every AI system that touches the project — Code (the buil
 - v1.6.0 (2026-05-10) — **Phase B Mode 1 ships.** Admin "Add Anime" floating button + form + local Express server (`npm run mode1`) that turns "type submit and boom" into reality. AniList prefill, hybrid image curation per rule #9, 9-step ship pipeline with SSE-streamed progress, explicit deploy confirmation gate, scoped git add, Excel backup, ANSI-stripped logs. 8 bugs caught and fixed by Code's pre-ship test session. Two-mode form: local server for one-click, deployed paste-fallback for off-device.
 - v1.6.1 (2026-05-10) — Hotfix: Mode 1 server `spawn EINVAL` on Windows + Node ≥20.12.2 (Bug 10 from v1.6.0 post-deploy testing). Reverted `runCmd` to `shell: true` for npm/npx/firebase wrappers; added a 17-line WHY comment naming the bug so a future session doesn't re-introduce the same fix attempt.
 - v1.6.2 (2026-05-11) — Bug 10 prevention. Mode 1 server now smoke-checks `runCmd` at startup (`npm --version` + `git --version` through the same code path) — fails fast with a Bug-10-pointer if the spawn config regresses. New `docs/DECISIONS.md` entry captures the meta-lesson: when you change pipeline plumbing, re-run the pipeline at the commit you're shipping (the Vinland Saga pre-ship test ran on pre-spawn-change code, not the code that shipped).
+- v1.6.3 (2026-05-11) — Polish bundle + first widget update under the new visitor-first skill. `/api/health` now reads `APP_VERSION` dynamically (was stuck at hardcoded `"1.6.1"` after v1.6.2 bumped past it); `release-skill.md` and `hotfix-skill.md` now cross-reference `widget-update-skill.md` for bullet curation; `docs/AI-PRIMER.md` "For deeper context" lists all three skill files; one combined backfill bullet on the homepage widget covers v1.6.1 + v1.6.2 + v1.6.3 (all three were tooling ships that didn't curate bullets at the time). Originally scheduled for live preview as you type; deferred to v1.6.4 because AniList's `Media(search:)` endpoint has been returning Not Found for 30+ hours.
 
-**Up next:** v1.6.3 — Mode 1 polish: live preview as you type. Search-as-you-type AniList lookup with debounced dropdown of matches, live card preview reusing the homepage render code. Requires extracting the anime-card render function from `script.js` so the admin form can mirror it. After v1.6.3: v1.6.4 "More Information" panel, v1.6.5 suggestion box integration, v1.6.x real one-click AI integration via Firebase Cloud Function (see `docs/ai-integration-design.md`).
+**Up next:** v1.6.4 — Mode 1 polish: live preview as you type. Search-as-you-type AniList lookup with debounced dropdown of matches, live card preview reusing the homepage render code. Requires extracting the anime-card render function from `script.js` so the admin form can mirror it. **Design pivot from the AniList outage:** ID-import becomes a first-class entry point alongside search-as-you-type (the `b+` approach in `docs/NEXT.md`), not a fallback. After v1.6.4: v1.6.5 "More Information" panel, v1.6.6 suggestion box integration, v1.6.x real one-click AI integration via Firebase Cloud Function (see `docs/ai-integration-design.md`).
 
 ---
 
@@ -129,14 +130,14 @@ The first AI mode goes live. Minimum viable Mode 1.
 - If Blake accepted the AniList default, Mode 1 downloads the cover URL into `assets/` with a slug-based filename (`{slug-of-title}.png`) before commit, so the deployed site serves it locally
 
 **Explicitly NOT in v1.6.0** (saved for upgrade arc):
-- Live preview as you type (v1.6.3)
-- "More Information" panel on anime cards (v1.6.4)
-- Suggestion box integration (v1.6.5)
+- Live preview as you type (v1.6.4)
+- "More Information" panel on anime cards (v1.6.5)
+- Suggestion box integration (v1.6.6)
 - Mode 2 swapping images on existing anime (out of scope by design — see Project rule #9)
 
 **Design note:** the admin panel uses the existing visual language — same purple-glow panel style as the homepage trio (Update Log / Top 10 / Latest Drop), same input styles as the search bar, same button styles, same modal patterns. Admin panel should feel like another illuminated window in the cityscape, not a separate utilitarian tool.
 
-### v1.6.3 — MINOR — Mode 1 polish: live preview as you type
+### v1.6.4 — MINOR — Mode 1 polish: live preview as you type
 
 Upgrade Mode 1 with reactive UX. As Blake types in the form, AniList lookup fires automatically and the right side of the panel shows what the anime card will look like on the homepage.
 
@@ -149,7 +150,7 @@ Upgrade Mode 1 with reactive UX. As Blake types in the form, AniList lookup fire
 
 **Why this is its own version, not bundled into v1.6.0:** baseline Mode 1 needs to ship and be used before Blake knows whether live preview is essential or nice-to-have. The refactor required for live preview is significant; doing it after the baseline is shipped lets that refactor be informed by real usage.
 
-### v1.6.4 — MINOR — Mode 1 expansion: "More Information" panel
+### v1.6.5 — MINOR — Mode 1 expansion: "More Information" panel
 
 Add a left-side mirror of the existing Community Tab on each anime page. Populated by Mode 1 with deeper AniList-derived data that doesn't fit on the main card.
 
@@ -164,7 +165,7 @@ Add a left-side mirror of the existing Community Tab on each anime page. Populat
 
 **Design constraint:** the panel mirrors the Community Tab's layout, dimensions, and styling so the page feels symmetrical.
 
-### v1.6.5 — MINOR — Mode 1 + Suggestion Box integration
+### v1.6.6 — MINOR — Mode 1 + Suggestion Box integration
 
 Visitors can request specific anime via a public form. Requests appear in the admin panel as a queue. Blake can click "Add this anime" on a request to pre-fill the new-anime form with the requested title, then write his review and ship via Mode 1.
 
@@ -177,9 +178,9 @@ Visitors can request specific anime via a public form. Requests appear in the ad
 
 **Note:** this combines what was originally planned as standalone "v1.4.0 — Suggestion box + admin viewer" with Mode 1 integration. The standalone version is no longer planned separately — it lands as part of Mode 1's upgrade arc.
 
-### v1.6.6+ — TBD upgrades
+### v1.6.7+ — TBD upgrades
 
-Future Mode 1 upgrades land here, scoped based on what Blake learns from using v1.6.0 through v1.6.5. Don't pre-plan specific versions; let real usage drive the next features.
+Future Mode 1 upgrades land here, scoped based on what Blake learns from using v1.6.0 through v1.6.6. Don't pre-plan specific versions; let real usage drive the next features.
 
 ---
 
@@ -193,7 +194,7 @@ One-time data migration: pull AniList data for the existing ~44 anime, populate 
 
 Each anime card gets a separate "AniList" section/tab on the main card, displaying verified-source data (genres, ratings, episode counts, streaming where-to-watch badges) at-a-glance.
 
-**This is a separate feature from the v1.6.4 "More Information" panel.** The AniList tab on the main card shows headline data at-a-glance for everyone visiting the page. The More Information panel is the deeper data nerd view that pairs with the Community Tab. Both display AniList-derived data; they serve different reading patterns.
+**This is a separate feature from the v1.6.5 "More Information" panel.** The AniList tab on the main card shows headline data at-a-glance for everyone visiting the page. The More Information panel is the deeper data nerd view that pairs with the Community Tab. Both display AniList-derived data; they serve different reading patterns.
 
 **Two distinct voices:** Blake's main review (human take), the AniList tab (verified-source headline data), the More Information panel (deeper data), the Community Tab (other users' takes).
 
@@ -290,7 +291,7 @@ Bugs documented but not yet fixed.
 
 These were originally planned as standalone features but are now folded into the Mode 1 upgrade arc or deprioritized:
 
-- **Suggestion box + admin viewer.** Folded into v1.6.5 with Mode 1 integration.
+- **Suggestion box + admin viewer.** Folded into v1.6.6 with Mode 1 integration.
 - **Anime font.** Lower priority; site typography is currently fine. Revisit if the visual identity ever feels stale.
 - **@mentions in comments.** Lower priority; the existing comment system works without it. Revisit if community engagement grows enough to need it.
 
