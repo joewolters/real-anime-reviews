@@ -10,15 +10,17 @@
  * error-prone — the v1.3.4 changelog widget bug was exactly this category:
  * APP_VERSION was bumped but the static fallback got missed).
  *
- * Where the version lives (per CLAUDE.md "Version bump checklist")
- * ----------------------------------------------------------------
- *   index.html line   8: <script>window.APP_VERSION="X.Y.Z"</script>
- *   index.html line  24: <link ... href="style.css?v=X.Y.Z">
- *   index.html line  25: <link ... href="mobile.css?v=X.Y.Z" ...>
- *   index.html line 168: <span ... id="changelog-version">vX.Y.Z</span>
- *   account.html line 7: <script>window.APP_VERSION="X.Y.Z"</script>
- *   account.html line 23: <link ... href="style.css?v=X.Y.Z" />
- *   account.html line 24: <link ... href="mobile.css?v=X.Y.Z" ... />
+ * Where the version lives (14 total strings across 3 HTML files)
+ * --------------------------------------------------------------
+ *   index.html              window.APP_VERSION + style/mobile/admin-fab
+ *                           cache-busts + changelog widget tag           (5)
+ *   account.html            window.APP_VERSION + style/mobile/admin-fab
+ *                           cache-busts                                   (4)
+ *   admin/new-anime.html    window.APP_VERSION + style/mobile/admin-fab/
+ *                           new-anime cache-busts                         (5)
+ *
+ * Authoritative source: the TARGETS array below. When you add a new HTML
+ * file or cache-busted asset, add an entry there.
  *
  * The hardcoded fallback `const v = window.APP_VERSION || "1.0.1"` in both
  * HTML files is INTENTIONALLY NOT bumped. That fallback represents the
@@ -29,7 +31,7 @@
  * -----
  *   node scripts/bump-version.js 1.5.0          # bump everything to 1.5.0
  *   node scripts/bump-version.js 1.5.0 --dry-run  # show what would change, no write
- *   node scripts/bump-version.js --check         # verify all 7 strings agree
+ *   node scripts/bump-version.js --check         # verify all 14 strings agree
  *   node scripts/bump-version.js --help          # this help
  *
  * Run from the project root (the folder containing index.html and account.html).
@@ -108,6 +110,49 @@ const TARGETS = [
     pattern: /(href="mobile\.css\?v=)([^"]+)(")/,
     replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
   },
+  // ---- Added in v1.6.0 (Mode 1 baseline) ----
+  {
+    file: 'index.html',
+    label: 'admin-fab.css?v= (index)',
+    pattern: /(href="admin-fab\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'account.html',
+    label: 'admin-fab.css?v= (account)',
+    pattern: /(href="admin-fab\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/new-anime.html',
+    label: 'window.APP_VERSION (admin)',
+    pattern: /(<script>window\.APP_VERSION=")([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/new-anime.html',
+    label: 'style.css?v= (admin)',
+    pattern: /(href="\.\.\/style\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/new-anime.html',
+    label: 'mobile.css?v= (admin)',
+    pattern: /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/new-anime.html',
+    label: 'admin-fab.css?v= (admin)',
+    pattern: /(href="\.\.\/admin-fab\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/new-anime.html',
+    label: 'new-anime.css?v= (admin)',
+    pattern: /(href="new-anime\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
 ];
 
 // ---- Helpers ---------------------------------------------------------------
@@ -160,17 +205,13 @@ ${C.bold}Real Anime Reviews — version-bump script${C.reset}
   ${C.bold}Usage:${C.reset}
     node scripts/bump-version.js ${C.green}1.5.0${C.reset}              ${C.gray}# bump to 1.5.0${C.reset}
     node scripts/bump-version.js ${C.green}1.5.0${C.reset} --dry-run    ${C.gray}# preview, no write${C.reset}
-    node scripts/bump-version.js --check              ${C.gray}# verify all 7 agree${C.reset}
+    node scripts/bump-version.js --check              ${C.gray}# verify all 14 agree${C.reset}
     node scripts/bump-version.js --help
 
-  ${C.bold}Updates 7 places automatically:${C.reset}
-    index.html   line   8  ${C.gray}window.APP_VERSION${C.reset}
-    index.html   line  24  ${C.gray}style.css?v=${C.reset}
-    index.html   line  25  ${C.gray}mobile.css?v=${C.reset}
-    index.html   line 168  ${C.gray}changelog widget static fallback${C.reset}
-    account.html line   7  ${C.gray}window.APP_VERSION${C.reset}
-    account.html line  23  ${C.gray}style.css?v=${C.reset}
-    account.html line  24  ${C.gray}mobile.css?v=${C.reset}
+  ${C.bold}Updates 14 places automatically:${C.reset}
+    index.html              ${C.gray}APP_VERSION + style/mobile/admin-fab cache-busts + widget tag${C.reset}  (5)
+    account.html            ${C.gray}APP_VERSION + style/mobile/admin-fab cache-busts${C.reset}              (4)
+    admin/new-anime.html    ${C.gray}APP_VERSION + style/mobile/admin-fab/new-anime cache-busts${C.reset}    (5)
 
   ${C.bold}Run from:${C.reset} the project root (folder containing index.html).
 `);
@@ -188,7 +229,7 @@ function cmdCheck() {
 
   if (versions.size === 1) {
     const [v] = versions;
-    console.log(`${C.green}OK:${C.reset} all 7 strings agree on ${C.bold}v${v}${C.reset}`);
+    console.log(`${C.green}OK:${C.reset} all ${found.length} strings agree on ${C.bold}v${v}${C.reset}`);
     process.exit(0);
   } else {
     console.log(`${C.red}MISMATCH:${C.reset} found ${versions.size} different versions: ${[...versions].join(', ')}`);

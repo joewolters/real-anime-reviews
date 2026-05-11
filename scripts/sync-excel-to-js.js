@@ -128,6 +128,18 @@ function checkGenre(genreString, title, warnings) {
   }
 }
 
+// Slugify a title to a filename-safe slug (matches Mode 1 server's slugify
+// so the slug-based image fallback below finds files Mode 1 downloaded).
+function slugify(title) {
+  return String(title)
+    .toLowerCase()
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-+/g, '-');
+}
+
 // ---- Title normalization for matching ------------------------------------
 // Excel often has curly apostrophes (’), Unicode dashes (− – —), and slightly
 // different capitalization than animeData.js (which has straight apostrophes ',
@@ -304,8 +316,22 @@ function rowToAnime(row, headers, imageMap, warnings) {
   // between Excel and the hand-typed JS without losing existing image references.)
   let image = imageMap.get(normalizeTitle(title));
   if (!image) {
+    // BUG 9 fix: before falling back to placeholder, try the slug convention.
+    // Mode 1 server downloads covers as `assets/<slug>.png`, so a freshly-added
+    // entry's image will be there even if no prior animeData.js entry exists.
+    const slug = slugify(title);
+    const ASSETS_DIR = path.resolve(path.dirname(OUTPUT_PATH), 'assets');
+    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
+      const candidate = `${slug}.${ext}`;
+      if (fs.existsSync(path.join(ASSETS_DIR, candidate))) {
+        image = candidate;
+        break;
+      }
+    }
+  }
+  if (!image) {
     image = DEFAULT_IMAGE;
-    warnings.push(`No image found in existing animeData.js for new entry "${title}" — using "${DEFAULT_IMAGE}". Drop the image file in assets/ and the next sync will need a manual edit, OR wait for Mode 1 (v1.6.0) which auto-downloads from AniList.`);
+    warnings.push(`No image found for new entry "${title}" — using "${DEFAULT_IMAGE}". Drop a file at assets/${slugify(title)}.png (or .jpg/.webp) and re-run sync, OR use Mode 1 which downloads the AniList cover automatically.`);
   }
 
   const anime = {

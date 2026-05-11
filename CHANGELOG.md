@@ -10,6 +10,62 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-05-10 -->
+## v1.6.0 — MINOR (2026-05-10)
+
+**Phase B begins: Mode 1 baseline + local "one-click ship" server.** Adding a new anime drops from "edit JS by hand, copy to Excel manually, hope you got the format right, run sync, run tests, bump version, commit, push, deploy" down to **type a title, write a review, click Submit & Ship.** The local Node server orchestrates the whole pipeline in ~30 seconds with a real-time progress stream.
+
+**Two ship modes (auto-detected by the form):**
+
+- **Local mode** — `npm run mode1` starts an Express server on `http://localhost:8888`. Form detects the server, button reads "Submit & Ship", clicking it runs the full 9-step pipeline (Excel backup + append → image download → sync → widget update → version bump → CHANGELOG entry → tests → git commit + push → Firebase deploy) with SSE-streamed progress. Pauses for explicit confirmation before the production deploy.
+- **Remote (deployed admin form, fallback)** — same form at `realanimereviews.com/admin/new-anime`, but no server reachable → button reads "Generate Excel Row" → outputs a tab-separated row + command sequence to run locally. Same data model, just two-step.
+
+**New entry point:** floating "Admin" pill in the bottom-right corner of every page (visible ONLY when signed in as admin per UID match). Click → dropdown menu of admin tools → "+ Add Anime" navigates to the form. Designed to extend — future Mode 2 dashboards, audit views, etc. plug into the same `ADMIN_MENU_ITEMS` array.
+
+**The form itself:**
+- Type title → AniList GraphQL fetch (browser-side, CORS-friendly, no backend needed)
+- Pre-fills genre, seasons, description (trimmed to ~600 chars), studio (with auto-capitalization for all-lowercase names), trailer (auto-normalized to `/embed/`), official streaming list, top 8 high-rank tags
+- Image preview shows AniList default cover with dimensions and a "⚠ not 2:3" warning if aspect ratio is off; **Override** button reveals a filename input for Blake's manual file (per project rule #9 hybrid image curation)
+- Watch is split into Official (green badge, AniList prefills) and Unofficial (orange badge, Blake fills) — combined + deduped on save
+- Custom number stepper for Top 10 Rank (matches site purple gradient instead of browser default arrows)
+- Inline AI suggestion panels next to Description and Tags — open Claude with a pre-filled prompt, paste response back, Use this populates the field. (Real one-click integration via Cloud Function planned in v1.6.x — see `docs/ai-integration-design.md`.)
+
+**Mode 1 server safety baked in:**
+- **Pre-flight checks** before any mutation: Excel lock file detection (friendly error if Excel is open), duplicate-title check against existing animeData.js
+- **Excel backup** (`.bak.<timestamp>.xlsx`) before every write — recovery path for failed ships since git can't roll back Excel
+- **Image overwrite refused** — server throws if `assets/<slug>.png` already exists (curated assets protected)
+- **Slug-based image fallback in sync** — if the new entry has no prior animeData.js entry, sync looks for `assets/<slug>.png` (or .jpg/.webp) before falling back to placeholder. The Mode 1 download lands at exactly that path.
+- **Override post-patch** — if Blake provided a custom filename, server patches animeData.js after sync to use it
+- **Tests must pass** before commit — chain stops on `npm test` failure
+- **Production deploy requires explicit UI confirmation** — server pauses with `awaitingDeploy: true`, form shows a "Yes, deploy now" button
+- **Scoped git add** — only commits files this ship is supposed to touch (CHANGELOG, animeData.js, HTMLs, the new image), leaves unrelated WIP alone
+- **`?skipPush=1` flag** for testing — runs everything except push and deploy, leaves zero public footprint
+- **ANSI escape stripping** in log streams — server console output is readable in the form's collapsible "Show server output" details panel
+- **No `shell: true` for git/node** — eliminates Node 22's DEP0190 deprecation warning AND the previous arg-mangling bug from cmd.exe quote handling
+
+**Tooling extended:**
+- `scripts/mode1-server.js` — the local Express server (~400 lines). One command: `npm run mode1`.
+- `scripts/sync-excel-to-js.js` — added `slugify()` helper + slug-based image fallback (Bug 9 fix from the testing report).
+- `scripts/bump-version.js` — extended from 7 to 14 version-string targets (added admin-fab.css cache-busts in index/account, plus 5 in admin/new-anime.html).
+- `package.json` — added `express ^4.21.0` dev dependency, `mode1` npm script.
+
+**New documentation:**
+- `docs/mode1-design.md` — full architecture for the form + server, file layout, security model, upgrade arc through v1.6.x.
+- `docs/ai-integration-design.md` — three-option plan for upgrading the inline AI panel from copy/paste to one-click (Cloud Function recommended).
+
+**What's NOT in v1.6.0** (saved for v1.6.x):
+- Live preview as you type (search-as-you-type AniList dropdown + live card preview)
+- "More Information" panel on cards (left-side mirror of Community Tab)
+- Suggestion box integration (public form + admin queue + handoff)
+- Real one-click AI integration (replacing the current paste-back workaround)
+- One-click full automation without the deploy confirmation gate
+
+**Tested by Code** in a separate session via the `?skipPush=1` test path (Vinland Saga end-to-end). All 9 pipeline steps green; 8 bugs surfaced and fixed before this ship; clean rollback verified via Excel `.bak` restore + `git stash`. See test report from 2026-05-10 for details.
+
+**Tests required and passed** (Tier A — production code change). Per project rule #7.
+
+**Up next:** v1.6.1 polish — live preview as you type (search dropdown + live card preview). Then v1.6.2+ per the Phase B upgrade arc.
+
 <!-- author: Code | date: 2026-05-09 -->
 ## v1.5.1 — PATCH (2026-05-09)
 

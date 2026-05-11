@@ -71,7 +71,7 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 ## Current state
 
-**Live at v1.5.1** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped:
+**Live at v1.6.0** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped; Mode 1 baseline + server shipped:
 
 - **Public** GitHub repo at `https://github.com/joewolters/real-anime-reviews` (went public + owner renamed from `ReaIGodzilla` → `joewolters` in v1.4.2 on 2026-05-09); formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end
@@ -83,8 +83,9 @@ These rules apply to every AI system that touches the project — Code (the buil
 - v1.4.3 (2026-05-09) — project relocated to `C:\Users\Owner\PROJECTS\Real Anime Reviews\`; tooling additions (`.gitattributes`, `scripts/bump-version.js`); new docs (`anilist-spike.md`, `AI-PRIMER.md`, `CODE-PROMPTS.md`, `DECISIONS.md`); project rule #9 updated to hybrid image curation. Docs/tooling only.
 - v1.5.0 (2026-05-09) — **Phase A complete.** `scripts/sync-excel-to-js.js` ships; `Anime_Master_Table.xlsx` is now genuinely canonical. `npm run sync` regenerates `animeData.js` from Excel in one command, with validation, transformation, and fuzzy title matching to preserve image references. 5 new Excel columns (Top10Rank + 4 AniList placeholders) added in same ship. 44 anime resynced; all 7 Playwright tests pass.
 - v1.5.1 (2026-05-09) — Top 10 rank #1 fix (Eminence in Shadow, was Farming Life). First real-world use of the v1.5.0 sync pipeline for a content edit.
+- v1.6.0 (2026-05-10) — **Phase B Mode 1 ships.** Admin "Add Anime" floating button + form + local Express server (`npm run mode1`) that turns "type submit and boom" into reality. AniList prefill, hybrid image curation per rule #9, 9-step ship pipeline with SSE-streamed progress, explicit deploy confirmation gate, scoped git add, Excel backup, ANSI-stripped logs. 8 bugs caught and fixed by Code's pre-ship test session. Two-mode form: local server for one-click, deployed paste-fallback for off-device.
 
-**Up next:** Phase B — Mode 1 baseline (v1.6.0): admin "new anime" page gated by admin UID, AniList prefill, image preview slot with override (per hybrid rule #9), full ship pipeline on save (CHANGELOG → animeData.js → Excel → commit → preview deploy → approval → prod). See Phase B section below for the full upgrade arc through v1.6.3.
+**Up next:** v1.6.1 — Mode 1 polish: live preview as you type. Search-as-you-type AniList lookup with debounced dropdown of matches, live card preview reusing the homepage render code. Requires extracting the anime-card render function from `script.js` so the admin form can mirror it. After v1.6.1: v1.6.2 "More Information" panel, v1.6.3 suggestion box integration, v1.6.x real one-click AI integration via Firebase Cloud Function (see `docs/ai-integration-design.md`).
 
 ---
 

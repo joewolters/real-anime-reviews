@@ -1,0 +1,234 @@
+/* admin-fab.css — Admin Mode floating action button (FAB)
+   ============================================================================
+   Visual: matches .inline-header-btn from style.css — same dark-purple glassy
+   gradient, same border, same shimmer sweep on hover. Sits in the bottom-right
+   corner of every page, visible only when admin.
+
+   Author: Code | date: 2026-05-10 | Mode 1 baseline (v1.6.0)
+   ============================================================================ */
+
+#admin-fab-root {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: auto;
+  font-family: 'Montserrat', sans-serif;
+}
+
+#admin-fab-root.admin-fab-hidden {
+  display: none;
+}
+
+#admin-fab-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  color: rgba(245, 242, 255, 0.96);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, rgba(110, 50, 195, 0.97), rgba(55, 0, 95, 1.0));
+  border: 1px solid rgba(187, 134, 252, 0.55);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.28),
+    0 0 0 rgba(187, 134, 252, 0);
+  cursor: pointer;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    filter 0.18s ease;
+}
+
+#admin-fab-button::before {
+  content: "";
+  position: absolute;
+  inset: -70%;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.06) 38%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.06) 62%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0.35;
+  transform: translate3d(-45%, 0, 0) rotate(10deg);
+  filter: blur(10px);
+  will-change: transform, opacity;
+  transition: opacity 0.18s ease, transform 0.45s ease;
+}
+
+#admin-fab-button:hover {
+  transform: translateY(-2px) scale(1.04);
+  border-color: rgba(187, 134, 252, 0.72);
+  box-shadow:
+    0 16px 30px rgba(0, 0, 0, 0.36),
+    0 0 18px rgba(187, 134, 252, 0.55);
+  filter: brightness(1.06);
+}
+
+#admin-fab-button:hover::before {
+  opacity: 0.70;
+  transform: translate3d(15%, 0, 0) rotate(10deg);
+}
+
+#admin-fab-button:active {
+  transform: translateY(0) scale(0.99);
+}
+
+#admin-fab-button:focus-visible {
+  outline: 2px solid rgba(187, 134, 252, 0.92);
+  outline-offset: 2px;
+}
+
+#admin-fab-button svg {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.admin-fab-label {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-fab-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 10px;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.92), rgba(20, 6, 38, 0.96));
+  border: 1px solid rgba(187, 134, 252, 0.42);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.50),
+    0 0 24px rgba(187, 134, 252, 0.20);
+  transform-origin: bottom right;
+  animation: admin-fab-menu-in 0.18s ease;
+}
+
+.admin-fab-menu-hidden {
+  display: none;
+}
+
+@keyframes admin-fab-menu-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.admin-fab-menu-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #bb86fc;
+  padding: 8px 12px 12px;
+  border-bottom: 1px solid rgba(187, 134, 252, 0.18);
+  margin-bottom: 6px;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.admin-fab-jp {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: #cfc7d9;
+  font-weight: 500;
+}
+
+.admin-fab-menu-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  margin: 2px 0;
+  border-radius: 10px;
+  text-align: left;
+  color: #efe7ff;
+  background: transparent;
+  border: 1px solid transparent;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    transform 0.14s ease;
+}
+
+.admin-fab-menu-item:hover {
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.22), rgba(70, 0, 110, 0.32));
+  border-color: rgba(187, 134, 252, 0.42);
+}
+
+.admin-fab-menu-item:focus-visible {
+  outline: 2px solid #ffd6ff;
+  outline-offset: 1px;
+}
+
+.admin-fab-menu-item:active {
+  transform: scale(0.99);
+}
+
+.admin-fab-menu-item-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.admin-fab-menu-item-jp {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 11px;
+  color: #bb86fc;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  #admin-fab-root {
+    bottom: 16px;
+    right: 16px;
+  }
+  #admin-fab-button {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+  }
+  .admin-fab-menu {
+    min-width: 240px;
+    max-width: calc(100vw - 32px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #admin-fab-button,
+  #admin-fab-button::before,
+  .admin-fab-menu-item {
+    transition: none !important;
+  }
+  .admin-fab-menu {
+    animation: none;
+  }
+}

@@ -2,16 +2,18 @@
   "name": "real-anime-reviews",
   "version": "1.0.0",
   "private": true,
-  "description": "Local tooling for realanimereviews.com (test runner + Excel sync — site code is plain HTML/JS).",
+  "description": "Local tooling for realanimereviews.com (test runner + Excel sync + Mode 1 server — site code is plain HTML/JS).",
   "scripts": {
     "test": "playwright test",
     "sync": "node scripts/sync-excel-to-js.js",
     "sync:check": "node scripts/sync-excel-to-js.js --dry-run",
     "bump": "node scripts/bump-version.js",
-    "anilist": "node scripts/anilist-fetch.js"
+    "anilist": "node scripts/anilist-fetch.js",
+    "mode1": "node scripts/mode1-server.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "express": "^4.21.0"
   }
 }
