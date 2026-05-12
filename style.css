@@ -215,7 +215,7 @@ header h1:hover {
     width: 100%;
     height: auto;
     aspect-ratio: 2 / 3;
-    object-fit: contain;
+    object-fit: cover;
     display: block;
 }
 

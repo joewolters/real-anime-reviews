@@ -11,6 +11,17 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-05-11 -->
+## v1.6.6 — PATCH (2026-05-11)
+
+**Hotfix: cover images now fill the anime card frame cleanly.** Switched `.card img` from `object-fit: contain` to `object-fit: cover` in `style.css:218` so AniList covers (and any source image not pixel-perfect 2:3) crop a few invisible edge pixels rather than letterboxing with visible dark bars inside the card frame.
+
+- `style.css:218` — `object-fit: contain` → `object-fit: cover` on the `.card img` rule. Pure `+1 / -1` diff. Affects both homepage cards (via `card-render.js`'s output) AND the admin form's live preview slot (which inherits the rule via the shared `.card` class).
+
+**Why it slipped through v1.6.5:** the rule was authored long before AniList sources came into use, and the project's 44 curated `assets/*.png` cover images happen to be ≈2:3 (most are 460×686, exactly the form copy's recommended ratio) — so `contain` and `cover` produced identical output in the live catalog. v1.6.5's live preview was the first feature to pipe an AniList CDN URL into a `.card` element, and AniList covers aren't always strictly 2:3 (the Gosick example Blake hit during v1.6.5 smoke is ~420×590, ratio 1:1.405 vs. 2:3's 1:1.5). Visible bars appeared. Queued in `docs/NEXT.md` v1.6.x as a polish ship; addressed here as a same-day hotfix since the AniList live-preview entry path was a v1.6.5 deliverable and visible-broken cards undermine the feature's value.
+
+Tier A — `style.css` is visitor-facing (homepage cards). `npm test` ran clean (7/7 in 15.6s). Blake's local browser check confirmed: live preview card now shows the AniList cover filling the card frame, no empty bars.
+
+<!-- author: Code | date: 2026-05-11 -->
 ## v1.6.5 — MINOR (2026-05-11)
 
 **Live preview as you type ships for the admin form — type a title (search-as-you-type dropdown) or paste an AniList URL/ID, see the prefilled form AND a live preview card that mirrors the homepage card rendering 1:1, with the preview panel staying pinned as you scroll through edits.** The headline is the live preview, but the enabling refactor is the bigger structural shift: the card-render function moves out of `script.js`'s IIFE into a shared `card-render.js`, so both the homepage and the admin form draw cards from the same code — no fork, no drift, no copy-paste duplication. This is also the first ship driven by the multi-gate Code/Cowork workflow with rolling `docs/SHIP-PROMPT.md` + `docs/SHIP-OUTPUT.md` files; gate-level browser smoke tests caught two bugs pre-commit that would have shipped under the previous "test then ship" rhythm.
