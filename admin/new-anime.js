@@ -40,12 +40,61 @@ query ($search: String!) {
   }
 }`;
 
+// ---- v1.6.5: search-as-you-type + ID-import + live preview ----------------
+const SEARCH_DEBOUNCE_MS = 250;
+const PREVIEW_DEBOUNCE_MS = 120;
+const SEARCH_MIN_CHARS = 2;
+
+// Lightweight query for the dropdown — just enough to render result items.
+const SEARCH_QUERY = `
+query ($search: String!) {
+  Page(perPage: 8) {
+    media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+      id
+      title { romaji english }
+      format
+      seasonYear
+    }
+  }
+}`;
+
+// Same shape as FULL_QUERY but takes an Int id instead of String search.
+// Used by dropdown-select + ID-import paths (both land at populateForm).
+const FULL_QUERY_BY_ID = `
+query ($id: Int!) {
+  Media(id: $id, type: ANIME) {
+    id
+    idMal
+    title { romaji english }
+    description(asHtml: false)
+    episodes
+    seasonYear
+    season
+    format
+    status
+    genres
+    tags { name rank isMediaSpoiler }
+    studios { nodes { name isAnimationStudio } }
+    coverImage { large extraLarge color }
+    averageScore
+    trailer { id site }
+    externalLinks { site url type language }
+    siteUrl
+  }
+}`;
+
 const state = {
   anilist: null,
   imageSource: 'anilist',
   imageOverride: '',
   serverMode: 'remote',
 };
+
+// v1.6.5 module-level state for search-as-you-type + preview debounce
+let _searchDebounceTimer = null;
+let _previewDebounceTimer = null;
+let _searchResultsCache = [];
+let _searchSelectedIndex = -1;
 
 // ---- Detect Mode 1 server (localhost only) -------------------------------
 async function detectServerMode() {
@@ -143,9 +192,40 @@ async function fetchAniList(title) {
   return body.data?.Media || null;
 }
 
+// v1.6.5 — lightweight multi-result search for the dropdown.
+async function searchAniList(query) {
+  const response = await fetch(ANILIST_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ query: SEARCH_QUERY, variables: { search: query } }),
+  });
+  if (!response.ok) throw new Error(`AniList HTTP ${response.status}`);
+  const body = await response.json();
+  if (body.errors?.length) throw new Error(body.errors[0].message);
+  return body.data?.Page?.media || [];
+}
+
+// v1.6.5 — full Media payload by ID. Used by dropdown-select + ID-import paths.
+async function fetchAniListById(id) {
+  const response = await fetch(ANILIST_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ query: FULL_QUERY_BY_ID, variables: { id: parseInt(id, 10) } }),
+  });
+  if (!response.ok) throw new Error(`AniList HTTP ${response.status}`);
+  const body = await response.json();
+  if (body.errors?.length) throw new Error(body.errors[0].message);
+  return body.data?.Media || null;
+}
+
 // ---- Populate form --------------------------------------------------------
 function populateForm(media) {
   state.anilist = media;
+
+  // gate 5c — overwrite title with AniList canonical (e.g. "GOSICK" not user's "gosick")
+  // so saved data matches the show's official spelling. English first, romaji fallback,
+  // preserve typed value only if both are null (rare). Same pattern as renderSearchResults.
+  $('title-input').value = media.title?.english || media.title?.romaji || $('title-input').value;
 
   const genres = (media.genres || []).slice(0, 2);
   $('genre-input').value = genres.join(' / ');
@@ -201,6 +281,143 @@ function populateForm(media) {
   showStep(2); showStep(3); showStep(4); showStep(5);
   $('output-section').hidden = true;
   $('progress-section').hidden = true;
+
+  // v1.6.5 — render the live preview card now that AniList data is loaded.
+  // All three entry paths (Fetch button, dropdown select, ID-import) land here
+  // and therefore get the preview rendered as a side effect of populateForm.
+  updatePreview();
+}
+
+// ---- v1.6.5: search dropdown + ID-import + live preview helpers -----------
+
+function parseAniListIdOrUrl(input) {
+  const trimmed = String(input || '').trim();
+  // URL pattern: anilist.co/anime/<digits>/anything  (also without trailing slash)
+  const urlMatch = trimmed.match(/anilist\.co\/anime\/(\d+)/i);
+  if (urlMatch) return parseInt(urlMatch[1], 10);
+  // Bare numeric
+  if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+  const err = new Error("That doesn't look like an AniList URL or ID. Paste either the full URL from anilist.co or just the number.");
+  err.code = 'PARSE';
+  throw err;
+}
+
+function renderSearchResults(results) {
+  _searchResultsCache = results;
+  _searchSelectedIndex = -1;
+  const ul = $('search-results');
+  if (!results.length) {
+    ul.innerHTML = `<li class="search-results-empty">No matches on AniList. Try a different spelling, or use Fetch by ID.</li>`;
+    ul.hidden = false;
+    $('title-input').setAttribute('aria-expanded', 'true');
+    return;
+  }
+  ul.innerHTML = results.map(r => {
+    const title = (r.title?.english || r.title?.romaji || '(no title)');
+    const meta = `${r.format || '?'} · ${r.seasonYear || '—'}`;
+    return `<li class="search-result-item" role="option" aria-selected="false" data-anilist-id="${r.id}">
+      <span class="result-title">${escapeHtml(title)}</span>
+      <span class="result-meta">${escapeHtml(meta)}</span>
+    </li>`;
+  }).join('');
+  ul.hidden = false;
+  $('title-input').setAttribute('aria-expanded', 'true');
+}
+
+function renderSearchResultsError(msg) {
+  const ul = $('search-results');
+  ul.innerHTML = `<li class="search-results-empty">${escapeHtml(msg)}</li>`;
+  ul.hidden = false;
+  $('title-input').setAttribute('aria-expanded', 'true');
+}
+
+function clearSearchResults() {
+  const ul = $('search-results');
+  ul.innerHTML = '';
+  ul.hidden = true;
+  _searchResultsCache = [];
+  _searchSelectedIndex = -1;
+  $('title-input').setAttribute('aria-expanded', 'false');
+}
+
+function highlightResult(index) {
+  if (!_searchResultsCache.length) return;
+  if (index < 0) index = _searchResultsCache.length - 1;
+  if (index >= _searchResultsCache.length) index = 0;
+  _searchSelectedIndex = index;
+  const items = $('search-results').querySelectorAll('.search-result-item');
+  items.forEach((li, i) => {
+    li.setAttribute('aria-selected', i === index ? 'true' : 'false');
+    if (i === index) li.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function selectResultByIndex(index) {
+  if (index < 0 || index >= _searchResultsCache.length) return;
+  selectResultById(_searchResultsCache[index].id);
+}
+
+async function selectResultById(anilistId) {
+  setStatus('Fetching from AniList…');
+  try {
+    const media = await fetchAniListById(anilistId);
+    if (!media) {
+      setStatus(`Couldn't find an anime with ID ${anilistId} on AniList. Double-check the number.`, 'error');
+      return;
+    }
+    populateForm(media);   // calls updatePreview() at its end (gate 5 adjustment #2 — no duplicate)
+    clearSearchResults();
+    setStatus(`Loaded "${media.title?.romaji || ''}".`);
+  } catch (err) {
+    setStatus(`AniList error: ${err.message}`, 'error');
+  }
+}
+
+function setIdStatus(msg, kind) {
+  const el = $('id-fetch-status');
+  if (!msg) { el.hidden = true; el.textContent = ''; return; }
+  el.hidden = false;
+  el.textContent = msg;
+  el.className = 'muted small status-line' + (kind === 'error' ? ' error' : '');
+}
+
+// Build the preview card data from CURRENT form state so Blake's edits reflect
+// immediately, not the AniList original. Image handling: AniList CDN URLs use
+// assetBase='' (URL is absolute); manual overrides + placeholder fall back to
+// '../assets/' because the admin form lives one level deep.
+function buildPreviewAnimeData() {
+  const title = $('title-input').value.trim() || '(Untitled)';
+  const genre = $('genre-input').value.trim();
+  const rating = $('rating-input').value.trim();
+  let image, assetBase;
+  if (state.imageSource === 'override' && state.imageOverride) {
+    image = state.imageOverride;
+    assetBase = '../assets/';
+  } else if (state.anilist?.coverImage) {
+    image = state.anilist.coverImage.extraLarge || state.anilist.coverImage.large || '';
+    assetBase = '';
+  } else {
+    image = 'placeholder.png';
+    assetBase = '../assets/';
+  }
+  return { anime: { Title: title, Genre: genre, Rating: rating, image }, assetBase };
+}
+
+function updatePreview() {
+  if (typeof window.renderAnimeCardMarkup !== 'function') return;  // gate 1 contract
+  const slot = $('card-preview-slot');
+  if (!slot) return;
+  // Leave placeholder visible until the user has fetched OR typed a title.
+  if (!state.anilist && !$('title-input').value.trim()) return;
+  const { anime, assetBase } = buildPreviewAnimeData();
+  slot.innerHTML = '';
+  const card = window.renderAnimeCardMarkup(anime, { animeId: 'preview', assetBase });
+  slot.appendChild(card);
+}
+
+function schedulePreviewUpdate() {
+  clearTimeout(_previewDebounceTimer);
+  _previewDebounceTimer = setTimeout(updatePreview, PREVIEW_DEBOUNCE_MS);
 }
 
 // ---- Generate Excel row + commands (paste workflow) -----------------------
@@ -535,14 +752,99 @@ function wire() {
   });
 
   $('title-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); $('fetch-btn').click(); }
+    // v1.6.5 — dropdown keyboard nav takes precedence when a result is highlighted;
+    // otherwise Enter falls back to the existing fetch-btn behavior.
+    if (e.key === 'ArrowDown') {
+      if ($('search-results').hidden) return;
+      e.preventDefault();
+      highlightResult(_searchSelectedIndex + 1);
+    } else if (e.key === 'ArrowUp') {
+      if ($('search-results').hidden) return;
+      e.preventDefault();
+      highlightResult(_searchSelectedIndex - 1);
+    } else if (e.key === 'Enter') {
+      if (_searchSelectedIndex >= 0) {
+        e.preventDefault();
+        selectResultByIndex(_searchSelectedIndex);
+      } else {
+        e.preventDefault();
+        $('fetch-btn').click();
+      }
+    } else if (e.key === 'Escape') {
+      clearSearchResults();
+    }
   });
+
+  // v1.6.5 — search-as-you-type
+  $('title-input').addEventListener('input', (e) => {
+    const q = e.target.value.trim();
+    clearTimeout(_searchDebounceTimer);
+    if (q.length < SEARCH_MIN_CHARS) { clearSearchResults(); return; }
+    _searchDebounceTimer = setTimeout(async () => {
+      try {
+        const results = await searchAniList(q);
+        renderSearchResults(results);
+      } catch (err) {
+        renderSearchResultsError("Couldn't reach AniList — try again in a moment.");
+      }
+    }, SEARCH_DEBOUNCE_MS);
+  });
+
+  // v1.6.5 — dropdown click delegation
+  $('search-results').addEventListener('click', (e) => {
+    const li = e.target.closest('.search-result-item');
+    if (!li) return;
+    const id = parseInt(li.dataset.anilistId, 10);
+    if (Number.isFinite(id)) selectResultById(id);
+  });
+
+  // v1.6.5 — click outside the dropdown clears it
+  document.addEventListener('click', (e) => {
+    const results = $('search-results');
+    if (!results || results.hidden) return;
+    if (!results.contains(e.target) && e.target !== $('title-input')) {
+      clearSearchResults();
+    }
+  });
+
+  // v1.6.5 — ID-import button: parse → fetch by ID → populateForm (which renders preview)
+  $('fetch-by-id-btn').addEventListener('click', async () => {
+    const raw = $('anilist-id-input').value;
+    setIdStatus('');
+    let id;
+    try { id = parseAniListIdOrUrl(raw); }
+    catch (err) { setIdStatus(err.message, 'error'); return; }
+    setIdStatus(`Fetching AniList ID ${id}…`);
+    try {
+      const media = await fetchAniListById(id);
+      if (!media) {
+        setIdStatus(`Couldn't find an anime with ID ${id} on AniList. Double-check the number.`, 'error');
+        return;
+      }
+      populateForm(media);   // calls updatePreview() at its end (gate 5 adjustment #2 — no duplicate)
+      setIdStatus(`Loaded "${media.title?.romaji || ''}" by ID.`);
+      $('anilist-id-input').value = '';
+    } catch (err) {
+      setIdStatus(`AniList error: ${err.message}`, 'error');
+    }
+  });
+
+  // v1.6.5 — Enter key on id-input triggers the ID-import button
+  $('anilist-id-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); $('fetch-by-id-btn').click(); }
+  });
+
+  // v1.6.5 — live preview re-render on field changes
+  for (const fieldId of ['title-input', 'genre-input', 'rating-input']) {
+    $(fieldId)?.addEventListener('input', schedulePreviewUpdate);
+  }
 
   $('override-btn').addEventListener('click', () => {
     state.imageSource = 'override';
     $('override-row').hidden = false;
     $('image-source-label').textContent = 'Manual override';
     $('image-filename-input').focus();
+    schedulePreviewUpdate();   // v1.6.5
   });
 
   $('image-filename-input').addEventListener('input', (e) => {
@@ -551,6 +853,7 @@ function wire() {
       $('image-preview').src = '../assets/' + state.imageOverride;
       $('image-preview').alt = state.imageOverride + ' (manual override)';
     }
+    schedulePreviewUpdate();   // v1.6.5
   });
 
   $('revert-image-btn').addEventListener('click', () => {
@@ -562,6 +865,7 @@ function wire() {
     $('image-source-label').textContent = 'AniList default';
     $('override-row').hidden = true;
     $('image-filename-input').value = '';
+    schedulePreviewUpdate();   // v1.6.5
   });
 
   $('generate-btn').addEventListener('click', () => {

@@ -8,6 +8,7 @@
       "PERSONAL.md",
       "UpdateLog/**",
       "AUDIT_*.md",
+      "docs/SHIP-*.md",
       "tests/**",
       "playwright.config.js",
       "package.json",

@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Add New Anime — Real Anime Reviews</title>
-  <script>window.APP_VERSION="1.6.4"</script>
+  <script>window.APP_VERSION="1.6.5"</script>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Admin-only Mode 1 page — not indexed." />
 
-  <link rel="stylesheet" href="../style.css?v=1.6.4" />
-  <link rel="stylesheet" href="../mobile.css?v=1.6.4" media="(max-width: 900px)" />
-  <link rel="stylesheet" href="../admin-fab.css?v=1.6.4" />
-  <link rel="stylesheet" href="new-anime.css?v=1.6.4" />
+  <link rel="stylesheet" href="../style.css?v=1.6.5" />
+  <link rel="stylesheet" href="../mobile.css?v=1.6.5" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="../admin-fab.css?v=1.6.5" />
+  <link rel="stylesheet" href="new-anime.css?v=1.6.5" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
@@ -37,6 +37,8 @@
   </div>
 
   <main class="admin-main" id="admin-main" hidden>
+    <div class="admin-shell-with-preview">
+
     <div class="admin-shell">
 
       <div class="admin-header">
@@ -50,16 +52,32 @@
       <section class="admin-section" aria-labelledby="step1-h">
         <div class="admin-section-head">
           <span class="step-num">1</span>
-          <h3 id="step1-h">Find the anime on AniList</h3>
+          <h3 id="step1-h">Find the Anime</h3>
         </div>
 
         <div class="admin-row">
           <label for="title-input">Anime title</label>
           <div class="title-row">
-            <input id="title-input" type="text" placeholder="e.g. Frieren: Beyond Journey's End" autocomplete="off" spellcheck="false" />
+            <input id="title-input" type="text"
+                   placeholder="e.g. Frieren: Beyond Journey's End"
+                   autocomplete="off" spellcheck="false"
+                   role="combobox" aria-autocomplete="list" aria-expanded="false"
+                   aria-controls="search-results" />
             <button type="button" id="fetch-btn" class="inline-header-btn">Fetch</button>
           </div>
+          <ul id="search-results" class="search-results" role="listbox" hidden></ul>
           <p id="fetch-status" class="muted small status-line" role="status" hidden></p>
+        </div>
+
+        <div class="admin-row">
+          <label for="anilist-id-input">Or paste an AniList URL or ID</label>
+          <div class="title-row">
+            <input id="anilist-id-input" type="text"
+                   placeholder="https://anilist.co/anime/101348/  ·  101348"
+                   autocomplete="off" spellcheck="false" />
+            <button type="button" id="fetch-by-id-btn" class="inline-header-btn">Fetch by ID</button>
+          </div>
+          <p id="id-fetch-status" class="muted small status-line" role="status" hidden></p>
         </div>
       </section>
 
@@ -239,10 +257,20 @@
       </section>
 
     </div>
+
+    <aside class="admin-card-preview-panel" aria-label="Live card preview">
+      <div class="card-preview-header">LIVE PREVIEW <span class="jp-mini">プレビュー</span></div>
+      <div id="card-preview-slot" class="card-preview-slot">
+        <p class="preview-placeholder">Card preview appears here once you fetch an anime from AniList.</p>
+      </div>
+    </aside>
+
+    </div>
   </main>
 
   <script>
     const v = window.APP_VERSION || "1.0.1";
+    document.write(`<script src="../card-render.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="../firebase.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="new-anime.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="../admin-fab.js?v=${v}"><\/script>`);

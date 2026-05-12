@@ -959,42 +959,14 @@ function syncFilterFormToApplied() {
   }
 
   // ---------- GRID + CARDS ----------
+  // The renderAnimeCardMarkup function lives in card-render.js (loaded as a
+  // classic <script> before this file) so both the homepage AND the admin
+  // form can use it. See docs/SHIP-OUTPUT.md gate 5b for the why. Call via
+  // window.renderAnimeCardMarkup since the function isn't in this closure.
+
   function createCard(anime) {
   const animeId = slug(anime.Title);
-
-  const card = document.createElement("div");
-  card.className = "card";
-  card.dataset.animeid = animeId;
-
-  card.innerHTML = `
-  <div class="icon-row">
-    <button class="icon-btn fav-btn" type="button" data-action="fav" aria-label="Favorite" aria-pressed="false">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5
-                 2 6.01 4.01 4 6.5 4
-                 c1.74 0 3.41 1.01 4.13 2.44
-                 C11.09 5.01 12.76 4 14.5 4
-                 16.99 4 19 6.01 19 8.5
-                 c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-      </svg>
-    </button>
-    <button class="icon-btn watch-btn" type="button" data-action="watch" aria-label="Add to watchlist" aria-pressed="false">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/>
-      </svg>
-    </button>
-  </div>
-
-  <img src="assets/${anime.image}" alt="${anime.Title}" loading="lazy"
-       decoding="async" width="400" height="600"
-       onerror="this.onerror=null;this.src='assets/placeholder.png';" />
-
-  <div class="info">
-    <h3 class="title-text">${anime.Title}</h3>
-    <p>${anime.Genre || ""}</p>
-    <span>${anime.Rating || ""}</span>
-  </div>
-`;
+  const card = window.renderAnimeCardMarkup(anime, { animeId });
 
   // Open modal when the card itself is clicked
   card.addEventListener("click", () => openModal(anime));

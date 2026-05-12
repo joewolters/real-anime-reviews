@@ -616,3 +616,153 @@
     transition: none;
   }
 }
+
+/* ============================================================================
+   v1.6.5 — Live preview panel + search-as-you-type dropdown + ID-import path
+   ============================================================================ */
+
+/* Two-column layout: form (left) + sticky preview panel (right).
+   Wraps to single column at viewports narrower than 1100px. */
+.admin-shell-with-preview {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 1300px;
+  margin: 0 auto;
+}
+.admin-shell-with-preview .admin-shell {
+  flex: 1 1 auto;
+  min-width: 0;        /* lets the flex item shrink properly */
+  max-width: 880px;    /* matches existing .admin-shell max-width */
+}
+
+.admin-card-preview-panel {
+  flex: 0 0 260px;
+  position: sticky;
+  top: 20px;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.55), rgba(20, 6, 38, 0.78));
+  border: 1px solid rgba(187, 134, 252, 0.32);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card-preview-header {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #bb86fc;
+  text-transform: uppercase;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(187, 134, 252, 0.18);
+}
+.card-preview-header .jp-mini {
+  margin-left: 6px;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: #cfc7d9;
+  font-weight: 500;
+}
+.card-preview-slot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 320px;
+}
+.card-preview-slot .card {
+  /* The .card class is defined in style.css for the homepage rendering;
+     these rules let it sit cleanly inside the preview panel without the
+     homepage's grid-row context. */
+  width: 100%;
+  max-width: 220px;
+  margin: 0;
+}
+.preview-placeholder {
+  margin: auto;
+  padding: 24px 12px;
+  color: #a8a0bd;
+  font-size: 0.82rem;
+  font-style: italic;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Search-as-you-type dropdown (populated by JS at gate 5) */
+.search-results {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 4px;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.95), rgba(20, 6, 38, 0.98));
+  border: 1px solid rgba(187, 134, 252, 0.42);
+  border-radius: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(187, 134, 252, 0.45) rgba(15, 5, 28, 0.45);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+.search-results[hidden] { display: none; }
+.search-result-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #efe7ff;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  border: 1px solid transparent;
+}
+.search-result-item:hover,
+.search-result-item[aria-selected="true"] {
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.22), rgba(70, 0, 110, 0.32));
+  border-color: rgba(187, 134, 252, 0.42);
+}
+.search-result-item .result-title {
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-result-item .result-meta {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  color: #bb86fc;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.search-results-empty {
+  padding: 12px;
+  color: #a8a0bd;
+  font-size: 0.82rem;
+  font-style: italic;
+  text-align: center;
+}
+
+/* Mobile (≤1100px): collapse to single column. Preview panel stacks under
+   the form, loses sticky positioning, full-width with a card max width that
+   matches the homepage. */
+@media (max-width: 1100px) {
+  .admin-shell-with-preview {
+    flex-direction: column;
+  }
+  .admin-card-preview-panel {
+    position: static;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 880px;
+    margin: 0 auto;
+  }
+  .card-preview-slot .card {
+    max-width: 240px;
+  }
+}

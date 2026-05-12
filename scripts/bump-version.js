@@ -10,7 +10,7 @@
  * error-prone — the v1.3.4 changelog widget bug was exactly this category:
  * APP_VERSION was bumped but the static fallback got missed).
  *
- * Where the version lives (14 total strings across 3 HTML files)
+ * Where the version lives (14 total static strings across 3 HTML files)
  * --------------------------------------------------------------
  *   index.html              window.APP_VERSION + style/mobile/admin-fab
  *                           cache-busts + changelog widget tag           (5)
@@ -18,6 +18,11 @@
  *                           cache-busts                                   (4)
  *   admin/new-anime.html    window.APP_VERSION + style/mobile/admin-fab/
  *                           new-anime cache-busts                         (5)
+ *
+ * JS files (script.js, account.js, firebase.js, admin-fab.js, new-anime.js,
+ * card-render.js as of v1.6.5) are NOT in this list — they're loaded via
+ * document.write with `${v}` template literal interpolation, runtime-versioned
+ * from window.APP_VERSION. Same bump, no manual TARGETS upkeep.
  *
  * Authoritative source: the TARGETS array below. When you add a new HTML
  * file or cache-busted asset, add an entry there.
@@ -153,6 +158,13 @@ const TARGETS = [
     pattern: /(href="new-anime\.css\?v=)([^"]+)(")/,
     replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
   },
+  // NOTE: JS files (script.js, account.js, firebase.js, admin-fab.js, new-anime.js,
+  // card-render.js as of v1.6.5) intentionally are NOT in TARGETS. They're loaded
+  // via document.write with `${v}` template literal interpolation in the HTML
+  // script blocks — the cache-bust comes from APP_VERSION at runtime. Only the
+  // static `<link href="...?v=X">` CSS cache-busts and APP_VERSION itself need
+  // script-driven bumping. Adding JS files here would create a maintenance burden
+  // with no benefit (the runtime interpolation already updates them every bump).
 ];
 
 // ---- Helpers ---------------------------------------------------------------

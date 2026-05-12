@@ -1,4 +1,7 @@
-html, body { overflow-x: hidden; }
+/* overflow-x: clip (not hidden) — `clip` preserves position:sticky context for
+   descendants (the v1.6.5 admin form's preview panel uses sticky). `hidden`
+   would silently break sticky on every descendant — Bug B from gate 5 smoke. */
+html, body { overflow-x: clip; }
 /* Reset default styles */
 * {
     margin: 0;

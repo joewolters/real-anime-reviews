@@ -71,7 +71,7 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 ## Current state
 
-**Live at v1.6.4** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped; Mode 1 baseline + server shipped (v1.6.0); spawn-EINVAL hotfix shipped (v1.6.1); Bug 10 prevention ship — startup smoke check + DECISIONS lesson — shipped (v1.6.2); polish bundle + first widget update under the new visitor-first skill shipped (v1.6.3); update log widget upgrade — dates, grouping, 10-cap, scroll containment — shipped (v1.6.4):
+**Live at v1.6.5** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped; Mode 1 baseline + server shipped (v1.6.0); spawn-EINVAL hotfix shipped (v1.6.1); Bug 10 prevention ship — startup smoke check + DECISIONS lesson — shipped (v1.6.2); polish bundle + first widget update under the new visitor-first skill shipped (v1.6.3); update log widget upgrade — dates, grouping, 10-cap, scroll containment — shipped (v1.6.4); Mode 1 live preview as you type (search-as-you-type + ID-import + card-render extraction) shipped (v1.6.5):
 
 - **Public** GitHub repo at `https://github.com/joewolters/real-anime-reviews` (went public + owner renamed from `ReaIGodzilla` → `joewolters` in v1.4.2 on 2026-05-09); formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end
@@ -88,8 +88,9 @@ These rules apply to every AI system that touches the project — Code (the buil
 - v1.6.2 (2026-05-11) — Bug 10 prevention. Mode 1 server now smoke-checks `runCmd` at startup (`npm --version` + `git --version` through the same code path) — fails fast with a Bug-10-pointer if the spawn config regresses. New `docs/DECISIONS.md` entry captures the meta-lesson: when you change pipeline plumbing, re-run the pipeline at the commit you're shipping (the Vinland Saga pre-ship test ran on pre-spawn-change code, not the code that shipped).
 - v1.6.3 (2026-05-11) — Polish bundle + first widget update under the new visitor-first skill. `/api/health` now reads `APP_VERSION` dynamically (was stuck at hardcoded `"1.6.1"` after v1.6.2 bumped past it); `release-skill.md` and `hotfix-skill.md` now cross-reference `widget-update-skill.md` for bullet curation; `docs/AI-PRIMER.md` "For deeper context" lists all three skill files; one combined backfill bullet on the homepage widget covers v1.6.1 + v1.6.2 + v1.6.3 (all three were tooling ships that didn't curate bullets at the time). Originally scheduled for live preview as you type; deferred to v1.6.4 because AniList's `Media(search:)` endpoint had been returning Not Found for 30+ hours.
 - v1.6.4 (2026-05-11) — Update log widget upgrade. Homepage widget now shows shipped-on dates on every change, groups bullets by date, holds up to 10 entries (was 5), and scrolls inside its panel rather than pushing the page down. The widget skill (`widget-update-skill.md`) is updated in the same ship to codify the new rules — per-change granularity, MM/DD/YYYY date format, 10-cap, "backfill consolidation" rule removed. AniList `Media(search:)` recovered partway through this session; v1.6.5 (live preview + ID-import) is unblocked.
+- v1.6.5 (2026-05-11) — Live preview as you type for the admin form. Search-as-you-type AniList dropdown with debounced lookup; ID-import as first-class entry point (the `b+` design from `docs/NEXT.md`, made co-equal during the AniList `Media(search:)` outage); live card preview that reuses the homepage's render code via a new shared `card-render.js` file (extracted from `script.js`'s IIFE so both the homepage and the admin form draw cards identically). Bundled fixes: sticky positioning (`overflow-x: clip` on `html, body` — `hidden` was breaking sticky context on every descendant); title-case canonicalization on AniList fetch (typing `gosick` now saves as `GOSICK` per AniList canonical). First ship driven by the multi-gate Code/Cowork workflow with rolling `docs/SHIP-PROMPT.md` + `docs/SHIP-OUTPUT.md` files; gate-level browser smoke tests caught two plan-level misses pre-commit.
 
-**Up next:** v1.6.5 — Mode 1 polish: live preview as you type. Search-as-you-type AniList lookup with debounced dropdown of matches, live card preview reusing the homepage render code. Requires extracting the anime-card render function from `script.js` so the admin form can mirror it. **Design pivot from the AniList outage:** ID-import becomes a first-class entry point alongside search-as-you-type (the `b+` approach in `docs/NEXT.md`), not a fallback. After v1.6.5: v1.6.6 "More Information" panel, v1.6.7 suggestion box integration, v1.6.x real one-click AI integration via Firebase Cloud Function (see `docs/ai-integration-design.md`).
+**Up next:** v1.6.6 — "More Information" panel on anime cards + franchise aggregation. **Two related pieces.** (A) When fetching an anime, Mode 1 also pulls AniList `relations` (other seasons, OVAs, specials) and aggregates fields across the whole franchise for the main card: total season count, all studios that worked on it, aggregate episode count — so One Punch Man defaults to "3 seasons / Madhouse + J.C.Staff" instead of just Season 1's data. (B) A left-side panel on each anime card mirrors the existing Community Tab's layout and shows the per-season breakdown — Season 1 (Madhouse, 12 ep, 2015), Season 2 (J.C.Staff, 12 ep, 2019), and so on — plus relations / prequels / sequels / OVAs / side stories / spin-offs (filtered to `type:ANIME` so manga + light novel sources are excluded), and per-episode names within each entry. Why both belong together: Real Anime Reviews treats each anime as one concept (one review covering the whole thing), but AniList indexes each season separately — aggregation makes the main card accurate by default, the panel makes the deeper data discoverable. Sharpened from Blake's v1.6.5 smoke-test observation. After v1.6.6: v1.6.7 suggestion box integration, v1.6.x real one-click AI integration via Firebase Cloud Function (see `docs/ai-integration-design.md`).
 
 ---
 
@@ -198,6 +199,25 @@ Each anime card gets a separate "AniList" section/tab on the main card, displayi
 **This is a separate feature from the v1.6.6 "More Information" panel.** The AniList tab on the main card shows headline data at-a-glance for everyone visiting the page. The More Information panel is the deeper data nerd view that pairs with the Community Tab. Both display AniList-derived data; they serve different reading patterns.
 
 **Two distinct voices:** Blake's main review (human take), the AniList tab (verified-source headline data), the More Information panel (deeper data), the Community Tab (other users' takes).
+
+---
+
+<!-- author: Code | date: 2026-05-11 -->
+## v1.9.0 — Mobile compatibility overhaul
+
+**Status as of 2026-05-11:** the site doesn't work on mobile at all per Blake's direct observation, despite `mobile.css` being loaded via `@media (max-width: 900px)`. Something between the rules in that file and the site's actual structure doesn't add up, and the result is unusable for visitors on phones.
+
+**Approach — two steps:**
+
+1. **Mobile audit ship** (Tier A, read-only — no fixes). Code loads the site at common mobile viewport widths (375px iPhone, 414px larger phones, 768px tablet), walks every major flow (homepage browse, search, modal open/close, Top 10 prev/next, account page, admin form, the new dated changelog widget), and produces a structured findings report classified by severity and grouped by viewport. Output lands as a new `docs/MOBILE-AUDIT-{date}.md` file (gitignored AND firebase-ignored per rule #8 since it may name internal areas).
+
+2. **Fix bundles** (one or more PATCH ships, possibly a MINOR if the work is structural). Group findings by area — layout, navigation, modal sizing, form usability, image scaling, font sizing — and ship in bundles small enough to verify visually per bundle. Each fix bundle gets its own preview-deploy with manual visual inspection on actual mobile-viewport sizes.
+
+**Scope clarification:** this is NOT a redesign. The desktop experience stays unchanged. The goal is "site is usable on a phone" — readable text, reachable buttons, no horizontal overflow, no broken layouts. If a future Phase looks at a full mobile-first redesign, that's separate work.
+
+**Why slotted here:** Mode 1 polish (Phase B) and Phase B-side (v1.7.0 backfill, v1.8.0 AniList tab) make cards visibly richer. Mobile compatibility lands AFTER those so the mobile work targets the FINAL card design, not a soon-to-be-replaced version. Slotted before Phase D Mode 2 because Mode 2 is autonomous-caretaker work and assumes the site is in a healthy baseline state on all viewports.
+
+**Project rules that still apply:** rule #9 (image curation hybrid) is unchanged — mobile work doesn't swap any images. Rule #7 (tests before prod-facing commits) applies to every fix-bundle ship.
 
 ---
 
