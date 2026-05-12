@@ -1,98 +1,104 @@
-<!-- author: Cowork | date: 2026-05-11 -->
-# v1.6.6 — Gate 10 (`git add -A`)
+<!-- author: Cowork | date: 2026-05-12 -->
+# v1.6.7 — Gate 11 (git add -A + pause for staged-state review)
 
 > **Rolling prompt file.** Overwritten per gate. Latest active prompt lives here.
 
 ---
 
-## Status — gate 9 approved end-to-end
+## Status — gates 2 + 3 + 5 + 6/6b + 7/7b + 8/8b + 9/9b + 9c + 10/10b applied ✅
 
-- Full diff reviewed: 9 modified files (7 v1.6.6-attributable + 2 rolling SHIP-*.md). Cowork's "~6 modified" estimate undercounted; Code's 9 is the right number.
-- `npm test` 7/7 in 17.8s — baseline range, no regressions
-- `--check` 14/14 strings at 1.6.6 — no drift
-- No surprise files. Every diff hunk attributable to gate 2/5/6/7/8.
-- All gate 7/8 wording landed exactly as proposed (widget bullet prepended, Mynoghra dropped, v1.6.5 gap closed via Option β, cover-image v1.6.x row deleted, version cascades preserve surrounding text).
+- **Gate 10 verification:** Full diff reviewed, npm test 7/7 green in 14.3s. Tier A test pass requirement satisfied.
+- **Gate 10b applied:** Option A for the HANDOFF.md leak. `docs/HANDOFF.md` added to `firebase.json` ignore array next to `docs/SHIP-*.md`. Single +1/-0 edit. Leak window closed.
+- **Working tree:** 11 modified + 1 untracked (HANDOFF.md, which will be picked up by gate 11's `git add -A` and committed but firebase-ignored on deploy).
 
 ---
 
-## Gate 10 — `git add -A`
+## Gate 11 — `git add -A` + pause
 
-Mechanical single command. No file edits, no proposals to review — stage everything for commit.
+This gate stages everything for commit. **No commit yet** — that's gate 12, separate go-signal.
 
 ### Process
 
-1. **Run `git add -A`** from `Current Version/`.
-2. **Run `git status --short`** to verify all 9 files are now in the staging area (the leftmost column should now show `M` for each file, not ` M` from gate 9).
-3. **Write brief confirmation to `docs/SHIP-OUTPUT.md`** (overwriting gate 9 content):
-   - `git status --short` post-add output verbatim
-   - Count check: 9 files staged (all M, no A — no untracked files in v1.6.6)
-   - One-sentence confirmation that nothing else snuck into staging
-4. **One-liner reply in chat:** "gate 10 staged, ready for gate 11 (commit + push)"
+1. **Run:**
 
-**Note:** the git commit doesn't happen in gate 10 — only the `add`. Gate 11 handles commit + push together. Gate 11's commit message is pre-specified below.
+   ```bash
+   git add -A
+   ```
 
----
+2. **Capture the staged state:**
 
-## Gate 11 — `git commit` + `git push` (after Cowork's gate 10 approval)
+   ```bash
+   git status --short
+   git diff --cached --stat
+   ```
 
-**Commit message:**
+   The expected result: 12 staged files (the 11 modified + the 1 untracked HANDOFF.md now picked up). Working tree should be clean post-add (no remaining modified/untracked entries).
 
-```
-Bump to v1.6.6 — Hotfix: cover image now fills card frame
-```
+3. **Sanity-check the staged set against gate 10's modified list:**
+   - `CHANGELOG.md`
+   - `ROADMAP.md`
+   - `account.html`
+   - `admin/new-anime.css`
+   - `admin/new-anime.html`
+   - `admin/new-anime.js`
+   - `docs/HANDOFF.md` ← previously untracked, now staged
+   - `docs/NEXT.md`
+   - `docs/SHIP-OUTPUT.md`
+   - `docs/SHIP-PROMPT.md`
+   - `firebase.json` ← added at gate 10b
+   - `index.html`
 
-Single-line title matching the v1.6.1 hotfix's commit cadence. No body — narrative lives in CHANGELOG.md.
+   That's 12 files. If anything is missing or extra, surface as anomaly.
 
-After commit, **`git push`** to `origin/main`. Repo: `joewolters/real-anime-reviews`.
+4. **Verify no embarrassments are staged.** Quick sanity scan:
+   - No `.env` files
+   - No `PERSONAL.md`
+   - No `AUDIT_*.md`
+   - No `node_modules/` or `.firebase/` debris
+   - No `playwright-report/` or `test-results/` directories
+   - No `*.log` files or `.DS_Store`
 
-Capture both the commit hash (from `git commit`) and the push refspec (from `git push`) to SHIP-OUTPUT.md.
+   These should all be either gitignored or absent, but worth a quick `git diff --cached --name-only | grep -E '(PERSONAL|AUDIT|\.env|node_modules|playwright-report|test-results|\.log$|DS_Store)'` to confirm zero hits.
 
----
+### Output to `docs/SHIP-OUTPUT.md`
 
-## Gate 12 — Preview channel deploy (after Cowork's gate 11 approval)
+Overwrite gate 10 content with:
 
-**`firebase hosting:channel:deploy preview-v1-6-6`** from `Current Version/`. Capture the preview URL.
+1. **`git status --short` after staging** — should show clean working tree.
+2. **`git diff --cached --stat`** — should show all 12 files staged.
+3. **Embarrassment grep result** — should be zero matches.
+4. **Anomalies / risks** — anything unexpected in the staged set.
+5. **One-liner reply in chat:** "gate 11 staged (12 files), awaiting approval to commit at gate 12."
 
-**Blake then manually inspects in browser at the preview URL:**
-
-1. **Homepage cards** — visit `<preview-url>/`. Spot-check 2–3 anime cards. Cover image should fill the card frame cleanly. No dark/empty bars top, bottom, or sides.
-2. **Admin form preview** — visit `<preview-url>/admin/new-anime`. Sign in as admin. Type `gosick` → click **Fetch**. Live preview card on the right should show the cover filling the card frame cleanly. Try 2-3 more anime (`frieren`, `csm`, anything) — each preview should fill cleanly.
-3. **Optional comparison** — open production (`https://realanimereviews.com`) in another tab. Compare homepage cards on preview vs prod. Visible improvement on preview (cards filling cleanly), no regression on the visual style (cards still look like cards, not stretched/cropped weirdly).
-
-**Blake reports pass/fail to Cowork.** Code does NOT proceed to gate 13 (production deploy) automatically. **Gate 12 ≠ gate 13** — explicit go-signal at each.
-
----
-
-## Gate 13 — Production deploy (separate explicit go-signal from Cowork)
-
-ONLY after Blake's preview pass + Cowork's explicit approval:
-
-```
-firebase deploy --only hosting
-```
-
-Capture deploy output to SHIP-OUTPUT.md.
-
----
-
-## Gate 14 — Production verification
-
-Per release-skill.md Step 11, plus the curl checks for hygiene:
-
-- **`curl https://realanimereviews.com/`** → HTTP 200 with `v1.6.6` in APP_VERSION + changelog widget static fallback
-- **`curl https://realanimereviews.com/style.css?v=1.6.6`** → HTTP 200, grep for `object-fit: cover` on the `.card img` rule — confirms the fix is on production
-- **`curl https://realanimereviews.com/docs/SHIP-PROMPT.md`** → HTTP 404 (firebase ignore working)
-- **`curl https://realanimereviews.com/docs/SHIP-OUTPUT.md`** → HTTP 404 (same)
-- **Browser check on production:** Blake visits `https://realanimereviews.com/admin/new-anime`, gosick test, confirms preview card fills cleanly. Plus a quick spot-check of homepage cards.
+**No `git commit`, no `git push`, no deploy.** Gate 11 ends here. Commit happens at gate 12 after Cowork approval AND with the gate 12 commit message draft reviewed.
 
 ---
 
-## Discipline reminder (still in effect)
+## Gate 12 preview — commit message draft
 
-Show-then-apply for non-rolling files. Gate 10 is mechanical (one command) — but per the v1.6.5 gate-12-skip lesson, gate 11 (push) does NOT chain into gate 12 (preview), and gate 12 does NOT chain into gate 13 (production). Each pause is real and requires explicit Cowork approval. "Push" doesn't mean "push to production" — it means `git push` only.
+Cowork will provide the gate 12 commit message draft in the next SHIP-PROMPT.md update. For Code's awareness, the message will follow the project convention (Code: re-check `docs/SKILLS/release-skill.md` if uncertain on the exact format — it's typically a subject line + paragraph body + footer with file count).
+
+Don't draft or apply the commit at gate 11 — gate 11 is staging only.
+
+---
+
+## Process for gate 12 → gate 15
+
+1. **Gate 12** — `git commit` + `git push`. Separate explicit go-signal from Cowork. Commit message reviewed in advance.
+2. **Gate 13** — Preview deploy + Blake browser verification on the preview URL (re-run OPM fetch on preview, confirm aggregation works there).
+3. **Gate 14** — Production deploy (separate explicit go-signal — gate 13 ≠ gate 14 discipline).
+4. **Gate 15** — Production verification.
+
+---
+
+## Discipline reminders
+
+- **Gate 11 stages only.** No commit, no push, no deploy.
+- **Gate 12 needs a separate go-signal** AND Cowork-reviewed commit message draft.
+- **Gate 13 ≠ Gate 14.** Preview deploy is its own pause.
 
 ---
 
 ## Reminder
 
-Code outputs to `docs/SHIP-OUTPUT.md` per gate (overwrite). Cowork prompts in this file (overwrite). Chat one-liners between gates. **Show-then-apply for non-rolling-file edits — strict. Gate 11 ≠ gate 12 ≠ gate 13.**
+Code outputs to `docs/SHIP-OUTPUT.md` per gate (overwrite). Cowork prompts in this file (overwrite). Chat one-liners between gates.

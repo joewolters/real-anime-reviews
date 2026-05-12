@@ -10,6 +10,32 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-05-12 -->
+## v1.6.7 — MINOR (2026-05-12)
+
+**The admin form now aggregates franchise data automatically when fetching multi-season anime.** Fetching One Punch Man pulls Season 1 + Season 2 + Road to Hero in one go and prefills the form with franchise totals (3 entries, 25 episodes, MADHOUSE / J.C.STAFF studio union) instead of just Season 1's data. A new FRANCHISE INFO panel surfaces the related entries (prequels, parents, sequels) in chronological order; an amber heads-up warning fires when the fetched entry has a PREQUEL, pointing toward the cleaner Season 1 fetch.
+
+- **New FRANCHISE INFO panel** in Section 2 of the admin form. Populated automatically when AniList's `relations` field includes a franchise chain (relation types: PREQUEL / PARENT / MAIN / SEQUEL, filtered to `type:ANIME` so manga / light novel adaptations don't pollute the aggregate). Hidden for single-season entries. Brand-consistent styling (purple gradient, Montserrat header with `フランチャイズ` subtitle) mirrors the v1.6.5 live preview panel.
+- **Seasons field now prefills from franchise season count** when aggregation finds multiple entries (e.g. `3 seasons` for OPM). Falls back to the existing single-entry format heuristic (`1 season` / `1 movie` / `1 ova` / etc.) when aggregation produces a single entry.
+- **Studio field now unions all animation studios across franchise entries** when the count is >1 (e.g. `MADHOUSE, J.C.STAFF` for OPM where Season 1 was Madhouse and Season 2 was J.C.Staff). Falls back to the single-entry `pickAnimationStudios()` pick otherwise. Case-insensitive dedupe via Map keyed on lowercased name; original capitalization preserved through the existing `maybeCapitalize` helper (which intentionally doesn't transform all-caps studio names like `MADHOUSE`).
+- **AniList summary line appends `franchise: N entries, X ep`** when aggregation finds multiple entries. Single-season fetches keep the old 3-part summary (`AniList ID · score · romaji title`) unchanged.
+- **New amber `'warn'` status-kind** for hint-level messages — the PREQUEL heads-up reads *"Heads up: this entry has a PREQUEL on AniList — aggregation may miss earlier seasons. For the cleanest franchise data, fetch Season 1."*. Distinct visual treatment (`color: #ffb84d`) from the existing `'info'` (default neutral) and `'error'` (red) kinds. One-line surgical extension of `setStatus()` at the existing site.
+- **Single-hop traversal scope.** Aggregation walks ONE hop of `media.relations.edges` from the fetched entry. **Known limitation:** late-chain seasons won't appear if AniList stores them under another season's SEQUEL relation. Canonical example: fetching OPM Season 1 catches PREQUEL Road to Hero and SEQUEL Season 2, but does NOT catch Season 3 (AniList stores it as a SEQUEL of Season 2). Acknowledged honestly here; multi-hop is queued for a future polish ship — see `docs/NEXT.md` v1.6.x polish backlog entry added in this ship's gate 9.
+
+**Implementation files (Part A scope — admin form only):**
+
+Part B ("More Information" panel on public anime modal) was split out to v1.6.8 at gate 0/1 per the lower-blast-radius recommendation — Part A and Part B share the same `relations` data shape but render in different surfaces, and shipping the admin-form aggregation first lets the next-anime-add immediately benefit while v1.6.8's public-modal panel work proceeds independently. v1.6.7 touches three admin-only files:
+
+- `admin/new-anime.js` — `FULL_QUERY` and `FULL_QUERY_BY_ID` expanded with the `relations` block (+32 lines, parity for search-by-title and fetch-by-ID paths); new `aggregateFranchise()` helper with a `TYPE_ORDER` constant (`PREQUEL: 0, PARENT: 1, MAIN: 2, SEQUEL: 3`) used as the secondary sort key so same-year ties resolve in natural reading order (+56 lines including comment); `populateForm()` updated with 5 surgical edits (franchise computation up front, franchise-aware seasons logic, franchise-aware studio union, multi-part `anilist-summary`, PREQUEL warning + `renderFranchisePanel(franchise)` call before `updatePreview()`); new `renderFranchisePanel()` helper (~37 lines, pure-DOM, no async, reuses existing `$()`/`escapeHtml`/`maybeCapitalize`); one-line `setStatus()` extension for the new `'warn'` kind.
+- `admin/new-anime.html` — new `#franchise-info-panel` block in Section 2 between the section head and the admin grid (+13 lines). IDs: `franchise-info-panel`, `franchise-season-count`, `franchise-total-ep`, `franchise-studios`, `franchise-entries` (each consumed by `renderFranchisePanel()`).
+- `admin/new-anime.css` — new FRANCHISE INFO panel section at end of file (+90 lines): `.franchise-info-panel`, `.franchise-info-header` + `.jp-mini`, `.franchise-info-stats`, `.franchise-entries` row styling, plus the `.status-line.warn` amber variant.
+
+Total: **269 insertions / 7 deletions** across 3 files. The 7 deletions are existing single-entry heuristic lines being replaced surgically by franchise-aware logic — no behavior loss, just decision-point swaps.
+
+Tier A — admin form behavior change visible to admin user (UID-gated; visitor-facing path is unchanged in this ship). `npm test` runs clean before commit at gate 10 (7/7 Playwright; admin-form path not under test). Blake's local browser smoke verified Test 1 (OPM by ID 21087) end-to-end with all 5 visual criteria; Tests 2 (Frieren via search-as-you-type) and 3 (Charlotte single-season fallback) confirmed before ship.
+
+**Roadmap cascade:** previously-queued v1.6.7 (the full panel-on-modal + aggregation bundle) split into Part A (this ship) + Part B (v1.6.8 — More Information panel on the public anime modal). Previously-queued v1.6.8 (Suggestion Box + admin viewer) shifts to v1.6.9.
+
 <!-- author: Code | date: 2026-05-11 -->
 ## v1.6.6 — PATCH (2026-05-11)
 

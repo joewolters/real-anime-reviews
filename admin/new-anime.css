@@ -766,3 +766,93 @@
     max-width: 240px;
   }
 }
+
+/* ============================================================================
+   v1.6.7 — FRANCHISE INFO panel (Section 2, shows when aggregated franchise
+   has >1 entry — i.e. multi-season anime)
+   ============================================================================ */
+
+.franchise-info-panel {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.55), rgba(20, 6, 38, 0.78));
+  border: 1px solid rgba(187, 134, 252, 0.32);
+  border-radius: 12px;
+}
+.franchise-info-panel[hidden] { display: none; }
+
+.franchise-info-header {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #bb86fc;
+  text-transform: uppercase;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(187, 134, 252, 0.18);
+  margin-bottom: 10px;
+}
+.franchise-info-header .jp-mini {
+  margin-left: 6px;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: #cfc7d9;
+  font-weight: 500;
+}
+
+.franchise-info-stats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: #efe7ff;
+  margin-bottom: 10px;
+}
+.franchise-info-stats strong {
+  color: #bb86fc;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.franchise-entries {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.franchise-entries li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(15, 5, 28, 0.45);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: #efe7ff;
+}
+.franchise-entries .entry-relation {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: #bb86fc;
+  text-transform: uppercase;
+  min-width: 64px;
+}
+.franchise-entries .entry-title {
+  flex: 1;
+  font-weight: 500;
+}
+.franchise-entries .entry-meta {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  color: #a8a0bd;
+  white-space: nowrap;
+}
+
+/* v1.6.7 — 'warn' status-line variant for the PREQUEL hint (Section 1 status) */
+.status-line.warn {
+  color: #ffb84d;
+}

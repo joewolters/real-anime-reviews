@@ -9,6 +9,7 @@
       "UpdateLog/**",
       "AUDIT_*.md",
       "docs/SHIP-*.md",
+      "docs/HANDOFF.md",
       "tests/**",
       "playwright.config.js",
       "package.json",

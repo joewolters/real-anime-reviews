@@ -1,317 +1,284 @@
-<!-- author: Code | date: 2026-05-11 -->
-# v1.6.6 — Gate 9 (full diff + npm test re-run + self-audit)
+<!-- author: Code | date: 2026-05-12 -->
+# v1.6.7 — Gate 10 verification (gate 9c applied + full diff + npm test)
 
-> Gates 5-8 post-apply content archived in git history. Overwritten per rolling-output convention.
-
----
-
-## TL;DR for Cowork
-
-- ✅ **9 modified files total** — 7 v1.6.6-attributable + 2 rolling SHIP-*.md (intra-session churn, not new for this ship)
-- ✅ **No untracked files** (no new files created in v1.6.6 — pure modification ship)
-- ✅ **`npm test` 7/7 in 17.8s** — back to baseline range
-- ✅ **`--check` confirms 14/14 strings at 1.6.6** — no drift
-- ✅ **No surprise files** in the diff; everything attributable to a specific gate (5/6/7/8)
-- ✅ Single-character fix (`style.css`) is the root cause + only logic change
+> Gate 9b apply content archived in git history. Overwritten per rolling-output convention.
 
 ---
 
-## (A) `git status --short`
+## 🛑 CRITICAL ANOMALY — `docs/HANDOFF.md` not firebase-ignored
+
+**Surfacing this at the top so Cowork sees it first.** The full gate 10 verification is below, but this needs a decision before gate 11 `git add -A`.
+
+### The finding
+
+`git status` shows `docs/HANDOFF.md` as **untracked**:
+
+```
+?? docs/HANDOFF.md
+```
+
+This file was created by Cowork at the start of the v1.6.7 session as a mid-chat handoff doc (Cowork author marker, dated 2026-05-12). Its content describes the session-transfer state. It's been carried in the working tree across all gates but hasn't been touched by any v1.6.7 work.
+
+`grep` of `firebase.json`'s ignore array shows:
+
+```json
+"ignore": [
+  "firebase.json",
+  "**/.*",
+  "**/node_modules/**",
+  "PERSONAL.md",
+  "UpdateLog/**",
+  "AUDIT_*.md",
+  "docs/SHIP-*.md",
+  "tests/**",
+  "playwright.config.js",
+  "package.json",
+  "package-lock.json",
+  "playwright-report/**",
+  "test-results/**"
+]
+```
+
+**HANDOFF.md is NOT covered by any ignore pattern.** The closest pattern is `docs/SHIP-*.md` which only matches files starting with "SHIP-".
+
+### Why this matters
+
+If I run `git add -A` at gate 11 without fixing, HANDOFF.md gets committed AND deploys to production at gate 14. Same project-rule-#8 violation precedent class as:
+
+- **PERSONAL.md** in v1.3.5 — would have leaked Firebase login email + admin UID + DNS values
+- **AUDIT_*.md** in v1.3.9 — full internal codebase critique uploaded to production
+- **Both fixed by adding to firebase.json ignore**
+
+HANDOFF.md content includes (from a quick header check): session-state, Cowork's chat-transition notes, "Blake has NOT yet sent any message to Code in this transition," and exact-state pauses-in-progress. It's internal process state — meaningful to AI sessions across chat boundaries, but **not visitor-facing**.
+
+### Proposed fix — Option A (recommended)
+
+Same pattern as `docs/SHIP-*.md` gate-2 fix from v1.6.5. Two surgical edits:
+
+1. **Add `docs/HANDOFF.md` to `firebase.json` `ignore` array** (insert alongside `docs/SHIP-*.md`):
+   ```diff
+        "docs/SHIP-*.md",
+   +    "docs/HANDOFF.md",
+        "tests/**",
+   ```
+
+2. **Include HANDOFF.md in the v1.6.7 commit** via `git add -A` at gate 11 (firebase-ignored, so the deploy ladder is closed; git-tracked so the audit trail is preserved across future sessions).
+
+Alternatives considered:
+- **Option B — generalize pattern to `docs/{SHIP,HANDOFF}-*.md` or `docs/HANDOFF*.md` separately**: same effect but slightly more flexible for future variants. No strong reason to over-engineer; Option A is the minimum viable fix.
+- **Option C — `.gitignore` HANDOFF.md so it stays untracked**: loses cross-session audit trail; future AIs in new chats wouldn't have access to it in the repo. Counter to its purpose.
+
+**Recommend Option A.** Surgical, mirrors existing pattern, closes the leak window before any commit.
+
+### What I need from Cowork
+
+Before proceeding to gate 11:
+
+1. **Approve Option A** → I apply the 1-line `firebase.json` ignore addition as part of gate 10's anomaly resolution, then proceed to gate 11.
+2. **OR approve an alternative** (B / C / something else).
+
+This needs to happen **before** `git add -A` at gate 11 — otherwise HANDOFF.md gets committed without the firebase-ignore safety, and we'd have to retroactively add the ignore in a follow-up commit (which adds churn and a momentary security window).
+
+---
+
+## Gate 9c apply confirmation
+
+Both swaps applied cleanly:
+
+```diff
+- Future Mode 1 upgrades land here, scoped based on what Blake learns from using v1.6.0 through v1.6.7.
++ Future Mode 1 upgrades land here, scoped based on what Blake learns from using v1.6.0 through v1.6.9.
+```
+
+```diff
+- - **Suggestion box + admin viewer.** Folded into v1.6.7 with Mode 1 integration.
++ - **Suggestion box + admin viewer.** Folded into v1.6.9 with Mode 1 integration.
+```
+
+### Post-9c verification — `grep -n "v1\.6\.7" ROADMAP.md`
+
+3 matches, all historical/current:
+
+```
+74:**Live at v1.6.7** ... shipped (v1.6.7):                       ← current chain
+93:- v1.6.7 (2026-05-12) — Admin form franchise aggregation ...   ← per-ship bullet
+95:**Up next:** v1.6.8 ... v1.6.7 shipped Part A ...               ← Up next paragraph (historical)
+```
+
+Lines 187 + 317 are clean. ✅
+
+---
+
+## Working tree shape — `git status --short`
 
 ```
  M CHANGELOG.md
  M ROADMAP.md
  M account.html
+ M admin/new-anime.css
  M admin/new-anime.html
+ M admin/new-anime.js
  M docs/NEXT.md
  M docs/SHIP-OUTPUT.md
  M docs/SHIP-PROMPT.md
  M index.html
- M style.css
+?? docs/HANDOFF.md
 ```
 
-**9 modified, 0 untracked.** Note: Cowork's gate 9 SHIP-PROMPT estimated "~6 modified" (style.css + 3 HTMLs + CHANGELOG + ROADMAP + NEXT.md = 7); my own propose-pass estimate was "7"; actual is 9 because the 2 rolling `docs/SHIP-*.md` files are tracked-modified from v1.6.5's commit (git sees their state has changed since `ba1990f`). The 7 v1.6.6-attributable files match the expected scope; the 2 rolling-file modifications are intra-session churn — they'll get committed alongside everything else at gate 10 per v1.6.5's established pattern (both files have ride-along-into-current-commit precedent from v1.6.5 and they're firebase-ignored either way).
+**10 modified — all 10 expected per SHIP-PROMPT.md.** No surprise modified files; no missing expected files.
+
+**1 untracked: `docs/HANDOFF.md`** — flagged in the critical anomaly section above.
 
 ---
 
-## (B) `git diff --stat`
+## Full diff stat — `git diff --stat`
 
 ```
-warning: in the working copy of 'CHANGELOG.md', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of 'docs/NEXT.md', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of 'docs/SHIP-OUTPUT.md', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of 'docs/SHIP-PROMPT.md', LF will be replaced by CRLF the next time Git touches it
- CHANGELOG.md         |  11 ++
- ROADMAP.md           |   5 +-
+ CHANGELOG.md         |  26 ++++
+ ROADMAP.md           |  21 +--
  account.html         |   8 +-
- admin/new-anime.html |  10 +-
- docs/NEXT.md         |   6 +-
- docs/SHIP-OUTPUT.md  | 531 +++------------------------------------------------
- docs/SHIP-PROMPT.md  | 131 +++++++++----
- index.html           |  12 +-
- style.css            |   2 +-
- 9 files changed, 146 insertions(+), 570 deletions(-)
+ admin/new-anime.css  |  90 +++++++++++++
+ admin/new-anime.html |  23 +++-
+ admin/new-anime.js   | 173 ++++++++++++++++++++++++-
+ docs/NEXT.md         |  17 +--
+ docs/SHIP-OUTPUT.md  | 351 ++++++++++++---------------------------------------
+ docs/SHIP-PROMPT.md  | 152 ++++++++++++++--------
+ index.html           |  17 ++-
+ 10 files changed, 516 insertions(+), 362 deletions(-)
 ```
 
-Note the large net-negative on `docs/SHIP-OUTPUT.md` (-531 lines) — that's intra-session overwrites: v1.6.5's final close-out content (long) → v1.6.6's gates 5-8 confirmation (short) → THIS gate 9 file (this writes after the stat was captured, so the diff snapshot still shows the short content). All four `LF→CRLF` warnings are `.gitattributes`-driven; not blockers.
+Largest deltas are the two rolling SHIP-*.md files (intra-session churn — overwritten multiple times across 10 gates). Meaningful code/docs delta: ~165 insertions (admin/new-anime.js 173 + admin/new-anime.css 90 + admin/new-anime.html 23 + CHANGELOG 26 + ROADMAP/NEXT/index/account small deltas).
 
 ---
 
-## (C) `git diff` — meaningful diffs (7 v1.6.6-attributable files)
+## Per-file diff details
 
-Skipping `docs/SHIP-OUTPUT.md` and `docs/SHIP-PROMPT.md` diff bodies — those are rolling-file intra-session churn (~660 lines combined) that don't warrant per-line review at gate 9. Both files are firebase-ignored via gate 2's earlier fix. If Cowork wants them inline, say so and I'll re-emit.
+### `CHANGELOG.md` (+26 lines)
 
-### `style.css` — THE FIX
+The v1.6.7 entry I applied at gate 6b. Prepended above the v1.6.6 entry, with the author marker comment. Includes the headline paragraph, 6 bullet specifics, implementation files paragraph, Tier A footer, roadmap cascade note. Diff captured at gate 9b; unchanged at gate 9c. No surprises — content matches what Cowork approved at gate 6.
 
-```diff
-diff --git a/style.css b/style.css
-index c6cbb6a..5e93013 100644
---- a/style.css
-+++ b/style.css
-@@ -215,7 +215,7 @@ header h1:hover {
-     width: 100%;
-     height: auto;
-     aspect-ratio: 2 / 3;
--    object-fit: contain;
-+    object-fit: cover;
-     display: block;
- }
-```
+### `ROADMAP.md` (+21 / -10)
 
-Pure `+1 / -1`. The root cause of the bug + the entire fix.
+11 distinct hunks (Edits E, F, per-ship bullet, Anomalies 1-5, TBD-bump, gate 9c-1, gate 9c-2):
 
-### `CHANGELOG.md` — v1.6.6 entry prepended
+- Line 74 — "Live at v1.6.6" → "Live at v1.6.7" + chain extension (Edit E)
+- Line 92 → 93 region — new v1.6.7 per-ship bullet inserted
+- Line 95 — Up next paragraph fully rewritten (Edit F)
+- Lines 137-138 — `(v1.6.6)` → `(v1.6.8)` and `(v1.6.7)` → `(v1.6.9)` in "Explicitly NOT in v1.6.0" list (Anomalies 1, 2)
+- Line 156 — section header `### v1.6.6` → `### v1.6.8` (Anomaly 3)
+- Line 171 — section header `### v1.6.7` → `### v1.6.9` (Anomaly 4)
+- Line 184 — `### v1.6.8+` → `### v1.6.10+` (Cowork addition)
+- Line 187 — `v1.6.0 through v1.6.7` → `v1.6.0 through v1.6.9` (gate 9c-1)
+- Line 200 — `v1.6.6 "More Information"` → `v1.6.8 "More Information"` (Anomaly 5)
+- Line 317 — `Folded into v1.6.7` → `Folded into v1.6.9` (gate 9c-2)
 
-```diff
-diff --git a/CHANGELOG.md b/CHANGELOG.md
-index fbaa19b..bea235d 100644
---- a/CHANGELOG.md
-+++ b/CHANGELOG.md
-@@ -10,6 +10,17 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
- 
- ---
- 
-+<!-- author: Code | date: 2026-05-11 -->
-+## v1.6.6 — PATCH (2026-05-11)
-+
-+**Hotfix: cover images now fill the anime card frame cleanly.** Switched `.card img` from `object-fit: contain` to `object-fit: cover` in `style.css:218` so AniList covers (and any source image not pixel-perfect 2:3) crop a few invisible edge pixels rather than letterboxing with visible dark bars inside the card frame.
-+
-+- `style.css:218` — `object-fit: contain` → `object-fit: cover` on the `.card img` rule. Pure `+1 / -1` diff. Affects both homepage cards (via `card-render.js`'s output) AND the admin form's live preview slot (which inherits the rule via the shared `.card` class).
-+
-+**Why it slipped through v1.6.5:** the rule was authored long before AniList sources came into use, and the project's 44 curated `assets/*.png` cover images happen to be ≈2:3 (most are 460×686, exactly the form copy's recommended ratio) — so `contain` and `cover` produced identical output in the live catalog. v1.6.5's live preview was the first feature to pipe an AniList CDN URL into a `.card` element, and AniList covers aren't always strictly 2:3 (the Gosick example Blake hit during v1.6.5 smoke is ~420×590, ratio 1:1.405 vs. 2:3's 1:1.5). Visible bars appeared. Queued in `docs/NEXT.md` v1.6.x as a polish ship; addressed here as a same-day hotfix since the AniList live-preview entry path was a v1.6.5 deliverable and visible-broken cards undermine the feature's value.
-+
-+Tier A — `style.css` is visitor-facing (homepage cards). `npm test` ran clean (7/7 in 15.6s). Blake's local browser check confirmed: live preview card now shows the AniList cover filling the card frame, no empty bars.
-+
- <!-- author: Code | date: 2026-05-11 -->
- ## v1.6.5 — MINOR (2026-05-11)
-```
+All version-renames + content additions. No structural damage. No whitespace drift on adjacent lines.
 
-Pure prepend. Author marker per project rule #2.
+### `docs/NEXT.md` (+17 / -16)
 
-### `ROADMAP.md` — A1 (Live at + chain) + A2 (new v1.6.6 bullet) + B (Up next rewrite)
+5 hunks (author marker + Edits A-D):
 
-```diff
-diff --git a/ROADMAP.md b/ROADMAP.md
-index bed6bb7..86aef3e 100644
---- a/ROADMAP.md
-+++ b/ROADMAP.md
-@@ -71,7 +71,7 @@ These rules apply to every AI system that touches the project — Code (the buil
- 
- ## Current state
- 
--**Live at v1.6.5** ... shipped (v1.6.4); Mode 1 live preview as you type (search-as-you-type + ID-import + card-render extraction) shipped (v1.6.5):
-+**Live at v1.6.6** ... shipped (v1.6.4); Mode 1 live preview as you type (search-as-you-type + ID-import + card-render extraction) shipped (v1.6.5); cover-image fill hotfix (`object-fit: cover` so AniList covers no longer letterbox) shipped (v1.6.6):
- 
-@@ -88,8 +88,9 @@ ...
- - v1.6.5 (2026-05-11) — Live preview as you type for the admin form. [unchanged]
-+- v1.6.6 (2026-05-11) — Hotfix: cover images now fill the anime card frame cleanly. `style.css:218` — `object-fit: contain` → `object-fit: cover` on `.card img`. Surfaced by Blake during v1.6.5's live preview testing (Gosick example showed dark bars), queued in `docs/NEXT.md` and resolved same-day. Affects both homepage cards and the admin form's live preview via the shared `.card` class.
- 
--**Up next:** v1.6.6 — "More Information" panel on anime cards + franchise aggregation. ... After v1.6.6: v1.6.7 suggestion box integration, ...
-+**Up next:** v1.6.7 — "More Information" panel on anime cards + franchise aggregation. ... After v1.6.7: v1.6.8 suggestion box integration, ...
-```
+- Line 1 — author marker date `2026-05-10` → `2026-05-12`
+- Line 12 — v1.6.7 entry prepended above v1.6.6 (Edit A)
+- Lines 21-29 — "Immediate next ship — v1.6.5" section replaced with "v1.6.8 (More Information panel...)" (Edit B)
+- Line 37 deleted, line 38 renumbered `v1.6.8` → `v1.6.9` (Edit C)
+- Multi-hop polish row inserted after v1.6.x Clickable live preview row (Edit D)
 
-(Diff abbreviated — the Up next paragraph rewrite is verbatim the same content except `v1.6.6` → `v1.6.7` and the "After" tail `v1.6.6 → v1.6.7 / v1.6.7 → v1.6.8`. Full diff in git.)
+Net symmetric — content swap, not pure addition. Surgical.
 
-### `docs/NEXT.md` — C1 + C2 + C3 + C4 + D1
+### `index.html` (+12 / -5)
 
-```diff
-diff --git a/docs/NEXT.md b/docs/NEXT.md
-index 32b2d2b..e2e058f 100644
---- a/docs/NEXT.md
-+++ b/docs/NEXT.md
-@@ -9,6 +9,8 @@
- 
- ## Recently shipped
- 
-+- **v1.6.6** (2026-05-11) — Hotfix: cover images now fill the anime card frame cleanly. `object-fit: contain` → `object-fit: cover` on `.card img` in `style.css`. Same-day fix for the bug surfaced during v1.6.5 smoke. See CHANGELOG.
-+- **v1.6.5** (2026-05-11) — Live preview as you type for the admin form. Search-as-you-type AniList dropdown, ID-import as first-class entry point (the `b+` design), live card preview via the new shared `card-render.js`. Bundled fixes: sticky positioning (`overflow-x: clip`), title-case canonicalization on AniList fetch. First multi-gate Code/Cowork ship. See CHANGELOG.
- - **v1.6.4** (2026-05-11) — Update log widget upgrade. ...
-@@ -34,8 +36,8 @@
- | Version | What | Notes |
- |---|---|---|
--| v1.6.6 | "More Information" panel on anime cards + franchise aggregation | ...[OPM spec — unchanged]... |
--| v1.6.7 | Suggestion Box + admin viewer | ...[unchanged]... |
-+| v1.6.7 | "More Information" panel on anime cards + franchise aggregation | ...[OPM spec — unchanged]... |
-+| v1.6.8 | Suggestion Box + admin viewer | ...[unchanged]... |
- | v1.6.x | Real one-click AI integration | [unchanged] |
- | v1.6.x | One-click full automation | [unchanged] |
- | v1.6.x | Clickable live preview opens modal | [unchanged] |
--| v1.6.x | Cover image sometimes doesn't fill the entire card | [DELETED — bug resolved in this ship] |
- | v1.7.x | Romaji subtitle on anime cards + modal | [unchanged] |
-```
+Gates 5/7b/8b cumulative:
 
-All 5 sub-edits visible:
-- C1: `v1.6.6 → v1.6.7` (More Information row) — same spec text preserved
-- C2: `v1.6.7 → v1.6.8` (Suggestion Box row) — same content preserved
-- C3: Cover-image v1.6.x row DELETED
-- C4: v1.6.6 prepended to Recently shipped
-- D1: v1.6.5 prepended to Recently shipped (Option β — closes the v1.6.5 gap)
+- Line 8: `APP_VERSION 1.6.6 → 1.6.7` (gate 8b)
+- Lines 24-26: 3 CSS cache-busts (gate 8b)
+- Line 169: `<span ...>v1.6.6</span>` → `v1.6.7` (gate 8b)
+- Lines 174-180: new `05/12/2026` section prepended with the v1.6.7 widget bullet (gate 7b)
+- Line ~196 (was 191 pre-edit): `<li>Fixed genre typos...</li>` deleted (gate 7b cap-drop)
 
-### `index.html` — bump + widget bullet add + bullet drop
+Five hunks. All gate-attributable.
 
-```diff
-diff --git a/index.html b/index.html
-index a78f428..4fe9fe3 100644
---- a/index.html
-+++ b/index.html
-@@ -5,7 +5,7 @@
-   <title>Real Anime Reviews</title>
--  <script>window.APP_VERSION="1.6.5"</script>
-+  <script>window.APP_VERSION="1.6.6"</script>
-@@ -21,9 +21,9 @@
--  <link rel="stylesheet" href="style.css?v=1.6.5">
--  <link rel="stylesheet" href="mobile.css?v=1.6.5" media="(max-width: 900px)">
--  <link rel="stylesheet" href="admin-fab.css?v=1.6.5">
-+  <link rel="stylesheet" href="style.css?v=1.6.6">
-+  <link rel="stylesheet" href="mobile.css?v=1.6.6" media="(max-width: 900px)">
-+  <link rel="stylesheet" href="admin-fab.css?v=1.6.6">
-@@ -166,7 +166,7 @@
--      <span class="changelog-tag" id="changelog-version">v1.6.5</span>
-+      <span class="changelog-tag" id="changelog-version">v1.6.6</span>
-@@ -174,6 +174,7 @@
-       <div class="version-section">
-         <div class="version-header">05/11/2026</div>
-         <ul class="changelog-list">
-+          <li>Fixed a bug where some anime cover images didn't fill the card cleanly.</li>
-           <li>Improved the tools used to add new anime to the catalog.</li>
-@@ -188,7 +189,6 @@
-           <li>New admin tooling — adding anime is now nearly automatic behind the scenes</li>
-           <li>Top 10 list refreshed — The Eminence in Shadow is now #1</li>
-           <li>Fixed genre typos across the catalog so filtering surfaces every match correctly</li>
--          <li>Apocalypse Bringer Mynoghra now shows its full title</li>
-         </ul>
-       </div>
-```
+### `account.html` (+4 / -4)
 
-Five hunks:
-- Line 8: `APP_VERSION 1.6.5 → 1.6.6` (gate 5 bump)
-- Lines 24-26: 3 CSS cache-busts (gate 5 bump)
-- Line 169: changelog widget static fallback `v1.6.5 → v1.6.6` (gate 5 bump — invariant with APP_VERSION above)
-- Line 177: new v1.6.6 widget bullet (gate 7)
-- Line 191: dropped Apocalypse Bringer bullet (gate 7 10-cap drop)
+Pure version bump (gate 8b only):
 
-### `account.html` — pure version bump (gate 5)
+- Line 7: `APP_VERSION 1.6.6 → 1.6.7`
+- Lines 23-25: 3 CSS cache-busts
 
-```diff
-diff --git a/account.html b/account.html
-@@ -4,7 +4,7 @@
--  <script>window.APP_VERSION="1.6.5"</script>
-+  <script>window.APP_VERSION="1.6.6"</script>
-@@ -20,9 +20,9 @@
--  <link rel="stylesheet" href="style.css?v=1.6.5" />
--  <link rel="stylesheet" href="mobile.css?v=1.6.5" media="(max-width: 900px)" />
--  <link rel="stylesheet" href="admin-fab.css?v=1.6.5" />
-+  <link rel="stylesheet" href="style.css?v=1.6.6" />
-+  <link rel="stylesheet" href="mobile.css?v=1.6.6" media="(max-width: 900px)" />
-+  <link rel="stylesheet" href="admin-fab.css?v=1.6.6" />
-```
+No structural changes. Matches the expected TARGETS distribution (4 strings for account.html).
 
-4 strings, all bump-version targets. No other edits.
+### `admin/new-anime.html` (+18 / -5)
 
-### `admin/new-anime.html` — pure version bump (gate 5)
+Gates 5/8b cumulative:
 
-```diff
-diff --git a/admin/new-anime.html b/admin/new-anime.html
-@@ -4,14 +4,14 @@
--  <script>window.APP_VERSION="1.6.5"</script>
-+  <script>window.APP_VERSION="1.6.6"</script>
-...
--  <link rel="stylesheet" href="../style.css?v=1.6.5" />
--  <link rel="stylesheet" href="../mobile.css?v=1.6.5" media="(max-width: 900px)" />
--  <link rel="stylesheet" href="../admin-fab.css?v=1.6.5" />
--  <link rel="stylesheet" href="new-anime.css?v=1.6.5" />
-+  <link rel="stylesheet" href="../style.css?v=1.6.6" />
-+  <link rel="stylesheet" href="../mobile.css?v=1.6.6" media="(max-width: 900px)" />
-+  <link rel="stylesheet" href="../admin-fab.css?v=1.6.6" />
-+  <link rel="stylesheet" href="new-anime.css?v=1.6.6" />
-```
+- Line 7: `APP_VERSION 1.6.6 → 1.6.7` (gate 8b)
+- Lines 11-14: 4 CSS cache-busts (gate 8b)
+- Lines 91-102 (post-edit): new `#franchise-info-panel` HTML block in Section 2 with all 5 expected IDs (gate 5)
 
-5 strings, all bump-version targets. No other edits.
+The FRANCHISE INFO panel insertion + version-string flips. All gate-attributable.
+
+### `admin/new-anime.css` (+90 / -0)
+
+Pure addition — gate 5's FRANCHISE INFO panel CSS block + the `.status-line.warn` amber variant at the bottom of the file. Full ~90 lines, no existing rules touched. Diff truncated above; available in full via `git diff admin/new-anime.css`.
+
+### `admin/new-anime.js` (+173 / -7)
+
+Cumulative gates 2 + 3 + 5:
+
+- Lines 37-58 + 96-117: two identical `relations` blocks in FULL_QUERY + FULL_QUERY_BY_ID (gate 2)
+- Line 157: setStatus 'warn' extension (gate 5)
+- Lines 253-308: `aggregateFranchise()` helper (gate 3, with TYPE_ORDER tiebreaker)
+- Lines 311-349: `renderFranchisePanel()` helper (gate 5)
+- Lines 352-447 (inside populateForm): 5 surgical edits (gate 5) — franchise computation up front, seasons-aware logic, studio union, multi-part summary, PREQUEL warning + render call
+
+The 7 deletions are existing single-entry heuristic lines replaced by franchise-aware logic. No behavior loss.
 
 ---
 
-## (D) `npm test` re-run
+## `npm test` — 7/7 GREEN ✅
 
 ```
-> playwright test
-
+$ cd "Current Version" && npm test
 Running 7 tests using 1 worker
-
-  ✓ tests\404-page.spec.js:4:3
-  ✓ tests\account-page-loads.spec.js:4:3
-  ✓ tests\anime-modal-opens-and-closes.spec.js:4:3
-  ✓ tests\deep-link-first-load.spec.js:16:3
-  ✓ tests\homepage-loads.spec.js:4:3
-  ✓ tests\modal-leak-check.spec.js:17:3
-  ✓ tests\search-works.spec.js:4:3
-
-  7 passed (17.8s)
+  7 passed (14.3s)
 ```
 
-7/7 clean in 17.8s — within baseline range (v1.6.5 gate-5b/5c were 14.3s and 15.5s; gate 9 of v1.6.5 was the outlier 30.2s). Card-rendering flows (homepage-loads, anime-modal, deep-link, modal-leak, search-works) all pass — the `object-fit: cover` change does not break any test that exercises card rendering or click handlers.
+Full pass in 14.3s — baseline range (matches v1.6.5 gate 5b's 14.3s, v1.6.6 gate 9's 17.8s). No flakes, no slow tests. Tier A test pass requirement satisfied.
 
 ---
 
-## (E) `--check` re-run (final sanity)
+## Summary of all anomalies
 
-```
-OK: all 14 strings agree on v1.6.6
-```
+| # | Severity | Anomaly | Resolution |
+|---|---|---|---|
+| 1 | 🛑 BLOCKER | `docs/HANDOFF.md` untracked + not firebase-ignored | **Cowork decision needed.** Recommend Option A: add to firebase.json ignore + include in commit. |
+| 2 | ℹ INFO | 4× LF→CRLF warnings on rolling docs (CHANGELOG, NEXT, SHIP-OUTPUT, SHIP-PROMPT) | Same as every prior gate — `.gitattributes` normalizes on next checkout, not a blocker |
+| 3 | ℹ INFO | Two rolling SHIP-*.md files have ~500-line net deletions in diff | Intra-session overwrite churn; firebase-ignored; not a blocker |
 
-No drift; 14/14 at 1.6.6.
-
----
-
-## (F) Self-audit checklist
-
-| Check | Status | Detail |
-|---|---|---|
-| File count matches expected scope | ✅ | 7 v1.6.6-attributable + 2 rolling SHIP-*.md = 9 total. Cowork's "~6 modified" estimate missed NEXT.md and the 2 rolling files; actual count tracks every gate's intended change. |
-| No surprise files | ✅ | Every file in the diff attributable to gate 2/5/6/7/8. No equivalent of v1.6.5's gate-9 `docs/NEXT.md` surprise. |
-| Version-string edits = exactly the 14 strings from `--check` | ✅ | account.html (4) + admin/new-anime.html (5) = 9 from bump in those files; index.html (5 from bump including changelog widget) = 14. Plus the +2 widget bullet changes in index.html (add new + drop old) which are gate 7, not gate 5. No surprise edits. |
-| Version-bump-affected files have ONLY version-string + intended gate edits | ✅ | account.html: 4 version strings only. admin/new-anime.html: 5 version strings only. index.html: 5 version strings + 2 widget-bullet edits (gate 7 — intended). style.css: only the gate 2 fix. |
-| `npm test` 7/7 | ✅ | 17.8s |
-| `--check` clean | ✅ | All 14 at 1.6.6 |
-| No partial work | ✅ | Every diff hunk is complete; no half-edits |
-| `docs/SHIP-PROMPT.md` and `docs/SHIP-OUTPUT.md` are in the modified set, firebase-ignored | ✅ | Both have ` M` markers in `git status`; both covered by `docs/SHIP-*.md` in firebase.json `ignore` array (gate 2's fix from v1.6.5). They'll be committed but not deployed. |
-| LF→CRLF warnings | ✅ informational | `.gitattributes` will normalize on next checkout. Same warning class as v1.6.5 gate 9. |
+Only Anomaly 1 is a real gate-blocker.
 
 ---
 
-## State at end of gate 9 (read-only — no working tree changes)
+## State at end of gate 10
+
+**Working tree** (pre-anomaly-1 fix):
 
 ```
-modified:   CHANGELOG.md           (gate 6)
-modified:   ROADMAP.md             (gate 8 A1 + A2 + B)
-modified:   account.html           (gate 5 — 4 version strings)
-modified:   admin/new-anime.html   (gate 5 — 5 version strings)
-modified:   docs/NEXT.md           (gate 8 C + D1)
-modified:   docs/SHIP-OUTPUT.md    (rolling file — this doc)
-modified:   docs/SHIP-PROMPT.md    (rolling file — Cowork's prompts across gates)
-modified:   index.html             (gate 5 — 5 version strings; gate 7 — widget bullet add + drop)
-modified:   style.css              (gate 2 — object-fit fix)
+10 modified + 1 untracked (HANDOFF.md)
++516 insertions / -362 deletions across the 10 modified
+npm test: 7/7 green in 14.3s
 ```
 
-9 modified, 0 untracked. Working tree clean otherwise.
+---
 
-**Awaiting Cowork's gate 9 approval.** Once approved, gate 10 = `git add -A`. Per the discipline reminder, NO `git add` until explicit gate 10 approval. Gates 11-14 proceed per SHIP-PROMPT.md (commit + push → preview deploy → Blake's preview verification → production deploy → curl + smoke verification). Gate 12 ≠ gate 13 — explicit go-signal at each.
+## Awaiting Cowork
+
+**Single critical decision:**
+
+1. **Approve Option A for the HANDOFF.md anomaly?** Add `docs/HANDOFF.md` to `firebase.json` ignore, include in commit. Single 1-line `firebase.json` edit; no other files touched. After that fix lands, gate 11 (`git add -A`) is safe to proceed.
+
+OR provide alternative direction (Option B / C / defer).
+
+**Default if "approved, proceed" with no specifics:** apply Option A as a gate 10b sub-step, then surface for gate 11.
+
+gate 10 verification in docs/SHIP-OUTPUT.md, awaiting approval to stage + commit. **Anomaly 1 (HANDOFF.md firebase-ignore) needs explicit Cowork direction before gate 11 can proceed safely.**

@@ -37,6 +37,22 @@ query ($search: String!) {
     trailer { id site }
     externalLinks { site url type language }
     siteUrl
+    relations {
+      edges {
+        relationType
+        node {
+          id
+          title { romaji english }
+          format
+          episodes
+          seasonYear
+          type
+          status
+          studios { nodes { name isAnimationStudio } }
+          averageScore
+        }
+      }
+    }
   }
 }`;
 
@@ -80,6 +96,22 @@ query ($id: Int!) {
     trailer { id site }
     externalLinks { site url type language }
     siteUrl
+    relations {
+      edges {
+        relationType
+        node {
+          id
+          title { romaji english }
+          format
+          episodes
+          seasonYear
+          type
+          status
+          studios { nodes { name isAnimationStudio } }
+          averageScore
+        }
+      }
+    }
   }
 }`;
 
@@ -122,7 +154,7 @@ function setStatus(message, kind = 'info') {
   }
   el.hidden = false;
   el.textContent = message;
-  el.className = 'muted small status-line ' + (kind === 'error' ? 'error' : '');
+  el.className = 'muted small status-line ' + (kind === 'error' ? 'error' : kind === 'warn' ? 'warn' : '');
 }
 
 function showStep(n) { $('step' + n).hidden = false; }
@@ -218,9 +250,107 @@ async function fetchAniListById(id) {
   return body.data?.Media || null;
 }
 
+// ---- v1.6.7 — franchise aggregation -----------------------------------------
+//
+// Aggregate franchise data from media.relations (single-hop only).
+// Filter: type:ANIME + relationType in PREQUEL|SEQUEL|PARENT (main TV chain).
+// SIDE_STORY, ALTERNATIVE, ADAPTATION, SUMMARY, OTHER excluded — the panel
+// would get noisy if every spin-off counted as a "season."
+//
+// One-hop limitation: fetching Season 2 catches Season 1 (PREQUEL) and
+// Season 3 (SEQUEL) but not earlier prequels. populateForm surfaces a
+// setStatus warning when the fetched entry has a PREQUEL, hinting the
+// user might want to fetch Season 1 for cleanest aggregation.
+//
+// Returns { seasonCount, totalEpisodes, studios, entries }:
+//   - entries[] sorted chronologically (seasonYear ascending; ties broken
+//     by TYPE_ORDER so PREQUEL < PARENT < MAIN < SEQUEL — captures natural
+//     reading order when AniList groups same-year prequel OVAs with the
+//     main TV entry, e.g. OPM Season 1 + Road to Hero both in 2015).
+//   - studios[] case-insensitively deduplicated; original capitalization
+//     preserved. Caller does maybeCapitalize() for display.
+function aggregateFranchise(media) {
+  const MAIN_RELATIONS = ['PREQUEL', 'SEQUEL', 'PARENT'];
+  const TYPE_ORDER = { PREQUEL: 0, PARENT: 1, MAIN: 2, SEQUEL: 3 };
+
+  // Combine fetched entry with its main-franchise neighbors.
+  const entries = [
+    { ...media, relationType: 'MAIN' },
+    ...(media.relations?.edges || [])
+      .filter(e => e.node?.type === 'ANIME' && MAIN_RELATIONS.includes(e.relationType))
+      .map(e => ({ ...e.node, relationType: e.relationType })),
+  ];
+
+  // Chronological order; same-year ties resolved by relation type so
+  // PREQUEL/PARENT appear before MAIN, SEQUEL after.
+  entries.sort((a, b) => {
+    const yearDelta = (a.seasonYear || 0) - (b.seasonYear || 0);
+    if (yearDelta !== 0) return yearDelta;
+    return (TYPE_ORDER[a.relationType] ?? 99) - (TYPE_ORDER[b.relationType] ?? 99);
+  });
+
+  const seasonCount = entries.length;
+  const totalEpisodes = entries.reduce((sum, e) => sum + (e.episodes || 0), 0);
+
+  // Union studios across all franchise entries (case-insensitive dedupe,
+  // preserve first-seen capitalization). Animation-studio filter mirrors
+  // pickAnimationStudios() at the top of the file.
+  const studioSet = new Map();
+  for (const e of entries) {
+    for (const s of e.studios?.nodes || []) {
+      if (s.isAnimationStudio) studioSet.set(s.name.toLowerCase(), s.name);
+    }
+  }
+  const studios = Array.from(studioSet.values());
+
+  return { seasonCount, totalEpisodes, studios, entries };
+}
+
+// v1.6.7 — Render the FRANCHISE INFO panel from a `franchise` object
+// returned by aggregateFranchise(). Hidden when seasonCount <= 1 (no
+// aggregation worth showing). Each entry's row shows relation type,
+// title, and meta (studios + episodes + year).
+function renderFranchisePanel(franchise) {
+  const panel = $('franchise-info-panel');
+  if (!panel) return;  // form not yet rendered
+  if (!franchise || franchise.seasonCount <= 1) {
+    panel.hidden = true;
+    return;
+  }
+
+  $('franchise-season-count').textContent = franchise.seasonCount;
+  $('franchise-total-ep').textContent = franchise.totalEpisodes || '—';
+  $('franchise-studios').textContent = franchise.studios.length
+    ? franchise.studios.map(maybeCapitalize).join(' / ')
+    : '';
+
+  const ul = $('franchise-entries');
+  ul.innerHTML = franchise.entries.map(e => {
+    const title = escapeHtml(e.title?.english || e.title?.romaji || '(no title)');
+    const studio = (e.studios?.nodes || [])
+      .filter(s => s.isAnimationStudio)
+      .map(s => maybeCapitalize(s.name))
+      .join(', ') || '—';
+    const eps = e.episodes ? `${e.episodes} ep` : '— ep';
+    const year = e.seasonYear || '—';
+    return `<li>
+      <span class="entry-relation">${escapeHtml(e.relationType)}</span>
+      <span class="entry-title">${title}</span>
+      <span class="entry-meta">${escapeHtml(studio)} · ${eps} · ${year}</span>
+    </li>`;
+  }).join('');
+  panel.hidden = false;
+}
+
 // ---- Populate form --------------------------------------------------------
 function populateForm(media) {
   state.anilist = media;
+
+  // v1.6.7 — compute franchise aggregation up front; all downstream logic
+  // (seasons field, studio field, anilist-summary, FRANCHISE INFO panel)
+  // reads from this single object so prefill stays consistent.
+  const franchise = aggregateFranchise(media);
+  state.franchise = franchise;
 
   // gate 5c — overwrite title with AniList canonical (e.g. "GOSICK" not user's "gosick")
   // so saved data matches the show's official spelling. English first, romaji fallback,
@@ -232,9 +362,15 @@ function populateForm(media) {
   $('anilist-genres-list').textContent = `AniList genres: ${(media.genres || []).join(', ') || 'none'}`;
 
   const fmt = media.format;
-  let seasonsGuess = '1 season';
-  if (fmt === 'MOVIE') seasonsGuess = '1 movie';
-  else if (fmt === 'OVA' || fmt === 'ONA' || fmt === 'SPECIAL') seasonsGuess = `1 ${fmt.toLowerCase()}`;
+  let seasonsGuess;
+  if (franchise.seasonCount > 1) {
+    // v1.6.7 — use aggregated franchise count instead of single-entry heuristic
+    seasonsGuess = `${franchise.seasonCount} seasons`;
+  } else {
+    seasonsGuess = '1 season';
+    if (fmt === 'MOVIE') seasonsGuess = '1 movie';
+    else if (fmt === 'OVA' || fmt === 'ONA' || fmt === 'SPECIAL') seasonsGuess = `1 ${fmt.toLowerCase()}`;
+  }
   $('seasons-input').value = seasonsGuess;
   $('anilist-episodes-hint').textContent = `AniList: ${formatEpisodesHint(media)}`;
 
@@ -242,7 +378,11 @@ function populateForm(media) {
   if (desc.length > 600) desc = desc.slice(0, 600) + '…';
   $('description-input').value = desc;
 
-  $('studio-input').value = pickAnimationStudios(media.studios);
+  // v1.6.7 — union studios across franchise when there's more than one
+  // animation studio across entries; otherwise fall back to single-entry pick.
+  $('studio-input').value = franchise.studios.length > 1
+    ? franchise.studios.map(maybeCapitalize).join(', ')
+    : pickAnimationStudios(media.studios);
   $('trailer-input').value = normalizeTrailer(media.trailer);
 
   const streaming = streamingFromAniList(media.externalLinks);
@@ -275,12 +415,31 @@ function populateForm(media) {
   $('override-row').hidden = true;
   $('image-filename-input').value = '';
 
-  $('anilist-summary').textContent =
-    `AniList ID ${media.id} · ${formatScore(media.averageScore)} · ${media.title?.romaji || ''}`;
+  // v1.6.7 — append franchise info when the aggregator found multiple entries
+  const summaryParts = [
+    `AniList ID ${media.id}`,
+    formatScore(media.averageScore),
+    media.title?.romaji || '',
+  ];
+  if (franchise.seasonCount > 1) {
+    summaryParts.push(`franchise: ${franchise.seasonCount} entries, ${franchise.totalEpisodes} ep`);
+  }
+  $('anilist-summary').textContent = summaryParts.filter(Boolean).join(' · ');
 
   showStep(2); showStep(3); showStep(4); showStep(5);
   $('output-section').hidden = true;
   $('progress-section').hidden = true;
+
+  // v1.6.7 — warn if fetched entry has a PREQUEL (likely Season 2+;
+  // single-hop aggregation will be partial — recommend fetch Season 1).
+  const hasPrequel = (media.relations?.edges || [])
+    .some(e => e.relationType === 'PREQUEL' && e.node?.type === 'ANIME');
+  if (hasPrequel) {
+    setStatus(`Heads up: this entry has a PREQUEL on AniList — aggregation may miss earlier seasons. For the cleanest franchise data, fetch Season 1.`, 'warn');
+  }
+
+  // v1.6.7 — render FRANCHISE INFO panel (hidden when seasonCount <= 1).
+  renderFranchisePanel(franchise);
 
   // v1.6.5 — render the live preview card now that AniList data is loaded.
   // All three entry paths (Fetch button, dropdown select, ID-import) land here

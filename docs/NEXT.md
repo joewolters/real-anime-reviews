@@ -1,4 +1,4 @@
-<!-- author: Code | date: 2026-05-10 -->
+<!-- author: Code | date: 2026-05-12 -->
 # What's Next — Real Anime Reviews Backlog
 
 > **Persistent task list.** Cowork's in-session TaskList tool is per-conversation; this file outlives that. New sessions read this to know what's queued. Keep updated when items ship or get rescoped.
@@ -9,6 +9,7 @@
 
 ## Recently shipped
 
+- **v1.6.7** (2026-05-12) — Admin form franchise aggregation (Part A of the franchise scope split). Fetching a multi-season anime in the admin form now aggregates AniList `relations` (PREQUEL / PARENT / MAIN / SEQUEL, filtered to `type:ANIME`) into a FRANCHISE INFO panel showing all entries in chronological order, plus franchise-aware Seasons + Studio field prefills. New amber `'warn'` status-kind for hint-level messages (PREQUEL heads-up). Single-hop traversal; multi-hop queued as a v1.6.x polish (see polish backlog below). See CHANGELOG.
 - **v1.6.6** (2026-05-11) — Hotfix: cover images now fill the anime card frame cleanly. `object-fit: contain` → `object-fit: cover` on `.card img` in `style.css`. Same-day fix for the bug surfaced during v1.6.5 smoke. See CHANGELOG.
 - **v1.6.5** (2026-05-11) — Live preview as you type for the admin form. Search-as-you-type AniList dropdown, ID-import as first-class entry point (the `b+` design), live card preview via the new shared `card-render.js`. Bundled fixes: sticky positioning (`overflow-x: clip`), title-case canonicalization on AniList fetch. First multi-gate Code/Cowork ship. See CHANGELOG.
 - **v1.6.4** (2026-05-11) — Update log widget upgrade. Shipped-on dates on every change, date-grouped sections (`<div class="version-section">` + MM/DD/YYYY headers), cap raised 5 → 10, internal scroll containment via `.changelog-content { max-height: 300px; overflow-y: auto; }`. Widget skill (`widget-update-skill.md`) rewritten in the same ship: per-change granularity, MM/DD/YYYY format mandatory, backfill-consolidation rule removed. AniList `Media(search:)` recovered partway through this session — v1.6.5 is unblocked. See CHANGELOG.
@@ -18,15 +19,15 @@
 
 ---
 
-## Immediate next ship — v1.6.5 (Mode 1 polish)
+## Immediate next ship — v1.6.8 (More Information panel on public modal)
 
-**Live preview as you type.** Search-as-you-type AniList lookup with debounced dropdown of matching titles + live preview of how the anime card will look on the homepage. Requires extracting the homepage card-render function from `script.js` so the admin form can mirror it.
+**Part B of the franchise scope split.** v1.6.7 shipped Part A (admin form aggregation). v1.6.8 ships Part B — the visitor-facing "More Information" panel on the public anime modal, surfacing the same franchise data (per-season studios, episode counts, years, plus prequels / sequels / OVAs / side stories) to site visitors when they click an anime card.
 
-Per `docs/mode1-design.md` §7. Estimated 2-3 hours including the refactor.
+**Shared data shape:** Part A and Part B both consume AniList's `relations` field. Part A pre-fills the admin form; Part B renders to the public modal. Same GraphQL query expansion (`relations { edges { ... } }`), same filtering (type:ANIME, MAIN_RELATIONS = PREQUEL/PARENT/MAIN/SEQUEL).
 
-**Design note (added 2026-05-11 after AniList search outage):** Live preview + ID-import (`b+` approach): build ID-input as first-class entry point alongside search-as-you-type, not as a fallback. AniList search outage exposed that ID-import is durable infrastructure, not a workaround.
+**Implementation surface:** new modal-side section in `script.js`'s modal-render, plus matching CSS in `style.css`. Touches the public path (visitor-facing) — Tier A.
 
-**Status:** AniList `Media(search:)` recovered partway through the v1.6.4 ship after ~36 hours down (verified against six titles). Search-as-you-type path is functional again. The `b+` ID-import-as-first-class-entry-point design decision still applies — search recovery doesn't change that ID-import is durable infrastructure.
+**Estimated:** 2-3 hours including modal layout work + the data-pipeline plumbing from `animeData.js` through the modal template.
 
 ---
 
@@ -34,11 +35,11 @@ Per `docs/mode1-design.md` §7. Estimated 2-3 hours including the refactor.
 
 | Version | What | Notes |
 |---|---|---|
-| v1.6.7 | "More Information" panel on anime cards + franchise aggregation | **Two related pieces.** (A) Aggregation: when fetching an anime, also fetch its AniList `relations` (other seasons, OVAs, specials). Aggregate fields across the whole franchise for the MAIN card: total season count (OPM = 3, not 1), all studios that worked on it ("Madhouse / J.C.Staff" for OPM), aggregate episode count. Prefill form with aggregates. (B) Display: left-side panel on each anime card showing per-season breakdown — Season 1 (Madhouse, 12 ep, 2015, AniList score), Season 2 (J.C.Staff, 12 ep, 2019, AniList score), etc., plus **relations, prequels, sequels, OVAs, side stories, and spin-offs** (AniList `relations` field filtered to type:ANIME so manga / light novel sources are excluded), and per-episode names within each entry. **Why both belong together:** Real Anime Reviews treats each anime as ONE concept (one review covering the whole thing), but AniList indexes each season separately. Without aggregation, fetching OPM today gives you just Season 1's studio + seasons count and you manually edit. With aggregation, the main card data is accurate to "the whole anime" by default. Sharpened spec from Blake's 2026-05-11 observation during v1.6.5 smoke test: "the main anime card should include how many seasons are in an anime, and the different studios that worked on a different season like OPM. The extra panel of information can be where all the other stuff lies." |
-| v1.6.8 | Suggestion Box + admin viewer | Public form (no sign-in, basic spam protection) → admin queue → "Add this anime" handoff into the Mode 1 form. Folded into Mode 1 from the originally-planned standalone v1.4.0 spec. |
+| v1.6.9 | Suggestion Box + admin viewer | Public form (no sign-in, basic spam protection) → admin queue → "Add this anime" handoff into the Mode 1 form. Folded into Mode 1 from the originally-planned standalone v1.4.0 spec. |
 | v1.6.x | Real one-click AI integration | Replace the current paste-back AI panel with a true one-click. See `docs/ai-integration-design.md` — recommended path is a Firebase Cloud Function. |
 | v1.6.x | One-click full automation | Drop the explicit deploy confirmation gate after enough trust is built up. Mode 1 server option. |
 | v1.6.x | Clickable live preview opens modal | Make the admin form's live preview card clickable; opens a mini-modal showing what the full review experience looks like (using the same modal code as the homepage). Requires extracting modal-opening logic from `script.js` similar to how `card-render.js` was extracted in v1.6.5. Estimated 1–2 hours. Requested by Blake during v1.6.5 smoke test ("I can't click on the live preview to see what a review would look like"). |
+| v1.6.x | Multi-hop franchise aggregation polish | Extend `aggregateFranchise()` in `admin/new-anime.js` to recurse one level past the initial fetch's direct relations, catching late-chain seasons. **Canonical missing case:** fetching One Punch Man Season 1 currently catches Road to Hero (PREQUEL) and Season 2 (SEQUEL) but NOT Season 3 (which AniList stores as a SEQUEL of Season 2). Single-hop traversal stops one link out. Bundle scope: also dedupe per-entry studios in the FRANCHISE INFO panel row display — currently shows `MADHOUSE, MADHOUSE` on Frieren S2 because AniList double-credits the same studio. One-line fix (`Array.from(new Set(...))` in `renderFranchisePanel`). Estimated 1-2 hours combined. |
 | v1.7.x | Romaji subtitle on anime cards + modal | Display the **romaji** title (e.g. "Sousou no Frieren", NOT the native kanji "葬送のフリーレン") as a smaller secondary line below the main English title on both the homepage card and the modal. Fits the existing "Call of the Night" aesthetic (project already uses Japanese accents like `プレビュー` and `モード1`). **Requires:** (1) new `TitleRomaji` field in `Anime_Master_Table.xlsx` and `animeData.js`; (2) sync script transformation update; (3) `card-render.js` template addition (new `<p class="title-romaji">` element); (4) CSS rule for the secondary title (smaller, muted color, matched font); (5) modal template update in `script.js`; (6) Mode 1 form integration — pull `title.romaji` from AniList on fetch (NOT `title.native`, which returns the kanji/kana form). **Data backfill best paired with v1.7.0** (the AniList backfill ship is already pulling per-anime data and adding Excel columns — adding `TitleRomaji` to that sweep is essentially free). **Display work could be its own v1.7.x ship after backfill.** Requested by Blake during v1.6.5 smoke test ("I want the main title to always be in English, but we could add the Japanese title somewhere on the anime card that looks smooth and is smaller than the main title — both on the preview and in the main card. I mean like Sousou no Frieren"). |
 
 ## Phase B-side — one-time data work
