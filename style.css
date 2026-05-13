@@ -2716,7 +2716,7 @@ body.filter-open { overflow: hidden; }
   padding: 0;
   box-shadow: none;
   display: grid;
-  grid-template-columns: 1.6fr 1fr;  /* left wider than right */
+  grid-template-columns: auto 1.6fr 1fr;  /* v1.6.8: auto More Info col | left details | right community */
   gap: 18px;
   align-items: start;
   max-height: 90vh;
@@ -2766,6 +2766,215 @@ body.filter-open { overflow: hidden; }
   .sheet {
     max-height: 80vh;
   }
+  /* v1.6.8 — let More Info container stack vertically with the sheets */
+  .more-info-container {
+    width: 100% !important;
+  }
+}
+
+/* ============================================================================
+   v1.6.8 — More Info panel: collapsed tab + expanded relations panel
+   ============================================================================ */
+
+/* Container — first child of .modal-content (a 3rd column in the duo grid).
+   Width transitions between collapsed (~40px, just the tab) and expanded
+   (~260px, matches Community Tab on the right). */
+.more-info-container {
+  position: relative;
+  width: 140px;
+  transition: width 220ms ease;
+  overflow: visible;
+}
+.more-info-container[data-state="expanded"] {
+  width: 260px;
+}
+
+/* Collapsed-state tab — horizontal pill on the far-left edge of the modal */
+.more-info-tab {
+  position: absolute;
+  top: 18px;
+  left: 0;
+  width: 130px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(180deg, rgba(40,18,70,.85), rgba(20,6,38,.95));
+  border: 1px solid rgba(187,134,252,.32);
+  border-radius: 12px;
+  color: #bb86fc;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 180ms ease, transform 180ms ease, border-color 160ms ease;
+  z-index: 2;
+}
+.more-info-tab:hover {
+  border-color: rgba(187,134,252,.6);
+}
+.more-info-tab-icon {
+  font-size: 9px;
+  line-height: 1;
+}
+.more-info-container[data-state="expanded"] .more-info-tab {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-20px);
+}
+
+/* Expanded-state panel — slides out from the left, matches Community Tab styling */
+.more-info-panel {
+  position: relative;
+  width: 100%;
+  max-height: 88vh;
+  background: linear-gradient(180deg, rgba(40,18,70,.85), rgba(20,6,38,.95));
+  border: 1px solid rgba(187,134,252,.32);
+  border-radius: 12px;
+  padding: 14px 12px;
+  opacity: 0;
+  transform: translateX(-100%);
+  transition: opacity 220ms ease, transform 220ms ease;
+  pointer-events: none;
+  overflow-y: auto;
+}
+.more-info-container[data-state="expanded"] .more-info-panel {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* X close — mirrors .sheet .close-button */
+.more-info-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #efd9ff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transition: background .15s, transform .1s, color .15s;
+}
+.more-info-close:hover {
+  background: rgba(167,139,250,.18);
+  color: #fff;
+  transform: scale(1.06);
+}
+
+/* Header — MORE INFO + 詳細情報 subtitle (reuses existing .jp-mini at style.css:781) */
+.more-info-header {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding-right: 32px;  /* clearance for the X button */
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(187,134,252,.18);
+}
+.more-info-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  color: #bb86fc;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+/* Entry list */
+.more-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.more-info-entry {
+  display: flex;
+  gap: 10px;
+  background: rgba(15,5,28,.45);
+  border-radius: 6px;
+  padding: 8px;
+  position: relative;
+}
+.more-info-entry--current {
+  border: 1px solid rgba(187,134,252,.4);
+  background: rgba(40,18,70,.4);
+}
+.more-info-entry--clickable {
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+.more-info-entry--clickable:hover {
+  background: rgba(40,18,70,.6);
+}
+
+.more-info-cover {
+  width: 50px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.more-info-cover--placeholder {
+  background: rgba(15,5,28,.7);
+}
+
+.more-info-body {
+  flex: 1;
+  min-width: 0;
+}
+.more-info-relation {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: .12em;
+  color: #bb86fc;
+  text-transform: uppercase;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+.more-info-english {
+  font-size: 0.85rem;
+  color: #fff;
+  line-height: 1.2;
+}
+.more-info-romaji {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,.6);
+  margin-top: 2px;
+}
+.more-info-meta {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,.55);
+  margin-top: 4px;
+}
+.more-info-score-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(187,134,252,.2);
+  color: #bb86fc;
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Loading + empty fallback states */
+.more-info-loading,
+.more-info-empty {
+  text-align: center;
+  color: rgba(255,255,255,.5);
+  padding: 24px 12px;
+  font-size: 0.8rem;
 }
 
 /* =========================

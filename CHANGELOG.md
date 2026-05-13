@@ -10,6 +10,40 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-05-13 -->
+## v1.6.8 — MINOR (2026-05-13)
+
+**Visitors can now click "Click for More Info" on any anime modal to see that show's full franchise — every season as a card, every card a click-through to AniList.** This is Part B of the franchise scope split that began in v1.6.7 (admin-form aggregation was Part A; this is the visitor-facing surface). A collapsible tab on the far-left edge of the anime modal expands into a panel listing the show's prequels, sequels, parents and the current entry itself — each with a cover thumbnail, relation badge, English + romaji title, year / episode count / animation studio, and AniList community score. Every row opens that season's AniList page in a new tab for the deep-dive data the review and community panels don't cover (episode lists, staff, characters, ratings).
+
+- **Collapsible "Click for More Info" tab** on the far-left of the anime modal. Closed by default — clicking expands the panel and shifts the modal contents right; an X on the panel collapses it back. The panel re-opens collapsed for every new anime modal (no carry-over).
+- **AniList relations rendered as cards** — one row per related anime (relation types PREQUEL / PARENT / MAIN / SEQUEL, filtered to `type:ANIME` so manga / light-novel adaptations don't pollute the list). Each card: cover thumbnail (AniList `coverImage.large`), relation badge, English title with a smaller romaji subtitle line, `year · N eps · studio(s)` meta line, and AniList `averageScore` as a small badge.
+- **MAIN row is visually distinguished** — the current anime (your review's subject) gets a subtle purple border highlight so it's clear which entry you're reading about. It's also fully clickable like every other row.
+- **Chronological sort** — entries ordered by season year, with a type-order tiebreaker (PREQUEL < PARENT < MAIN < SEQUEL) for same-year ties — same ordering logic as v1.6.7's admin-form franchise panel.
+- **Every row is clickable** — opens `anilist.co/anime/{id}` in a new tab. Per Blake's design call, this includes MAIN: a visitor can deep-dive the current anime's verified AniList data (full episode list, staff credits, character list, community ratings) without leaving the review page.
+- **Lazy fetch + session cache** — no AniList request fires until the visitor expands the panel. Once fetched, re-opening the panel for the same anime in the same session is instant (in-memory cache, cleared on page reload).
+- **Popularity-sorted search** — the source anime is resolved against AniList via `Page(media:, sort: [POPULARITY_DESC, SCORE_DESC])` (mirroring the admin form's pattern), so an ambiguous short title like "Demon slayer" resolves to Kimetsu no Yaiba — the most-popular match — instead of an obscure same-named entry.
+- **Graceful degradation** — AniList errors, rate-limits, or no-match all render a friendly "No franchise info available yet." state instead of breaking the modal. A standalone anime (no franchise relations) still shows its single clickable MAIN row.
+- **Brand-consistent styling** — purple gradient, Montserrat header pattern, Japanese subtitle (`詳細情報`), 12px radius — the same visual vocabulary as v1.6.7's admin franchise panel and v1.6.5's live-preview panel.
+
+**Known limitations (queued for v1.6.10):**
+
+- **Multi-hop relations not yet traversed** — fetching One Punch Man Season 1 catches Season 2 (a SEQUEL) but not Season 3 (AniList stores S3 as a SEQUEL of S2, one hop further out). Same single-hop scope as v1.6.7's admin aggregation; multi-hop is queued for v1.6.10.
+- **Per-entry studio dedupe** — entries like Frieren Season 2 show `MADHOUSE, MADHOUSE` because AniList double-credits the same studio. Cosmetic; the one-line fix is bundled into v1.6.10.
+
+**Implementation files:**
+
+The data shape (`relations.edges.node`) and the aggregation logic were already in place from v1.6.7's admin-form work — v1.6.8 reuses the same shape and renders it in a different surface (the public modal instead of the admin form's sidebar). Three files touched:
+
+- `script.js` (+309) — `findInCatalog()` helper (carried over from the initial click-through design, now unused after the gate-5c switch to universal AniList click-through; left in place, reaped in a future polish gate); a new self-contained "More Info panel" block — `ANILIST_ENDPOINT_PUBLIC` constant, `MORE_INFO_QUERY_BY_SEARCH` (popularity-sorted `Page(media:)`) + `MORE_INFO_QUERY_BY_ID` (direct `Media(id:)`) GraphQL strings, `buildMainNode()` (synthesizes the MAIN row from local catalog data + the AniList-resolved source id), `fetchRelationsFromAniList()` (returns `{ sourceId, edges }`, no-throw graceful-empty contract), `fetchRelationsForModal()` (in-memory cache wrapper), `renderMoreInfoPanel()` (pure HTML-string renderer, four states), `renderMoreInfoEntry()` (per-row markup); `openModal()` gains the `.more-info-container` markup (collapsed tab + expanded panel + header + content slot) as the modal's first column, plus three event listeners (tab-click expand+fetch+render, X-close, card-click → `window.open` AniList in a new tab).
+- `style.css` (+210 / -1) — new "v1.6.8 — More Info panel" section (~205 lines): `.more-info-container` (collapsed 140px / expanded 260px width transition), `.more-info-tab` (the far-left pill), `.more-info-panel` (slide-out, purple gradient), `.more-info-close` (mirrors the sheet close button), `.more-info-header` + reuse of the existing `.jp-mini`, entry-row classes (`.more-info-entry`, `--current`, `--clickable` + `:hover`, `.more-info-cover` + `--placeholder`, `.more-info-relation`, `.more-info-english`, `.more-info-romaji`, `.more-info-meta`, `.more-info-score-badge`), and `.more-info-loading` / `.more-info-empty` fallback states; the `.modal.duo .modal-content` grid changes from `1.6fr 1fr` to `auto 1.6fr 1fr` (the auto column is the More Info container); a one-line `.more-info-container { width: 100% !important; }` rule added inside the existing `@media (max-width: 1000px)` block so the new column stacks with the sheets on narrow viewports.
+- `admin/new-anime.js` (+2) — `coverImage { large }` added to the `relations.edges.node` block in both `FULL_QUERY` and `FULL_QUERY_BY_ID` (parity), so the admin form's `relations` payload carries the cover URLs the public panel renders. Purely additive — no admin-form behavior change.
+
+Total: **521 insertions / 1 deletion** across 3 files (vs the v1.6.7 commit).
+
+Tier A — `script.js`, `style.css`, and the public anime modal are visitor-facing. `npm test` runs clean before commit at gate 10 (7/7 Playwright; the More Info panel's lazy-fetch path is not under test). Blake's local browser smoke verified the panel across Demon Slayer (multi-season franchise rows), Re:Zero, and a standalone title — collapsed tab → expand → AniList rows render with covers + badges + meta + scores → every row click-through to AniList in a new tab → X collapse. Three internal iteration passes (gate 4b re-indent for IIFE consistency; gate 5b query split fixing an AniList null-constraint 404; gate 5c popularity-sort fixing the "Demon slayer → Onigiri" misresolve plus the universal-click-through behavior change) folded into the final result.
+
+**Roadmap cascade:** none — v1.6.8 lands in its planned slot. v1.6.9 (richer modal data — per-episode names + recommendations + staff credits) and v1.6.10 (multi-hop franchise traversal + per-entry studio dedupe — closes the two limitations noted above) remain on their current slots.
+
 <!-- author: Code | date: 2026-05-12 -->
 ## v1.6.7 — MINOR (2026-05-12)
 

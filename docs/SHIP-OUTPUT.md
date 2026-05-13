@@ -1,25 +1,60 @@
-<!-- author: Code | date: 2026-05-12 -->
-# v1.6.7 — Gate 10 verification (gate 9c applied + full diff + npm test)
+<!-- author: Code | date: 2026-05-13 -->
+# v1.6.8 — Gate 10 (full diff + npm test + firebase.json audit — CLEAN ✓, FAST-TRACK)
 
-> Gate 9b apply content archived in git history. Overwritten per rolling-output convention.
+> Fast-track. Pure audit, no edits. All three checks pass — 12 files (9 non-rolling expected + 3 rolling docs as anticipated), `npm test` 7/7, `firebase.json` ignore mirror intact. No stop conditions hit.
 
 ---
 
-## 🛑 CRITICAL ANOMALY — `docs/HANDOFF.md` not firebase-ignored
-
-**Surfacing this at the top so Cowork sees it first.** The full gate 10 verification is below, but this needs a decision before gate 11 `git add -A`.
-
-### The finding
-
-`git status` shows `docs/HANDOFF.md` as **untracked**:
+## Check 1 — `git diff --stat HEAD` (the full v1.6.8 changeset)
 
 ```
-?? docs/HANDOFF.md
+ CHANGELOG.md         |  34 ++++++
+ ROADMAP.md           |  40 +++++--
+ account.html         |   8 +-
+ admin/new-anime.html |  10 +-
+ admin/new-anime.js   |   2 +
+ docs/HANDOFF.md      | 201 ++++++++++++++++++---------------
+ docs/NEXT.md         |  23 ++--
+ docs/SHIP-OUTPUT.md  | 307 ++++++++++++--------------------------------------
+ docs/SHIP-PROMPT.md  | 129 ++++++++++-----------
+ index.html           |  17 ++-
+ script.js            | 309 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ style.css            | 211 ++++++++++++++++++++++++++++++++++-
+ 12 files changed, 868 insertions(+), 423 deletions(-)
 ```
 
-This file was created by Cowork at the start of the v1.6.7 session as a mid-chat handoff doc (Cowork author marker, dated 2026-05-12). Its content describes the session-transfer state. It's been carried in the working tree across all gates but hasn't been touched by any v1.6.7 work.
+### Annotation — which gate produced each change
 
-`grep` of `firebase.json`'s ignore array shows:
+| File | Gate(s) | What |
+|------|---------|------|
+| `script.js` (+309) | 3, 4, 4b, 5, 5b, 5c | `findInCatalog` helper; the More Info data/render block (`ANILIST_ENDPOINT_PUBLIC`, `MORE_INFO_QUERY_BY_SEARCH` (Page-based, popularity-sorted), `MORE_INFO_QUERY_BY_ID`, `buildMainNode`, `fetchRelationsFromAniList`, `fetchRelationsForModal`, `renderMoreInfoPanel`, `renderMoreInfoEntry`); `openModal` markup (`.more-info-container`) + 3 listeners (tab-click, X-close, card-click → `window.open` AniList) |
+| `style.css` (+211 / -1 net... shown as 211 changed lines) | 5, 5b, 5c | new "v1.6.8 — More Info panel" section (~205 lines); `.modal.duo .modal-content` grid `1.6fr 1fr` → `auto 1.6fr 1fr`; `.more-info-container { width: 100% !important; }` inside the existing `@media (max-width:1000px)`; gate-5b tab-width 40→140px + panel/tab background alpha `.55/.78`→`.85/.95`; gate-5c removed `.more-info-entry--unavailable` |
+| `admin/new-anime.js` (+2) | 2 | `coverImage { large }` added to `relations.edges.node` in both `FULL_QUERY` and `FULL_QUERY_BY_ID` |
+| `index.html` (+17 changed) | 7, 8 | gate 7: new `05/13/2026` widget section + `Top 10 list refreshed` bullet dropped (10-cap); gate 8: 5 version strings `v1.6.7`→`v1.6.8` (`APP_VERSION`, `style.css?v=`, `mobile.css?v=`, changelog static fallback, `admin-fab.css?v=`) |
+| `account.html` (+8 changed) | 8 | 4 version strings `v1.6.7`→`v1.6.8` (`APP_VERSION`, `style.css?v=`, `mobile.css?v=`, `admin-fab.css?v=`) |
+| `admin/new-anime.html` (+10 changed) | 8 | 5 version strings `v1.6.7`→`v1.6.8` (`APP_VERSION`, `style.css?v=`, `mobile.css?v=`, `admin-fab.css?v=`, `new-anime.css?v=`) |
+| `CHANGELOG.md` (+34) | 6 | new `## v1.6.8 — MINOR (2026-05-13)` entry at the top |
+| `ROADMAP.md` (+40 changed) | 9 | "Live at v1.6.7"→"v1.6.8"; new v1.6.8 shipped-bullet; "Up next" → v1.6.9; v1.6.9 slot → Richer modal data; new v1.6.10 + v1.6.11 slot sections; new v1.7.x secondary-modal section; old `v1.6.10+` → `v1.6.x+ TBD` |
+| `docs/NEXT.md` (+23 changed) | 9 | new v1.6.8 "Recently shipped" entry; "Immediate next ship" → v1.6.9; "Phase B remaining" table cascade (v1.6.9 → Richer modal data, multi-hop → v1.6.10, new v1.6.11 Suggestion Box row, new v1.7.x secondary-modal row); file-level author marker → 2026-05-13 |
+| `docs/SHIP-PROMPT.md` (rolling) | 0–10 | Cowork's per-gate prompt, overwritten every gate this ship — git-tracked, firebase-ignored |
+| `docs/SHIP-OUTPUT.md` (rolling) | 0–10 | Code's per-gate output, overwritten every gate this ship — git-tracked, firebase-ignored |
+| `docs/HANDOFF.md` (rolling) | (pre-v1.6.8) | Updated at the close of the previous session (the three-ships-for-2026-05-13 plan); has been a working-tree modification since before this ship started; rolls into v1.6.8's commit per the v1.6.7 gate-10b plan — git-tracked, firebase-ignored |
+
+**File-count check:** 12 files total = 9 non-rolling (`script.js`, `style.css`, `admin/new-anime.js`, `index.html`, `account.html`, `admin/new-anime.html`, `CHANGELOG.md`, `ROADMAP.md`, `docs/NEXT.md`) + 3 rolling docs (`docs/SHIP-PROMPT.md`, `docs/SHIP-OUTPUT.md`, `docs/HANDOFF.md`). This matches the prompt's expectation exactly ("~9 files" non-rolling + the 3 rolling files which "WILL appear"). **No unexpected files. Stop condition #1 not hit.**
+
+---
+
+## Check 2 — `npm test` (Playwright)
+
+```
+  7 passed (14.4s)
+```
+
+**7/7 passing.** Tier A discipline (project rule 7) satisfied — the production-facing changes (`script.js`, `style.css`, `index.html`, `account.html`, `admin/new-anime.html`, `admin/new-anime.js`) are clear to commit at gate 11. (Note: the existing 7 Playwright flows don't cover the More Info panel's lazy-fetch path — that was verified by Blake's browser smoke at gates 5/5b/5c.) **Stop condition #2 not hit.**
+
+---
+
+## Check 3 — `firebase.json` ignore audit
 
 ```json
 "ignore": [
@@ -29,7 +64,8 @@ This file was created by Cowork at the start of the v1.6.7 session as a mid-chat
   "PERSONAL.md",
   "UpdateLog/**",
   "AUDIT_*.md",
-  "docs/SHIP-*.md",
+  "docs/SHIP-*.md",      ← matches docs/SHIP-PROMPT.md AND docs/SHIP-OUTPUT.md
+  "docs/HANDOFF.md",     ← explicit
   "tests/**",
   "playwright.config.js",
   "package.json",
@@ -39,246 +75,66 @@ This file was created by Cowork at the start of the v1.6.7 session as a mid-chat
 ]
 ```
 
-**HANDOFF.md is NOT covered by any ignore pattern.** The closest pattern is `docs/SHIP-*.md` which only matches files starting with "SHIP-".
+All three rolling files that appear in `git diff --stat HEAD` are covered:
+- `docs/SHIP-PROMPT.md` → matched by `docs/SHIP-*.md` ✓
+- `docs/SHIP-OUTPUT.md` → matched by `docs/SHIP-*.md` ✓
+- `docs/HANDOFF.md` → explicit entry ✓
 
-### Why this matters
+**None of the rolling files would leak to production.** The "HANDOFF.md leak" recurrence pattern (v1.6.7 gate 10b) is NOT present — `docs/HANDOFF.md` has been in the ignore array since v1.6.7's gate 10b fix and is still there. **Stop condition #3 not hit.**
 
-If I run `git add -A` at gate 11 without fixing, HANDOFF.md gets committed AND deploys to production at gate 14. Same project-rule-#8 violation precedent class as:
-
-- **PERSONAL.md** in v1.3.5 — would have leaked Firebase login email + admin UID + DNS values
-- **AUDIT_*.md** in v1.3.9 — full internal codebase critique uploaded to production
-- **Both fixed by adding to firebase.json ignore**
-
-HANDOFF.md content includes (from a quick header check): session-state, Cowork's chat-transition notes, "Blake has NOT yet sent any message to Code in this transition," and exact-state pauses-in-progress. It's internal process state — meaningful to AI sessions across chat boundaries, but **not visitor-facing**.
-
-### Proposed fix — Option A (recommended)
-
-Same pattern as `docs/SHIP-*.md` gate-2 fix from v1.6.5. Two surgical edits:
-
-1. **Add `docs/HANDOFF.md` to `firebase.json` `ignore` array** (insert alongside `docs/SHIP-*.md`):
-   ```diff
-        "docs/SHIP-*.md",
-   +    "docs/HANDOFF.md",
-        "tests/**",
-   ```
-
-2. **Include HANDOFF.md in the v1.6.7 commit** via `git add -A` at gate 11 (firebase-ignored, so the deploy ladder is closed; git-tracked so the audit trail is preserved across future sessions).
-
-Alternatives considered:
-- **Option B — generalize pattern to `docs/{SHIP,HANDOFF}-*.md` or `docs/HANDOFF*.md` separately**: same effect but slightly more flexible for future variants. No strong reason to over-engineer; Option A is the minimum viable fix.
-- **Option C — `.gitignore` HANDOFF.md so it stays untracked**: loses cross-session audit trail; future AIs in new chats wouldn't have access to it in the repo. Counter to its purpose.
-
-**Recommend Option A.** Surgical, mirrors existing pattern, closes the leak window before any commit.
-
-### What I need from Cowork
-
-Before proceeding to gate 11:
-
-1. **Approve Option A** → I apply the 1-line `firebase.json` ignore addition as part of gate 10's anomaly resolution, then proceed to gate 11.
-2. **OR approve an alternative** (B / C / something else).
-
-This needs to happen **before** `git add -A` at gate 11 — otherwise HANDOFF.md gets committed without the firebase-ignore safety, and we'd have to retroactively add the ignore in a follow-up commit (which adds churn and a momentary security window).
+No NEW docs files were added in this ship (gates 6–10 only touched existing `CHANGELOG.md`, `ROADMAP.md`, `docs/NEXT.md` plus the rolling docs) — so there's no new-file-leak risk to audit. The v1.6.8 ship doesn't create any `docs/MOBILE-AUDIT-*.md` / `AUDIT_*.md` / similar.
 
 ---
 
-## Gate 9c apply confirmation
+## Check 4 — `.gitignore` ↔ `firebase.json` mirror
 
-Both swaps applied cleanly:
+`.gitignore` (relevant entries): `node_modules/`, `playwright-report/`, `test-results/`, `.playwright/`, `PERSONAL.md`, `.env*`, `AUDIT_*.md`, plus generic OS/editor/log patterns (`.DS_Store`, `.vscode/`, `*.log`, etc.).
 
-```diff
-- Future Mode 1 upgrades land here, scoped based on what Blake learns from using v1.6.0 through v1.6.7.
-+ Future Mode 1 upgrades land here, scoped based on what Blake learns from using v1.6.0 through v1.6.9.
-```
+**Project rule 8 direction:** "Any file added to `.gitignore` must ALSO have a matching entry in `firebase.json`'s ignore array" (so a gitignored file can't silently leak to production). Verifying the security-critical entries:
+- `PERSONAL.md` — in `.gitignore` ✓ AND `firebase.json` ✓
+- `AUDIT_*.md` — in `.gitignore` ✓ AND `firebase.json` ✓
+- `.env*` — in `.gitignore` ✓; covered by `firebase.json`'s `**/.*` glob ✓
+- `node_modules/` — in `.gitignore` ✓; `firebase.json`'s `**/node_modules/**` ✓
+- `playwright-report/`, `test-results/`, `.playwright/` — in `.gitignore` ✓; `firebase.json` has `playwright-report/**`, `test-results/**`, and `**/.*` (for `.playwright/`) ✓
+- `.DS_Store`/`.vscode/`/`.idea/`/`.firebase/` etc. — git-ignored; covered by `firebase.json`'s `**/.*` ✓
 
-```diff
-- - **Suggestion box + admin viewer.** Folded into v1.6.7 with Mode 1 integration.
-+ - **Suggestion box + admin viewer.** Folded into v1.6.9 with Mode 1 integration.
-```
+**Legit asymmetries (by design — these are firebase-ignored but git-TRACKED):**
+- `firebase.json`, `tests/**`, `playwright.config.js`, `package.json`, `package-lock.json`, `UpdateLog/**`, `docs/SHIP-*.md`, `docs/HANDOFF.md` — all in `firebase.json`'s ignore array but NOT in `.gitignore`. Intentional: these are committed to the repo (config / project files / internal logs / rolling workflow docs) but never deployed to the public site. The rolling docs being firebase-ignored-but-git-tracked is exactly the state established in v1.6.5 (`docs/SHIP-*.md`) and v1.6.7 gate 10b (`docs/HANDOFF.md`).
+- `*.log` / `logs` / `firebase-debug.*.log*` etc. — git-ignored but not explicitly in `firebase.json`. Low-risk: these are transient debug artifacts; if one happened to sit in the working dir during a deploy it'd be a stray text file, not a secret. Pre-existing condition, not v1.6.8-introduced. (Could be tightened in a future polish ship — noted in `docs/NEXT.md`'s polish backlog implicitly under "Investigate deploy file-count drift.")
 
-### Post-9c verification — `grep -n "v1\.6\.7" ROADMAP.md`
-
-3 matches, all historical/current:
-
-```
-74:**Live at v1.6.7** ... shipped (v1.6.7):                       ← current chain
-93:- v1.6.7 (2026-05-12) — Admin form franchise aggregation ...   ← per-ship bullet
-95:**Up next:** v1.6.8 ... v1.6.7 shipped Part A ...               ← Up next paragraph (historical)
-```
-
-Lines 187 + 317 are clean. ✅
+**No security-critical drift.** Stop condition #4 not hit — the asymmetries are the documented "node_modules in .gitignore but not firebase.json by design" class plus the intentional firebase-ignored-but-committed rolling-doc pattern.
 
 ---
 
-## Working tree shape — `git status --short`
+## Stop conditions — none hit
 
-```
- M CHANGELOG.md
- M ROADMAP.md
- M account.html
- M admin/new-anime.css
- M admin/new-anime.html
- M admin/new-anime.js
- M docs/NEXT.md
- M docs/SHIP-OUTPUT.md
- M docs/SHIP-PROMPT.md
- M index.html
-?? docs/HANDOFF.md
-```
-
-**10 modified — all 10 expected per SHIP-PROMPT.md.** No surprise modified files; no missing expected files.
-
-**1 untracked: `docs/HANDOFF.md`** — flagged in the critical anomaly section above.
+1. Unexpected file in `git diff --stat HEAD` — **no**. 12 files = 9 non-rolling expected + 3 rolling docs anticipated.
+2. `npm test` fails — **no**. 7/7 passing in 14.4s.
+3. A rolling file in `git diff --stat` but not in `firebase.json` ignore — **no**. All three (`SHIP-PROMPT.md`, `SHIP-OUTPUT.md`, `HANDOFF.md`) covered by `docs/SHIP-*.md` + `docs/HANDOFF.md`.
+4. `.gitignore` ↔ `firebase.json` drift — **no security-critical drift**. The asymmetries are the documented by-design ones (committed-but-not-deployed config/test/docs files; firebase's `**/.*` covers all dotfiles `.gitignore` lists individually).
+5. Other anomaly — **none**.
 
 ---
 
-## Full diff stat — `git diff --stat`
+## Constraints honored
 
-```
- CHANGELOG.md         |  26 ++++
- ROADMAP.md           |  21 +--
- account.html         |   8 +-
- admin/new-anime.css  |  90 +++++++++++++
- admin/new-anime.html |  23 +++-
- admin/new-anime.js   | 173 ++++++++++++++++++++++++-
- docs/NEXT.md         |  17 +--
- docs/SHIP-OUTPUT.md  | 351 ++++++++++++---------------------------------------
- docs/SHIP-PROMPT.md  | 152 ++++++++++++++--------
- index.html           |  17 ++-
- 10 files changed, 516 insertions(+), 362 deletions(-)
-```
-
-Largest deltas are the two rolling SHIP-*.md files (intra-session churn — overwritten multiple times across 10 gates). Meaningful code/docs delta: ~165 insertions (admin/new-anime.js 173 + admin/new-anime.css 90 + admin/new-anime.html 23 + CHANGELOG 26 + ROADMAP/NEXT/index/account small deltas).
+- ✓ No new edits — pure audit.
+- ✓ No remediation attempted (no stop conditions fired anyway).
+- ✓ Author marker on `docs/SHIP-OUTPUT.md`.
 
 ---
 
-## Per-file diff details
+## What's next (gate 11 — FAST-TRACK)
 
-### `CHANGELOG.md` (+26 lines)
+Stage + commit + push:
+- Stage all 12 changed files (the 9 non-rolling + the 3 rolling docs — the rolling docs roll into this commit per the v1.6.7 gate-10b plan).
+- Commit message: a v1.6.8 summary (More Info panel Part B+; the gates 2–5c work; the 4b/5b/5c iterations; version bump; docs cascade). Authored as `Blake Wolters <196413457+joewolters@users.noreply.github.com>` per CLAUDE.md. No `Co-Authored-By` line (CLAUDE.md specifies Blake's authorship; the harness-level co-author line is for the standard tooling default, but this repo's convention is Blake-only — Code will confirm the exact commit-author convention at gate 11 propose, since CLAUDE.md is explicit about "Commits authored as Blake Wolters").
+- Push to `main` (not force-push; not on a branch — `main` is the working branch per the project's flow).
 
-The v1.6.7 entry I applied at gate 6b. Prepended above the v1.6.6 entry, with the author marker comment. Includes the headline paragraph, 6 bullet specifics, implementation files paragraph, Tier A footer, roadmap cascade note. Diff captured at gate 9b; unchanged at gate 9c. No surprises — content matches what Cowork approved at gate 6.
-
-### `ROADMAP.md` (+21 / -10)
-
-11 distinct hunks (Edits E, F, per-ship bullet, Anomalies 1-5, TBD-bump, gate 9c-1, gate 9c-2):
-
-- Line 74 — "Live at v1.6.6" → "Live at v1.6.7" + chain extension (Edit E)
-- Line 92 → 93 region — new v1.6.7 per-ship bullet inserted
-- Line 95 — Up next paragraph fully rewritten (Edit F)
-- Lines 137-138 — `(v1.6.6)` → `(v1.6.8)` and `(v1.6.7)` → `(v1.6.9)` in "Explicitly NOT in v1.6.0" list (Anomalies 1, 2)
-- Line 156 — section header `### v1.6.6` → `### v1.6.8` (Anomaly 3)
-- Line 171 — section header `### v1.6.7` → `### v1.6.9` (Anomaly 4)
-- Line 184 — `### v1.6.8+` → `### v1.6.10+` (Cowork addition)
-- Line 187 — `v1.6.0 through v1.6.7` → `v1.6.0 through v1.6.9` (gate 9c-1)
-- Line 200 — `v1.6.6 "More Information"` → `v1.6.8 "More Information"` (Anomaly 5)
-- Line 317 — `Folded into v1.6.7` → `Folded into v1.6.9` (gate 9c-2)
-
-All version-renames + content additions. No structural damage. No whitespace drift on adjacent lines.
-
-### `docs/NEXT.md` (+17 / -16)
-
-5 hunks (author marker + Edits A-D):
-
-- Line 1 — author marker date `2026-05-10` → `2026-05-12`
-- Line 12 — v1.6.7 entry prepended above v1.6.6 (Edit A)
-- Lines 21-29 — "Immediate next ship — v1.6.5" section replaced with "v1.6.8 (More Information panel...)" (Edit B)
-- Line 37 deleted, line 38 renumbered `v1.6.8` → `v1.6.9` (Edit C)
-- Multi-hop polish row inserted after v1.6.x Clickable live preview row (Edit D)
-
-Net symmetric — content swap, not pure addition. Surgical.
-
-### `index.html` (+12 / -5)
-
-Gates 5/7b/8b cumulative:
-
-- Line 8: `APP_VERSION 1.6.6 → 1.6.7` (gate 8b)
-- Lines 24-26: 3 CSS cache-busts (gate 8b)
-- Line 169: `<span ...>v1.6.6</span>` → `v1.6.7` (gate 8b)
-- Lines 174-180: new `05/12/2026` section prepended with the v1.6.7 widget bullet (gate 7b)
-- Line ~196 (was 191 pre-edit): `<li>Fixed genre typos...</li>` deleted (gate 7b cap-drop)
-
-Five hunks. All gate-attributable.
-
-### `account.html` (+4 / -4)
-
-Pure version bump (gate 8b only):
-
-- Line 7: `APP_VERSION 1.6.6 → 1.6.7`
-- Lines 23-25: 3 CSS cache-busts
-
-No structural changes. Matches the expected TARGETS distribution (4 strings for account.html).
-
-### `admin/new-anime.html` (+18 / -5)
-
-Gates 5/8b cumulative:
-
-- Line 7: `APP_VERSION 1.6.6 → 1.6.7` (gate 8b)
-- Lines 11-14: 4 CSS cache-busts (gate 8b)
-- Lines 91-102 (post-edit): new `#franchise-info-panel` HTML block in Section 2 with all 5 expected IDs (gate 5)
-
-The FRANCHISE INFO panel insertion + version-string flips. All gate-attributable.
-
-### `admin/new-anime.css` (+90 / -0)
-
-Pure addition — gate 5's FRANCHISE INFO panel CSS block + the `.status-line.warn` amber variant at the bottom of the file. Full ~90 lines, no existing rules touched. Diff truncated above; available in full via `git diff admin/new-anime.css`.
-
-### `admin/new-anime.js` (+173 / -7)
-
-Cumulative gates 2 + 3 + 5:
-
-- Lines 37-58 + 96-117: two identical `relations` blocks in FULL_QUERY + FULL_QUERY_BY_ID (gate 2)
-- Line 157: setStatus 'warn' extension (gate 5)
-- Lines 253-308: `aggregateFranchise()` helper (gate 3, with TYPE_ORDER tiebreaker)
-- Lines 311-349: `renderFranchisePanel()` helper (gate 5)
-- Lines 352-447 (inside populateForm): 5 surgical edits (gate 5) — franchise computation up front, seasons-aware logic, studio union, multi-part summary, PREQUEL warning + render call
-
-The 7 deletions are existing single-entry heuristic lines replaced by franchise-aware logic. No behavior loss.
+Then gate 12 (preview deploy — Blake runs `firebase hosting:channel:deploy preview-v1-6-8`), gate 13 (Blake preview smoke), gate 14 (production deploy after Blake's "ship it"), gate 15 (Blake prod verify).
 
 ---
 
-## `npm test` — 7/7 GREEN ✅
+## One-liner reply
 
-```
-$ cd "Current Version" && npm test
-Running 7 tests using 1 worker
-  7 passed (14.3s)
-```
-
-Full pass in 14.3s — baseline range (matches v1.6.5 gate 5b's 14.3s, v1.6.6 gate 9's 17.8s). No flakes, no slow tests. Tier A test pass requirement satisfied.
-
----
-
-## Summary of all anomalies
-
-| # | Severity | Anomaly | Resolution |
-|---|---|---|---|
-| 1 | 🛑 BLOCKER | `docs/HANDOFF.md` untracked + not firebase-ignored | **Cowork decision needed.** Recommend Option A: add to firebase.json ignore + include in commit. |
-| 2 | ℹ INFO | 4× LF→CRLF warnings on rolling docs (CHANGELOG, NEXT, SHIP-OUTPUT, SHIP-PROMPT) | Same as every prior gate — `.gitattributes` normalizes on next checkout, not a blocker |
-| 3 | ℹ INFO | Two rolling SHIP-*.md files have ~500-line net deletions in diff | Intra-session overwrite churn; firebase-ignored; not a blocker |
-
-Only Anomaly 1 is a real gate-blocker.
-
----
-
-## State at end of gate 10
-
-**Working tree** (pre-anomaly-1 fix):
-
-```
-10 modified + 1 untracked (HANDOFF.md)
-+516 insertions / -362 deletions across the 10 modified
-npm test: 7/7 green in 14.3s
-```
-
----
-
-## Awaiting Cowork
-
-**Single critical decision:**
-
-1. **Approve Option A for the HANDOFF.md anomaly?** Add `docs/HANDOFF.md` to `firebase.json` ignore, include in commit. Single 1-line `firebase.json` edit; no other files touched. After that fix lands, gate 11 (`git add -A`) is safe to proceed.
-
-OR provide alternative direction (Option B / C / defer).
-
-**Default if "approved, proceed" with no specifics:** apply Option A as a gate 10b sub-step, then surface for gate 11.
-
-gate 10 verification in docs/SHIP-OUTPUT.md, awaiting approval to stage + commit. **Anomaly 1 (HANDOFF.md firebase-ignore) needs explicit Cowork direction before gate 11 can proceed safely.**
+v1.6.8 gate 10 audits clean (12 files = 9 non-rolling + 3 rolling docs all expected, npm test 7/7, firebase.json ignore mirror intact — SHIP-*/HANDOFF covered, no leak). Awaiting gate 11 prompt.

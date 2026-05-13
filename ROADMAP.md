@@ -71,7 +71,7 @@ These rules apply to every AI system that touches the project — Code (the buil
 
 ## Current state
 
-**Live at v1.6.7** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped; Mode 1 baseline + server shipped (v1.6.0); spawn-EINVAL hotfix shipped (v1.6.1); Bug 10 prevention ship — startup smoke check + DECISIONS lesson — shipped (v1.6.2); polish bundle + first widget update under the new visitor-first skill shipped (v1.6.3); update log widget upgrade — dates, grouping, 10-cap, scroll containment — shipped (v1.6.4); Mode 1 live preview as you type (search-as-you-type + ID-import + card-render extraction) shipped (v1.6.5); cover-image fill hotfix (`object-fit: cover` so AniList covers no longer letterbox) shipped (v1.6.6); admin form franchise aggregation Part A (FRANCHISE INFO panel + franchise-aware Seasons/Studio prefill + PREQUEL warning, single-hop scope) shipped (v1.6.7):
+**Live at v1.6.8** ([realanimereviews.com](https://realanimereviews.com)). Foundation complete; Phase A shipped; Mode 1 baseline + server shipped (v1.6.0); spawn-EINVAL hotfix shipped (v1.6.1); Bug 10 prevention ship — startup smoke check + DECISIONS lesson — shipped (v1.6.2); polish bundle + first widget update under the new visitor-first skill shipped (v1.6.3); update log widget upgrade — dates, grouping, 10-cap, scroll containment — shipped (v1.6.4); Mode 1 live preview as you type (search-as-you-type + ID-import + card-render extraction) shipped (v1.6.5); cover-image fill hotfix (`object-fit: cover` so AniList covers no longer letterbox) shipped (v1.6.6); admin form franchise aggregation Part A (FRANCHISE INFO panel + franchise-aware Seasons/Studio prefill + PREQUEL warning, single-hop scope) shipped (v1.6.7); More Info panel Part B+ — visitor-facing franchise relations on the public anime modal, every season a card with cover/title/meta/score and a click-through to AniList — shipped (v1.6.8):
 
 - **Public** GitHub repo at `https://github.com/joewolters/real-anime-reviews` (went public + owner renamed from `ReaIGodzilla` → `joewolters` in v1.4.2 on 2026-05-09); formal documentation system (this file is part of it)
 - `local → preview channel → production` deploy ladder, validated end-to-end
@@ -90,9 +90,10 @@ These rules apply to every AI system that touches the project — Code (the buil
 - v1.6.4 (2026-05-11) — Update log widget upgrade. Homepage widget now shows shipped-on dates on every change, groups bullets by date, holds up to 10 entries (was 5), and scrolls inside its panel rather than pushing the page down. The widget skill (`widget-update-skill.md`) is updated in the same ship to codify the new rules — per-change granularity, MM/DD/YYYY date format, 10-cap, "backfill consolidation" rule removed. AniList `Media(search:)` recovered partway through this session; v1.6.5 (live preview + ID-import) is unblocked.
 - v1.6.5 (2026-05-11) — Live preview as you type for the admin form. Search-as-you-type AniList dropdown with debounced lookup; ID-import as first-class entry point (the `b+` design from `docs/NEXT.md`, made co-equal during the AniList `Media(search:)` outage); live card preview that reuses the homepage's render code via a new shared `card-render.js` file (extracted from `script.js`'s IIFE so both the homepage and the admin form draw cards identically). Bundled fixes: sticky positioning (`overflow-x: clip` on `html, body` — `hidden` was breaking sticky context on every descendant); title-case canonicalization on AniList fetch (typing `gosick` now saves as `GOSICK` per AniList canonical). First ship driven by the multi-gate Code/Cowork workflow with rolling `docs/SHIP-PROMPT.md` + `docs/SHIP-OUTPUT.md` files; gate-level browser smoke tests caught two plan-level misses pre-commit.
 - v1.6.6 (2026-05-11) — Hotfix: cover images now fill the anime card frame cleanly. `style.css:218` — `object-fit: contain` → `object-fit: cover` on `.card img`. Surfaced by Blake during v1.6.5's live preview testing (Gosick example showed dark bars), queued in `docs/NEXT.md` and resolved same-day. Affects both homepage cards and the admin form's live preview via the shared `.card` class.
-- v1.6.7 (2026-05-12) — Admin form franchise aggregation Part A. Mode 1 form now pulls AniList `relations` and aggregates across the franchise — fetching One Punch Man populates Seasons as "3 seasons" and Studio as "MADHOUSE, J.C.STAFF" instead of just Season 1's values. New FRANCHISE INFO panel surfaces per-entry breakdown in Section 2. Amber `'warn'` status-kind for hint-level messages (PREQUEL heads-up to refetch Season 1 for cleanest aggregation). Single-hop traversal scope; multi-hop polish queued in `docs/NEXT.md`. Part B (public-modal More Information panel) split out to v1.6.8 at gate 0/1 for lower blast radius; Suggestion Box cascaded to v1.6.9.
+- v1.6.7 (2026-05-12) — Admin form franchise aggregation Part A. Mode 1 form now pulls AniList `relations` and aggregates across the franchise — fetching One Punch Man populates Seasons as "3 seasons" and Studio as "MADHOUSE, J.C.STAFF" instead of just Season 1's values. New FRANCHISE INFO panel surfaces per-entry breakdown in Section 2. Amber `'warn'` status-kind for hint-level messages (PREQUEL heads-up to refetch Season 1 for cleanest aggregation). Single-hop traversal scope; multi-hop polish queued in `docs/NEXT.md`. Part B (public-modal More Information panel) split out to v1.6.8 at gate 0/1 for lower blast radius; Suggestion Box cascaded.
+- v1.6.8 (2026-05-13) — More Info panel (Path B+). Visitor-facing surface of the v1.6.7 franchise split. Collapsible "Click for More Info" tab on every public anime modal expands into a panel showing the show's full franchise — PREQUEL/MAIN/SEQUEL/PARENT relations rendered as cards with cover thumbnails, English+romaji titles, year/episode count/studio meta, and AniList community scores; every row clickable → opens that season's AniList page in a new tab. Lazy fetch on tab click, in-session cache, popularity-sorted search (`Page(media:, sort:[POPULARITY_DESC, SCORE_DESC])`) so ambiguous titles like "Demon slayer" resolve to Kimetsu no Yaiba. Three internal iterations folded in (gate 4b IIFE indent, gate 5b null-constraint 404 fix, gate 5c popularity sort + universal click-through). Known limits queued for v1.6.10: single-hop relations (OPM S3 missing when fetching S1), per-entry studio dedupe (MADHOUSE,MADHOUSE on Frieren S2).
 
-**Up next:** v1.6.8 — "More Information" panel on the public anime modal (Part B of the franchise scope split). v1.6.7 shipped Part A (admin form aggregation); v1.6.8 ships Part B — surfacing the same franchise data (per-season studios, episode counts, years, plus prequels / sequels / OVAs / side stories) to site visitors when they click an anime card. Shared data shape with Part A (`relations { edges { ... } }` with `type:ANIME` + PREQUEL/PARENT/MAIN/SEQUEL filtering); the v1.6.7 ship pre-validated this against OPM and Frieren. After v1.6.8: v1.6.9 Suggestion Box + admin viewer integration, v1.6.x real one-click AI integration via Firebase Cloud Function (see `docs/ai-integration-design.md`).
+**Up next:** v1.6.9 — Richer modal data. Three new data clusters inline in the More Info panel from v1.6.8: per-episode names + counts (AniList `streamingEpisodes`, collapsible "show more" for long-running shows), recommendations (3-5 with covers, same click-through pattern as v1.6.8's rows), and key staff credits (director / series composition / music / character design — names non-clickable for now). Not in v1.6.9: per-episode scores (feasibility uncertain — v1.7.x), MAL integration (v1.7.0 backfill). After v1.6.9: v1.6.10 — multi-hop franchise traversal + per-entry studio dedupe (closes v1.6.8's known limitations); v1.6.11 — Suggestion Box + admin viewer integration; v1.6.x — real one-click AI integration via Firebase Cloud Function (see `docs/ai-integration-design.md`).
 
 ---
 
@@ -169,7 +170,28 @@ Add a left-side mirror of the existing Community Tab on each anime page. Populat
 
 **Design constraint:** the panel mirrors the Community Tab's layout, dimensions, and styling so the page feels symmetrical.
 
-### v1.6.9 — MINOR — Mode 1 + Suggestion Box integration
+### v1.6.9 — MINOR — Richer modal data
+
+Three new data clusters inline in the More Info panel from v1.6.8:
+
+1. **Per-episode names + counts** via AniList's `streamingEpisodes` field. Coverage isn't 100% — handle gracefully. Long-running shows (One Piece, Naruto, Detective Conan) wrap the list in collapsible "show more" UX so the panel doesn't blow out vertically.
+2. **Recommendations** via AniList's `recommendations` field. Show 3-5 recommended anime with cover thumbnails + titles; same click-through pattern as v1.6.8's relation rows (opens AniList in a new tab).
+3. **Staff credits** via AniList's `staff` field. Show 4-6 key roles (director, series composition, music, character design) — not the full staff list. Names non-clickable for v1.6.9; a dedicated staff page is deferred.
+
+**Not in v1.6.9:** AniList per-episode scores (feasibility uncertain — needs schema validation; defer to v1.7.x), MAL integration (paired with the v1.7.0 backfill).
+
+**Implementation surface:** extends the `renderMoreInfoPanel` / `renderMoreInfoEntry` block in `script.js` plus the `MORE_INFO_QUERY_*` GraphQL strings; matching CSS in `style.css`. Tier A.
+
+### v1.6.10 — MINOR — Multi-hop franchise polish + per-entry studio dedupe
+
+Closes the two known limitations carried out of v1.6.7's admin aggregation and v1.6.8's public panel.
+
+1. **Multi-hop traversal.** Extend franchise traversal — both `aggregateFranchise()` in `admin/new-anime.js` AND the public modal's relations fetch in `script.js` — to recurse one level past the initial fetch's direct relations. Add a depth limit (max 2 hops) to prevent infinite loops. **Canonical case to verify:** fetching One Punch Man Season 1 should now also catch Season 3 (currently missing because AniList stores S3 as a SEQUEL of S2, one link further out).
+2. **Per-entry studio dedupe** — one-line fix (`Array.from(new Set(...))`) to suppress `MADHOUSE, MADHOUSE` and similar AniList double-credits.
+
+**Bonus tightening (defer-able):** the "3 seasons" overcounting where OPM's PREQUEL OVA gets counted as a season — could refine the season count to TV-format entries only.
+
+### v1.6.11 — MINOR — Mode 1 + Suggestion Box integration
 
 Visitors can request specific anime via a public form. Requests appear in the admin panel as a queue. Blake can click "Add this anime" on a request to pre-fill the new-anime form with the requested title, then write his review and ship via Mode 1.
 
@@ -180,11 +202,11 @@ Visitors can request specific anime via a public form. Requests appear in the ad
 - One-click "Add this anime" handoff from request → new-anime form
 - Submissions stored in Firestore under a new collection (path TBD during implementation)
 
-**Note:** this combines what was originally planned as standalone "v1.4.0 — Suggestion box + admin viewer" with Mode 1 integration. The standalone version is no longer planned separately — it lands as part of Mode 1's upgrade arc.
+**Note:** this combines what was originally planned as standalone "v1.4.0 — Suggestion box + admin viewer" with Mode 1 integration. The standalone version is no longer planned separately — it lands as part of Mode 1's upgrade arc. (Cascaded from v1.6.9 by the v1.6.8 + v1.6.9 + v1.6.10 inserts.)
 
-### v1.6.10+ — TBD upgrades
+### v1.6.x+ — TBD upgrades
 
-Future Mode 1 upgrades land here, scoped based on what Blake learns from using v1.6.0 through v1.6.9. Don't pre-plan specific versions; let real usage drive the next features.
+Future Mode 1 upgrades land here, scoped based on what Blake learns from using v1.6.0 onward. Don't pre-plan specific versions; let real usage drive the next features.
 
 ---
 
@@ -201,6 +223,10 @@ Each anime card gets a separate "AniList" section/tab on the main card, displayi
 **This is a separate feature from the v1.6.8 "More Information" panel.** The AniList tab on the main card shows headline data at-a-glance for everyone visiting the page. The More Information panel is the deeper data nerd view that pairs with the Community Tab. Both display AniList-derived data; they serve different reading patterns.
 
 **Two distinct voices:** Blake's main review (human take), the AniList tab (verified-source headline data), the More Information panel (deeper data), the Community Tab (other users' takes).
+
+### v1.7.x — MINOR — In-site secondary modal for franchise entries
+
+**In-site secondary modal for franchise entries.** Currently v1.6.8 opens AniList in a new tab when a visitor clicks any row in the More Info panel — visitors leave the site to see season-specific details. This ship replaces the new-tab navigation with an in-site secondary modal: clicking a More Info row opens a second modal layered over (or replacing) the current one, showing that specific season's full AniList data (extended description, episode list, characters, staff credits, AniList community rating) in the site's own visual vocabulary. Includes a "Back" button to return to the primary review modal. Visitors stay on Real Anime Reviews instead of being redirected. Conceptually pairs with v1.8.0's "AniList tab on cards" — both deliver verified AniList data inside the site. Estimated 4-6 hours. Requested by Blake during v1.6.8 gate-5c smoke test (2026-05-13). Implementation hooks: the `data-anilist-id` attribute already present on every More Info row (gate 5c) is the click target; the `findInCatalog` helper (gate 3) is currently dead code and could be reaped or repurposed.
 
 ---
 

@@ -286,8 +286,269 @@ async function setSave(kind, uid, animeId, title, turnOn) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
 
+  // v1.6.8 — Look up a related-anime node from AniList against the local catalog.
+  // Returns the matching animeData entry, or null if not in catalog.
+  // Detection order:
+  //   1. AniListId exact match (future-proof — v1.7.0 backfill populates this for existing entries)
+  //   2. slug-match against node.title.english
+  //   3. slug-match against node.title.romaji
+  // Today (pre-backfill): slug-match is the primary path.
+  function findInCatalog(node) {
+    if (!node) return null;
+    const wantId = node.id;
+    const wantSlugs = [
+      node.title?.english && slug(node.title.english),
+      node.title?.romaji && slug(node.title.romaji),
+    ].filter(Boolean);
+    for (const a of animeData) {
+      if (a.AniListId && a.AniListId === wantId) return a;
+      if (a.Title && wantSlugs.includes(slug(a.Title))) return a;
+    }
+    return null;
+  }
+
   const safeArray = (v) => (Array.isArray(v) ? v : []);
   const norm = (v) => (v || "").toString().toLowerCase();
+
+  // ============================================================================
+  // v1.6.8 — More Info panel: AniList relations fetch + cache + renderer
+  // ============================================================================
+  // Public-modal counterpart to admin/new-anime.js's aggregateFranchise().
+  // Lazily fetches relations on tab click (gate 5 wires this), caches per
+  // session, renders four states (loading / success / empty / error→empty).
+  // No DOM injection here — gate 5 wires the tab markup and click handlers.
+  // ============================================================================
+
+  // Mirrors admin/new-anime.js:18 — duplicated literal because script.js is a
+  // non-module script and admin/new-anime.js is an ES module. Worth extracting
+  // to a shared module in a future refactor.
+  const ANILIST_ENDPOINT_PUBLIC = 'https://graphql.anilist.co';
+
+  // v1.6.8 gate 5b — split into two queries to mirror the admin form's
+  // by-search and by-id pattern. AniList's `Media(search, id)` field doesn't
+  // ignore a null-valued constraint — passing one null in a combined query
+  // returns HTTP 404 + Media: null. Two queries, each with a single var,
+  // avoids the trap.
+  // v1.6.8 gate 5c — by-search now uses Page(media:, sort:[POPULARITY_DESC,
+  // SCORE_DESC]) + perPage:1, mirroring admin/new-anime.js. Plain Media(search:)
+  // returns the first text-match (no relevance ranking), so an ambiguous short
+  // title like "Demon slayer" matched "Onigiri" (id 21612, zero relations)
+  // instead of Kimetsu no Yaiba. Popularity-sort fixes that. by-id stays a
+  // direct Media(id:) lookup — IDs are unambiguous.
+  const MORE_INFO_QUERY_BY_SEARCH = `
+query ($search: String) {
+  Page(page: 1, perPage: 1) {
+    media(search: $search, type: ANIME, sort: [POPULARITY_DESC, SCORE_DESC]) {
+      id
+      relations {
+        edges {
+          relationType
+          node {
+            id
+            title { romaji english }
+            format
+            episodes
+            seasonYear
+            type
+            status
+            studios { nodes { name isAnimationStudio } }
+            averageScore
+            coverImage { large }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+  const MORE_INFO_QUERY_BY_ID = `
+query ($id: Int) {
+  Media(id: $id, type: ANIME) {
+    id
+    relations {
+      edges {
+        relationType
+        node {
+          id
+          title { romaji english }
+          format
+          episodes
+          seasonYear
+          type
+          status
+          studios { nodes { name isAnimationStudio } }
+          averageScore
+          coverImage { large }
+        }
+      }
+    }
+  }
+}`;
+
+  // v1.6.8 — Build a relations-edge-shaped node from a local animeData entry.
+  // Many AniList fields are unavailable from local catalog data (romaji, year,
+  // episodes, format); renderer omits these gracefully. v1.7.0 backfill will
+  // populate AniListId enabling a future upgrade that pulls the source's own
+  // canon from AniList to fill the gaps.
+  function buildMainNode(anime, sourceId) {
+    const studioNames = (anime.Studio || '').split(',').map(s => s.trim()).filter(Boolean);
+    return {
+      id: anime.AniListId || sourceId || null,
+      title: { english: anime.Title || '', romaji: null },
+      format: null,
+      episodes: null,
+      seasonYear: null,
+      type: 'ANIME',
+      studios: { nodes: studioNames.map(name => ({ name, isAnimationStudio: true })) },
+      averageScore: anime.AniListScore || null,
+      coverImage: { large: 'assets/' + (anime.image || 'placeholder.png') },
+    };
+  }
+
+  // v1.6.8 — Fetch relations from AniList. Uses AniListId when populated
+  // (exact Media(id:) lookup), falls back to popularity-sorted Page(media:)
+  // search (the common path today — 0/44 entries have AniListId pre-v1.7.0).
+  // Returns { sourceId, edges } — sourceId is the AniList Media id resolved for
+  // the source anime (so the MAIN row is clickable even pre-backfill); edges is
+  // the raw relations.edges array. Both default to null/[] on any failure (no
+  // throw — the public modal must degrade gracefully).
+  async function fetchRelationsFromAniList(anime) {
+    const useId = !!anime.AniListId;
+    const query = useId ? MORE_INFO_QUERY_BY_ID : MORE_INFO_QUERY_BY_SEARCH;
+    const variables = useId ? { id: anime.AniListId } : { search: anime.Title || '' };
+    try {
+      const res = await fetch(ANILIST_ENDPOINT_PUBLIC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ query, variables }),
+      });
+      if (!res.ok) return { sourceId: null, edges: [] };
+      const body = await res.json();
+      if (body.errors?.length) return { sourceId: null, edges: [] };
+      const media = useId ? body.data?.Media : body.data?.Page?.media?.[0];
+      return {
+        sourceId: media?.id || null,
+        edges: media?.relations?.edges || [],
+      };
+    } catch (_) {
+      return { sourceId: null, edges: [] };
+    }
+  }
+
+  // v1.6.8 — In-memory cache keyed by AniListId (when populated) or title slug.
+  // Cleared on page reload. Empty arrays are cached so failed fetches don't
+  // hammer AniList on every re-open of the same modal in the same session.
+  const moreInfoCache = new Map();
+
+  async function fetchRelationsForModal(anime) {
+    const cacheKey = anime.AniListId || (anime.Title && slug(anime.Title));
+    if (!cacheKey) return { sourceId: null, edges: [] };
+    if (moreInfoCache.has(cacheKey)) return moreInfoCache.get(cacheKey);
+    const result = await fetchRelationsFromAniList(anime);
+    moreInfoCache.set(cacheKey, result);
+    return result;
+  }
+
+  // v1.6.8 — Pure renderer: returns an HTML string, never touches the DOM.
+  // States: 'loading' / 'success' / 'empty' / 'error' (error routes to 'empty'
+  // for v1.6.8 — single friendly fallback message). Success-state logic mirrors
+  // admin/new-anime.js's aggregateFranchise():
+  //   - keep only ANIME-type nodes with relationType ∈ PREQUEL/PARENT/SEQUEL
+  //   - inject source as synthetic MAIN via buildMainNode(), dedupe by node.id
+  //   - sort by seasonYear ascending, TYPE_ORDER tiebreaker (same formula:
+  //     missing year → 0, so MAIN with null year sorts to top — acceptable
+  //     until v1.7.0 backfill enables source-canon fetch)
+  function renderMoreInfoPanel(state, sourceAnime, result) {
+    if (state === 'loading') {
+      return '<div class="more-info-loading">Loading…</div>';
+    }
+    if (state === 'empty' || state === 'error') {
+      return '<div class="more-info-empty">No franchise info available yet.</div>';
+    }
+
+    const sourceId = result?.sourceId || null;
+    const edges = result?.edges || [];
+
+    const MAIN_RELATIONS = ['PREQUEL', 'PARENT', 'SEQUEL'];
+    const TYPE_ORDER = { PREQUEL: 0, PARENT: 1, MAIN: 2, SEQUEL: 3 };
+
+    const main = buildMainNode(sourceAnime, sourceId);
+    const seenIds = new Set();
+    if (main.id) seenIds.add(main.id);
+
+    const entries = [{ ...main, relationType: 'MAIN' }];
+    for (const edge of edges) {
+      if (!MAIN_RELATIONS.includes(edge.relationType)) continue;
+      if (edge.node?.type !== 'ANIME') continue;
+      if (edge.node?.id && seenIds.has(edge.node.id)) continue;
+      if (edge.node?.id) seenIds.add(edge.node.id);
+      entries.push({ ...edge.node, relationType: edge.relationType });
+    }
+
+    if (entries.length <= 1 && !main.id) {
+      return '<div class="more-info-empty">No franchise info available yet.</div>';
+    }
+
+    entries.sort((a, b) => {
+      const yearDelta = (a.seasonYear || 0) - (b.seasonYear || 0);
+      if (yearDelta !== 0) return yearDelta;
+      return (TYPE_ORDER[a.relationType] ?? 99) - (TYPE_ORDER[b.relationType] ?? 99);
+    });
+
+    const rows = entries.map(node => renderMoreInfoEntry(node)).join('');
+    return `<div class="more-info-list">${rows}</div>`;
+  }
+
+  // v1.6.8 — Render one entry row. Every entry with an AniList id is clickable
+  // (gate 5c — opens anilist.co/anime/{id} in a new tab for the season's full
+  // info, including MAIN which is just season 1). MAIN keeps the --current
+  // highlight but is also clickable. Click listeners attached by openModal's
+  // delegation handler.
+  function renderMoreInfoEntry(node) {
+    const cover = node.coverImage?.large || '';
+    const english = node.title?.english || node.title?.romaji || '(untitled)';
+    const romaji = (node.title?.romaji && node.title.romaji !== english) ? node.title.romaji : '';
+    const year = node.seasonYear || '';
+    const eps = node.episodes ? `${node.episodes} eps` : '';
+    const studios = (node.studios?.nodes || [])
+      .filter(s => s.isAnimationStudio !== false)
+      .map(s => s.name)
+      .filter(Boolean)
+      .join(', ');
+    const metaParts = [year, eps, studios].filter(Boolean);
+
+    let entryClass = 'more-info-entry';
+    let clickAttrs = '';
+    if (node.relationType === 'MAIN') {
+      entryClass += ' more-info-entry--current';
+    }
+    if (node.id) {
+      entryClass += ' more-info-entry--clickable';
+      clickAttrs = ` data-anilist-id="${escapeHtml(String(node.id))}"`;
+    }
+
+    const coverHtml = cover
+      ? `<img class="more-info-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">`
+      : '<div class="more-info-cover more-info-cover--placeholder"></div>';
+    const scoreHtml = node.averageScore
+      ? `<span class="more-info-score-badge">${escapeHtml(String(node.averageScore))}</span>`
+      : '';
+    const romajiHtml = romaji ? `<div class="more-info-romaji">${escapeHtml(romaji)}</div>` : '';
+    const metaHtml = metaParts.length
+      ? `<div class="more-info-meta">${escapeHtml(metaParts.join(' · '))}</div>`
+      : '';
+
+    return `<div class="${entryClass}"${clickAttrs}>
+    ${coverHtml}
+    <div class="more-info-body">
+      <span class="more-info-relation">${escapeHtml(node.relationType)}</span>
+      <div class="more-info-english">${escapeHtml(english)}</div>
+      ${romajiHtml}
+      ${metaHtml}
+    </div>
+    ${scoreHtml}
+  </div>`;
+  }
 
   function toYouTubeEmbedSrc(trailerStr) {
     if (!trailerStr) return null;
@@ -3294,6 +3555,21 @@ function openModal(anime) {
   // Build duo stage
   modal.classList.add('duo');
   modalContent.innerHTML =
+    // v1.6.8 — More Info container (collapsed tab + expanded panel)
+    '<div class="more-info-container" data-state="collapsed">' +
+      '<button class="more-info-tab" type="button" aria-label="Show more anime information">' +
+        '<span class="more-info-tab-icon">▶</span>' +
+        '<span class="more-info-tab-label">Click for More Info</span>' +
+      '</button>' +
+      '<aside class="more-info-panel" aria-hidden="true">' +
+        '<button class="more-info-close" type="button" aria-label="Close more info panel">×</button>' +
+        '<div class="more-info-header">' +
+          '<h3 class="more-info-title">MORE INFO</h3>' +
+          '<span class="jp-mini">詳細情報</span>' +
+        '</div>' +
+        '<div class="more-info-content"></div>' +
+      '</aside>' +
+    '</div>' +
     '<div class="sheet sheet--left">' + leftHTML + '</div>' +
     '<aside class="sheet sheet--right">' + rightHTML + '</aside>';
 
@@ -3317,6 +3593,39 @@ function openModal(anime) {
   overlay.classList.add('active');
   modal.classList.add('active');
   updateScrollLock();
+
+  // v1.6.8 — More Info panel wiring: tab opens + fetches, X closes, card-click navigates
+  const moreInfoContainer = modalContent.querySelector('.more-info-container');
+  const moreInfoTab = moreInfoContainer.querySelector('.more-info-tab');
+  const moreInfoPanel = moreInfoContainer.querySelector('.more-info-panel');
+  const moreInfoContent = moreInfoContainer.querySelector('.more-info-content');
+  const moreInfoClose = moreInfoContainer.querySelector('.more-info-close');
+
+  moreInfoTab.addEventListener('click', async () => {
+    moreInfoContainer.setAttribute('data-state', 'expanded');
+    moreInfoPanel.setAttribute('aria-hidden', 'false');
+    moreInfoContent.innerHTML = renderMoreInfoPanel('loading', anime);
+
+    const result = await fetchRelationsForModal(anime);
+    // Visitor may have collapsed during the fetch — re-check state before injecting.
+    if (moreInfoContainer.getAttribute('data-state') !== 'expanded') return;
+    const hasContent = (result.edges && result.edges.length > 0) || !!result.sourceId;
+    const state = hasContent ? 'success' : 'empty';
+    moreInfoContent.innerHTML = renderMoreInfoPanel(state, anime, result);
+  });
+
+  moreInfoClose.addEventListener('click', () => {
+    moreInfoContainer.setAttribute('data-state', 'collapsed');
+    moreInfoPanel.setAttribute('aria-hidden', 'true');
+  });
+
+  moreInfoContent.addEventListener('click', (e) => {
+    const card = e.target.closest('.more-info-entry--clickable');
+    if (!card) return;
+    const anilistId = card.dataset.anilistId;
+    if (!anilistId) return;
+    window.open(`https://anilist.co/anime/${anilistId}/`, '_blank', 'noopener');
+  });
 
   // wire close buttons in both sheets
   modal.querySelectorAll('.sheet .close-button').forEach((btn) => {

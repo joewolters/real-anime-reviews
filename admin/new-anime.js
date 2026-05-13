@@ -50,6 +50,7 @@ query ($search: String!) {
           status
           studios { nodes { name isAnimationStudio } }
           averageScore
+          coverImage { large }
         }
       }
     }
@@ -109,6 +110,7 @@ query ($id: Int!) {
           status
           studios { nodes { name isAnimationStudio } }
           averageScore
+          coverImage { large }
         }
       }
     }
