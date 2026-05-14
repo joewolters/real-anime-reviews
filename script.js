@@ -357,6 +357,29 @@ query ($search: String) {
           }
         }
       }
+      streamingEpisodes {
+        title
+      }
+      recommendations(perPage: 5, sort: [RATING_DESC]) {
+        nodes {
+          rating
+          mediaRecommendation {
+            id
+            title { romaji english }
+            coverImage { large }
+            format
+          }
+        }
+      }
+      staff(perPage: 25, sort: [RELEVANCE]) {
+        edges {
+          role
+          node {
+            id
+            name { full }
+          }
+        }
+      }
     }
   }
 }`;
@@ -379,6 +402,29 @@ query ($id: Int) {
           studios { nodes { name isAnimationStudio } }
           averageScore
           coverImage { large }
+        }
+      }
+    }
+    streamingEpisodes {
+      title
+    }
+    recommendations(perPage: 5, sort: [RATING_DESC]) {
+      nodes {
+        rating
+        mediaRecommendation {
+          id
+          title { romaji english }
+          coverImage { large }
+          format
+        }
+      }
+    }
+    staff(perPage: 25, sort: [RELEVANCE]) {
+      edges {
+        role
+        node {
+          id
+          name { full }
         }
       }
     }
@@ -408,10 +454,14 @@ query ($id: Int) {
   // v1.6.8 — Fetch relations from AniList. Uses AniListId when populated
   // (exact Media(id:) lookup), falls back to popularity-sorted Page(media:)
   // search (the common path today — 0/44 entries have AniListId pre-v1.7.0).
-  // Returns { sourceId, edges } — sourceId is the AniList Media id resolved for
-  // the source anime (so the MAIN row is clickable even pre-backfill); edges is
-  // the raw relations.edges array. Both default to null/[] on any failure (no
-  // throw — the public modal must degrade gracefully).
+  // v1.6.9 — return shape extended to { sourceId, edges, streamingEpisodes,
+  // recommendations, staff }: streamingEpisodes raw (renderer sorts/parses by
+  // the "Episode N -" prefix); recommendations = the recommendation nodes'
+  // mediaRecommendation, nulls dropped, filtered to anime formats (gate-1
+  // anime-format filter); staff raw (renderer applies the role whitelist).
+  // All five default to null/[] on any failure (HTTP non-200, GraphQL errors,
+  // no Media match, network throw) — no throw, the public modal degrades
+  // gracefully.
   async function fetchRelationsFromAniList(anime) {
     const useId = !!anime.AniListId;
     const query = useId ? MORE_INFO_QUERY_BY_ID : MORE_INFO_QUERY_BY_SEARCH;
@@ -422,27 +472,36 @@ query ($id: Int) {
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({ query, variables }),
       });
-      if (!res.ok) return { sourceId: null, edges: [] };
+      if (!res.ok) return { sourceId: null, edges: [], streamingEpisodes: [], recommendations: [], staff: [] };
       const body = await res.json();
-      if (body.errors?.length) return { sourceId: null, edges: [] };
+      if (body.errors?.length) return { sourceId: null, edges: [], streamingEpisodes: [], recommendations: [], staff: [] };
       const media = useId ? body.data?.Media : body.data?.Page?.media?.[0];
+      if (!media) return { sourceId: null, edges: [], streamingEpisodes: [], recommendations: [], staff: [] };
       return {
-        sourceId: media?.id || null,
-        edges: media?.relations?.edges || [],
+        sourceId: media.id || null,
+        edges: media.relations?.edges || [],
+        streamingEpisodes: media.streamingEpisodes || [],
+        recommendations: (media.recommendations?.nodes || [])
+          .map(n => n.mediaRecommendation)
+          .filter(Boolean)
+          .filter(m => ['TV', 'TV_SHORT', 'MOVIE', 'OVA', 'ONA', 'SPECIAL'].includes(m.format)),
+        staff: media.staff?.edges || [],
       };
     } catch (_) {
-      return { sourceId: null, edges: [] };
+      return { sourceId: null, edges: [], streamingEpisodes: [], recommendations: [], staff: [] };
     }
   }
 
   // v1.6.8 — In-memory cache keyed by AniListId (when populated) or title slug.
-  // Cleared on page reload. Empty arrays are cached so failed fetches don't
+  // Cleared on page reload. Empty results are cached so failed fetches don't
   // hammer AniList on every re-open of the same modal in the same session.
+  // v1.6.9 — caches/returns the extended { sourceId, edges, streamingEpisodes,
+  // recommendations, staff } shape verbatim; cache passthrough unchanged.
   const moreInfoCache = new Map();
 
   async function fetchRelationsForModal(anime) {
     const cacheKey = anime.AniListId || (anime.Title && slug(anime.Title));
-    if (!cacheKey) return { sourceId: null, edges: [] };
+    if (!cacheKey) return { sourceId: null, edges: [], streamingEpisodes: [], recommendations: [], staff: [] };
     if (moreInfoCache.has(cacheKey)) return moreInfoCache.get(cacheKey);
     const result = await fetchRelationsFromAniList(anime);
     moreInfoCache.set(cacheKey, result);
@@ -468,6 +527,9 @@ query ($id: Int) {
 
     const sourceId = result?.sourceId || null;
     const edges = result?.edges || [];
+    const streamingEpisodes = result?.streamingEpisodes || [];
+    const recommendations = result?.recommendations || [];
+    const staffEdges = result?.staff || [];
 
     const MAIN_RELATIONS = ['PREQUEL', 'PARENT', 'SEQUEL'];
     const TYPE_ORDER = { PREQUEL: 0, PARENT: 1, MAIN: 2, SEQUEL: 3 };
@@ -496,7 +558,10 @@ query ($id: Int) {
     });
 
     const rows = entries.map(node => renderMoreInfoEntry(node)).join('');
-    return `<div class="more-info-list">${rows}</div>`;
+    return `<div class="more-info-list">${rows}</div>`
+      + renderEpisodeList(streamingEpisodes, sourceAnime)
+      + renderRecommendations(recommendations)
+      + renderStaffCredits(staffEdges);
   }
 
   // v1.6.8 — Render one entry row. Every entry with an AniList id is clickable
@@ -548,6 +613,92 @@ query ($id: Int) {
     </div>
     ${scoreHtml}
   </div>`;
+  }
+
+  // v1.6.9 — Render the source anime's per-episode list (AniList streamingEpisodes,
+  // title-only — no thumbnails/links per gate-1). Sorted by the episode number
+  // parsed from each "Episode N -" title prefix; titles without that prefix (OAD,
+  // specials) sort to the end in AniList's order. Collapsed behind <details> when
+  // > 8 episodes. Returns '' when AniList has no episode data (coverage isn't 100%).
+  function renderEpisodeList(streamingEpisodes, sourceAnime) {
+    if (!streamingEpisodes || streamingEpisodes.length === 0) return '';
+    const sorted = streamingEpisodes
+      .map((e, i) => {
+        const title = (e && e.title) || '';
+        const m = title.match(/^Episode\s+(\d+)\s*[-–—]/i);
+        return { title, epNum: m ? parseInt(m[1], 10) : null, origIndex: i };
+      })
+      .sort((a, b) => {
+        if (a.epNum === null && b.epNum === null) return a.origIndex - b.origIndex;
+        if (a.epNum === null) return 1;
+        if (b.epNum === null) return -1;
+        return a.epNum - b.epNum;
+      });
+    const rowHtml = sorted
+      .map(r => `<div class="more-info-episode-row">${escapeHtml(r.title || '(untitled episode)')}</div>`)
+      .join('');
+    const header = `<div class="more-info-section-header">EPISODES — ${escapeHtml((sourceAnime && sourceAnime.Title) || '')}</div>`;
+    const body = streamingEpisodes.length > 8
+      ? `<details class="more-info-episodes-details"><summary>Show all ${streamingEpisodes.length} episodes</summary>${rowHtml}</details>`
+      : rowHtml;
+    return `<div class="more-info-episodes">${header}${body}</div>`;
+  }
+
+  // v1.6.9 — Render the "ALSO LIKED" recommendations cluster. Cards reuse v1.6.8's
+  // .more-info-entry--clickable + data-anilist-id pattern so the existing modal
+  // click-delegation opens anilist.co/anime/{id} in a new tab. Already filtered to
+  // anime formats (nulls dropped) by fetchRelationsFromAniList. Returns '' when empty.
+  function renderRecommendations(recs) {
+    if (!recs || recs.length === 0) return '';
+    const cards = recs.map(m => {
+      const id = m && m.id;
+      const english = (m && m.title && (m.title.english || m.title.romaji)) || '(untitled)';
+      const cover = (m && m.coverImage && m.coverImage.large) || '';
+      const fmt = (m && m.format) || '';
+      const coverHtml = cover
+        ? `<img class="more-info-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">`
+        : '<div class="more-info-cover more-info-cover--placeholder"></div>';
+      const fmtHtml = fmt ? `<span class="more-info-rec-format-badge">${escapeHtml(fmt)}</span>` : '';
+      const clickAttrs = id ? ` data-anilist-id="${escapeHtml(String(id))}"` : '';
+      const entryClass = id ? 'more-info-entry more-info-entry--clickable' : 'more-info-entry';
+      return `<div class="${entryClass}"${clickAttrs}>
+    ${coverHtml}
+    <div class="more-info-body">
+      <div class="more-info-english">${escapeHtml(english)}</div>
+    </div>
+    ${fmtHtml}
+  </div>`;
+    }).join('');
+    return `<div class="more-info-recommendations"><div class="more-info-section-header">ALSO LIKED</div><div class="more-info-list">${cards}</div></div>`;
+  }
+
+  // v1.6.9 — Render the STAFF cluster: 4-6 key roles, names non-clickable (per
+  // gate-1 — per-staff page deferred). Filters AniList's staff edges to a role
+  // whitelist (first edge per role); falls back to the top ~4 non-Original-Creator/
+  // Assistance roles by RELEVANCE when no whitelist role is present. Returns '' when
+  // nothing usable.
+  function renderStaffCredits(staffEdges) {
+    if (!staffEdges || staffEdges.length === 0) return '';
+    const WHITELIST = ['Director', 'Series Composition', 'Music', 'Character Design'];
+    const picked = [];
+    for (const role of WHITELIST) {
+      const edge = staffEdges.find(e => e && e.role === role && e.node && e.node.name && e.node.name.full);
+      if (edge) picked.push({ role, name: edge.node.name.full });
+    }
+    if (picked.length === 0) {
+      const EXCLUDE = new Set(['Original Creator', 'Assistance']);
+      for (const e of staffEdges) {
+        if (picked.length >= 4) break;
+        if (!e || !e.role || EXCLUDE.has(e.role)) continue;
+        if (!e.node || !e.node.name || !e.node.name.full) continue;
+        picked.push({ role: e.role, name: e.node.name.full });
+      }
+    }
+    if (picked.length === 0) return '';
+    const rowHtml = picked
+      .map(p => `<div class="more-info-staff-row">${escapeHtml(p.role)} — ${escapeHtml(p.name)}</div>`)
+      .join('');
+    return `<div class="more-info-staff"><div class="more-info-section-header">STAFF</div>${rowHtml}</div>`;
   }
 
   function toYouTubeEmbedSrc(trailerStr) {
