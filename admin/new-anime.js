@@ -329,10 +329,11 @@ function renderFranchisePanel(franchise) {
   const ul = $('franchise-entries');
   ul.innerHTML = franchise.entries.map(e => {
     const title = escapeHtml(e.title?.english || e.title?.romaji || '(no title)');
-    const studio = (e.studios?.nodes || [])
-      .filter(s => s.isAnimationStudio)
-      .map(s => maybeCapitalize(s.name))
-      .join(', ') || '—';
+    const studio = Array.from(new Set(
+      (e.studios?.nodes || [])
+        .filter(s => s.isAnimationStudio)
+        .map(s => maybeCapitalize(s.name))
+    )).join(', ') || '—';
     const eps = e.episodes ? `${e.episodes} ep` : '— ep';
     const year = e.seasonYear || '—';
     return `<li>

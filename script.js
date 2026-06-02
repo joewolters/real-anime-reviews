@@ -575,11 +575,12 @@ query ($id: Int) {
     const romaji = (node.title?.romaji && node.title.romaji !== english) ? node.title.romaji : '';
     const year = node.seasonYear || '';
     const eps = node.episodes ? `${node.episodes} eps` : '';
-    const studios = (node.studios?.nodes || [])
-      .filter(s => s.isAnimationStudio !== false)
-      .map(s => s.name)
-      .filter(Boolean)
-      .join(', ');
+    const studios = Array.from(new Set(
+      (node.studios?.nodes || [])
+        .filter(s => s.isAnimationStudio !== false)
+        .map(s => s.name)
+        .filter(Boolean)
+    )).join(', ');
     const metaParts = [year, eps, studios].filter(Boolean);
 
     let entryClass = 'more-info-entry';
@@ -599,8 +600,19 @@ query ($id: Int) {
       ? `<span class="more-info-score-badge">${escapeHtml(String(node.averageScore))}</span>`
       : '';
     const romajiHtml = romaji ? `<div class="more-info-romaji">${escapeHtml(romaji)}</div>` : '';
-    const metaHtml = metaParts.length
-      ? `<div class="more-info-meta">${escapeHtml(metaParts.join(' · '))}</div>`
+    // v1.6.10 — format pill at the start of the meta line. Reuses
+    // .more-info-rec-format-badge for visual parity with recommendation cards;
+    // inline position:static override prevents it from absolute-positioning to
+    // the corner where .more-info-score-badge already sits.
+    const fmtBadgeHtml = node.format
+      ? `<span class="more-info-rec-format-badge" style="position: static;">${escapeHtml(node.format)}</span>`
+      : '';
+    const metaTextHtml = metaParts.length ? escapeHtml(metaParts.join(' · ')) : '';
+    const metaInner = fmtBadgeHtml && metaTextHtml
+      ? `${fmtBadgeHtml} ${metaTextHtml}`
+      : (fmtBadgeHtml || metaTextHtml);
+    const metaHtml = metaInner
+      ? `<div class="more-info-meta">${metaInner}</div>`
       : '';
 
     return `<div class="${entryClass}"${clickAttrs}>
@@ -688,7 +700,7 @@ query ($id: Int) {
     if (picked.length === 0) {
       const EXCLUDE = new Set(['Original Creator', 'Assistance']);
       for (const e of staffEdges) {
-        if (picked.length >= 4) break;
+        if (picked.length >= 6) break;
         if (!e || !e.role || EXCLUDE.has(e.role)) continue;
         if (!e.node || !e.node.name || !e.node.name.full) continue;
         picked.push({ role: e.role, name: e.node.name.full });

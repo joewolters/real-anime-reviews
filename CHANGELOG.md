@@ -10,6 +10,32 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-06-02 -->
+## v1.6.10 — MINOR (2026-06-02)
+
+**The More Info panel on every anime modal now reads a little cleaner: duplicate studio names dedupe, each franchise row carries a small format pill, and the STAFF cluster can show up to six roles when AniList's data falls outside the standard four-role whitelist.** Three small visible polishes, no new clusters and no new markup — the changes ride entirely on existing v1.6.8 / v1.6.9 styles. Click "Click for More Info" on any anime modal and the same three things land everywhere.
+
+- **Per-row studio dedupe** — when AniList returns the same animation studio twice on a single relation row (Frieren S2's `MADHOUSE, MADHOUSE` is the canonical example), the modal now shows it once. The fix is a one-line `Array.from(new Set(...))` wrapper around the studio-name extraction, applied in both the public modal (`renderMoreInfoEntry`) and the admin form (`renderFranchisePanel`) so the admin-side FRANCHISE INFO panel stays visually consistent.
+- **Format pill on each franchise row** — AniList's `format` field (`TV` / `MOVIE` / `OVA` / `ONA` / `SPECIAL`) renders as a small pill at the start of the row's meta line, in flow with the year / eps / studio text. Visitors can tell apart Mugen Train MOVIE from Mugen Train ARC TV at a glance — a stop-gap until v1.7.1's multi-hop traversal surfaces both seasons explicitly. The pill reuses the existing `.more-info-rec-format-badge` styling (introduced for recommendation cards in v1.6.9) with an inline `position: static` override so it doesn't stack on top of the row's score badge in the corner.
+- **STAFF section bumped 4 → 6 roles** — when AniList doesn't list any of the four whitelist roles (Director, Series Composition, Music, Character Design), the fallback loop that walks `staff.edges` by relevance score now collects up to six entries instead of four. Anime with deeper credit lists (OVAs with named editors, animation-production specials) get a fuller STAFF cluster.
+
+**Known limitations:**
+
+- **Multi-hop franchise traversal and franchise-episode aggregation were both scoped for v1.6.10 but deferred to v1.7.1.** The original v1.6.10 plan chased relation chains two hops out (so Demon Slayer's modal would surface Entertainment District / Swordsmith Village / Hashira Training / Infinity Castle, and One-Punch Man would surface S3 + S3 Part 2) and aggregated per-season episode lists (closing v1.6.9's known limitation about wrong-season episodes for Re:Zero and other ongoing multi-season shows). Both required a nested-relations GraphQL shape that AniList returns 500 errors for on relation-heavy nodes (Demon Slayer's id is the canonical 500-prone case — its source-material pivot path exceeds AniList's per-query complexity budget). v1.7.1's redesign — N+1 parallel fetches in place of the single nested mega-query — will deliver both items. v1.6.10 ships small with the three polish wins above; the architectural debt is acknowledged and queued.
+
+**Implementation files:**
+
+- `script.js` (~+20 / ~-8) — `renderMoreInfoEntry`'s studio-split chain wrapped in `Array.from(new Set(...))`; the same renderer's meta-line construction extended to defensively extract `node.format` and prepend a `<span class="more-info-rec-format-badge" style="position: static;">` pill (the inline style overrides the class's `position: absolute` so the pill sits in the meta line, not in the top-right corner where `.more-info-score-badge` already lives); `renderStaffCredits`'s fallback loop bumped from `picked.length >= 4` to `>= 6`. No signature changes, no fetcher changes, no query changes.
+- `admin/new-anime.js` (~+5 / ~-4) — admin parity for the studio dedupe: same `Array.from(new Set(...))` wrapper in `renderFranchisePanel`'s per-entry studio render, so the admin form's FRANCHISE INFO panel stays visually consistent with the public modal. Other admin paths (the studio-input prefill via `aggregateFranchise`'s studio-union Map) already deduped case-insensitively in v1.6.7 and are untouched.
+- No new CSS — both changes reuse existing v1.6.8 / v1.6.9 classes (`.more-info-rec-format-badge` for the pill, the existing staff-row markup).
+- No new HTML structure, no new event listeners.
+
+Total: **~25 insertions / ~12 deletions** across 2 files (`script.js`, `admin/new-anime.js`) — plus the version-bump strings and the widget bullet in the gate-7/8 work.
+
+Tier A — `script.js`, `admin/new-anime.js`, and the public anime modal + admin form are visitor-facing. `npm test` runs clean before commit (7/7 Playwright; the More Info panel's lazy-fetch path is not under test). Blake's local browser smoke verified Demon Slayer (single-hop relations correctly limited to Mugen Train Movie + Mugen Train Arc — Entertainment District / Swordsmith / Hashira / Infinity Castle absent, the deferred v1.7.1 scope), Frieren S2 (single Madhouse on the row, no duplicate), format pills visible on each TV / MOVIE / OVA / etc. relation, and the STAFF cluster showing 4-6 entries depending on which fallback path fires.
+
+**Roadmap cascade:** v1.6.11 (Suggestion Box + admin viewer) is the next immediate ship — Cowork's Tier-B request queue is partly built and that's the cleanest next slot. v1.7.0 (AniList backfill — populates the `AniListId` column for every existing review so future modal fetches use the precise `Media(id:)` lookup instead of the popularity-sorted `Page(media:)` search) follows. v1.7.1 closes v1.6.10's architectural debt: N+1 parallel fetches replace the single nested mega-query, restoring multi-hop traversal AND enabling franchise-episode aggregation in a way that respects AniList's per-query complexity budget — the two deferred items from this ship land there. Other v1.7.x candidates (romaji subtitle, in-site secondary modal, watchlist hook on ALSO LIKED cards) keep their current slots.
+
 <!-- author: Code | date: 2026-05-13 -->
 ## v1.6.9 — MINOR (2026-05-13)
 
