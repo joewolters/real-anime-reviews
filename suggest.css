@@ -640,6 +640,11 @@
   transition: opacity 380ms cubic-bezier(.2, .7, .3, 1),
               transform 380ms cubic-bezier(.2, .7, .3, 1);
 }
+/* gate 3g — match the .suggest-search-wrap[hidden] pattern. Without this,
+   the .suggest-selected { display: flex } rule overrides the HTML hidden
+   attribute's UA-default display: none, leaving the card visible even
+   when JS sets card.hidden=true (root cause of the gate-9-smoke bug). */
+.suggest-selected[hidden] { display: none; }
 .suggest-selected.is-entering {
   opacity: 0;
   transform: translateY(-8px) scale(0.97);

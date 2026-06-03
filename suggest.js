@@ -99,7 +99,16 @@ async function searchLite(query, signal) {
 
 function onTitleInput() {
   const q = $('suggest-title').value.trim();
-  if (selection) clearSelection();   // typing in the input cancels a prior pick
+  // gate 3g — belt-and-suspenders state-clear: typing in the input means the
+  // visitor is searching fresh; force the selected card hidden + selection
+  // cleared synchronously (no animated reverse swap that could race the new
+  // input handling). Defensive against any future transitionend race where
+  // the gate-3f coordinator doesn't fully settle before the visitor types.
+  if (selection || !$('suggest-selected').hidden) {
+    selection = null;
+    $('suggest-selected').hidden = true;
+    $('suggest-selected').classList.remove('is-leaving', 'is-entering');
+  }
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
   if (inFlightController) inFlightController.abort();
 
