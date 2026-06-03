@@ -112,25 +112,10 @@ async function downloadFile(url, destPath, { allowOverwrite = false } = {}) {
   return buf.length;
 }
 
-// Backup Excel before modifying — git can't roll it back (it's outside the repo)
-async function backupExcel() {
-  const ts = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = EXCEL_PATH.replace(/\.xlsx$/, `.bak.${ts}.xlsx`);
-  await fsp.copyFile(EXCEL_PATH, backupPath);
-  return backupPath;
-}
-
-// Pre-flight: detect Excel lock file. If Excel has the workbook open in the
-// GUI, any write attempt throws raw EBUSY. Friendly check + clear error
-// before the user is mid-pipeline.
-function checkExcelLock() {
-  const dir = path.dirname(EXCEL_PATH);
-  const base = path.basename(EXCEL_PATH);
-  const lockPath = path.join(dir, '~$' + base);
-  if (fs.existsSync(lockPath)) {
-    throw new Error(`Excel file is currently open in the desktop app (lock file ~$${base} exists). Close ${base} in Excel and try again.`);
-  }
-}
+// v1.7.0 — backupExcel + checkExcelLock extracted to scripts/lib/excel-backup.js
+// so the AniList backfill CLI reuses the same logic. Call sites below pass
+// EXCEL_PATH explicitly. Behaviour is byte-identical to the prior inline versions.
+const { backupExcel, checkExcelLock } = require('./lib/excel-backup');
 
 // Pre-flight: check the existing animeData.js for a duplicate Title BEFORE
 // mutating Excel. Sync would catch it later, but by then Excel is already
@@ -275,7 +260,7 @@ async function runShipSequence(payload, send, opts = {}) {
 
   // ---- Step 0 (pre-flight): Excel lock + duplicate-title checks ----
   send('step', { id: 'preflight', label: 'Pre-flight checks', status: 'running' });
-  checkExcelLock();
+  checkExcelLock(EXCEL_PATH);
   await checkDuplicateTitle(title);
   send('step', { id: 'preflight', label: 'Pre-flight checks (Excel free, no duplicate title)', status: 'done' });
 
@@ -304,7 +289,7 @@ async function runShipSequence(payload, send, opts = {}) {
   // ---- Step 2: backup + append Excel ----
   send('step', { id: 'excel', label: 'Backup + append row to Excel', status: 'running' });
   if (!dryRun) {
-    const backup = await backupExcel();
+    const backup = await backupExcel(EXCEL_PATH);
     send('log', { line: `Excel backup: ${path.basename(backup)}` });
   }
   const watchCombined = [watchOfficial, watchUnofficial].filter(Boolean).join(', ');

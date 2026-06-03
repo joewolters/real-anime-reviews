@@ -9,6 +9,7 @@
     "sync:check": "node scripts/sync-excel-to-js.js --dry-run",
     "bump": "node scripts/bump-version.js",
     "anilist": "node scripts/anilist-fetch.js",
+    "backfill": "node scripts/anilist-backfill.js",
     "mode1": "node scripts/mode1-server.js"
   },
   "devDependencies": {

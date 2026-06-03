@@ -3650,10 +3650,32 @@ function openModal(anime) {
   const seasonsVal =
     anime.Seasons ?? anime.seasons ?? anime.Season ?? anime.season ?? null;
 
+  // v1.7.0 (gate 1b) — AniList community score as an inline badge with an
+  // ANILIST kicker (data attribution, allowed), sitting on the same row as
+  // Blake's rating. Bare score (no /10) — the kicker supplies the context.
+  // Omitted entirely when AniListScore is null (no hidden-toggle → no [hidden]
+  // symmetry rule needed). Reads the static backfilled field; no API call.
+  const aniListBadgeHtml = (anime.AniListScore != null && anime.AniListScore !== '')
+    ? '<span class="anilist-badge">' +
+        '<span class="anilist-badge-kicker">ANILIST</span>' +
+        '<span class="anilist-badge-divider">·</span>' +
+        '<span class="anilist-badge-score">' + (Number(anime.AniListScore) / 10).toFixed(1) + '</span>' +
+      '</span>'
+    : '';
+
+  // v1.7.0 (gate 1c) — RATING badge is now the gold twin of the ANILIST badge:
+  // same kicker/divider/score structure, no external "Rating:" label, bare score
+  // (strip a trailing /10 — the kicker supplies the scale, same as the AniList badge).
+  const ratingScore = String(anime.Rating || '').replace(/\/\s*10\s*$/, '').trim();
   const ratingHtml =
-    '<p class="meta-line rating-line"><strong>Rating:</strong> <span class="rating-badge">' +
-    (anime.Rating || '') +
-    '</span></p>';
+    '<p class="meta-line meta-line-rating">' +
+      '<span class="rating-badge">' +
+        '<span class="rating-badge-kicker">RATING</span>' +
+        '<span class="rating-badge-divider">·</span>' +
+        '<span class="rating-badge-score">' + ratingScore + '</span>' +
+      '</span>' +
+      aniListBadgeHtml +
+    '</p>';
 
   const genreHtml =
   '<p class="meta-line"><strong>Genre:</strong> <span class="genre-chip">' +

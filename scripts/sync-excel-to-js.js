@@ -370,6 +370,12 @@ function rowToAnime(row, headers, imageMap, warnings) {
   const color = get('AniListColor');
   if (color) anime.AniListColor = color;
 
+  // v1.7.0 — backfilled title variants (stored only; display deferred to v1.7.x).
+  const titleEnglish = get('TitleEnglish');
+  if (titleEnglish) anime.TitleEnglish = titleEnglish;
+  const titleRomaji = get('TitleRomaji');
+  if (titleRomaji) anime.TitleRomaji = titleRomaji;
+
   return anime;
 }
 
@@ -427,6 +433,8 @@ function renderJsFile(animes) {
     if (a.IdMal != null) lines.push(`    ,IdMal: ${a.IdMal}`);
     if (a.AniListScore != null) lines.push(`    ,AniListScore: ${a.AniListScore}`);
     if (a.AniListColor != null) lines.push(`    ,AniListColor: ${escapeString(a.AniListColor)}`);
+    if (a.TitleEnglish != null) lines.push(`    ,TitleEnglish: ${escapeString(a.TitleEnglish)}`);
+    if (a.TitleRomaji != null) lines.push(`    ,TitleRomaji: ${escapeString(a.TitleRomaji)}`);
     lines.push('  },');
   }
   lines.push('];');

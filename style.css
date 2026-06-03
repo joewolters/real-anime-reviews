@@ -370,17 +370,89 @@ header h1:hover {
 /* --- Modal meta upgrades --- */
 .modal-meta .meta-line { margin-bottom: 12px; }
 
-/* Rating: bold dark text inside a yellow pill */
+/* v1.7.0 (gate 1c) — RATING badge: gold twin of .anilist-badge. Same flex /
+   kicker / divider / score structure; gold accent lifted from the prior pill
+   (#ffd54a fill, #e6b800 deep gold, rgba(255,213,74,*) glow). No animation-delay
+   so it lands first — the eye reads Blake's score before the community one. */
 .modal-meta .rating-badge {
-  display: inline-block;
-  padding: 2px 8px;               /* smaller */
-  border-radius: 8px;             /* tighter corners */
-  background: #ffd54a;            /* yellow */
-  color: #1a1a1a;                 /* dark text */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 213, 74, 0.32), rgba(230, 184, 0, 0.18));
+  border: 1px solid rgba(255, 213, 74, 0.55);
+  box-shadow: 0 0 8px rgba(255, 213, 74, 0.30);
+  animation: anilist-badge-in 360ms ease both;
+}
+.modal-meta .rating-badge-kicker {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #ffd54a;
+}
+.modal-meta .rating-badge-divider {
+  color: rgba(255, 213, 74, 0.55);
+  font-weight: 700;
+}
+.modal-meta .rating-badge-score {
+  font-size: 0.92rem;
   font-weight: 800;
-  font-size: 0.90rem;             /* smaller text */
-  letter-spacing: 0.1px;
-  box-shadow: 0 0 0 1px #e6b800 inset, 0 0 8px rgba(255, 213, 74, 0.35);
+  color: #efe7ff;
+}
+
+/* v1.7.0 (gate 1b) — Rating row becomes a flex line so the AniList community
+   score sits inline next to Blake's rating; wraps below it on narrow screens. */
+.modal-meta .meta-line-rating {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* AniList community score — inline badge with an ANILIST kicker (data
+   attribution, allowed). Brand-purple gradient; rendered only when a score
+   exists (omitted from markup otherwise — no hidden-toggle, no [hidden] rule). */
+.modal-meta .anilist-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(187, 134, 252, 0.32), rgba(140, 70, 220, 0.18));
+  border: 1px solid rgba(187, 134, 252, 0.55);
+  box-shadow: 0 0 8px rgba(187, 134, 252, 0.30);
+  /* Staggered fade-in: lands 80ms after the modal opens so the eye catches
+     Blake's rating first, then the community score — a subtle hierarchy cue.
+     No hover/transition: these badges are informational, not interactive. */
+  animation: anilist-badge-in 360ms ease 80ms both;
+}
+.modal-meta .anilist-badge-kicker {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #bb86fc;
+}
+.modal-meta .anilist-badge-divider {
+  color: rgba(187, 134, 252, 0.55);
+  font-weight: 700;
+}
+.modal-meta .anilist-badge-score {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #efe7ff;
+}
+@keyframes anilist-badge-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-meta .rating-badge,
+  .modal-meta .anilist-badge { animation: none; }
 }
 
 

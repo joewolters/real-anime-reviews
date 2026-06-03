@@ -10,6 +10,31 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-06-03 -->
+## v1.7.0 — MINOR (2026-06-03)
+
+**AniList enrichment for the legacy catalog: a community-score badge on every anime modal, precise ID-based franchise lookups, and a one-time backfill of the existing 44 reviews.** The ~44 reviews that pre-date Mode 1's AniList integration are now caught up to the same field-level data new anime get automatically.
+
+**Visitor-facing:**
+
+- **Community score badge on every anime modal.** Next to Blake's rating, each modal now shows the AniList community score as a twin badge — `RATING · 8.5` and `ANILIST · 8.1` side by side, same shape, gold vs purple accent. It's a quick read on where Blake's take lines up with the wider anime community. Hidden automatically for the few titles AniList has no score for. (AniList is named as data attribution on the badge kicker — not as a third-party brand interruption.)
+- **More Info panel resolves precisely by ID.** The "Click for More Info" panel's franchise/relations chain now looks anime up by their exact AniList ID instead of a fuzzy popularity-sorted title search — so ambiguous titles resolve to the right show every time. This path was built back in v1.6.8 anticipating the backfill; populating the IDs activated it automatically (no new modal code).
+
+**Behind the scenes (admin / data):**
+
+- **One-time AniList backfill.** A new interactive CLI (`npm run backfill`) walked the canonical Excel row-by-row, queried AniList for each legacy title, let Blake confirm the right match in his terminal, and wrote six fields back — `AniListId`, `IdMal`, `AniListScore`, `AniListColor`, `TitleEnglish`, `TitleRomaji`. 40 of 44 matched; 4 were skipped (left blank, the site falls back to title search for those). Idempotent (re-runnable), `--dry-run` and `--auto` (exact-title auto-pick) modes, sequential rate-limit-friendly queries, a one-time Excel backup before the first write, and a markdown verification report written outside the deploy root.
+- **`IdMal` + `TitleRomaji` are stored, not yet used.** MAL API calls and romaji subtitles on cards are deferred to later ships — this ship just banks the data.
+
+**Implementation files:**
+
+- `scripts/anilist-backfill.js` (new, ~290 lines) — the backfill CLI; reuses the shared backup helper + a dedicated AniList query (adds `idMal` / `episodes` / `coverImage.color`).
+- `scripts/lib/excel-backup.js` (new) — `backupExcel()` + `checkExcelLock()` extracted from `scripts/mode1-server.js` so both the Mode 1 server and the backfill share one source of truth; mode1-server now imports them (behaviour unchanged).
+- `scripts/sync-excel-to-js.js` (+8) — reads + emits the new `TitleEnglish` / `TitleRomaji` fields.
+- `scripts/anilist-fetch.js` (+2) — exports `callAniList` for the backfill's query.
+- `package.json` (+1) — `npm run backfill`.
+- `script.js` (~+18) — the `RATING` / `ANILIST` twin badges in `.modal-meta` (reads the static `AniListScore`, no API call; hidden when null). The `Media(id:)` lookup path was already present.
+- `style.css` (~+45) — twin `.rating-badge` / `.anilist-badge` (inline-flex kicker · divider · score, gold vs purple gradient, staggered fade-in, reduced-motion fallback, no hover — informational).
+
 <!-- author: Code | date: 2026-06-02 -->
 ## v1.6.12 — PATCH (2026-06-02)
 

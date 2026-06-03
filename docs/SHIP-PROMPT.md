@@ -1,56 +1,64 @@
-<!-- author: Cowork | date: 2026-06-02 -->
-# v1.6.12 iteration apply + commit + preview redeploy (FAST-TRACK)
+<!-- author: Cowork | date: 2026-06-03 -->
+# v1.7.0 — Gates 6 + 7 + 8 (audits + commit + preview deploy — FAST-TRACK)
 
-Blake approved all 5 Q-decisions per your recommendations. Compressed single-sweep apply + commit + preview redeploy. **Same version v1.6.12** — no bump.
+Compressed single-sweep audit + commit + preview deploy. No firestore:rules redeploy (schema unchanged since v1.6.11 gate 8).
 
-## Sub-step 1 — Apply the 2 items per your proposal
+## Sub-step 1 — Audits (gate 6)
 
-- **Item 1 (catch branch fix + belt-and-suspenders):** repoint `loadQueue()` catch at `suggestions-list-new` + `suggestions-list-reviewed`, hide both sections + empty + stats, show error. Add `$('suggestions-error').hidden = true;` on both `renderQueue()` success branches (empty-result and has-docs).
-- **Item 2 (side-by-side columns):**
-  - HTML: add inline `<p class="column-empty" id="empty-new" hidden>Nothing yet</p>` after `#suggestions-list-new`, and `<p class="column-empty" id="empty-reviewed" hidden>Nothing reviewed yet</p>` after `#suggestions-list-reviewed`. Sections lose their default `hidden`.
-  - CSS: `#suggestions-queue { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }`; `@media (max-width: 768px) { grid-template-columns: 1fr; gap: 22px; }`; `.column-empty` styling per your sketch (muted text, dashed purple border, rounded). Replace the old `.suggestion-row.leaving/.entering` translateX with fade+scale (`opacity: 0; transform: scale(0.96)`), 200ms out / 240ms in. Update `prefers-reduced-motion` to instant move.
-  - JS: `updateStats()` drops `section.hidden = count === 0`, replaces with `$('empty-new').hidden = newCount > 0; $('empty-reviewed').hidden = reviewedCount > 0;`. `renderQueue()` success path unhides both `<section>`s and lets `updateStats()` drive placeholders. `moveToReviewed()` timing tweak to 200ms out → append → 240ms in (keep double-rAF + setTimeout fallback). Whole-queue-empty branch (0 docs total) keeps the big `QUEUE EMPTY` card and hides both columns.
+- `npm test` — must report **7/7 passing** before commit. If anything fails, STOP and report; do not commit.
+- `firebase.json` ↔ `.gitignore` mirror audit — confirm sensitive entries (PERSONAL.md, AUDIT_*, etc.) in both; deploy-but-don't-commit / commit-but-don't-deploy asymmetric entries are intentional per project rule #8.
+- `git diff --stat HEAD` — confirm changes map to v1.7.0 scope: backfill CLI + shared backup lib + sync extension + twin badge CSS/JS + docs cascade + Excel data (animeData.js).
 
-## Sub-step 2 — Verify before stopping
+## Sub-step 2 — Commit (gate 7)
 
-- `node --check admin/suggestions.js` clean
-- `bump-version.js --check` still "all 26 strings agree on v1.6.12" (no version bump this iteration)
-- `npm test` 7/7 — Rule #7 still applies (this commit is production-facing)
-- Grep `suggestions-list[^-]` in `admin/suggestions.js` returns ZERO hits (confirms the dead-ID is fully gone, no other places reference it)
+- `git add -A`, then `git restore --staged` the 7 Cowork-managed doc excludes (same as v1.6.11 / v1.6.12):
+  ```
+  docs/COWORK-STYLE.md docs/AI-PRIMER.md docs/CODE-PROMPTS.md
+  docs/SKILLS/README.md docs/SKILLS/hotfix-skill.md
+  docs/SKILLS/release-skill.md docs/SKILLS/widget-update-skill.md
+  ```
+  All 7 stay as unstaged modifications + untracked. Blake hasn't ratified them yet.
 
-## Sub-step 3 — Commit + push
+- Author marker: `Blake Wolters <196413457+joewolters@users.noreply.github.com>` (NO Co-Authored-By / 🤖 / Claude Code / Generated with trailers).
 
-- `git add -A` then `git restore --staged` the same 7 Cowork excludes (`docs/COWORK-STYLE.md`, `docs/AI-PRIMER.md`, `docs/CODE-PROMPTS.md`, `docs/SKILLS/README.md`, `docs/SKILLS/hotfix-skill.md`, `docs/SKILLS/release-skill.md`, `docs/SKILLS/widget-update-skill.md`)
-- Author marker: `Blake Wolters <196413457+joewolters@users.noreply.github.com>` (NO Co-Authored-By / 🤖 / Claude Code / Generated with trailers)
 - Commit message:
 
 ```
-v1.6.12 — Admin queue iteration: catch-branch fix + side-by-side columns
+v1.7.0 — AniList enrichment + community-score twin badge
 
-Item 1: loadQueue() catch was referencing #suggestions-list, an ID that
-no longer exists after the gate-0 section split. That threw a TypeError
-on every real failure, breaking the error display. Repointed at the new
-two-list IDs + belt-and-suspenders: every renderQueue() success branch
-now explicitly hides the error card.
+One-time backfill populated AniListId/IdMal/AniListScore/AniListColor/
+TitleEnglish/TitleRomaji on the existing 44 reviews (40 matched, 4
+skipped) via the new `npm run backfill` CLI. Idempotent, supports
+--dry-run and --auto exact-match. Backup hook reused from Mode 1
+(extracted to a shared lib/excel-backup.js).
 
-Item 2: Reviewed section moved from vertical stack to side-by-side
-horizontal column. CSS Grid 1fr 1fr on desktop, stacks at 768px. Inline
-"Nothing yet" / "Nothing reviewed yet" placeholders keep columns
-symmetric. Mark Reviewed animation reworked from horizontal slide to
-fade+scale (works regardless of differing column heights). Whole-queue-
-empty still uses the branded QUEUE EMPTY card.
+Every anime modal now shows the AniList community score next to Blake's
+rating as a twin badge -- RATING (gold) and ANILIST (purple), same
+kicker/divider/score structure, hidden when no score is present. The
+More Info panel relations chain now resolves by precise Media(id:)
+lookup (the v1.6.8 path activates automatically with the backfilled IDs).
+
+bump-version.js: 26 strings swept to v1.7.0.
 ```
 
-- `git push origin main`
+- `git push origin main` — clean fast-forward expected.
 
-## Sub-step 4 — Preview redeploy
+## Sub-step 3 — Preview deploy (gate 8)
 
 ```
-firebase hosting:channel:deploy preview-v1-6-12
+firebase hosting:channel:deploy preview-v1-7-0
 ```
 
-Channel URL stays at the same hash (`5ex8721o`). No firestore:rules redeploy.
+Capture the channel URL. No `firestore:rules` redeploy this gate.
+
+## Verify before stopping
+
+- `npm test` 7/7
+- `git log -1 --format="%an %ae"` shows Blake's canonical author
+- `git log -1 --format="%B" | grep -ciE "co-authored-by|🤖|claude code|generated with"` returns 0
+- `git status` post-push shows the 7 excludes still in working tree
+- Channel URL printed and captured
 
 ## Report shape
 
-Lean. Files written + line counts, new commit SHA, test pass, push confirmation, channel URL preserved, one-liner reply. Flag anything unexpected.
+Lean. New commit SHA, push confirmation, 7-excludes preserved confirmation, preview URL prominently. One-liner reply. Flag if anything came through differently.

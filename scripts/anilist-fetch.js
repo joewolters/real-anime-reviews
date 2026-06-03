@@ -403,7 +403,10 @@ async function mainCli() {
 }
 
 // ---- Module exports + CLI dispatch ----------------------------------------
-module.exports = { fetchAniListAnime, searchAniList };
+// v1.7.0 — callAniList exported so scripts/anilist-backfill.js can POST its own
+// dedicated query (it needs idMal + episodes + coverImage.color, which
+// searchAniList's SEARCH_QUERY doesn't return) without duplicating the fetch.
+module.exports = { fetchAniListAnime, searchAniList, callAniList, ANILIST_ENDPOINT, USER_AGENT };
 
 if (require.main === module) {
   mainCli();
