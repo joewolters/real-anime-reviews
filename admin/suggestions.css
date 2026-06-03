@@ -83,18 +83,25 @@
   gap: 12px;
 }
 
-/* ---- Section split (v1.6.12 item 3 — NEW / REVIEWED) ----------------------- */
+/* ---- Section split (v1.6.12 — NEW / REVIEWED side-by-side columns) ---------- */
 #suggestions-queue {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;   /* 50/50 columns (Q1) */
+  gap: 24px;
+  align-items: start;               /* columns size to their own content */
 }
-#suggestions-queue[hidden] { display: none; }   /* [hidden] symmetry vs display:flex */
+#suggestions-queue[hidden] { display: none; }   /* [hidden] symmetry vs display:grid */
+
+/* Stack to a single column on tablet/phone (Q2). */
+@media (max-width: 768px) {
+  #suggestions-queue { grid-template-columns: 1fr; gap: 22px; }
+}
 
 .queue-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;                     /* let grid tracks shrink; long titles wrap */
   /* Entrance flourish when a section first appears (e.g. REVIEWED on first
      mark) — a soft fade-up so the new section doesn't pop in abruptly. */
   animation: queue-section-in 420ms cubic-bezier(.2, .7, .3, 1) both;
@@ -142,6 +149,20 @@
 }
 .section-count:not(:empty)::before { content: '· '; }
 
+/* Inline per-column empty placeholder — keeps the two columns symmetric when one
+   side has no rows (v1.6.12 iteration, Q3). Muted text + dashed brand hairline. */
+.column-empty {
+  margin: 4px 0 0;
+  padding: 22px 16px;
+  text-align: center;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.40);
+  border: 1px dashed rgba(187, 134, 252, 0.18);
+  border-radius: 10px;
+}
+.column-empty[hidden] { display: none; }
+
 /* ---- Suggestion row -------------------------------------------------------- */
 .suggestion-row {
   position: relative;
@@ -185,13 +206,19 @@
   opacity: 1;
 }
 
-/* Cross-slide when a row moves between the NEW and REVIEWED lists (320ms). */
-.suggestion-row.leaving,
-.suggestion-row.entering {
-  transition: transform 320ms cubic-bezier(.2, .7, .3, 1), opacity 320ms ease;
+/* v1.6.12 iteration — column-to-column move is now a fade+scale (200ms out /
+   240ms in) instead of a horizontal slide, so it reads correctly regardless of
+   the two columns' differing heights. */
+.suggestion-row.leaving {
+  transition: transform 200ms ease, opacity 200ms ease;
+  opacity: 0;
+  transform: scale(0.96);
 }
-.suggestion-row.leaving  { opacity: 0; transform: translateX(-18px); }
-.suggestion-row.entering { opacity: 0; transform: translateX(18px); }
+.suggestion-row.entering {
+  transition: transform 240ms cubic-bezier(.2, .7, .3, 1), opacity 240ms ease;
+  opacity: 0;
+  transform: scale(0.96);
+}
 
 .suggestion-row.removing {
   opacity: 0;
@@ -735,7 +762,7 @@
   .confirm-card .confirm-actions button {
     transition-duration: 0s !important;
   }
-  /* No slide offset when motion is reduced — instant move. */
+  /* No scale offset when motion is reduced — instant move. */
   .suggestion-row.leaving  { transform: none; }
   .suggestion-row.entering { transform: none; }
 }

@@ -99,9 +99,10 @@ function updateStats() {
   $('count-new').textContent = newCount ? String(newCount) : '';
   $('count-reviewed').textContent = reviewedCount ? String(reviewedCount) : '';
 
-  // Section visibility follows live row counts — hide an empty section's header.
-  $('section-new').hidden = newCount === 0;
-  $('section-reviewed').hidden = reviewedCount === 0;
+  // v1.6.12 iteration — both columns stay visible; show each column's inline
+  // empty placeholder when its list has no live rows (keeps columns symmetric).
+  $('empty-new').hidden = newCount > 0;
+  $('empty-reviewed').hidden = reviewedCount > 0;
 }
 
 // ---- Render ----------------------------------------------------------------
@@ -153,6 +154,10 @@ function renderQueue(snaps) {
   const newList = $('suggestions-list-new');
   const reviewedList = $('suggestions-list-reviewed');
 
+  $('suggestions-error').hidden = true;   // success path — never show error, period
+
+  // Whole-queue-empty (0 docs total) — keep the branded QUEUE EMPTY card and
+  // hide both columns (the per-column placeholders are for partial-empty only).
   if (snaps.empty || snaps.size === 0) {
     newList.innerHTML = '';
     reviewedList.innerHTML = '';
@@ -174,7 +179,12 @@ function renderQueue(snaps) {
   newList.innerHTML = newDocs.map((snap, i) => renderRow(snap, i)).join('');
   reviewedList.innerHTML = reviewedDocs.map((snap, i) => renderRow(snap, i)).join('');
 
-  updateStats();   // also sets section visibility + per-section counts
+  // v1.6.12 iteration — both columns stay visible side-by-side; updateStats()
+  // toggles each column's inline placeholder when its list is empty.
+  $('section-new').hidden = false;
+  $('section-reviewed').hidden = false;
+
+  updateStats();   // drives per-section counts + per-column empty placeholders
 }
 
 // ---- Branded confirm modal (v1.6.12 item 2) --------------------------------
@@ -227,13 +237,14 @@ function confirmModal(title) {
 
 // ---- Reviewed-section move (v1.6.12 item 3) --------------------------------
 
-// Slides a row out of the NEW list and into the REVIEWED list with a 320ms
-// cross-slide. Uses the gate-3f double-rAF pattern so the entrance transition
-// replays; a setTimeout fallback covers reduced-motion (zeroed transitions
-// don't fire transitionend reliably).
+// Moves a row from the NEW column into the REVIEWED column. v1.6.12 iteration —
+// fade+scale OUT (200ms) → physical DOM move → fade+scale IN (240ms); works
+// regardless of the two columns' differing heights. Uses the gate-3f double-rAF
+// so the entrance transition replays; the setTimeout fallback covers
+// reduced-motion (zeroed transitions don't fire transitionend reliably).
 function moveToReviewed(row) {
   const reviewedList = $('suggestions-list-reviewed');
-  $('section-reviewed').hidden = false;   // ensure target visible before the move
+  $('section-reviewed').hidden = false;   // safety — column should already be visible
   row.classList.add('leaving');
 
   let done = false;
@@ -241,13 +252,13 @@ function moveToReviewed(row) {
     if (done) return;
     done = true;
     row.classList.remove('leaving');
-    reviewedList.appendChild(row);        // physical DOM move between lists
+    reviewedList.appendChild(row);        // physical DOM move between columns
     row.classList.add('entering');
     requestAnimationFrame(() => requestAnimationFrame(() => row.classList.remove('entering')));
-    updateStats();                        // refresh counts + section visibility
+    updateStats();                        // refresh counts + column placeholders
   };
   row.addEventListener('transitionend', finish, { once: true });
-  setTimeout(finish, 400);                // reduced-motion / no-transition fallback
+  setTimeout(finish, 320);                // reduced-motion / no-transition fallback
 }
 
 // ---- Event delegation ------------------------------------------------------
@@ -307,8 +318,12 @@ function wireListClicks() {
         updateStats();
         const cleanup = () => {
           row.remove();
-          updateStats();   // refresh counts + section visibility after removal
+          updateStats();   // refresh counts + column placeholders after removal
           if (!$('suggestions-queue').querySelector('li.suggestion-row:not(.skeleton):not(.removing)')) {
+            // Whole queue now empty — match renderQueue's empty branch: big card,
+            // both columns hidden (not the per-column "Nothing yet" placeholders).
+            $('section-new').hidden = true;
+            $('section-reviewed').hidden = true;
             $('suggestions-empty').hidden = false;
             $('queue-stats').hidden = true;
           }
@@ -344,10 +359,16 @@ async function loadQueue() {
     renderQueue(snaps);
   } catch (err) {
     console.error('loadQueue failed', err);
-    $('suggestions-list').innerHTML = '';   // clear skeleton rows
-    $('suggestions-empty').hidden = true;   // gate 3d: hide empty card if visible
-    $('queue-stats').hidden = true;         // gate 3d: hide stats counter if visible
-    $('suggestions-error').hidden = false;
+    // v1.6.12 iteration — repointed at the two-section list IDs. The old
+    // single-list element was renamed in the gate-0 split; the stale reference
+    // here threw a TypeError and broke the whole error path.
+    $('suggestions-list-new').innerHTML = '';        // clear skeleton rows
+    $('suggestions-list-reviewed').innerHTML = '';
+    $('section-new').hidden = true;
+    $('section-reviewed').hidden = true;
+    $('suggestions-empty').hidden = true;            // hide empty card if visible
+    $('queue-stats').hidden = true;                  // hide stats counter if visible
+    $('suggestions-error').hidden = false;           // now actually reached
   }
 }
 
