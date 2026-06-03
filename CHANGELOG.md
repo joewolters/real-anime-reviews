@@ -11,6 +11,25 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-03 -->
+## v1.7.1 — PATCH (2026-06-03)
+
+**Polish bundle on top of v1.7.0's AniList enrichment — original-language titles, per-anime color, and a premium empty state.**
+
+- **Japanese / romaji subtitle on every card + modal.** Each anime now shows its original title under the English one, wrapped in `「 」` brackets — the romanized reading (e.g. `「Sousou no Frieren」`) when it's meaningfully different from the English, or the **native Japanese** (e.g. `チェンソーマン`, `ワンパンマン`) when the romaji is basically the English title back. Latin readings render in Outfit Light Italic; Japanese renders in Noto Sans JP. Long titles wrap up to 3 lines. Shown on the homepage grid, View All grid, the Top 10 carousel, the Latest Anime Drop card, and inside the modal.
+- **Per-anime color accent on the community-score badge.** The `ANILIST` badge now picks up each anime's own AniList cover color (One Punch Man's amber, Frieren's mint, Solo Leveling's blue, etc.) on its border, gradient, and kicker — with a readability guard that lifts very dark colors (Chainsaw Man's deep red) to a legible tone. Falls back to brand purple when an anime has no color.
+- **Premium "no matches" empty state.** Searching/filtering with no results now shows a branded card (🔍 + `NO MATCHES 該当なし` + a `SUGGEST ONE →` button to the suggestion box) instead of a bare text line, centered in the grid.
+- **Update-log version chips.** Each date in the homepage update log now carries the version(s) that shipped that day — stacked chips for 1-2 ships, an arrow range (e.g. `v1.6.2 → v1.6.6`) for busier days.
+- **All 44 reviews now AniList-enriched.** The 4 titles that didn't auto-match in v1.7.0's backfill (My Stepmom's Daughter Is My Ex, Watari-kun's, An Archdemon's Dilemma, Hatsune Miku: Colorful Stage!) were backfilled by explicit ID.
+
+**Behind the scenes:**
+
+- New `--add-native` backfill mode + a `TitleNative` Excel column populated for all 44 (the native Japanese title), read + emitted by the sync. A repeatable `--match "<Title>" <id>` mode was also added for explicit-ID backfills.
+- `pickSubtitle` resolver (in `card-render.js` + `script.js`) normalizes before comparing romaji vs. English so near-duplicates fall through to the native title; `.is-native` swaps the font to Noto Sans JP.
+- Top 10 carousel glass portrait expanded to fit the new subtitle line; Latest Anime Drop card got the subtitle treatment + a title-block centering fix.
+
+**Implementation files:** `script.js`, `card-render.js`, `style.css` (subtitle render + resolver + empty-state + badge color + spacing), `index.html` (widget chips + Outfit-italic/Klee font imports), `scripts/anilist-backfill.js` (`--add-native` + `--match` modes), `scripts/sync-excel-to-js.js` (`TitleNative`), `animeData.js` (regenerated with `TitleNative` on all 44).
+
+<!-- author: Code | date: 2026-06-03 -->
 ## v1.7.0 — MINOR (2026-06-03)
 
 **AniList enrichment for the legacy catalog: a community-score badge on every anime modal, precise ID-based franchise lookups, and a one-time backfill of the existing 44 reviews.** The ~44 reviews that pre-date Mode 1's AniList integration are now caught up to the same field-level data new anime get automatically.

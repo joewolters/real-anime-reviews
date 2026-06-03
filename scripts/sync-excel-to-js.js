@@ -375,6 +375,8 @@ function rowToAnime(row, headers, imageMap, warnings) {
   if (titleEnglish) anime.TitleEnglish = titleEnglish;
   const titleRomaji = get('TitleRomaji');
   if (titleRomaji) anime.TitleRomaji = titleRomaji;
+  const titleNative = get('TitleNative');
+  if (titleNative) anime.TitleNative = titleNative;
 
   return anime;
 }
@@ -435,6 +437,7 @@ function renderJsFile(animes) {
     if (a.AniListColor != null) lines.push(`    ,AniListColor: ${escapeString(a.AniListColor)}`);
     if (a.TitleEnglish != null) lines.push(`    ,TitleEnglish: ${escapeString(a.TitleEnglish)}`);
     if (a.TitleRomaji != null) lines.push(`    ,TitleRomaji: ${escapeString(a.TitleRomaji)}`);
+    if (a.TitleNative != null) lines.push(`    ,TitleNative: ${escapeString(a.TitleNative)}`);
     lines.push('  },');
   }
   lines.push('];');

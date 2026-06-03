@@ -738,6 +738,40 @@ query ($id: Int) {
 }
 function nl2br(s) { return String(s ?? "").replace(/\n/g, "<br>"); }
 function toMillis(ts) { return ts?.toMillis ? ts.toMillis() : (typeof ts === 'number' ? ts : Date.now()); }
+
+// v1.7.1 — keep a per-anime AniListColor readable as kicker text on the dark
+// modal: very dark colors (e.g. Chainsaw Man's #6b1a1a) get lightened toward a
+// readable band; everything mid/light passes through. Returns rgb() or null.
+function readableAccent(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex ?? "").trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;   // 0-255 perceived
+  if (lum < 110) {
+    const t = ((110 - lum) / 110) * 0.7;              // mix toward white
+    r = Math.round(r + (255 - r) * t);
+    g = Math.round(g + (255 - g) * t);
+    b = Math.round(b + (255 - b) * t);
+  }
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// v1.7.1 gate 1f — subtitle resolver: prefer Romaji when meaningfully different
+// from English, else fall back to the native Japanese title (.is-native → Noto
+// Sans JP). Duplicated in card-render.js — keep the two in sync.
+// gate 1g — normalize (strip non-alphanumerics + lowercase) before comparing so
+// romaji that matches English bar punctuation/case (e.g. "One Punch Man" vs
+// "One-Punch Man") is treated as identical → fall through to the native title.
+function normSub(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function pickSubtitle(anime) {
+  const eng = String(anime.TitleEnglish || anime.Title || '').trim();
+  const rom = String(anime.TitleRomaji || '').trim();
+  const nat = String(anime.TitleNative || '').trim();
+  if (rom && normSub(rom) !== normSub(eng)) return { text: rom, kind: 'romaji' };
+  if (nat) return { text: nat, kind: 'native' };
+  return null;
+}
 function stripAccidentalPaste(s) {
   const text = String(s ?? "");
 
@@ -1454,6 +1488,12 @@ function buildFeaturedDrop() {
   // “Latest” = last entry in animeData (matches your current workflow)
   const a = animeData[animeData.length - 1];
 
+  // v1.7.1 gate 1g — romaji/native subtitle, same resolver + markup as the cards.
+  const fSub = pickSubtitle(a);
+  const fRomaji = fSub
+    ? `<p class="title-romaji${fSub.kind === 'native' ? ' is-native' : ''}"><i class="rb">「</i>${escapeHtml(fSub.text)}<i class="rb">」</i></p>`
+    : '';
+
   featuredDropCard.innerHTML = `
     <img class="featured-thumb" src="assets/${escapeHtml(a.image || '')}"
       alt="${escapeHtml(a.Title || '')}"
@@ -1461,6 +1501,7 @@ function buildFeaturedDrop() {
       onerror="this.onerror=null;this.src='assets/placeholder.png';" />
 
     <div class="featured-name">${escapeHtml(a.Title || '')}</div>
+    ${fRomaji}
     <div class="featured-genre">${escapeHtml(a.Genre || '')}</div>
     <div class="featured-rating">${escapeHtml(a.Rating || '')}</div>
   `;
@@ -3655,8 +3696,17 @@ function openModal(anime) {
   // Blake's rating. Bare score (no /10) — the kicker supplies the context.
   // Omitted entirely when AniListScore is null (no hidden-toggle → no [hidden]
   // symmetry rule needed). Reads the static backfilled field; no API call.
+  // v1.7.1 — per-anime accent from the backfilled AniListColor: the raw hex
+  // drives the border + gradient (extremes are harmless there), while a
+  // luminance-guarded variant keeps the kicker text readable. Falls back to
+  // brand purple (CSS defaults) when the anime has no color.
+  const aniColor = anime.AniListColor || null;
+  const aniKicker = readableAccent(aniColor);
+  const aniBadgeStyle = aniColor
+    ? ' style="--anilist-color: ' + escapeHtml(aniColor) + '; --anilist-kicker: ' + (aniKicker || aniColor) + '"'
+    : '';
   const aniListBadgeHtml = (anime.AniListScore != null && anime.AniListScore !== '')
-    ? '<span class="anilist-badge">' +
+    ? '<span class="anilist-badge"' + aniBadgeStyle + '>' +
         '<span class="anilist-badge-kicker">ANILIST</span>' +
         '<span class="anilist-badge-divider">·</span>' +
         '<span class="anilist-badge-score">' + (Number(anime.AniListScore) / 10).toFixed(1) + '</span>' +
@@ -3722,11 +3772,20 @@ function openModal(anime) {
       anime.Review + '</p></div>'
     : '';
 
+  // v1.7.1 — romaji subtitle under the modal title, shown only when it differs
+  // from the displayed (English) title (e.g. "Sousou no Frieren"; skipped for
+  // identical-romaji titles like "Chainsaw Man").
+  const modalSub = pickSubtitle(anime);
+  const modalRomaji = modalSub
+    ? '<p class="modal-romaji' + (modalSub.kind === 'native' ? ' is-native' : '') + '"><i class="rb">「</i>' + modalSub.text + '<i class="rb">」</i></p>'
+    : '';
+
   // LEFT sheet markup (details + comments)
   const leftHTML =
     '<span class="close-button" aria-label="Close">&times;</span>' +
     trailerBlock +
     '<h2 class="modal-title">' + anime.Title + '</h2>' +
+    modalRomaji +
     officialVotesMarkup(anime) +
     '<div class="modal-meta">' +
     ratingHtml + genreHtml + seasonsHtml + studioHtml + tagsHtml + platformsHtml +
@@ -4025,13 +4084,19 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
     if (q) base = base.filter((a) => matchesSearch(a, q));
 
     if (!base.length) {
-      cardContainer.innerHTML = "";
-      const msg = document.createElement("div");
-      msg.className = "empty-msg";
-      msg.textContent = q
-        ? `No results for "${q}" with current filters.`
-        : `No matches for current filters.`;
-      cardContainer.appendChild(msg);
+      // v1.7.1 — branded "no results" card (mirrors the suggestions-empty-card
+      // vocabulary) replacing the bare text line. SUGGEST ONE always shows —
+      // it's a valid action whether the dead-end came from search or filters.
+      const body = q
+        ? `No anime match "${escapeHtml(q)}" with your current filters.`
+        : `No anime match your current filters.`;
+      cardContainer.innerHTML =
+        '<div class="search-empty-card">' +
+          '<div class="se-glyph" aria-hidden="true">🔍</div>' +
+          '<div class="se-kicker">NO MATCHES <span class="jp-mini">該当なし</span></div>' +
+          '<p class="se-body">' + body + '</p>' +
+          '<a class="se-cta" href="/suggest">SUGGEST ONE <span class="se-arrow" aria-hidden="true">→</span></a>' +
+        '</div>';
       return;
     }
     renderGrid(shuffle(base));

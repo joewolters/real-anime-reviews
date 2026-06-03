@@ -35,11 +35,37 @@
       .replace(/(^-|-$)/g, "");
   }
 
+  // v1.7.1 gate 1f — choose the subtitle under the title: prefer Romaji when it's
+  // meaningfully different from the English title; otherwise fall back to the
+  // native Japanese title (rendered in Noto Sans JP via the .is-native class).
+  // Duplicated in script.js (modal render) — keep the two in sync.
+  // gate 1g — normalize before comparing so romaji that's the same as English
+  // bar punctuation/case (e.g. "One Punch Man" vs "One-Punch Man") is treated as
+  // identical and we fall through to the native Japanese title instead.
+  function norm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function pickSubtitle(anime) {
+    const eng = String(anime.TitleEnglish || anime.Title || '').trim();
+    const rom = String(anime.TitleRomaji || '').trim();
+    const nat = String(anime.TitleNative || '').trim();
+    if (rom && norm(rom) !== norm(eng)) return { text: rom, kind: 'romaji' };
+    if (nat) return { text: nat, kind: 'native' };
+    return null;
+  }
+
   function renderAnimeCardMarkup(anime, { animeId, assetBase = 'assets/' } = {}) {
     animeId = animeId || slug(anime.Title);
     const card = document.createElement("div");
     card.className = "card";
     card.dataset.animeid = animeId;
+    // v1.7.1 — romaji subtitle under the title, only when it differs from the
+    // displayed title (skips identical-romaji titles like "Chainsaw Man").
+    // gate 1d — Japanese 「」brackets are LITERAL inline <i class="rb"> chars so
+    // they wrap with the text under -webkit-line-clamp. <i> (not <span>) avoids
+    // the `.card .info span` gold-text + Top-10 gold-pill cascade.
+    // gate 1f — pickSubtitle resolves Romaji-or-native; .is-native swaps the font.
+    const sub = pickSubtitle(anime);
+    const romaji = sub
+      ? `<p class="title-romaji${sub.kind === 'native' ? ' is-native' : ''}"><i class="rb">「</i>${sub.text}<i class="rb">」</i></p>` : '';
     card.innerHTML = `
   <div class="icon-row">
     <button class="icon-btn fav-btn" type="button" data-action="fav" aria-label="Favorite" aria-pressed="false">
@@ -65,6 +91,7 @@
 
   <div class="info">
     <h3 class="title-text">${anime.Title}</h3>
+    ${romaji}
     <p>${anime.Genre || ""}</p>
     <span>${anime.Rating || ""}</span>
   </div>

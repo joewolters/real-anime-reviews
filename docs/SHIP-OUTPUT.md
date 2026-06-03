@@ -1,49 +1,39 @@
 <!-- author: Code | date: 2026-06-03 -->
-# v1.7.0 — Gate 5 (docs cascade — DONE ✓, FAST-TRACK)
+# v1.7.1 — Gate 1h (3-line romaji wrap + Top 10 portrait expand — DONE ✓, APPLY)
 
-> Version bumped 1.6.12 → 1.7.0 (26/26 agree), CHANGELOG entry prepended, visitor widget bullet added (cap held at 10 by dropping the oldest), NEXT.md + ROADMAP.md rolled forward. `npm test` 7/7. No commit (gate 7).
+> Pure CSS. Romaji line-clamp 2 → 3 (covers grid cards + Latest Drop via the shared selector); Top 10 glass portrait bumped +24px to fit the 3rd line. `npm test` 7/7, no bump, no JS touched.
 
 ---
 
-## Files touched
+## Item 1 — Card romaji 3-line wrap
+The romaji rule is a single shared selector (`.card .title-romaji, .featured-card .title-romaji`, merged at gate 1g), so one change covers **both** grid cards and the Latest Anime Drop card:
+```css
+-webkit-line-clamp: 3;   /* was 2 */
+```
+`line-clamp` is a max, so short romaji (1-2 lines) is unaffected; only the long titles (Angel Next Door, Failure Frame, Project Sekai, Apocalypse Bringer Mynoghra) now use the 3rd line instead of truncating at 2. Modal romaji untouched (it has no clamp — plenty of vertical space).
 
-| File | Δ | What |
-|---|---|---|
-| 7 HTML files (index/account/suggest/admin × cache-busters) | 26 strings | `bump-version.js 1.7.0` |
-| `index.html` | +7 / −1 | New `06/03/2026` widget section (1 bullet); dropped the oldest bullet to hold the 10-cap |
-| `CHANGELOG.md` | +~30 | v1.7.0 MINOR entry prepended |
-| `docs/NEXT.md` | +3 / ~6 moved | v1.7.0 → Recently shipped; v1.7.0-polish promoted to Immediate next ship; Phase B-side v1.7.0 marked ✅ shipped |
-| `ROADMAP.md` | +2 / ~2 | Current state → Live at v1.7.0 + v1.7.0 clause; v1.7.0 shipped-highlight bullet; "Up next" rewritten to v1.7.0-polish → v1.7.1 → v1.7.2 |
+## Item 2 — Top 10 glass portrait (exact values)
+```css
+.spotlight-stack         { height: 630px; }                      /* was 606px  (+24) */
+.spotlight-stack::before { height: clamp(632px, 68vw, 672px); }  /* was clamp(608px, 66vw, 648px)  (+24 / +2vw) */
+```
++24px (~one text line at the romaji's ~0.82em·1.25) so the 3-line case fits comfortably. Same trade-off as gate 1f: subtitle-less cards just get a touch more glass margin (cards center in the frame).
 
-## Final widget bullet (index.html, visitor-facing)
-> When you open an anime, you'll now see the AniList community score right next to my rating — so you can see where my take lines up with the wider community.
+## Item 3 — Other variants
+- **Grid cards** auto-size to content, so a 3rd romaji line grows the card height naturally; grid reflow unaffected (the clamp just allows more height, doesn't force it).
+- **Latest Drop** (`.featured-card`) also auto-sizes its flex-column container — the extra line grows it; no fixed height to bump there.
+- **Modal** — no clamp, no change.
 
-Blake's first-person voice, casual, no class names/IDs. "AniList" appears as data attribution (allowed per the updated memory). Cap math: was 10 bullets → added 1, dropped the oldest (`"Made the update log scroll inside its panel."`) → still 10.
+## Verify
+- `grep -webkit-line-clamp: 3` → **1 hit** (the romaji rule)
+- `grep -webkit-line-clamp: 2` → 2 hits, **both non-romaji** (a "compact rows (2 lines max)" block at :3328 and `.activity-desc` at :3983) — so **0 in romaji context** ✓
+- Portrait heights: `.spotlight-stack` 630px + `::before` `clamp(632px, 68vw, 672px)` present
+- `bump-version.js --check` → all 26 agree on **v1.7.0** (no bump)
+- `npm test` → **7 passed (11.6s)**
+- No JS touched (pure CSS) → no `node --check` needed
 
-## CHANGELOG entry body (summary)
-`## v1.7.0 — MINOR (2026-06-03)` — headline: *AniList enrichment for the legacy catalog.*
-- **Visitor-facing:** community-score twin badge (`RATING · 8.5` / `ANILIST · 8.1`, gold vs purple, hidden when no score); More Info panel resolves by exact `Media(id:)` (v1.6.8 path auto-activated by the backfilled IDs).
-- **Behind the scenes:** one-time `npm run backfill` populated 6 fields on the 44 reviews (40 matched / 4 skipped); idempotent, `--dry-run`/`--auto`, sequential queries, one-time backup, markdown report outside the deploy root. `IdMal` + `TitleRomaji` banked for later.
-- **Implementation files** list: `anilist-backfill.js` (new ~290), `lib/excel-backup.js` (new), `sync-excel-to-js.js` (+8), `anilist-fetch.js` (+2), `package.json` (+1), `script.js` (~+18 twin badges), `style.css` (~+45).
-
-## NEXT.md diff (summary)
-- **Recently shipped:** new v1.7.0 bullet at top (backfill + twin badge + id-path activation; 40/44).
-- **Immediate next ship:** was `v1.7.0 (AniList backfill)` → now **`v1.7.0-polish (widget version chips per <li>)`**, ~1-2h.
-- **Phase B-side:** the v1.7.0 entry marked `✅ shipped 2026-06-03`; v1.7.0-polish + v1.7.1 unchanged in their slots.
-
-## ROADMAP.md diff (summary)
-- **Current state:** `Live at v1.6.12` → **`Live at v1.7.0`**; appended a v1.7.0 clause to the running ship narrative.
-- **Shipped highlights:** new `- v1.7.0 (2026-06-03)` detail bullet before "Up next".
-- **Up next:** rewritten `v1.7.0` → **`v1.7.0-polish (widget chips) → v1.7.1 (multi-fetch) → v1.7.2 (secondary modal)`**.
-
-## Verify (all green)
-- `bump-version.js --check` → **all 26 agree on v1.7.0**
-- `grep -c v1.7.0` → CHANGELOG **4**, ROADMAP **8**, NEXT.md **8** (≥1 each ✓)
-- Widget bullet = plain visitor copy, no class names/IDs ✓
-- `npm test` → **7 passed (16.2s)**
-
-## Anything unexpected
-The ROADMAP "shipped highlights" list had no v1.6.12 detail bullet (gate 10 only updated the Current-state line), so I appended the v1.7.0 bullet at the end of that list (before "Up next") rather than "after v1.6.12's" — same outcome, just noting the prompt's anchor didn't exist. Nothing else.
+## Note on "confirm 3-line wrap"
+The CSS now *permits* up to 3 lines (`-webkit-line-clamp: 3`) and the portrait was sized for the 3-line height — but whether Angel Next Door / Failure Frame actually render on the 3rd line vs. still fitting in 2 is a render-time/viewport judgment that's Blake's smoke to confirm. The mechanism is in place; nothing caps them at 2 anymore.
 
 ## One-liner reply
-v1.7.0 gate-5 docs cascade done (FAST-TRACK): bumped 1.6.12 → 1.7.0 (26/26 strings agree), prepended the v1.7.0 MINOR CHANGELOG entry (visitor: community-score twin badge + precise `Media(id:)` More Info lookups; behind-the-scenes: the `npm run backfill` one-time 6-field populate of the 44 legacy reviews, 40 matched/4 skipped, plus the new `anilist-backfill.js` + shared `lib/excel-backup.js`), added one visitor widget bullet in Blake's voice ("…now see the AniList community score right next to my rating…", no class names, cap held at 10 by dropping the oldest), moved v1.7.0 into NEXT.md Recently-shipped and promoted v1.7.0-polish (widget version chips) to Immediate-next, and rolled ROADMAP Current-state to Live at v1.7.0 with the "Up next" rewritten to v1.7.0-polish → v1.7.1 → v1.7.2; verified — 26 strings agree on v1.7.0, v1.7.0 present in all three docs, widget copy clean, `npm test` 7/7; one minor note (ROADMAP had no v1.6.12 detail bullet so the v1.7.0 highlight was appended to the list end); ready for gate 6 audits → gate 7 commit.
+v1.7.1 gate-1h done (APPLY, pure CSS): bumped the card romaji `-webkit-line-clamp` from 2 → 3 on the shared `.card .title-romaji, .featured-card .title-romaji` rule so the longest romaji titles (Angel Next Door, Failure Frame, Project Sekai, Apocalypse Bringer Mynoghra) get a 3rd line instead of truncating — covers both grid cards and the Latest Drop card in one change, and short titles are unaffected since clamp is a max; expanded the Top 10 glass portrait by +24px to fit it — `.spotlight-stack` 606px → **630px** and `::before` `clamp(608px,66vw,648px)` → **`clamp(632px,68vw,672px)`** (same center-in-frame trade-off as gate 1f); grid + Latest-Drop containers auto-size so they grow naturally, modal has no clamp so it's untouched; verified — `line-clamp: 3` present (1), the only remaining `line-clamp: 2` are non-romaji (`.activity-desc` + a compact-rows block), 26 strings still agree on v1.7.0, `npm test` 7/7, no JS touched; the 3-line mechanism is in place — actual render on the 3rd line is Blake's smoke to confirm; if clean, v1.7.1 build is DONE → gate 5 docs cascade.

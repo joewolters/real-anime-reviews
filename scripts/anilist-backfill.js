@@ -84,7 +84,7 @@ query ($search: String) {
     media(search: $search, type: ANIME, sort: [POPULARITY_DESC, SCORE_DESC]) {
       id
       idMal
-      title { romaji english }
+      title { romaji english native }
       format
       seasonYear
       episodes
@@ -140,10 +140,65 @@ function candidateLine(n, m) {
   return `  ${C.bold}${n}.${C.reset} ${romaji}${eng} ${C.gray}(${meta}, id ${m.id})${C.reset}`;
 }
 
+// Dedicated by-id query (v1.7.1 --match mode): same fields as BACKFILL_QUERY but
+// a precise Media(id:) lookup for titles AniList search couldn't auto-match.
+const BACKFILL_ID_QUERY = `
+query ($id: Int) {
+  Media(id: $id, type: ANIME) {
+    id
+    idMal
+    title { romaji english native }
+    format
+    seasonYear
+    episodes
+    averageScore
+    coverImage { color }
+  }
+}`;
+
 // ---- AniList ---------------------------------------------------------------
 async function queryCandidates(title) {
   const data = await callAniList(BACKFILL_QUERY, { search: title });
   return (data && data.Page && data.Page.media) || [];
+}
+
+async function queryById(id) {
+  const data = await callAniList(BACKFILL_ID_QUERY, { id });
+  return (data && data.Media) || null;
+}
+
+// Map an AniList Media node to the 6 backfill field values.
+function valuesFromMedia(m) {
+  return {
+    AniListId: m.id ?? null,
+    IdMal: m.idMal ?? null,
+    AniListScore: m.averageScore ?? null,
+    AniListColor: m.coverImage?.color ?? null,
+    TitleEnglish: m.title?.english ?? null,
+    TitleRomaji: m.title?.romaji ?? null,
+  };
+}
+
+// Write the 6 fields into one row (skips genuinely-missing values → blank cell).
+function writeRow(sheet, r, colIndex, values) {
+  for (const { header, type } of BACKFILL_COLUMNS) {
+    const val = values[header];
+    if (val == null || val === '') continue;
+    setCell(sheet, r, colIndex[header], val, type);
+  }
+}
+
+// Parse repeatable `--match "<Title>" <id>` pairs from argv.
+function parseMatches(args) {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--match') {
+      const title = args[i + 1];
+      const id = parseInt(args[i + 2], 10);
+      if (title && !title.startsWith('--') && !isNaN(id)) { out.push({ title, id }); i += 2; }
+    }
+  }
+  return out;
 }
 
 // ---- readline prompt -------------------------------------------------------
@@ -163,11 +218,11 @@ function buildReport(rows, opts) {
   lines.push(`- Mode: ${opts.dryRun ? 'DRY RUN (no writes)' : 'LIVE'}${opts.auto ? ' + --auto' : ''}`);
   lines.push(`- Rows processed: ${rows.length}`);
   lines.push('');
-  lines.push('| Title | Action | AniListId | IdMal | Score | Color | English | Romaji |');
-  lines.push('|---|---|---|---|---|---|---|---|');
+  lines.push('| Title | Action | AniListId | IdMal | Score | Color | English | Romaji | Native |');
+  lines.push('|---|---|---|---|---|---|---|---|---|');
   for (const r of rows) {
     const v = r.values || {};
-    lines.push(`| ${r.title} | ${r.action} | ${v.AniListId ?? ''} | ${v.IdMal ?? ''} | ${v.AniListScore ?? ''} | ${v.AniListColor ?? ''} | ${(v.TitleEnglish ?? '').replace(/\|/g, '\\|')} | ${(v.TitleRomaji ?? '').replace(/\|/g, '\\|')} |`);
+    lines.push(`| ${r.title} | ${r.action} | ${v.AniListId ?? ''} | ${v.IdMal ?? ''} | ${v.AniListScore ?? ''} | ${v.AniListColor ?? ''} | ${(v.TitleEnglish ?? '').replace(/\|/g, '\\|')} | ${(v.TitleRomaji ?? '').replace(/\|/g, '\\|')} | ${(v.TitleNative ?? '').replace(/\|/g, '\\|')} |`);
   }
   lines.push('');
   return lines.join('\n');
@@ -179,14 +234,20 @@ async function main() {
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
 ${C.bold}AniList backfill${C.reset}
-  npm run backfill                 interactive
-  npm run backfill -- --dry-run    queries + prompts, no writes
-  npm run backfill -- --auto       auto-pick exact title matches, prompt the rest
+  npm run backfill                              interactive
+  npm run backfill -- --dry-run                 queries + prompts, no writes
+  npm run backfill -- --auto                    auto-pick exact title matches, prompt the rest
+  npm run backfill -- --match "<Title>" <id>    write a specific row by explicit AniList id
+                                                (repeatable; combine with --dry-run)
+  npm run backfill -- --add-native              populate TitleNative (Japanese title) for every
+                                                row with an AniListId (idempotent; by id, not title)
 `);
     return;
   }
   const dryRun = args.includes('--dry-run');
   const auto = args.includes('--auto');
+  const addNative = args.includes('--add-native');
+  const matches = parseMatches(args);
 
   if (!fs.existsSync(EXCEL_PATH)) {
     console.error(`${C.red}ERROR:${C.reset} Excel not found at ${EXCEL_PATH}`);
@@ -221,10 +282,101 @@ ${C.bold}AniList backfill${C.reset}
   const aniIdIdx = colIndex.AniListId;
   if (titleIdx === -1) { console.error(`${C.red}ERROR:${C.reset} no "Title" column.`); process.exit(2); }
 
-  const { ask, close } = makePrompter();
   const reportRows = [];
   let backedUp = false;
   let wroteAny = false;
+  const backupOnce = async () => {
+    if (!dryRun && !backedUp) {
+      const bak = await backupExcel(EXCEL_PATH);
+      console.log(`  ${C.gray}backup: ${path.basename(bak)}${C.reset}`);
+      backedUp = true;
+    }
+  };
+
+  // ---- Add-native mode (v1.7.1 gate 1f): populate TitleNative by AniList id --
+  if (addNative) {
+    // ensure the TitleNative column exists (col 20 — added if missing)
+    let nIdx = headerIndex(sheet, range, 'TitleNative');
+    if (nIdx === -1) {
+      nIdx = range.e.c + 1;
+      range.e.c = nIdx;
+      if (!dryRun) setCell(sheet, range.s.r, nIdx, 'TitleNative', 's');
+      appended = true;
+      console.log(`${C.cyan}+ column${C.reset} "TitleNative" ${dryRun ? '(would be added)' : `added at col ${nIdx}`}`);
+    }
+    colIndex.TitleNative = nIdx;
+
+    console.log(`${C.bold}--add-native${C.reset} ${C.gray}(Japanese titles by AniList id, idempotent)${C.reset}`);
+    for (let r = range.s.r + 1; r <= range.e.r; r++) {
+      const title = getCell(sheet, r, titleIdx);
+      if (title == null || String(title).trim() === '') continue;
+      const aniId = getCell(sheet, r, aniIdIdx);
+      if (aniId == null || String(aniId).trim() === '') {
+        console.log(`${C.gray}· skip${C.reset} "${title}" (no AniListId)`);
+        reportRows.push({ title, action: 'skip (no AniListId)', values: {} });
+        continue;
+      }
+      const existingNative = getCell(sheet, r, nIdx);
+      if (existingNative != null && String(existingNative).trim() !== '') {
+        console.log(`${C.gray}· skip${C.reset} "${title}" (already has native)`);
+        reportRows.push({ title, action: 'skip (already populated)', values: { TitleNative: existingNative } });
+        continue;
+      }
+      const id = parseInt(aniId, 10);
+      console.log(`\n${C.bold}${title}${C.reset} ${C.gray}→ id ${id}${C.reset}`);
+      let media;
+      try { media = await queryById(id); }
+      catch (err) {
+        console.log(`  ${C.red}query failed:${C.reset} ${err.message} — skipping`);
+        reportRows.push({ title, action: `query error: ${err.message}`, values: {} });
+        continue;
+      }
+      await sleep(300);
+      const native = media?.title?.native || null;
+      if (!native) {
+        console.log(`  ${C.yellow}no native title${C.reset} for id ${id} — skipping`);
+        reportRows.push({ title, action: 'no native title', values: {} });
+        continue;
+      }
+      await backupOnce();
+      if (!dryRun) { setCell(sheet, r, nIdx, native, 's'); wroteAny = true; }
+      console.log(`  ${C.green}${dryRun ? 'would write' : 'wrote'}${C.reset} ${native}`);
+      reportRows.push({ title, action: `native by id ${id}`, values: { TitleNative: native } });
+    }
+  } else if (matches.length) {
+    for (const { title, id } of matches) {
+      let rowIdx = -1;
+      for (let rr = range.s.r + 1; rr <= range.e.r; rr++) {
+        const t = getCell(sheet, rr, titleIdx);
+        if (t != null && normalizeTitle(t) === normalizeTitle(title)) { rowIdx = rr; break; }
+      }
+      if (rowIdx === -1) {
+        console.log(`${C.yellow}no row${C.reset} matching "${title}" — skipping`);
+        reportRows.push({ title, action: 'no matching Excel row', values: {} });
+        continue;
+      }
+      console.log(`\n${C.bold}${title}${C.reset} ${C.gray}→ AniList id ${id}${C.reset}`);
+      let media;
+      try { media = await queryById(id); }
+      catch (err) {
+        console.log(`  ${C.red}query failed:${C.reset} ${err.message} — skipping`);
+        reportRows.push({ title, action: `query error: ${err.message}`, values: {} });
+        continue;
+      }
+      await sleep(300);
+      if (!media) {
+        console.log(`  ${C.yellow}no Media for id ${id}${C.reset} — skipping`);
+        reportRows.push({ title, action: `no Media for id ${id}`, values: {} });
+        continue;
+      }
+      const values = valuesFromMedia(media);
+      await backupOnce();
+      if (!dryRun) { writeRow(sheet, rowIdx, colIndex, values); wroteAny = true; }
+      console.log(`  ${C.green}${dryRun ? 'would write' : 'wrote'}${C.reset} id ${values.AniListId}, score ${values.AniListScore ?? 'n/a'}`);
+      reportRows.push({ title, action: `matched by id ${id}`, values });
+    }
+  } else {
+  const { ask, close } = makePrompter();
   let quit = false;
 
   for (let r = range.s.r + 1; r <= range.e.r && !quit; r++) {
@@ -285,33 +437,15 @@ ${C.bold}AniList backfill${C.reset}
     }
 
     const m = candidates[choiceIdx];
-    const values = {
-      AniListId: m.id ?? null,
-      IdMal: m.idMal ?? null,
-      AniListScore: m.averageScore ?? null,
-      AniListColor: m.coverImage?.color ?? null,
-      TitleEnglish: m.title?.english ?? null,
-      TitleRomaji: m.title?.romaji ?? null,
-    };
-
-    if (!dryRun) {
-      if (!backedUp) {
-        const bak = await backupExcel(EXCEL_PATH);
-        console.log(`  ${C.gray}backup: ${path.basename(bak)}${C.reset}`);
-        backedUp = true;
-      }
-      for (const { header, type } of BACKFILL_COLUMNS) {
-        const val = values[header];
-        if (val == null || val === '') continue;   // leave genuinely-missing fields blank
-        setCell(sheet, r, colIndex[header], val, type);
-      }
-      wroteAny = true;
-    }
+    const values = valuesFromMedia(m);
+    await backupOnce();
+    if (!dryRun) { writeRow(sheet, r, colIndex, values); wroteAny = true; }
     console.log(`  ${C.green}${dryRun ? 'would write' : 'wrote'}${C.reset} id ${values.AniListId}, score ${values.AniListScore ?? 'n/a'}`);
     reportRows.push({ title, action: choiceIdx === 0 && auto ? 'auto-picked' : `picked #${choiceIdx + 1}`, values });
   }
 
   close();
+  }
 
   // ---- Save phase ----------------------------------------------------------
   if (!dryRun && (wroteAny || appended)) {

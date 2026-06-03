@@ -413,8 +413,11 @@ header h1:hover {
 }
 
 /* AniList community score — inline badge with an ANILIST kicker (data
-   attribution, allowed). Brand-purple gradient; rendered only when a score
-   exists (omitted from markup otherwise — no hidden-toggle, no [hidden] rule). */
+   attribution, allowed). v1.7.1: per-anime accent from --anilist-color (set
+   inline from the backfilled AniListColor), with --anilist-kicker the
+   luminance-guarded variant for readable kicker text. Every color property has
+   a plain brand-purple fallback line FIRST so browsers without color-mix() (or
+   anime with no color) still render the original purple badge. */
 .modal-meta .anilist-badge {
   display: inline-flex;
   align-items: center;
@@ -422,8 +425,13 @@ header h1:hover {
   padding: 3px 10px;
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(187, 134, 252, 0.32), rgba(140, 70, 220, 0.18));
+  background: linear-gradient(180deg,
+              color-mix(in srgb, var(--anilist-color, #bb86fc) 30%, transparent),
+              color-mix(in srgb, var(--anilist-color, #8c46dc) 16%, transparent));
   border: 1px solid rgba(187, 134, 252, 0.55);
+  border-color: var(--anilist-color, rgba(187, 134, 252, 0.55));
   box-shadow: 0 0 8px rgba(187, 134, 252, 0.30);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--anilist-color, #bb86fc) 40%, transparent);
   /* Staggered fade-in: lands 80ms after the modal opens so the eye catches
      Blake's rating first, then the community score — a subtle hierarchy cue.
      No hover/transition: these badges are informational, not interactive. */
@@ -436,9 +444,11 @@ header h1:hover {
   text-transform: uppercase;
   font-weight: 700;
   color: #bb86fc;
+  color: var(--anilist-kicker, #bb86fc);
 }
 .modal-meta .anilist-badge-divider {
   color: rgba(187, 134, 252, 0.55);
+  color: color-mix(in srgb, var(--anilist-color, #bb86fc) 55%, transparent);
   font-weight: 700;
 }
 .modal-meta .anilist-badge-score {
@@ -875,7 +885,7 @@ body.modal-open {
   flex-direction: column;
   padding: 12px;
   cursor: pointer;
-  text-align: left;
+  text-align: center;   /* gate 1g — center the title / romaji / genre block */
   color: inherit;
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
@@ -1672,8 +1682,11 @@ body.modal-open {
 .spotlight-stack {
     position: relative;
     width: 100%;
-    height: 550px;
-    /* Match the card height */
+    /* gate 1f — raised from 550px so the glass portrait fits cards that now carry
+       a romaji/native subtitle line (with-subtitle is the new baseline). Cards
+       center in the frame, so subtitle-less cards just get slightly more margin.
+       gate 1h — +24px more for the 3-line romaji wrap (Angel Next Door etc.). */
+    height: 630px;
     margin-bottom: 60px;
     /* Space between sections */
 }
@@ -1689,7 +1702,7 @@ body.modal-open {
   left: 50%;
   transform: translate(-50%, -50%);
   width: clamp(338px, 36vw, 372px);
-  height: clamp(552px, 62vw, 592px);
+  height: clamp(632px, 68vw, 672px);   /* gate 1f +56px subtitle; gate 1h +24px for 3-line wrap */
   border-radius: 24px;
 
   background: linear-gradient(
@@ -4817,5 +4830,227 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
     transform: translate3d(-50%, 0, 0) rotate(8deg);
   }
   .suggest-cta-banner:hover .cta-arrow { transform: none; }
+}
+
+/* ============================================================================
+   v1.7.1 — polish bundle: search empty-state card, widget version chips,
+   romaji subtitle (Klee One). AniList per-anime color accent lives up in the
+   .anilist-badge block.
+   ============================================================================ */
+
+/* ---- Item 1: branded "no results" card ------------------------------------ */
+.search-empty-card {
+  position: relative;
+  /* gate 1e — the card-container is a centered 4-col grid; without this the card
+     lands in column 1 (left of center). Span all columns, then margin-auto centers. */
+  grid-column: 1 / -1;
+  max-width: 520px;
+  margin: 40px auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 44px 28px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.55), rgba(20, 6, 38, 0.78));
+  border: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, rgba(187, 134, 252, 0.40), transparent) 1;
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 28px rgba(187, 134, 252, 0.14);
+  animation: se-card-in 350ms cubic-bezier(.2, .7, .3, 1) both;
+}
+.search-empty-card .se-glyph {
+  font-size: 2.6rem;
+  filter: drop-shadow(0 0 14px rgba(187, 134, 252, 0.30));
+  animation: se-glyph-float 4s ease-in-out infinite alternate;
+}
+.search-empty-card .se-kicker {
+  position: relative;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #bb86fc;
+  padding-bottom: 12px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, rgba(187, 134, 252, 0.35), transparent) 1;
+  overflow: hidden;
+}
+.search-empty-card .se-kicker .jp-mini {
+  margin-left: 4px;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 11px;
+  color: #cfc7d9;
+}
+.search-empty-card .se-kicker::after {   /* one-shot shimmer sweep on entrance */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%);
+  transform: translateX(-120%);
+  animation: se-kicker-shimmer 1.6s ease 0.3s 1;
+}
+.search-empty-card .se-body {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+  word-break: break-word;
+}
+/* SUGGEST ONE — glassy gradient + shimmer sweep + lift (inline-header-btn port) */
+.search-empty-card .se-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: rgba(245, 242, 255, 0.96);
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.50), rgba(70, 0, 110, 0.85));
+  border: 1px solid rgba(187, 134, 252, 0.45);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.30);
+  overflow: hidden;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
+}
+.search-empty-card .se-cta::before {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.22) 50%, transparent 62%);
+  transform: translate3d(-45%, 0, 0) rotate(10deg);
+  opacity: 0.4;
+  transition: transform .45s ease, opacity .18s ease;
+}
+.search-empty-card .se-cta:hover {
+  transform: translateY(-2px) scale(1.03);
+  border-color: rgba(187, 134, 252, 0.75);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35), 0 0 16px rgba(187, 134, 252, 0.45);
+  filter: brightness(1.06);
+}
+.search-empty-card .se-cta:hover::before { transform: translate3d(18%, 0, 0) rotate(10deg); opacity: 0.7; }
+.search-empty-card .se-arrow { transition: transform .18s ease; }
+.search-empty-card .se-cta:hover .se-arrow { transform: translateX(4px); }
+
+@keyframes se-card-in      { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes se-glyph-float  { from { transform: translateY(0); }               to { transform: translateY(-7px); } }
+@keyframes se-kicker-shimmer { to { transform: translateX(120%); } }
+
+/* ---- Item 2: widget version chips (above each date section) ---------------- */
+.version-chips {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+.version-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #d9b9ff;
+  background: linear-gradient(180deg, rgba(187, 134, 252, 0.22), rgba(140, 70, 220, 0.12));
+  border: 1px solid rgba(187, 134, 252, 0.35);
+  animation: version-chip-in 300ms ease both;
+}
+.version-chip-range { letter-spacing: 0.06em; }
+.version-chip .vc-arrow { color: rgba(187, 134, 252, 0.78); font-weight: 700; margin: 0 1px; }
+/* entrance stagger for stacked chips */
+.version-chips .version-chip:nth-child(2) { animation-delay: 40ms; }
+.version-chips .version-chip:nth-child(3) { animation-delay: 80ms; }
+@keyframes version-chip-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ---- Item 5: romaji subtitle — Japanese 「」brackets, Outfit Light Italic -- */
+/* v1.7.1 gate 1d — brackets are LITERAL inline <i class="rb"> chars (not
+   pseudo-elements) so they wrap naturally with the text; line-clamp gives a real
+   2-line max. The romaji text is a bare node — using <i> for brackets (not
+   <span>) sidesteps `.card .info span { color: gold }` and the Top-10 gold-pill
+   `.spotlight-stack .card .info span` rule that were tinting the old <span>.
+   Color forced with !important to beat `.card .info p { color:#ccc }`. */
+/* gate 1g — same romaji treatment on the Latest Drop card (.featured-card) */
+.card .title-romaji,
+.featured-card .title-romaji {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;   /* gate 1h — up to 3 lines (Angel Next Door, Failure Frame) */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* gate 1f — push the asymmetry: flush under the title, clear gap before genre */
+  margin: 0 0 18px;
+  text-align: center;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 300;
+  font-style: italic;
+  font-size: 0.82em;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.62) !important;   /* dim white, secondary to the bold title */
+}
+.card .title-romaji .rb,
+.featured-card .title-romaji .rb {
+  font-style: normal;
+  font-weight: 600;
+  color: #bb86fc;                                  /* brackets stay purple */
+  transition: color .18s ease;
+}
+.card:hover .title-romaji .rb,
+.featured-card:hover .title-romaji .rb { color: #d9b9ff; } /* subtle hover brighten */
+.modal-romaji {
+  /* v1.7.1 gate 1e — Outfit italic white subtitle with the same 「」purple
+     brackets as the cards, bigger (modal scale), centered, and pulled up close
+     to the centered title (negative top margin counteracts .modal-title's 25px
+     bottom margin so the romaji reads as a direct subtitle). */
+  margin: -14px 0 4px;
+  text-align: center;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 1.2rem;          /* gate 1f — slightly smaller than 1.35rem */
+  line-height: 1.2;
+  color: #fff;
+}
+.modal-romaji .rb {
+  font-style: normal;
+  font-weight: 600;
+  color: #bb86fc;
+}
+
+/* v1.7.1 gate 1f — native Japanese fallback: swap Outfit italic → Noto Sans JP
+   (already imported). The 「」brackets stay (they're Japanese title marks). */
+.card .title-romaji.is-native,
+.featured-card .title-romaji.is-native,
+.modal-romaji.is-native {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-style: normal;
+  font-weight: 400;
+}
+
+/* ---- v1.7.1 reduced-motion pass ------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .search-empty-card,
+  .search-empty-card .se-glyph,
+  .search-empty-card .se-kicker::after,
+  .search-empty-card .se-cta,
+  .search-empty-card .se-cta::before,
+  .search-empty-card .se-arrow,
+  .version-chip {
+    animation: none !important;
+    transition: none !important;
+  }
+  .search-empty-card .se-cta:hover { transform: none; }
+  .search-empty-card .se-cta:hover .se-arrow { transform: none; }
+  .card .title-romaji .rb,
+  .featured-card .title-romaji .rb { transition: none !important; }
 }
 
