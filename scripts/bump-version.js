@@ -158,13 +158,93 @@ const TARGETS = [
     pattern: /(href="new-anime\.css\?v=)([^"]+)(")/,
     replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
   },
-  // NOTE: JS files (script.js, account.js, firebase.js, admin-fab.js, new-anime.js,
-  // card-render.js as of v1.6.5) intentionally are NOT in TARGETS. They're loaded
-  // via document.write with `${v}` template literal interpolation in the HTML
-  // script blocks — the cache-bust comes from APP_VERSION at runtime. Only the
-  // static `<link href="...?v=X">` CSS cache-busts and APP_VERSION itself need
-  // script-driven bumping. Adding JS files here would create a maintenance burden
-  // with no benefit (the runtime interpolation already updates them every bump).
+  // ---- Added in v1.6.11 (Suggestion Box) ----
+  {
+    file: 'suggest.html',
+    label: 'window.APP_VERSION (suggest)',
+    pattern: /(<script>window\.APP_VERSION=")([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'suggest.html',
+    label: 'style.css?v= (suggest)',
+    pattern: /(href="style\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'suggest.html',
+    label: 'mobile.css?v= (suggest)',
+    pattern: /(href="mobile\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'suggest.html',
+    label: 'suggest.css?v= (suggest)',
+    pattern: /(href="suggest\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  // ---- Added in v1.6.11 gate 2 (Suggestions admin queue) ----
+  {
+    file: 'admin/suggestions.html',
+    label: 'window.APP_VERSION (suggestions)',
+    pattern: /(<script>window\.APP_VERSION=")([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/suggestions.html',
+    label: 'style.css?v= (suggestions)',
+    pattern: /(href="\.\.\/style\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/suggestions.html',
+    label: 'mobile.css?v= (suggestions)',
+    pattern: /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/suggestions.html',
+    label: 'suggestions.css?v= (suggestions)',
+    pattern: /(href="suggestions\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  // ---- Added in v1.6.11 gate 5b (static JS-script cache-busters) ----
+  // Most HTML files load their JS via `document.write` with runtime APP_VERSION
+  // interpolation, so the JS cache-bust comes free with each bump. BUT
+  // suggest.html (gate 1b) and admin/suggestions.html (gate 2b) load their
+  // module scripts via static <script type="module" src="...?v=X.Y.Z"> tags
+  // instead. Those 4 cache-busters DO need TARGETS entries to stay in sync.
+  {
+    file: 'suggest.html',
+    label: 'firebase.js?v= (suggest)',
+    pattern: /(src="firebase\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'suggest.html',
+    label: 'suggest.js?v= (suggest)',
+    pattern: /(src="suggest\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/suggestions.html',
+    label: 'firebase.js?v= (suggestions)',
+    pattern: /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/suggestions.html',
+    label: 'suggestions.js?v= (suggestions)',
+    pattern: /(src="suggestions\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  // NOTE: All OTHER JS files (script.js, account.js, firebase.js loaded into
+  // index.html/account.html/admin/new-anime.html, admin-fab.js, new-anime.js,
+  // card-render.js) intentionally are NOT in TARGETS. Those HTML files use
+  // `document.write` with `${v}` template literal interpolation in the HTML
+  // script blocks — the cache-bust comes from APP_VERSION at runtime. Adding
+  // those JS files here would create a maintenance burden with no benefit
+  // (the runtime interpolation already updates them every bump).
 ];
 
 // ---- Helpers ---------------------------------------------------------------

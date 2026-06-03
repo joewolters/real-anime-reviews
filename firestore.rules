@@ -1,0 +1,232 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    // =========================
+    // USER PROFILES
+    // =========================
+    match /users/{uid} {
+      allow get: if true; // optional; tighten later
+      allow create, update, delete: if isOwner(uid);
+      match /favorites/{animeId} {
+        allow get, list: if isOwner(uid);
+        allow create, update, delete: if isOwner(uid);
+      }
+      match /watchlist/{animeId} {
+        allow get, list: if isOwner(uid);
+        allow create, update, delete: if isOwner(uid);
+      }
+      match /notifications/{notifId} {
+        allow get, list: if isOwner(uid);
+        allow create: if isSignedIn()
+          && request.resource.data.toUid == uid
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.type is string
+          && (request.resource.data.type == "comment_vote" || request.resource.data.type == "review_vote")
+          && request.resource.data.value is int
+          && (request.resource.data.value == 1 || request.resource.data.value == -1)
+          && request.resource.data.animeId is string
+          && request.resource.data.animeTitle is string
+          && request.resource.data.targetId is string
+          && request.resource.data.fromDisplayName is string
+          && (!('fromPhotoURL' in request.resource.data) || request.resource.data.fromPhotoURL is string || request.resource.data.fromPhotoURL == null)
+          && ('createdAt' in request.resource.data);
+        allow update, delete: if isOwner(uid);
+      }
+    }
+    // =========================
+    // Collection Group Reads for Activity Feed
+    // =========================
+    match /{parentPath=**}/items/{docId} {
+      allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+    match /{parentPath=**}/threads/{docId} {
+      allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+    // =========================
+    // COMMENTS (under Blake reviews)
+    // =========================
+    match /comments/{anime}/items/{cid} {
+      allow get, list: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.displayName is string
+        && (!('photoURL' in request.resource.data) || request.resource.data.photoURL is string || request.resource.data.photoURL == null)
+        && ('createdAt' in request.resource.data)
+        && request.resource.data.likesCount is int
+        && request.resource.data.dislikesCount is int;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow update: if (
+          isSignedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['text','editedAt','photoURL','displayName'])
+        )
+        || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['likesCount','dislikesCount'])
+          && request.resource.data.likesCount is int
+          && request.resource.data.dislikesCount is int
+          && request.resource.data.likesCount >= 0
+          && request.resource.data.dislikesCount >= 0
+        );
+      match /votes/{uid} {
+        allow get, list: if true;
+        allow create, update: if isOwner(uid)
+          && request.resource.data.value is int
+          && (request.resource.data.value == 1 || request.resource.data.value == -1)
+          && ('updatedAt' in request.resource.data);
+        allow delete: if isOwner(uid);
+      }
+    }
+    // =========================
+    // COMMUNITY REVIEWS (one per user per anime)
+    // =========================
+    match /reviews/{anime}/items/{uid} {
+      allow get, list: if true;
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && (!('photoURL' in request.resource.data) || request.resource.data.photoURL is string || request.resource.data.photoURL == null)
+        && request.resource.data.title is string
+        && request.resource.data.body is string
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 10
+        && ('createdAt' in request.resource.data)
+        && ('updatedAt' in request.resource.data)
+        && request.resource.data.likesCount is int
+        && request.resource.data.dislikesCount is int;
+      allow update: if (
+          isOwner(uid)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).changedKeys()
+              .hasOnly(['title','body','rating','updatedAt','displayName','photoURL'])
+        )
+        || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['likesCount','dislikesCount'])
+          && request.resource.data.likesCount is int
+          && request.resource.data.dislikesCount is int
+          && request.resource.data.likesCount >= 0
+          && request.resource.data.dislikesCount >= 0
+        );
+      allow delete: if isOwner(uid);
+      match /votes/{voterUid} {
+        allow get, list: if true;
+        allow create, update: if isOwner(voterUid)
+          && request.resource.data.value is int
+          && (request.resource.data.value == 1 || request.resource.data.value == -1)
+          && ('updatedAt' in request.resource.data);
+        allow delete: if isOwner(voterUid);
+      }
+      match /threads/{tid} {
+        allow get, list: if true;
+        allow create: if isSignedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.displayName is string
+          && (!('photoURL' in request.resource.data) || request.resource.data.photoURL is string || request.resource.data.photoURL == null)
+          && ('createdAt' in request.resource.data)
+          && request.resource.data.likesCount is int
+          && request.resource.data.dislikesCount is int;
+        allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+        allow update: if (
+            isSignedIn()
+            && resource.data.uid == request.auth.uid
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly(['text','editedAt','photoURL','displayName'])
+          )
+          || (
+            isSignedIn()
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly(['likesCount','dislikesCount'])
+            && request.resource.data.likesCount is int
+            && request.resource.data.dislikesCount is int
+            && request.resource.data.likesCount >= 0
+            && request.resource.data.dislikesCount >= 0
+          );
+        match /votes/{voterUid} {
+          allow get, list: if true;
+          allow create, update: if isOwner(voterUid)
+            && request.resource.data.value is int
+            && (request.resource.data.value == 1 || request.resource.data.value == -1)
+            && ('updatedAt' in request.resource.data);
+          allow delete: if isOwner(voterUid);
+        }
+      }
+    }
+    // =========================
+    // OFFICIAL (Blake) RATING VOTES (per anime)
+    // =========================
+    match /official/{animeId} {
+      allow get, list: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.animeId is string
+        && request.resource.data.likesCount is int
+        && request.resource.data.dislikesCount is int
+        && request.resource.data.likesCount >= 0
+        && request.resource.data.dislikesCount >= 0
+        && ('updatedAt' in request.resource.data);
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).changedKeys()
+            .hasOnly(['animeId','likesCount','dislikesCount','updatedAt'])
+        && request.resource.data.likesCount is int
+        && request.resource.data.dislikesCount is int
+        && request.resource.data.likesCount >= 0
+        && request.resource.data.dislikesCount >= 0;
+      allow delete: if false;
+      match /votes/{voterUid} {
+        allow get, list: if true;
+        allow create, update: if isOwner(voterUid)
+          && request.resource.data.value is int
+          && (request.resource.data.value == 1 || request.resource.data.value == -1)
+          && ('updatedAt' in request.resource.data);
+        allow delete: if isOwner(voterUid);
+      }
+    }
+    // =========================
+    // SUGGESTIONS (v1.6.11 — public submit, admin-managed queue)
+    // Path: suggestions/{docId}
+    // Visitors create; ADMIN_UID reads/lists/updates/deletes.
+    // =========================
+    match /suggestions/{docId} {
+      // Anyone can create; field shape enforced (spam defense).
+      // v1.6.11 gate 3e: extended with 6 optional AniList enrichment fields
+      // (visitors who pick from the search dropdown include them; raw-title
+      // fallback submissions omit them and still pass).
+      allow create: if request.resource.data.keys().hasOnly(['title', 'reason', 'submittedAt', 'status',
+                                                              'anilistId', 'coverImage', 'format', 'year',
+                                                              'englishTitle', 'romajiTitle'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() < 200
+        && (!('reason' in request.resource.data)
+            || (request.resource.data.reason is string
+                && request.resource.data.reason.size() < 1000))
+        && request.resource.data.status == 'new'
+        && ('submittedAt' in request.resource.data)
+        // Optional AniList enrichment fields (gate 3e)
+        && (!('anilistId' in request.resource.data)
+            || (request.resource.data.anilistId is int
+                && request.resource.data.anilistId > 0))
+        && (!('coverImage' in request.resource.data)
+            || (request.resource.data.coverImage is string
+                && request.resource.data.coverImage.size() < 500))
+        && (!('format' in request.resource.data)
+            || (request.resource.data.format is string
+                && request.resource.data.format.size() < 20))
+        && (!('year' in request.resource.data)
+            || (request.resource.data.year is int
+                && request.resource.data.year > 1900
+                && request.resource.data.year < 2100))
+        && (!('englishTitle' in request.resource.data)
+            || (request.resource.data.englishTitle is string
+                && request.resource.data.englishTitle.size() < 200))
+        && (!('romajiTitle' in request.resource.data)
+            || (request.resource.data.romajiTitle is string
+                && request.resource.data.romajiTitle.size() < 200));
+      // Admin-only read / list / update / delete.
+      allow get, list, update, delete: if isSignedIn()
+        && request.auth.uid == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
+    }
+  }
+}

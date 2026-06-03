@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Suggestions Queue — Real Anime Reviews</title>
+  <script>window.APP_VERSION="1.6.11"</script>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Admin-only suggestion queue — not indexed." />
+
+  <link rel="stylesheet" href="../style.css?v=1.6.11" />
+  <link rel="stylesheet" href="../mobile.css?v=1.6.11" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=1.6.11" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="admin-page">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="../index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" id="back-btn" class="inline-header-btn" onclick="location.href='../index.html'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-gate-message">
+      <div class="admin-gate-spinner"></div>
+      <p>Verifying admin access…</p>
+    </div>
+  </div>
+
+  <main class="admin-main" id="admin-main" hidden>
+    <div class="admin-shell">
+
+      <div class="admin-header">
+        <h2 class="admin-title-line">
+          <span class="admin-kicker-inline">SUGGESTIONS <span class="jp-mini">提案</span></span>
+          <span class="admin-divider">·</span>
+          <span class="admin-title-text">Queue</span>
+        </h2>
+        <div class="suggestions-stats" id="queue-stats" hidden></div>
+      </div>
+
+      <ul id="suggestions-list" class="suggestions-list"></ul>
+
+      <div id="suggestions-empty" class="suggestions-empty-card" hidden>
+        <div class="empty-glyph" aria-hidden="true">📭</div>
+        <div class="empty-kicker">QUEUE EMPTY <span class="jp-mini">空</span></div>
+        <p class="empty-body">No suggestions yet. Visitor submissions land here.</p>
+      </div>
+
+      <div id="suggestions-error" class="suggestions-error-card" hidden>
+        <div class="error-glyph" aria-hidden="true">⚠️</div>
+        <div class="error-kicker">COULDN'T LOAD <span class="jp-mini">接続</span></div>
+        <p class="error-body">Couldn't reach the queue. Reload to retry.</p>
+        <button type="button" class="error-reload-btn" onclick="location.reload()">Reload</button>
+      </div>
+
+    </div>
+  </main>
+
+  <script type="module" src="../firebase.js?v=1.6.11"></script>
+  <script type="module" src="suggestions.js?v=1.6.11"></script>
+</body>
+</html>

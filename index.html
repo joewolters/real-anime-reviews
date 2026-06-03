@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI." />
   <title>Real Anime Reviews</title>
-  <script>window.APP_VERSION="1.6.10"</script>
+  <script>window.APP_VERSION="1.6.11"</script>
   <!-- Social preview (Discord / iMessage / etc) -->
 <link rel="canonical" href="https://realanimereviews.com/">
 
@@ -21,9 +21,9 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=1.6.10">
-  <link rel="stylesheet" href="mobile.css?v=1.6.10" media="(max-width: 900px)">
-  <link rel="stylesheet" href="admin-fab.css?v=1.6.10">
+  <link rel="stylesheet" href="style.css?v=1.6.11">
+  <link rel="stylesheet" href="mobile.css?v=1.6.11" media="(max-width: 900px)">
+  <link rel="stylesheet" href="admin-fab.css?v=1.6.11">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&display=swap" rel="stylesheet">
@@ -166,7 +166,7 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v1.6.10</span>
+      <span class="changelog-tag" id="changelog-version">v1.6.11</span>
      Minor Update
     </div>
 
@@ -174,6 +174,7 @@
       <div class="version-section">
         <div class="version-header">06/02/2026</div>
         <ul class="changelog-list">
+          <li>New Suggestion Box at the bottom of the homepage — recommend an anime you want reviewed, with live search so you can pick the exact one you mean.</li>
           <li>Cleaned up the More Info panel: no more duplicate studio names on franchise rows, each row now shows a small format tag (TV / MOVIE / etc.), and the STAFF section can show a few more roles.</li>
         </ul>
       </div>
@@ -194,7 +195,6 @@
         <div class="version-header">05/11/2026</div>
         <ul class="changelog-list">
           <li>Fixed a bug where some anime cover images didn't fill the card cleanly.</li>
-          <li>Improved the tools used to add new anime to the catalog.</li>
           <li>Added shipped-on dates to the update log.</li>
           <li>Grouped the update log so changes appear by date.</li>
           <li>Made the update log show 10 entries instead of 5.</li>
@@ -236,6 +236,15 @@
 <section id="all-anime-view" style="display: none;">
   <div class="card-container"></div>
 </section>
+
+  <!-- Suggest CTA banner (v1.6.11 gate 3c) — bottom-of-grid call-to-action -->
+  <a href="/suggest" class="suggest-cta-banner">
+    <div class="cta-kicker">MISSING SOMETHING? <span class="jp-mini">提案</span></div>
+    <div class="cta-headline">
+      Tell Blake what to review next
+      <span class="cta-arrow" aria-hidden="true">→</span>
+    </div>
+  </a>
 
   <!-- Modal and Overlay -->
   <div id="modal-overlay" class="modal-overlay"></div>

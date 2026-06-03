@@ -18,6 +18,11 @@ const ADMIN_MENU_ITEMS = [
     jp: '新規追加',
     href: 'admin/new-anime.html',
   },
+  {
+    label: 'Suggestion Queue',
+    jp: '提案',
+    href: 'admin/suggestions.html',
+  },
   // Future entries land here:
   // { label: 'Site Health', jp: '監視', href: 'admin/health.html' },
   // { label: 'Audit', jp: '監査', href: 'admin/audit.html' },

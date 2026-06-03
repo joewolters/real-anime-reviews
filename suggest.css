@@ -1,0 +1,802 @@
+/* ============================================================================
+   v1.6.11 — Suggest an Anime (gate 3b UI overhaul)
+   Brand-parity rewrite matching .admin-shell / .admin-title-line / .more-info-*
+   vocabulary. Cowork layers baked in: SVG-noise overlay, :focus-visible ring,
+   hairline gradient dividers, submit-success morph via :has(), full
+   prefers-reduced-motion override.
+   ============================================================================ */
+
+/* ---- Main wrapper ---------------------------------------------------------- */
+.suggest-main {
+  position: relative;
+  z-index: 1;
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+/* ---- Shell (the gold-standard admin-shell pattern) ------------------------- */
+.suggest-shell {
+  position: relative;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.78), rgba(20, 6, 38, 0.92));
+  border: 1px solid rgba(187, 134, 252, 0.42);
+  border-radius: 18px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(187, 134, 252, 0.16);
+  padding: 32px 36px;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  color: #efe7ff;
+  overflow: hidden;
+  animation: suggest-fade-up 600ms cubic-bezier(.2, .7, .3, 1) both;
+}
+
+/* Cowork addition #1 — SVG-noise grain overlay (~3% opacity) */
+.suggest-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>");
+}
+
+@keyframes suggest-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Shell header ---------------------------------------------------------- */
+.suggest-shell-header {
+  position: relative;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, rgba(187, 134, 252, 0.35), transparent) 1;
+  padding-bottom: 18px;
+  margin-bottom: 24px;
+}
+
+.suggest-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-family: 'Bebas Neue', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  position: relative;
+}
+
+/* Title underline grow (animation #2) */
+.suggest-title-line::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -10px;
+  height: 1px;
+  width: 0;
+  background: linear-gradient(90deg, rgba(187, 134, 252, 0.85), transparent);
+  animation: suggest-underline-grow 700ms 200ms ease-out forwards;
+}
+
+@keyframes suggest-underline-grow {
+  to { width: 60%; }
+}
+
+.suggest-kicker {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: #bb86fc;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Kicker dot pulse (creative addition) */
+.suggest-kicker::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #bb86fc;
+  box-shadow: 0 0 6px rgba(187, 134, 252, 0.7);
+  animation: suggest-pulse 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes suggest-pulse {
+  from { opacity: 0.55; transform: scale(1); }
+  to   { opacity: 1;    transform: scale(1.25); }
+}
+
+.suggest-kicker .jp-mini {
+  margin-left: 4px;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 10px;
+  color: #cfc7d9;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.suggest-divider {
+  color: rgba(187, 134, 252, 0.55);
+  font-size: 1.2rem;
+}
+
+.suggest-title-text {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.9rem;
+  letter-spacing: 0.04em;
+}
+
+.suggest-intro {
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.72);
+  margin: 14px 0 0;
+  line-height: 1.45;
+}
+
+/* ---- Form rows ------------------------------------------------------------- */
+.suggest-form { position: relative; }
+
+.suggest-row { margin-bottom: 18px; position: relative; }
+
+.suggest-row label {
+  display: block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #efe7ff;
+  margin-bottom: 8px;
+}
+.suggest-row .required { color: #ff8a8a; }
+
+.suggest-row input,
+.suggest-row textarea {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(187, 134, 252, 0.32);
+  background: rgba(15, 5, 28, 0.55);
+  color: #ffffff;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  transition: border-color 220ms ease, background 220ms ease, box-shadow 220ms ease;
+}
+.suggest-row textarea {
+  resize: vertical;
+  min-height: 110px;
+  line-height: 1.5;
+}
+.suggest-row input:focus,
+.suggest-row textarea:focus {
+  outline: none;
+  border-color: rgba(187, 134, 252, 0.78);
+  background: rgba(20, 8, 38, 0.75);
+  box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.18);
+}
+
+/* Character counter */
+.char-counter {
+  position: absolute;
+  right: 6px;
+  bottom: -22px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.45);
+  transition: color 200ms ease;
+}
+.char-counter.warn { color: #ffe1a0; }
+.char-counter.full { color: #ff9b9b; }
+
+/* Honeypot — off-screen */
+.suggest-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ---- Submit button (dedicated .suggest-submit class) ----------------------- */
+.suggest-actions {
+  margin-top: 32px;
+  text-align: right;
+}
+
+/* Direct port of homepage .inline-header-btn (style.css:1439-1537):
+   premium glassy gradient + ::before shimmer sweep + lift/scale hover. */
+.suggest-submit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  color: rgba(245, 242, 255, 0.96);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.42), rgba(70, 0, 110, 0.78));
+  border: 1px solid rgba(187, 134, 252, 0.38);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28), 0 0 0 rgba(187, 134, 252, 0);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
+}
+
+/* Shimmer sweep — matches .inline-header-btn::before */
+.suggest-submit::before {
+  content: "";
+  position: absolute;
+  inset: -70%;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0)    0%,
+    rgba(255, 255, 255, 0.06) 38%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.06) 62%,
+    rgba(255, 255, 255, 0)    100%
+  );
+  opacity: 0.35;
+  transform: translate3d(-45%, 0, 0) rotate(10deg);
+  filter: blur(10px);
+  will-change: transform, opacity;
+  transition: opacity .18s ease, transform .45s ease;
+  z-index: 0;
+}
+
+.suggest-submit .btn-text {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  transition: opacity 240ms ease;
+}
+
+.suggest-submit::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 240ms ease, transform 240ms ease;
+  z-index: 2;
+}
+
+.suggest-submit:hover {
+  transform: translateY(-2px) scale(1.04);
+  border-color: rgba(187, 134, 252, 0.72);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.36), 0 0 18px rgba(187, 134, 252, 0.55);
+  filter: brightness(1.06);
+}
+.suggest-submit:hover::before {
+  opacity: 0.70;
+  transform: translate3d(15%, 0, 0) rotate(10deg);
+}
+
+.suggest-submit:active {
+  transform: translateY(0px) scale(0.99);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.32), 0 0 10px rgba(187, 134, 252, 0.45);
+  transition-duration: 100ms;
+}
+
+.suggest-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.suggest-submit:disabled::before { opacity: 0; }
+
+/* Cowork addition #6 — submit-success morph via :has().
+   Shimmer ::before is hidden during the morph so it doesn't fight the green pulse. */
+.suggest-form:has(#suggest-status.success) .suggest-submit {
+  animation: suggest-submit-pulse 900ms ease-out 1;
+}
+.suggest-form:has(#suggest-status.success) .suggest-submit::before {
+  animation: suggest-shimmer-hide 900ms ease-out 1;
+}
+.suggest-form:has(#suggest-status.success) .suggest-submit .btn-text {
+  animation: suggest-text-out 900ms ease-out 1;
+}
+.suggest-form:has(#suggest-status.success) .suggest-submit::after {
+  animation: suggest-check-in 900ms ease-out 1;
+}
+
+@keyframes suggest-submit-pulse {
+  0%, 100% {
+    background: linear-gradient(180deg, rgba(140, 70, 220, 0.42), rgba(70, 0, 110, 0.78));
+    transform: scale(1);
+  }
+  30% {
+    background: linear-gradient(180deg, rgba(80, 200, 130, 0.85), rgba(30, 130, 80, 0.95));
+    transform: scale(1.05);
+    box-shadow: 0 0 24px rgba(120, 220, 160, 0.45);
+  }
+}
+@keyframes suggest-shimmer-hide {
+  0%, 100% { opacity: 0.35; }
+  10%, 80% { opacity: 0; }
+}
+@keyframes suggest-text-out {
+  0%, 100% { opacity: 1; }
+  10%, 80% { opacity: 0; }
+}
+@keyframes suggest-check-in {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  20%, 80% { opacity: 1; transform: scale(1); }
+}
+
+/* ---- Status messages (gradient pills + slide-in) --------------------------- */
+.suggest-status {
+  margin-top: 22px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-family: 'Outfit', sans-serif;
+  border: 1px solid transparent;
+  animation: suggest-status-in 320ms ease-out;
+}
+.suggest-status[hidden] { display: none; }
+
+.suggest-status.info {
+  background: linear-gradient(180deg, rgba(100, 100, 255, 0.20), rgba(60, 60, 200, 0.10));
+  color: #c4c4ff;
+  border-color: rgba(120, 120, 255, 0.30);
+}
+.suggest-status.success {
+  background: linear-gradient(180deg, rgba(60, 200, 130, 0.22), rgba(20, 130, 80, 0.10));
+  color: #8aff8a;
+  border-color: rgba(80, 220, 140, 0.40);
+}
+.suggest-status.warn {
+  background: linear-gradient(180deg, rgba(255, 200, 80, 0.18), rgba(195, 130, 30, 0.08));
+  color: #ffe1a0;
+  border-color: rgba(255, 200, 100, 0.35);
+}
+.suggest-status.error {
+  background: linear-gradient(180deg, rgba(255, 100, 100, 0.18), rgba(180, 50, 50, 0.08));
+  color: #ff9b9b;
+  border-color: rgba(255, 120, 120, 0.40);
+}
+
+@keyframes suggest-status-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Cowork addition #4 — :focus-visible ring (keyboard nav only) ---------- */
+.suggest-shell *:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(187, 134, 252, 0.95),
+    0 0 0 4px rgba(187, 134, 252, 0.25);
+}
+
+/* ---- Mobile reflow --------------------------------------------------------- */
+@media (max-width: 640px) {
+  .suggest-main { margin: 24px auto; padding: 0 14px; }
+  .suggest-shell { padding: 24px 22px; border-radius: 14px; }
+  .suggest-title-text { font-size: 1.6rem; }
+  .suggest-actions { text-align: center; }
+  .suggest-submit { width: 100%; }
+}
+
+/* ---- Cowork addition #3 — prefers-reduced-motion accessibility pass -------- */
+@media (prefers-reduced-motion: reduce) {
+  .suggest-shell,
+  .suggest-title-line::after,
+  .suggest-kicker::before,
+  .suggest-status,
+  .suggest-submit::before,
+  .suggest-form:has(#suggest-status.success) .suggest-submit,
+  .suggest-form:has(#suggest-status.success) .suggest-submit::before,
+  .suggest-form:has(#suggest-status.success) .suggest-submit .btn-text,
+  .suggest-form:has(#suggest-status.success) .suggest-submit::after {
+    animation: none !important;
+  }
+  .suggest-row input,
+  .suggest-row textarea,
+  .suggest-submit,
+  .suggest-submit::before,
+  .char-counter {
+    transition-duration: 0s !important;
+  }
+  .suggest-title-line::after { width: 60%; }  /* show final state immediately */
+  .suggest-kicker::before { opacity: 1; }
+}
+
+/* ============================================================================
+   v1.6.11 gate 3e — Search-as-you-type dropdown + selection card
+   ============================================================================ */
+
+/* Anchor for the absolutely-positioned dropdown */
+.suggest-row-search { position: relative; }
+
+/* Wrapper around the input (so spinner can sit inside) */
+.suggest-search-wrap {
+  position: relative;
+  /* gate 3f — transition-based swap. Default duration 220ms (leaving);
+     .is-entering overrides to 320ms for the "reverse" direction. */
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.suggest-search-wrap[hidden] { display: none; }
+.suggest-search-wrap.is-leaving {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.suggest-search-wrap.is-entering {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition-duration: 320ms;
+}
+
+/* gate 3f item 3c — purple ring spinner (conic gradient + mask carve-out
+   for a smoother, designed feel vs. the gate-3e single-border-top ring). */
+.suggest-search-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;       /* center vertically without transform (transform owned by the spin animation) */
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(187, 134, 252, 0.95) 0deg,
+    rgba(187, 134, 252, 0.45) 120deg,
+    rgba(187, 134, 252, 0)    240deg,
+    rgba(187, 134, 252, 0)    360deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 7px, black 8px);
+          mask: radial-gradient(circle, transparent 7px, black 8px);
+  animation: suggest-spinner-spin 1s linear infinite;
+  pointer-events: none;
+}
+@keyframes suggest-spinner-spin { to { transform: rotate(360deg); } }
+
+/* Dropdown container */
+.suggest-search-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  margin-top: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.95), rgba(20, 6, 38, 0.98));
+  border: 1px solid rgba(187, 134, 252, 0.42);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45), 0 0 22px rgba(187, 134, 252, 0.18);
+  animation: suggest-dropdown-in 220ms ease-out;
+}
+@keyframes suggest-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Custom scrollbar for the dropdown */
+.suggest-search-results::-webkit-scrollbar { width: 8px; }
+.suggest-search-results::-webkit-scrollbar-track { background: rgba(15, 5, 28, 0.45); border-radius: 6px; }
+.suggest-search-results::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.55), rgba(70, 0, 110, 0.85));
+  border-radius: 6px;
+}
+
+/* Each result row */
+.suggest-result-row {
+  position: relative;                                /* anchor for the gate-3f title underline ::after */
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(187, 134, 252, 0.10);
+  transition: background 160ms ease, transform 160ms ease;
+  /* gate 3f item 3a — stagger entrance via --i custom property (set inline
+     by renderResultRow). 50ms per row → 5-result dropdown fully in ~520ms. */
+  animation: suggest-result-in 320ms cubic-bezier(.2, .7, .3, 1) both;
+  animation-delay: calc(var(--i, 0) * 50ms);
+}
+@keyframes suggest-result-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.suggest-result-row:last-child { border-bottom: none; }
+.suggest-result-row:hover,
+.suggest-result-row.focused {
+  background: linear-gradient(180deg, rgba(187, 134, 252, 0.20), rgba(140, 70, 220, 0.12));
+}
+.suggest-result-row.focused {
+  outline: 1px solid rgba(187, 134, 252, 0.45);
+  outline-offset: -1px;
+}
+
+/* gate 3f item 3b — tactile hover micro-interactions */
+.suggest-result-row .suggest-result-cover {
+  transition: transform 220ms cubic-bezier(.2, .7, .3, 1),
+              box-shadow 220ms ease;
+}
+.suggest-result-row .suggest-result-title {
+  position: relative;
+  display: inline-block;
+}
+.suggest-result-row .suggest-result-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 100%;
+  bottom: -2px;
+  height: 1px;
+  background: linear-gradient(90deg, #bb86fc, transparent);
+  transition: right 280ms cubic-bezier(.2, .7, .3, 1);
+}
+.suggest-result-row:hover .suggest-result-cover,
+.suggest-result-row.focused .suggest-result-cover {
+  transform: scale(1.04) rotate(-1deg);
+  box-shadow: 0 4px 14px rgba(187, 134, 252, 0.30);
+}
+.suggest-result-row:hover .suggest-result-title::after,
+.suggest-result-row.focused .suggest-result-title::after {
+  right: 0;
+}
+
+.suggest-result-cover {
+  width: 60px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: rgba(15, 5, 28, 0.6);
+  border: 1px solid rgba(187, 134, 252, 0.18);
+}
+.suggest-result-cover-placeholder {
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.55), rgba(20, 6, 38, 0.72));
+}
+
+.suggest-result-body { flex: 1; min-width: 0; }
+.suggest-result-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.suggest-result-romaji {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 2px;
+}
+.suggest-result-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+/* Format pill — palette ported from .more-info-rec-format-badge */
+.suggest-result-format-badge {
+  background: rgba(187, 134, 252, 0.20);
+  color: #bb86fc;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.suggest-result-year {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: 'Montserrat', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+/* Empty / error state inside dropdown (visitor-facing copy, no third-party branding) */
+.suggest-result-empty {
+  padding: 18px 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.88rem;
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Selected confirmation card (replaces input visually after pick) */
+.suggest-selected {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.62), rgba(20, 6, 38, 0.78));
+  border: 1px solid rgba(187, 134, 252, 0.48);
+  border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35), 0 0 18px rgba(187, 134, 252, 0.18);
+  /* gate 3f — transition-based swap (replaces gate-3e named animation).
+     `is-entering` / `is-leaving` state classes drive the in/out states;
+     transitionend in JS coordinates the show/hide timing. */
+  transition: opacity 380ms cubic-bezier(.2, .7, .3, 1),
+              transform 380ms cubic-bezier(.2, .7, .3, 1);
+}
+.suggest-selected.is-entering {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.97);
+}
+.suggest-selected.is-leaving {
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+  transition-duration: 260ms;  /* lighter exit than entrance */
+}
+
+.selected-cover {
+  width: 70px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  border: 1px solid rgba(187, 134, 252, 0.35);
+  /* gate 3f item 3d — Ken Burns: slow scale + drift over 9s, alternating.
+     Almost imperceptible per second; reads as "this is alive" subliminally. */
+  animation: selected-cover-kenburns 9s ease-in-out infinite alternate;
+}
+@keyframes selected-cover-kenburns {
+  from { transform: scale(1)    translate(0, 0); }
+  to   { transform: scale(1.04) translate(-1%, -1%); }
+}
+.selected-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.selected-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  color: #ffffff;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.selected-sub {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+.selected-format-pill {
+  background: rgba(187, 134, 252, 0.20);
+  color: #bb86fc;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.selected-year {
+  font-family: 'Montserrat', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+/* gate 3f — port of .inline-header-btn's 115° ::before shimmer at smaller
+   scale. Hover adds lift + scale + border-glow + box-shadow purple bloom. */
+.selected-change-btn {
+  position: relative;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 5px 12px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid rgba(187, 134, 252, 0.42);
+  border-radius: 6px;
+  color: #bb86fc;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .18s ease, box-shadow .18s ease,
+              background .18s ease, color .18s ease, border-color .18s ease;
+  box-shadow: 0 0 0 rgba(187, 134, 252, 0);
+}
+.selected-change-btn::before {
+  content: '';
+  position: absolute;
+  inset: -70%;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(115deg,
+    rgba(255, 255, 255, 0)    0%,
+    rgba(255, 255, 255, 0.06) 38%,
+    rgba(255, 255, 255, 0.20) 50%,
+    rgba(255, 255, 255, 0.06) 62%,
+    rgba(255, 255, 255, 0)    100%);
+  opacity: 0.30;
+  transform: translate3d(-45%, 0, 0) rotate(10deg);
+  filter: blur(8px);
+  transition: opacity .18s ease, transform .45s ease;
+  z-index: 0;
+}
+.selected-change-btn > * {
+  position: relative;
+  z-index: 1;
+}
+.selected-change-btn:hover {
+  transform: translateY(-1px) scale(1.02);
+  background: rgba(187, 134, 252, 0.15);
+  color: #ffffff;
+  border-color: rgba(187, 134, 252, 0.70);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.32), 0 0 12px rgba(187, 134, 252, 0.40);
+}
+.selected-change-btn:hover::before {
+  opacity: 0.65;
+  transform: translate3d(15%, 0, 0) rotate(10deg);
+}
+.selected-change-btn:active {
+  transform: scale(0.98);
+  transition-duration: 100ms;
+}
+
+/* Mobile reflow */
+@media (max-width: 640px) {
+  .suggest-search-results { max-height: 280px; }
+  .suggest-result-cover { width: 50px; height: 70px; }
+  .suggest-selected { flex-direction: column; }
+  .selected-cover { width: 100%; max-width: 140px; height: auto; aspect-ratio: 5 / 7; }
+}
+
+/* Reduced-motion override — covers everything from gate 3e + 3f */
+@media (prefers-reduced-motion: reduce) {
+  .suggest-search-results,
+  .suggest-search-spinner,
+  .suggest-result-row,         /* gate 3f 3a stagger */
+  .selected-cover {            /* gate 3f 3d Ken Burns */
+    animation: none !important;
+  }
+  .suggest-result-row,
+  .suggest-result-row .suggest-result-cover,     /* gate 3f 3b cover hover */
+  .suggest-result-row .suggest-result-title::after, /* gate 3f 3b underline grow */
+  .suggest-search-wrap,        /* gate 3f 1 swap transition */
+  .suggest-selected,           /* gate 3f 1 swap transition */
+  .selected-change-btn,
+  .selected-change-btn::before {  /* gate 3f 2 shimmer */
+    transition-duration: 0s !important;
+  }
+  /* Force final visible state (skip the .is-entering / .is-leaving offsets) */
+  .suggest-search-wrap.is-entering,
+  .suggest-search-wrap.is-leaving,
+  .suggest-selected.is-entering,
+  .suggest-selected.is-leaving {
+    opacity: 1;
+    transform: none;
+  }
+  /* Static hover end-states (no animation toward them) */
+  .suggest-result-row:hover .suggest-result-cover,
+  .suggest-result-row.focused .suggest-result-cover {
+    transform: none;
+  }
+}

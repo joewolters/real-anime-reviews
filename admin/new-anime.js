@@ -1157,6 +1157,30 @@ async function init() {
     $('admin-main').hidden = false;
     wire();
 
+    // v1.6.11 — Suggestion Box handoff: if `?suggest=<title>` is present (the
+    // admin clicked "Add this anime" on the /admin/suggestions queue), prefill
+    // the title input. Coexists with `?skipPush=1` / `?dryRun=1` submit-time
+    // flags handled in submitAndShip() — different params, different lifecycle.
+    const handoffParams = new URLSearchParams(window.location.search);
+    const suggestTitle = handoffParams.get('suggest');
+    if (suggestTitle) {
+      const titleInput = document.getElementById('title-input');
+      if (titleInput) titleInput.value = suggestTitle;
+    }
+
+    // v1.6.11 gate 3e — if the visitor picked from /suggest's search dropdown,
+    // the queue row's "Add this anime" button also passes `?anilistId=<id>`.
+    // Auto-trigger Fetch by ID so admin skips the search step entirely.
+    const anilistId = handoffParams.get('anilistId');
+    if (anilistId) {
+      const idInput = document.getElementById('anilist-id-input');
+      const fetchByIdBtn = document.getElementById('fetch-by-id-btn');
+      if (idInput && fetchByIdBtn) {
+        idInput.value = anilistId;
+        fetchByIdBtn.click();
+      }
+    }
+
     if (state.serverMode === 'local') {
       $('generate-btn').textContent = 'Submit & Ship';
       $('server-mode-label').textContent = 'Mode 1 server · 一発';

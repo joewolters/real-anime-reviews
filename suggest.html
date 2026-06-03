@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Suggest an anime for Real Anime Reviews to review." />
+  <title>Suggest an Anime — Real Anime Reviews</title>
+  <script>window.APP_VERSION="1.6.11"</script>
+
+  <link rel="stylesheet" href="style.css?v=1.6.11">
+  <link rel="stylesheet" href="mobile.css?v=1.6.11" media="(max-width: 900px)">
+  <link rel="stylesheet" href="suggest.css?v=1.6.11">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="/" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" class="inline-header-btn" onclick="location.href='/'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="suggest-main">
+    <div class="suggest-shell">
+
+      <div class="suggest-shell-header">
+        <h2 class="suggest-title-line">
+          <span class="suggest-kicker">SUGGESTION BOX <span class="jp-mini">提案</span></span>
+          <span class="suggest-divider">·</span>
+          <span class="suggest-title-text">Recommend an Anime!</span>
+        </h2>
+        <p class="suggest-intro">Got an anime you'd love to see reviewed here? Drop the title (and a quick reason if you want) and Blake will take a look.</p>
+      </div>
+
+      <form id="suggest-form" class="suggest-form" novalidate>
+
+        <!-- Honeypot: real users never see this; bots fill everything. -->
+        <div class="suggest-hp" aria-hidden="true">
+          <label for="hp_email">Leave this empty</label>
+          <input id="hp_email" name="hp_email" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="suggest-row suggest-row-search">
+          <label for="suggest-title">Anime title <span class="required">*</span></label>
+
+          <!-- Search input (visible until visitor picks a result) -->
+          <div class="suggest-search-wrap">
+            <input id="suggest-title" type="text" required maxlength="200"
+                   placeholder="e.g. Frieren: Beyond Journey's End"
+                   autocomplete="off"
+                   role="combobox" aria-autocomplete="list"
+                   aria-expanded="false" aria-controls="suggest-search-results" />
+            <div id="suggest-search-spinner" class="suggest-search-spinner" aria-hidden="true" hidden></div>
+          </div>
+
+          <!-- Search results dropdown (hidden until 2+ chars typed + results in) -->
+          <div id="suggest-search-results" class="suggest-search-results" role="listbox" hidden></div>
+
+          <!-- Selected confirmation card (replaces the input visually after pick) -->
+          <div id="suggest-selected" class="suggest-selected" hidden>
+            <img class="selected-cover" alt="" loading="lazy" />
+            <div class="selected-meta">
+              <div class="selected-title"></div>
+              <div class="selected-sub">
+                <span class="selected-format-pill" hidden></span>
+                <span class="selected-year"></span>
+              </div>
+              <button type="button" class="selected-change-btn">Change selection</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="suggest-row">
+          <label for="suggest-reason">Why you're suggesting it (optional)</label>
+          <textarea id="suggest-reason" rows="4" maxlength="1000"
+                    placeholder="Say something you like about the anime!"
+                    oninput="var c=document.getElementById('reason-counter');var n=this.value.length;c.textContent=n+'/1000';c.classList.toggle('warn',n>=800);c.classList.toggle('full',n>=950);"></textarea>
+          <span class="char-counter" id="reason-counter" aria-live="polite">0/1000</span>
+        </div>
+
+        <div class="suggest-actions">
+          <button type="submit" id="suggest-submit" class="suggest-submit">
+            <span class="btn-text">Send suggestion</span>
+          </button>
+        </div>
+
+        <p id="suggest-status" class="suggest-status" role="status" hidden></p>
+
+      </form>
+
+    </div>
+  </main>
+
+  <script type="module" src="firebase.js?v=1.6.11"></script>
+  <script type="module" src="suggest.js?v=1.6.11"></script>
+</body>
+</html>

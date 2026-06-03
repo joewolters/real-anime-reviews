@@ -1,131 +1,136 @@
 <!-- author: Code | date: 2026-06-02 -->
-# v1.6.10 — Gate 10 (diff + npm test + firebase.json audit — DONE ✓, FAST-TRACK)
+# v1.6.11 — Gate 6 (audits — DONE ✓ with 1 SURFACE, FAST-TRACK)
 
-> All 3 read-only audits clean. 8 non-rolling code/doc files + 3 rolling docs in diff (within the gate-10 expected ~9-10 + 3 range); Playwright 7/7; rolling docs still firebase-ignored. No stop conditions hit.
-
----
-
-## 1. `git diff --stat HEAD` with per-gate annotations
-
-```
- CHANGELOG.md         |  26 ++++++++         ← Gate 6
- ROADMAP.md           |  32 +++++++---       ← Gate 9 (A1-A5)
- account.html         |   8 +--              ← Gate 8 (version bump)
- admin/new-anime.html |  10 ++--             ← Gate 8 (version bump)
- admin/new-anime.js   |   9 +--              ← Gate 3 (studio dedupe parity)
- docs/HANDOFF.md      | 130 ++++++++++++--…  ← Rolling (pre-existing, not touched by Code this ship)
- docs/NEXT.md         |  36 ++++++------     ← Gate 9 (B1-B5)
- docs/SHIP-OUTPUT.md  | 163 ++++++++++++--…  ← Rolling (Code's gate reports, gates 0-9)
- docs/SHIP-PROMPT.md  |  18 +++---           ← Rolling (Cowork's gate prompts)
- index.html           |  17 ++++--           ← Gate 7 (widget bullet) + Gate 8 (version bump)
- script.js            |  28 ++++++---        ← Gate 3 (studio dedupe + staff cap) + Gate 4 (format pill)
- 11 files changed, 255 insertions(+), 222 deletions(-)
-```
-
-### Per-gate accounting
-
-| Gate | What | Files touched |
-|---|---|---|
-| **Gate 3** (FAST-TRACK) | studio dedupe both sides + staff cap 4→6 | `script.js`, `admin/new-anime.js` |
-| **Gate 4** (PROPOSE-FIRST) | format pill inline in `renderMoreInfoEntry` | `script.js` (same file as gate 3, combined in diff) |
-| **Gate 6** (FAST-TRACK) | CHANGELOG v1.6.10 entry | `CHANGELOG.md` |
-| **Gate 7** (FAST-TRACK) | widget bullet + drop oldest 05/11 `<li>` | `index.html` |
-| **Gate 8** (FAST-TRACK) | version bump 1.6.9 → 1.6.10 (14 strings) | `index.html`, `account.html`, `admin/new-anime.html` |
-| **Gate 9** (FAST-TRACK) | NEXT.md + ROADMAP cascade | `ROADMAP.md`, `docs/NEXT.md` |
-| **Gate 2b** (PROPOSE-FIRST) | revert gate-2 multi-hop | (already reflected in `script.js` + `admin/new-anime.js` net diffs — gate-3+4 lives on top of the reverted baseline) |
-
-**Non-rolling files: 8** — `CHANGELOG.md`, `ROADMAP.md`, `account.html`, `admin/new-anime.html`, `admin/new-anime.js`, `docs/NEXT.md`, `index.html`, `script.js`.
-
-**Rolling docs: 3** — `docs/HANDOFF.md`, `docs/SHIP-PROMPT.md`, `docs/SHIP-OUTPUT.md`. All firebase-ignored (see §3 audit).
-
-**Total: 11 files.** Gate-10 prompt expected "~9-10 non-rolling + 3 rolling" = ~12-13 total. Code's 8 + 3 = 11 lands inside the tolerance band (the "~9-10" was an estimate; observed 8 is one below the low end). The undercount is because gate-2b's revert collapsed two gate-2 net changes (admin queries + script.js queries) back into the surviving gate-3+4 modifications on the same files — no separate diff entries.
-
-**No unexpected files.** ✓ Stop condition "unexpected file in diff" not hit.
-
-### What's NOT in the diff (sanity)
-
-- ✓ No `style.css` — confirmed by Cowork's gate-4 lock-in to reuse existing classes + inline-position-override rather than CSS edits.
-- ✓ No `mobile.css` — visual changes are inside the existing modal markup; no responsive surface added.
-- ✓ No `animeData.js` — no anime data changed this ship.
-- ✓ No `firebase.json` / `.gitignore` — no new gitignored files to add ignore entries for.
-- ✓ No `package.json` / `package-lock.json` — no dependency changes.
-- ✓ No `scripts/*.js` — bump-version.js used but not modified.
+> Sub-step 1 PASS (Playwright 7/7). Sub-step 2 PASS (firebase.json ↔ .gitignore mirror is correctly asymmetric per project rule #8; all 6 gate-6 §19-24 specific checks pass). Sub-step 3 STRUCTURALLY PASS + **7 unexpected modifications outside Code's v1.6.11 build gates surfaced** — 6 modified docs files + 1 new docs file that appear Cowork-managed. **Not blocking** but recommending Cowork confirms intent before gate 7 commit.
 
 ---
 
-## 2. `npm test` — Tier A 7/7 requirement
+## Sub-step 1 — `npm test` (Playwright) → ✓ PASS
 
 ```
-  7 passed (13.0s)
+  7 passed (19.4s)
 ```
 
-✓ All 7 Playwright tests pass. CLAUDE.md project rule #7 satisfied — the production-facing code changes (HTML / JS) have been validated against the test suite before commit. ✓ Stop condition "test fails (any < 7/7)" not hit.
-
-(The Playwright suite tests the homepage shell, modal open/close, search, deep-link regression, account page, 404 path. It doesn't exercise the AniList integration end-to-end — that path is mocked at the data layer. Functional verification of the gate-3 / gate-4 changes is Blake's gate-5-smoke (already completed) + the gate-13 preview-channel smoke later in this plan.)
+7/7 green. Rule #7 satisfied — prod-facing commit can proceed.
 
 ---
 
-## 3. `firebase.json` ignore audit
+## Sub-step 2 — `firebase.json` ↔ `.gitignore` mirror audit → ✓ PASS
+
+### firebase.json `hosting.ignore` array (14 entries)
 
 ```json
 "ignore": [
-  "firebase.json",
-  "**/.*",
-  "**/node_modules/**",
-  "PERSONAL.md",
-  "UpdateLog/**",
-  "AUDIT_*.md",
-  "docs/SHIP-*.md",       ← covers docs/SHIP-PROMPT.md AND docs/SHIP-OUTPUT.md
-  "docs/HANDOFF.md",      ← explicit
-  "tests/**",
-  "playwright.config.js",
-  "package.json",
-  "package-lock.json",
-  "playwright-report/**",
-  "test-results/**"
-],
+  "firebase.json",         // bootstrap
+  "**/.*",                 // bootstrap (hidden files)
+  "**/node_modules/**",    // bootstrap
+  "PERSONAL.md",           // sensitive — also in .gitignore ✓
+  "UpdateLog/**",          // committed but don't-deploy (intentional asymmetric)
+  "AUDIT_*.md",            // sensitive — also in .gitignore ✓
+  "docs/SHIP-*.md",        // committed rolling docs, don't-deploy ✓
+  "docs/HANDOFF.md",       // committed rolling doc, don't-deploy ✓
+  "tests/**",              // committed test infra, don't-deploy ✓
+  "playwright.config.js",  // committed test infra, don't-deploy ✓
+  "package.json",          // committed tooling, don't-deploy ✓
+  "package-lock.json",     // committed tooling, don't-deploy ✓
+  "playwright-report/**",  // .gitignored + don't-deploy ✓
+  "test-results/**"        // .gitignored + don't-deploy ✓
+]
 ```
 
-**All 3 rolling docs covered:**
-- `docs/SHIP-PROMPT.md` — matches the `docs/SHIP-*.md` glob ✓
-- `docs/SHIP-OUTPUT.md` — matches the `docs/SHIP-*.md` glob ✓
-- `docs/HANDOFF.md` — explicit entry ✓
+### Asymmetry is intentional per project rule #8
 
-✓ Stop condition "rolling doc not firebase-ignored" **not hit**.
+The two lists serve different purposes — sensitive secrets must be in BOTH; build/tooling artifacts that should be committed for the repo but not uploaded to the CDN go in `firebase.json` ignore ONLY. The 14 entries break down:
 
-**Precedent entries preserved:**
-- `PERSONAL.md` (from v1.3.5 commit `46b3291`) — admin UID / DNS values guard ✓
-- `UpdateLog/**` (same commit) — Firebase login email guard ✓
-- `AUDIT_*.md` (from v1.3.9 commit `6167da5`) — internal-critique-doc leak guard ✓
+- **Both `.gitignore` AND `firebase.json` ignore** (sensitive — must never leak): `PERSONAL.md`, `AUDIT_*.md`, `node_modules`, `playwright-report/`, `test-results/`, `.env`, `.firebase/` (the last 3 covered by `**/.*` in firebase + explicit in .gitignore). ✓
+- **`firebase.json` ignore ONLY** (committed to repo, don't deploy): `UpdateLog/**`, `docs/SHIP-*.md`, `docs/HANDOFF.md`, `tests/**`, `playwright.config.js`, `package.json`, `package-lock.json`. ✓ All deliberate per the existing project pattern.
 
-No new gitignored files were created in this ship per the gate-10 prompt §8 explicit note ("No new docs files this ship to audit"). Verified by §1 above — no new files in the diff that would need a corresponding `firebase.json` ignore entry.
+### Gate-6 §19-24 specific checks
+
+| Check | Status |
+|---|---|
+| `firestore.rules` NOT in firebase ignore (deploys via `--only firestore:rules`) | ✓ not in the ignore array |
+| `firestore.indexes.json` NOT in firebase ignore | ✓ not in the ignore array |
+| `docs/SHIP-*.md` IN firebase ignore | ✓ entry 7 |
+| `docs/HANDOFF.md` IN firebase ignore | ✓ entry 8 |
+| `tests/**`, `playwright.config.js`, `package.json`, `package-lock.json`, `playwright-report/`, `test-results/` all firebase-ignored | ✓ entries 9-14 |
+
+All 6 checks pass. No mirror drift.
 
 ---
 
-## 4. Stop-condition audit
+## Sub-step 3 — `git diff` review → ✓ STRUCTURALLY PASS + 7 surfaces
+
+### `git diff --stat HEAD` summary
+
+```
+ 20 files changed, 590 insertions(+), 201 deletions(-)
+```
+
+### EXPECTED modifications (13 files — direct v1.6.11 work):
+
+| File | Maps to gate |
+|---|---|
+| `CHANGELOG.md` | gate 5 |
+| `ROADMAP.md` | gate 5 |
+| `account.html` | gate 5 (bump-version) |
+| `admin-fab.js` | gate 3d-apply (Suggestion Queue menu entry) |
+| `admin/new-anime.html` | gate 5 (bump-version) |
+| `admin/new-anime.js` | gate 2b + 3e (suggest/anilistId URL param handler) |
+| `docs/HANDOFF.md` | rolling (Cowork) |
+| `docs/NEXT.md` | gate 5 |
+| `docs/SHIP-OUTPUT.md` | rolling (Code per gate) |
+| `docs/SHIP-PROMPT.md` | rolling (Cowork per gate) |
+| `firebase.json` | gate 1b (firestore block) |
+| `index.html` | gates 3c (CTA banner) + 3d (admin-fab) + 5 (bump + widget bullet) |
+| `scripts/bump-version.js` | gates 1b + 2b (TARGETS additions) + 5b (4 more TARGETS) |
+| `style.css` | gates 3c (banner CSS) + 3d (arrow upsize) |
+
+### EXPECTED new (untracked) files — 8 files per gate-6 §39:
+
+`firestore.rules`, `firestore.indexes.json` (gate 1b); `suggest.html`, `suggest.js`, `suggest.css` (gate 1b); `admin/suggestions.html`, `admin/suggestions.js`, `admin/suggestions.css` (gate 2b). ✓ All 8 accounted for.
+
+### 🟡 SURFACE — 7 unexpected files outside Code's v1.6.11 build gates
+
+These appear in the working tree but were NOT touched by any gate Code executed during this ship:
+
+**Modified (6):**
+
+| File | Diff size | Note |
+|---|---|---|
+| `docs/AI-PRIMER.md` | +22 / -? lines | Not edited by any v1.6.11 Code gate |
+| `docs/CODE-PROMPTS.md` | +2 / -1 lines | Not edited by any v1.6.11 Code gate |
+| `docs/SKILLS/README.md` | +8 / -? lines | Not edited by any v1.6.11 Code gate |
+| `docs/SKILLS/hotfix-skill.md` | +4 / -? lines | Not edited by any v1.6.11 Code gate |
+| `docs/SKILLS/release-skill.md` | +35 / -? lines | Not edited by any v1.6.11 Code gate (largest of the surface set) |
+| `docs/SKILLS/widget-update-skill.md` | +2 / -? lines | Not edited by any v1.6.11 Code gate |
+
+**New untracked (1):**
+
+| File | Note |
+|---|---|
+| `docs/COWORK-STYLE.md` | New file, not created by any Code gate |
+
+These look like Cowork-managed doc improvements made out-of-band between gates (consistent with the rolling docs pattern). **Not blocking v1.6.11 ship** — they're docs-only, no code impact. But per gate-6 §41 ("If you see anything else untracked or unexpected, surface it"), flagging for Cowork's confirmation before gate-7 stages them.
+
+**Two paths forward:**
+1. **Ship as-is** — if these are Cowork-intentional doc improvements that should ride with the v1.6.11 commit, just proceed to gate 7 with `git add -A`.
+2. **Selective stage** — if any of these should NOT ship with v1.6.11, gate 7 stages explicit files instead of `-A`.
+
+Recommend path 1 (ship all together) unless Cowork knows of a reason to exclude.
+
+---
+
+## Stop-condition audit (gate 6 §4 "don't half-state")
 
 | Stop | Status |
 |---|---|
-| Unexpected file in diff | ✓ Not hit. All 11 files (8 non-rolling + 3 rolling) accounted for by gate. |
-| Test fails (any < 7/7) | ✓ Not hit. `7 passed (13.0s)`. |
-| Rolling doc not firebase-ignored | ✓ Not hit. `docs/SHIP-*.md` glob + `docs/HANDOFF.md` explicit both present. |
+| `npm test` fails | ✓ Not hit (7/7) |
+| Mirror drift | ✓ Not hit (all 6 specific checks pass; asymmetry is intentional per rule #8) |
+| `git diff` shows rogue change | 🟡 7 unexpected files surfaced — not strictly "rogue" (look like Cowork doc work), but not from any Code gate. Reporting per §41 rather than blocking. |
 
 ---
 
-## 5. State for gate 11
+## One-liner reply
 
-Per gate-2b §46 plan, gate 11 is the commit gate. The expected commit groups all 8 non-rolling files + the version bumps into a single v1.6.10 commit with a structured message body. Rolling docs (`docs/SHIP-*.md`, `docs/HANDOFF.md`) stay uncommitted per the firebase-ignore + working-tree-state convention.
-
-CLAUDE.md commit-creation protocol applies:
-- Stage only the 8 non-rolling files (NOT the rolling docs).
-- Commit author: `Blake Wolters <196413457+joewolters@users.noreply.github.com>` per CLAUDE.md.
-- Commit message body should describe the shipped scope (3 polish items) + the v1.7.1 deferral.
-- `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer per the harness commit instructions.
-
-Awaiting gate-11 prompt for exact commit message body + any final pre-stage checks.
-
----
-
-## 6. One-liner reply
-
-Gate 10 done: `git diff --stat HEAD` shows 11 files = 8 non-rolling (CHANGELOG / ROADMAP / NEXT / script.js / admin/new-anime.js / index.html / account.html / admin/new-anime.html — all per-gate-accounted) + 3 rolling docs (SHIP-PROMPT / SHIP-OUTPUT / HANDOFF — all `firebase.json`-ignored via `docs/SHIP-*.md` glob + explicit `docs/HANDOFF.md`), Playwright `npm test` returned **7 passed (13.0s)** satisfying Tier A's 7/7 requirement and CLAUDE.md rule #7, `firebase.json` ignore array preserves all three v1.3.5/v1.3.9 precedent entries (`PERSONAL.md`, `UpdateLog/**`, `AUDIT_*.md`) — no stop conditions hit; ready for gate 11 (commit).
+Gate 6 done with all 3 sub-steps green: **(1)** `npm test` 7/7 (19.4s); **(2)** `firebase.json` ↔ `.gitignore` mirror correctly asymmetric per project rule #8 — sensitive files in BOTH (PERSONAL.md, AUDIT_*.md, .env, node_modules), committed-but-don't-deploy files in firebase-ignore ONLY (UpdateLog/, docs/SHIP-*.md, docs/HANDOFF.md, tests/, playwright.config.js, package.json, package-lock.json) — plus all 6 gate-6 §19-24 specific checks pass (firestore.rules + firestore.indexes.json correctly NOT firebase-ignored; SHIP-*.md + HANDOFF.md + tests/ + playwright config + package.json + package-lock.json + playwright-report/ + test-results/ correctly ARE firebase-ignored); **(3)** `git diff --stat HEAD` shows 20 modified + 9 untracked files totaling +590/-201 net, with the **13 expected modifications** (CHANGELOG, ROADMAP, account.html, admin-fab.js, admin/new-anime.html + .js, NEXT.md, firebase.json, index.html, scripts/bump-version.js, style.css, plus rolling HANDOFF/SHIP-OUTPUT/SHIP-PROMPT) and **8 expected new files** (firestore.rules, firestore.indexes.json, 3× suggest.*, 3× admin/suggestions.*) all mapping cleanly to v1.6.11 build gates, BUT **7 unexpected items surfaced** for Cowork's confirmation before gate 7 — 6 modified docs files (docs/AI-PRIMER.md, docs/CODE-PROMPTS.md, docs/SKILLS/README.md, docs/SKILLS/hotfix-skill.md, docs/SKILLS/release-skill.md +35 lines being the largest, docs/SKILLS/widget-update-skill.md) + 1 new docs file (docs/COWORK-STYLE.md) that appear Cowork-managed (likely out-of-band doc improvements between gates, consistent with the rolling-docs pattern) — **not blocking, no code impact**, recommend ship-as-is at gate 7 unless Cowork flags a reason to exclude; no real stop conditions hit; ready for gate 7 (commit + push) once Cowork confirms the 7 surfaces.
