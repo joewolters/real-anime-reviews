@@ -320,6 +320,8 @@ Bigger swings — not on a release schedule. Each is a "yes if/when," not a "soo
 - **Community Top 5 Favorites panel.** Aggregate-counted top 5 across all users, surfaced on home page. *(Originally planned as v1.1.0, postponed.)*
 - **Stats dashboard.** Site-wide stats (most active threads, most prolific reviewers, vote distributions) — public or admin-only TBD.
 - **Admin mode UI.** Logged-in-as-admin surface for moderating comments, deleting abusive content, pinning featured anime. Admin UID already configured in PERSONAL.md.
+<!-- author: Code | date: 2026-06-02 -->
+- **Suggestion DM inbox.** Admin replies directly to suggestion submitters (DM-style) and can tell them if Blake liked it — gated on capturing a stable submitter identity at submission time. Pairs with the notification/comment overhaul. (See NEXT.md v1.8.x.)
 
 ---
 

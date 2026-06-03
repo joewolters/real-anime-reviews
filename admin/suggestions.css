@@ -83,6 +83,65 @@
   gap: 12px;
 }
 
+/* ---- Section split (v1.6.12 item 3 — NEW / REVIEWED) ----------------------- */
+#suggestions-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+#suggestions-queue[hidden] { display: none; }   /* [hidden] symmetry vs display:flex */
+
+.queue-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Entrance flourish when a section first appears (e.g. REVIEWED on first
+     mark) — a soft fade-up so the new section doesn't pop in abruptly. */
+  animation: queue-section-in 420ms cubic-bezier(.2, .7, .3, 1) both;
+}
+.queue-section[hidden] { display: none; }
+
+@keyframes queue-section-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(187, 134, 252, 0.30), transparent) 1;
+}
+.section-kicker {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.20em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #bb86fc;
+}
+.section-kicker .jp-mini {
+  margin-left: 4px;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.62rem;
+  color: #cfc7d9;
+}
+/* Reviewed section reads cooler/greyer to echo the reviewed status pill. */
+#section-reviewed .section-kicker { color: #b9b9c8; }
+#section-reviewed .section-header {
+  border-image: linear-gradient(90deg, rgba(160, 160, 180, 0.30), transparent) 1;
+}
+.section-count {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.45);
+}
+.section-count:not(:empty)::before { content: '· '; }
+
 /* ---- Suggestion row -------------------------------------------------------- */
 .suggestion-row {
   position: relative;
@@ -118,12 +177,21 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 18px rgba(187, 134, 252, 0.20);
 }
 
+/* v1.6.12 item 3 — reviewed rows no longer dim in place; they move to the
+   dedicated REVIEWED section whose header carries the meaning (rec #3). The
+   .reviewed class is retained as a semantic hook (status pill already styles
+   itself via .status-reviewed), but full opacity for readability. */
 .suggestion-row.reviewed {
-  opacity: 0.5;
+  opacity: 1;
 }
-.suggestion-row.reviewed:hover {
-  opacity: 0.75;
+
+/* Cross-slide when a row moves between the NEW and REVIEWED lists (320ms). */
+.suggestion-row.leaving,
+.suggestion-row.entering {
+  transition: transform 320ms cubic-bezier(.2, .7, .3, 1), opacity 320ms ease;
 }
+.suggestion-row.leaving  { opacity: 0; transform: translateX(-18px); }
+.suggestion-row.entering { opacity: 0; transform: translateX(18px); }
 
 .suggestion-row.removing {
   opacity: 0;
@@ -529,4 +597,145 @@
 
 @media (max-width: 640px) {
   .suggestion-row .row-cover-img { width: 60px; height: 84px; align-self: center; }
+}
+
+/* ============================================================================
+   v1.6.12 item 2 — Branded delete-confirmation modal
+   Centered overlay + .admin-shell-vocabulary card. Replaces native confirm().
+   ============================================================================ */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: confirm-overlay-in 220ms ease both;
+}
+/* [hidden] symmetry — author display:flex would otherwise override UA [hidden]. */
+.confirm-overlay[hidden] { display: none; }
+
+@keyframes confirm-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.confirm-card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.92), rgba(20, 6, 38, 0.96));
+  border: 1px solid transparent;
+  border-image: linear-gradient(135deg, rgba(187, 134, 252, 0.55), rgba(187, 134, 252, 0.10)) 1;
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 32px rgba(187, 134, 252, 0.18);
+  padding: 28px 26px 22px;
+  text-align: center;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  color: #efe7ff;
+  /* Entrance: fade + scale, replayed via JS .is-open toggle each open. */
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity 220ms ease, transform 220ms cubic-bezier(.2, .7, .3, 1);
+}
+.confirm-card.is-open {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.confirm-card .confirm-glyph {
+  font-size: 2.2rem;
+  filter: drop-shadow(0 0 12px rgba(255, 130, 130, 0.30));
+}
+.confirm-card .confirm-kicker {
+  margin-top: 6px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: #ff9b9b;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.confirm-card .confirm-kicker .jp-mini {
+  margin-left: 4px;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 10px;
+  color: rgba(255, 200, 200, 0.80);
+}
+.confirm-card .confirm-body {
+  margin: 14px 0 22px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.88);
+  word-break: break-word;
+}
+.confirm-card .confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+/* Reuse the row action-button vocabulary (gradient + shimmer-less here) at a
+   slightly larger modal scale. .secondary + .danger variants already defined. */
+.confirm-card .confirm-actions button {
+  flex: 1;
+  max-width: 160px;
+  padding: 10px 16px;
+  border-radius: 9px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: rgba(245, 242, 255, 0.96);
+  border: 1px solid rgba(187, 134, 252, 0.38);
+  background: linear-gradient(180deg, rgba(120, 120, 150, 0.40), rgba(70, 70, 100, 0.78));
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
+}
+.confirm-card .confirm-actions button.secondary {
+  border-color: rgba(160, 160, 200, 0.35);
+}
+.confirm-card .confirm-actions button.secondary:hover {
+  transform: translateY(-2px);
+  border-color: rgba(180, 180, 210, 0.62);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.32), 0 0 14px rgba(160, 160, 200, 0.40);
+  filter: brightness(1.06);
+}
+.confirm-card .confirm-actions button.danger {
+  background: linear-gradient(180deg, rgba(220, 80, 80, 0.42), rgba(140, 30, 30, 0.82));
+  border-color: rgba(255, 130, 130, 0.40);
+  color: #ffd5d5;
+}
+.confirm-card .confirm-actions button.danger:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 150, 150, 0.72);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.32), 0 0 14px rgba(255, 130, 130, 0.50);
+  color: #fff;
+  filter: brightness(1.06);
+}
+.confirm-card .confirm-actions button:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: 100ms;
+}
+
+/* ---- v1.6.12 reduced-motion pass (sections + move + modal) ----------------- */
+@media (prefers-reduced-motion: reduce) {
+  .queue-section,
+  .confirm-overlay {
+    animation: none !important;
+  }
+  .suggestion-row.leaving,
+  .suggestion-row.entering,
+  .confirm-card,
+  .confirm-card .confirm-actions button {
+    transition-duration: 0s !important;
+  }
+  /* No slide offset when motion is reduced — instant move. */
+  .suggestion-row.leaving  { transform: none; }
+  .suggestion-row.entering { transform: none; }
 }

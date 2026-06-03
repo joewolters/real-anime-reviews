@@ -10,6 +10,8 @@
       "AUDIT_*.md",
       "docs/SHIP-*.md",
       "docs/HANDOFF.md",
+      "docs/CODE-HANDOFF.md",
+      "docs/COWORK-STYLE.md",
       "tests/**",
       "playwright.config.js",
       "package.json",

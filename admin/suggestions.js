@@ -8,6 +8,11 @@
 // skeleton shimmer placeholders before getDocs resolves, queue header stats counter,
 // smooth row-collapse on Delete (CSS transition before DOM removal).
 //
+// v1.6.12 additions: (1) loadQueue clears stale empty/error cards before fetch;
+// (2) custom branded delete-confirmation modal (confirmModal) replacing native
+// confirm(); (3) reviewed rows move to a separate NEW/REVIEWED section split with
+// a 320ms cross-slide instead of dimming in place.
+//
 // Author: Code | date: 2026-06-02 | v1.6.11 Suggestion Box (gate 3b UI overhaul)
 
 import { auth, db } from '../firebase.js';
@@ -59,28 +64,44 @@ function renderSkeleton() {
       <div class="sk-block sk-btn"></div>
     </div>
   </li>`;
-  $('suggestions-list').innerHTML = skeletonRow.repeat(SKELETON_COUNT);
+  // Skeleton lives in the NEW section; reviewed stays hidden until data resolves.
+  $('section-new').hidden = false;
+  $('section-reviewed').hidden = true;
+  $('suggestions-list-new').innerHTML = skeletonRow.repeat(SKELETON_COUNT);
 }
 
-// ---- Stats counter (gate 3b creative addition) -----------------------------
+// ---- Stats counter (gate 3b creative addition; v1.6.12 two-list aware) ------
+
+// Count live rows (excludes skeletons + any mid-animation rows) in one list.
+function liveCount(listId) {
+  return $(listId).querySelectorAll(
+    'li.suggestion-row:not(.skeleton):not(.removing):not(.leaving)'
+  ).length;
+}
 
 function updateStats() {
-  const rows = $('suggestions-list').querySelectorAll('li.suggestion-row:not(.skeleton):not(.removing)');
-  if (!rows.length) {
+  const newCount = liveCount('suggestions-list-new');
+  const reviewedCount = liveCount('suggestions-list-reviewed');
+
+  // Top widget — keeps the existing `X NEW · Y REVIEWED` summary.
+  if (!newCount && !reviewedCount) {
     $('queue-stats').hidden = true;
-    return;
+  } else {
+    const parts = [];
+    if (newCount > 0) parts.push(`<span class="stat-new">${newCount} NEW</span>`);
+    if (newCount > 0 && reviewedCount > 0) parts.push(`<span class="stat-divider">·</span>`);
+    if (reviewedCount > 0) parts.push(`<span class="stat-reviewed">${reviewedCount} REVIEWED</span>`);
+    $('queue-stats').innerHTML = parts.join('');
+    $('queue-stats').hidden = false;
   }
-  let newCount = 0, reviewedCount = 0;
-  rows.forEach(row => {
-    if (row.classList.contains('reviewed')) reviewedCount++;
-    else newCount++;
-  });
-  const parts = [];
-  if (newCount > 0) parts.push(`<span class="stat-new">${newCount} NEW</span>`);
-  if (newCount > 0 && reviewedCount > 0) parts.push(`<span class="stat-divider">·</span>`);
-  if (reviewedCount > 0) parts.push(`<span class="stat-reviewed">${reviewedCount} REVIEWED</span>`);
-  $('queue-stats').innerHTML = parts.join('');
-  $('queue-stats').hidden = false;
+
+  // Per-section header counts (v1.6.12 rec #5 — local count beside each kicker).
+  $('count-new').textContent = newCount ? String(newCount) : '';
+  $('count-reviewed').textContent = reviewedCount ? String(reviewedCount) : '';
+
+  // Section visibility follows live row counts — hide an empty section's header.
+  $('section-new').hidden = newCount === 0;
+  $('section-reviewed').hidden = reviewedCount === 0;
 }
 
 // ---- Render ----------------------------------------------------------------
@@ -129,22 +150,112 @@ function renderRow(snap, index) {
 }
 
 function renderQueue(snaps) {
-  const list = $('suggestions-list');
+  const newList = $('suggestions-list-new');
+  const reviewedList = $('suggestions-list-reviewed');
+
   if (snaps.empty || snaps.size === 0) {
-    list.innerHTML = '';
+    newList.innerHTML = '';
+    reviewedList.innerHTML = '';
+    $('section-new').hidden = true;
+    $('section-reviewed').hidden = true;
     $('suggestions-empty').hidden = false;
     $('queue-stats').hidden = true;
     return;
   }
+
   $('suggestions-empty').hidden = true;
-  list.innerHTML = snaps.docs.map((snap, i) => renderRow(snap, i)).join('');
-  updateStats();
+
+  // v1.6.12 item 3 — split docs into NEW vs REVIEWED, render into their own lists.
+  const newDocs = [], reviewedDocs = [];
+  snaps.docs.forEach((snap) => {
+    const status = snap.data().status || 'new';
+    (status === 'reviewed' ? reviewedDocs : newDocs).push(snap);
+  });
+  newList.innerHTML = newDocs.map((snap, i) => renderRow(snap, i)).join('');
+  reviewedList.innerHTML = reviewedDocs.map((snap, i) => renderRow(snap, i)).join('');
+
+  updateStats();   // also sets section visibility + per-section counts
+}
+
+// ---- Branded confirm modal (v1.6.12 item 2) --------------------------------
+
+// Promise-based replacement for native confirm(). Resolves true on Delete,
+// false on Cancel / backdrop / Escape. Reuses the static #confirm-modal overlay
+// already in the DOM (admin/suggestions.html). Focus trap keeps Tab inside the
+// two buttons while open; reduced-motion is handled in CSS.
+function confirmModal(title) {
+  return new Promise((resolve) => {
+    const overlay = $('confirm-modal');
+    const card = overlay.querySelector('.confirm-card');
+    const cancelBtn = overlay.querySelector('[data-confirm="cancel"]');
+    const okBtn = overlay.querySelector('[data-confirm="ok"]');
+    $('confirm-title').textContent = `Delete suggestion "${title}"?`;
+
+    const prevFocus = document.activeElement;
+    overlay.hidden = false;
+    // Double-rAF so the entrance transition replays reliably on every open
+    // (single rAF batches the hidden-removal + class-add into one frame).
+    requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-open')));
+    cancelBtn.focus();   // default focus on the safe option
+
+    const close = (val) => {
+      overlay.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey);
+      card.classList.remove('is-open');
+      overlay.hidden = true;
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
+      resolve(val);
+    };
+    const onClick = (e) => {
+      if (e.target === overlay) return close(false);          // backdrop = cancel
+      const b = e.target.closest('[data-confirm]');
+      if (b) close(b.dataset.confirm === 'ok');
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); return close(false); }
+      if (e.key === 'Tab') {
+        // Two-stop focus trap between Cancel and Delete.
+        const active = document.activeElement;
+        if (e.shiftKey && active === cancelBtn) { e.preventDefault(); okBtn.focus(); }
+        else if (!e.shiftKey && active === okBtn) { e.preventDefault(); cancelBtn.focus(); }
+      }
+    };
+    overlay.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+// ---- Reviewed-section move (v1.6.12 item 3) --------------------------------
+
+// Slides a row out of the NEW list and into the REVIEWED list with a 320ms
+// cross-slide. Uses the gate-3f double-rAF pattern so the entrance transition
+// replays; a setTimeout fallback covers reduced-motion (zeroed transitions
+// don't fire transitionend reliably).
+function moveToReviewed(row) {
+  const reviewedList = $('suggestions-list-reviewed');
+  $('section-reviewed').hidden = false;   // ensure target visible before the move
+  row.classList.add('leaving');
+
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    row.classList.remove('leaving');
+    reviewedList.appendChild(row);        // physical DOM move between lists
+    row.classList.add('entering');
+    requestAnimationFrame(() => requestAnimationFrame(() => row.classList.remove('entering')));
+    updateStats();                        // refresh counts + section visibility
+  };
+  row.addEventListener('transitionend', finish, { once: true });
+  setTimeout(finish, 400);                // reduced-motion / no-transition fallback
 }
 
 // ---- Event delegation ------------------------------------------------------
 
 function wireListClicks() {
-  $('suggestions-list').addEventListener('click', async (e) => {
+  // Delegate on the wrapper so clicks in BOTH the new + reviewed lists are caught
+  // (a row physically moves between the two lists on Mark Reviewed).
+  $('suggestions-queue').addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
     const row = btn.closest('li.suggestion-row');
@@ -175,7 +286,7 @@ function wireListClicks() {
           pill.textContent = 'reviewed';
           pill.className = 'status-pill status-reviewed';
         }
-        updateStats();
+        moveToReviewed(row);   // v1.6.12 item 3 — slide row into the REVIEWED section
       } catch (err) {
         console.error('mark-reviewed failed', err);
         alert('Could not mark as reviewed — see console.');
@@ -186,7 +297,8 @@ function wireListClicks() {
     }
 
     if (action === 'delete') {
-      if (!confirm(`Delete suggestion: "${title}"?`)) return;
+      // v1.6.12 item 2 — branded modal in place of the native confirm() dialog.
+      if (!(await confirmModal(title))) return;
       btn.disabled = true;
       try {
         await deleteDoc(doc(db, 'suggestions', docId));
@@ -195,7 +307,8 @@ function wireListClicks() {
         updateStats();
         const cleanup = () => {
           row.remove();
-          if (!$('suggestions-list').querySelector('li.suggestion-row:not(.skeleton)')) {
+          updateStats();   // refresh counts + section visibility after removal
+          if (!$('suggestions-queue').querySelector('li.suggestion-row:not(.skeleton):not(.removing)')) {
             $('suggestions-empty').hidden = false;
             $('queue-stats').hidden = true;
           }
@@ -221,6 +334,10 @@ function wireListClicks() {
 // ---- Load queue ------------------------------------------------------------
 
 async function loadQueue() {
+  // v1.6.12 item 1 — clear any stale empty/error card before fetching so a
+  // prior failed attempt's error card can't linger past a later success.
+  $('suggestions-empty').hidden = true;
+  $('suggestions-error').hidden = true;
   try {
     const q = query(collection(db, 'suggestions'), orderBy('submittedAt', 'desc'));
     const snaps = await getDocs(q);

@@ -11,6 +11,24 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-02 -->
+## v1.6.12 — PATCH (2026-06-02)
+
+**Three admin Suggestions Queue fixes from Blake's v1.6.11 prod smoke, plus a docs-only note for a future feature.** All changes are admin-only (`/admin/suggestions`) — nothing visitor-facing changed.
+
+- **Error card now clears on a successful load.** The "Couldn't load" error card could linger past a later successful fetch — Blake's screenshot showed a loaded queue, the empty-state card, and the error card all visible at once. `loadQueue()` now hides both the empty and error cards before each fetch, so a stale error from a prior failed attempt can't survive a success.
+- **Delete confirmation is now a custom branded modal** instead of the browser-native `confirm()` dialog. Centered overlay with a `rgba(0,0,0,0.55)` + blur backdrop; a layered-gradient card matching the `.admin-shell` vocabulary (border-image hairline, glow, 18px radius); 🗑️ glyph + `DELETE SUGGESTION 削除` kicker + dynamic *"Delete suggestion '<title>'?"* body; Cancel (default focus) and Delete (`.danger` red) buttons. Click-backdrop and Escape both cancel, focus is trapped between the two buttons while open, and the 220ms fade+scale entrance is disabled under `prefers-reduced-motion`. Built as a reusable `confirmModal(title) → Promise<boolean>` so the existing delete logic stayed intact (`if (!await confirmModal(...)) return;`).
+- **Mark Reviewed now moves the row to a separate `REVIEWED 承認済` section** below the new submissions, instead of dimming it in place. The queue is split into two stacked sections (`NEW 新着` / `REVIEWED 承認済`), each with its own header + live count; marking a row reviewed slides it (320ms cross-slide) out of NEW and into REVIEWED. Empty sections hide their header. The top `X NEW · Y REVIEWED` stats counter stays, and each section header now also shows its own count.
+
+**Docs (no code):** a DM-style inbox between admin and visitors — so Blake can reply directly to whoever submitted a suggestion and tell them if he liked it — is now noted in `docs/NEXT.md` (v1.8.x, pairs with the planned notification/comment overhaul) and `ROADMAP.md` Big-vision ideas. Both flag the auth prerequisite: capturing a stable visitor identity at suggestion-submission time (schema change on `suggestions` docs).
+
+**Implementation files:**
+
+- `admin/suggestions.js` (+~95 lines) — 2-line stale-card clear at the top of `loadQueue()`; `confirmModal()` Promise helper (focus trap + backdrop/Escape cancel + double-rAF entrance); `moveToReviewed()` cross-slide helper; `renderQueue()` splits docs by `status === 'reviewed'` into two lists; `updateStats()` reworked to count both lists, drive per-section header counts, and toggle section visibility; click delegation moved to the `#suggestions-queue` wrapper.
+- `admin/suggestions.html` (+~25 lines) — two `<section>` blocks (`#section-new` / `#section-reviewed`) replacing the single `<ul>`; `#confirm-modal` overlay placed outside `.admin-shell` (its `backdrop-filter` would otherwise become the containing block for the fixed overlay and clip it via `overflow:hidden`).
+- `admin/suggestions.css` (+~190 lines) — section headers (kicker + count, fade-up entrance), 320ms cross-slide for the reviewed move, full modal styling, `[hidden]` symmetry on the new `display:flex` containers, and a `prefers-reduced-motion` pass over every new transition/animation. Dropped the old `.suggestion-row.reviewed { opacity: 0.5 }` dim — the section header now carries the "reviewed" meaning, so reviewed rows render at full opacity.
+- `docs/NEXT.md` + `ROADMAP.md` — DM-inbox future-feature entries (docs-only).
+
+<!-- author: Code | date: 2026-06-02 -->
 ## v1.6.11 — MINOR (2026-06-02)
 
 **Visitors can now recommend an anime for Blake to review.** A new Suggestion Box page (`/suggest`) lets anyone — no sign-in required — type an anime title, pick the exact one they meant from a live search-as-you-type dropdown (covers + format pill + year), and send it to the admin queue. A banner CTA at the bottom of the homepage anime grid links visitors over: *"Missing something? — Tell Blake what to review next →"*. On the admin side, a new Suggestions Queue at `/admin/suggestions` shows submissions newest-first with the visitor's chosen cover + title + reason, and an "Add this anime" button hands the existing Mode 1 form the full search data so admin skips the typing + Fetch step entirely.

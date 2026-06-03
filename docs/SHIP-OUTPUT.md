@@ -1,136 +1,201 @@
 <!-- author: Code | date: 2026-06-02 -->
-# v1.6.11 — Gate 6 (audits — DONE ✓ with 1 SURFACE, FAST-TRACK)
+# v1.6.12 — Gate 0 (recon + 4-item propose — PROPOSED, PROPOSE-FIRST)
 
-> Sub-step 1 PASS (Playwright 7/7). Sub-step 2 PASS (firebase.json ↔ .gitignore mirror is correctly asymmetric per project rule #8; all 6 gate-6 §19-24 specific checks pass). Sub-step 3 STRUCTURALLY PASS + **7 unexpected modifications outside Code's v1.6.11 build gates surfaced** — 6 modified docs files + 1 new docs file that appear Cowork-managed. **Not blocking** but recommending Cowork confirms intent before gate 7 commit.
+> Recon complete on all 4 SHIP-PROMPT items. Item 1 (error card) bug confirmed exactly as Blake described — `renderQueue()` success path never clears `#suggestions-error`; 2-line fix. Item 2 (branded modal) is net-new — no overlay modal exists in `admin/` yet; promise-based `confirmModal()` with a clean one-line call-site swap. Item 3 (reviewed section) — two stacked sections + DOM-move; `loadQueue`/`renderQueue` and `.reviewed` styling have NOT drifted from the gate-3d shape. Item 4 (DM inbox) — docs-only homes proposed in NEXT.md (v1.8.x slot) + ROADMAP.md (Big-vision ideas). **Nothing applied** — awaiting Blake's answers to the 5 open questions + go-signal.
 
----
-
-## Sub-step 1 — `npm test` (Playwright) → ✓ PASS
-
-```
-  7 passed (19.4s)
-```
-
-7/7 green. Rule #7 satisfied — prod-facing commit can proceed.
+A note before the items: the memory `[[feedback-no-native-dialogs]]` referenced in the SHIP-PROMPT isn't on disk yet (`memory/MEMORY.md` doesn't exist). Not blocking — Item 2 implements exactly that guidance — but flagging that the memory file wasn't actually saved.
 
 ---
 
-## Sub-step 2 — `firebase.json` ↔ `.gitignore` mirror audit → ✓ PASS
+## Item 1 — Error card hides on successful load
 
-### firebase.json `hosting.ignore` array (14 entries)
+### Recon findings
+Confirmed the bug exactly as Blake described. The structure matches the gate-3d-apply shape:
 
-```json
-"ignore": [
-  "firebase.json",         // bootstrap
-  "**/.*",                 // bootstrap (hidden files)
-  "**/node_modules/**",    // bootstrap
-  "PERSONAL.md",           // sensitive — also in .gitignore ✓
-  "UpdateLog/**",          // committed but don't-deploy (intentional asymmetric)
-  "AUDIT_*.md",            // sensitive — also in .gitignore ✓
-  "docs/SHIP-*.md",        // committed rolling docs, don't-deploy ✓
-  "docs/HANDOFF.md",       // committed rolling doc, don't-deploy ✓
-  "tests/**",              // committed test infra, don't-deploy ✓
-  "playwright.config.js",  // committed test infra, don't-deploy ✓
-  "package.json",          // committed tooling, don't-deploy ✓
-  "package-lock.json",     // committed tooling, don't-deploy ✓
-  "playwright-report/**",  // .gitignored + don't-deploy ✓
-  "test-results/**"        // .gitignored + don't-deploy ✓
-]
+- `loadQueue()` (suggestions.js:223) does **not** hide `#suggestions-error` before fetching. It only touches the error card inside its `catch` branch.
+- `renderQueue()` (suggestions.js:131) on the **success** path hides `#suggestions-empty` (line 139) and toggles `#queue-stats` — but **never touches `#suggestions-error`**. So a stale error card from a prior failed attempt survives a later successful load. That's the "all three cards visible at once" screenshot.
+- The catch branch (lines 230–233) already hides empty + stats and shows error — that half is correct.
+
+### Proposed fix
+Add 2 lines at the very start of `loadQueue()`, before the `try`/fetch:
+
+```js
+async function loadQueue() {
+  $('suggestions-empty').hidden = true;   // clear any stale empty card
+  $('suggestions-error').hidden = true;   // clear any stale error card  <- the actual fix
+  try {
+    const q = query(...);
+    ...
 ```
 
-### Asymmetry is intentional per project rule #8
+`renderSkeleton()` already runs once in the auth callback (line 246), not per-load, so a reload-retry won't reshow skeletons — acceptable, and out of scope. The 2-line hide is the minimal correct fix.
 
-The two lists serve different purposes — sensitive secrets must be in BOTH; build/tooling artifacts that should be committed for the repo but not uploaded to the CDN go in `firebase.json` ignore ONLY. The 14 entries break down:
-
-- **Both `.gitignore` AND `firebase.json` ignore** (sensitive — must never leak): `PERSONAL.md`, `AUDIT_*.md`, `node_modules`, `playwright-report/`, `test-results/`, `.env`, `.firebase/` (the last 3 covered by `**/.*` in firebase + explicit in .gitignore). ✓
-- **`firebase.json` ignore ONLY** (committed to repo, don't deploy): `UpdateLog/**`, `docs/SHIP-*.md`, `docs/HANDOFF.md`, `tests/**`, `playwright.config.js`, `package.json`, `package-lock.json`. ✓ All deliberate per the existing project pattern.
-
-### Gate-6 §19-24 specific checks
-
-| Check | Status |
-|---|---|
-| `firestore.rules` NOT in firebase ignore (deploys via `--only firestore:rules`) | ✓ not in the ignore array |
-| `firestore.indexes.json` NOT in firebase ignore | ✓ not in the ignore array |
-| `docs/SHIP-*.md` IN firebase ignore | ✓ entry 7 |
-| `docs/HANDOFF.md` IN firebase ignore | ✓ entry 8 |
-| `tests/**`, `playwright.config.js`, `package.json`, `package-lock.json`, `playwright-report/`, `test-results/` all firebase-ignored | ✓ entries 9-14 |
-
-All 6 checks pass. No mirror drift.
+### Line-count delta
+**+2 lines** in `suggestions.js`. No CSS/HTML.
 
 ---
 
-## Sub-step 3 — `git diff` review → ✓ STRUCTURALLY PASS + 7 surfaces
+## Item 2 — Custom branded delete-confirmation modal
 
-### `git diff --stat HEAD` summary
+### Recon findings
+- **No reusable overlay modal exists anywhere in `admin/`.** The "confirm" hits in `new-anime.js` are inline `#deploy-confirm-row` rows, not overlays. This is a net-new component.
+- The `.danger` red-gradient button style already exists at suggestions.css:301 and can be reused directly.
+- The delete call site is suggestions.js:189: `if (!confirm(...)) return;` — a clean single-line swap point.
+- Brand vocabulary to mirror: `.admin-shell` layered gradient + border-image hairline + glow (suggestions.css:17–32), 18px radius, kicker pattern (`COULDN'T LOAD 接続`, etc.).
 
+### Proposed implementation
+**HTML** (`suggestions.html`) — one static overlay block before the closing `</main>`, `hidden` by default:
+
+```html
+<div id="confirm-modal" class="confirm-overlay" hidden>
+  <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="confirm-glyph" aria-hidden="true">🗑️</div>
+    <div class="confirm-kicker">DELETE SUGGESTION <span class="jp-mini">削除</span></div>
+    <p class="confirm-body" id="confirm-title"><!-- filled dynamically --></p>
+    <div class="confirm-actions">
+      <button type="button" class="secondary" data-confirm="cancel">Cancel</button>
+      <button type="button" class="danger" data-confirm="ok">Delete</button>
+    </div>
+  </div>
+</div>
 ```
- 20 files changed, 590 insertions(+), 201 deletions(-)
+
+**JS** (`suggestions.js`) — promise-based helper, plus a one-line call-site swap:
+
+```js
+function confirmModal(title) {
+  return new Promise((resolve) => {
+    const overlay = $('confirm-modal');
+    $('confirm-title').textContent = `Delete suggestion "${title}"?`;
+    overlay.hidden = false;
+    const cancelBtn = overlay.querySelector('[data-confirm="cancel"]');
+    cancelBtn.focus();                       // default focus on safe option
+
+    const close = (val) => {
+      overlay.hidden = true;
+      overlay.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey);
+      resolve(val);
+    };
+    const onClick = (e) => {
+      if (e.target === overlay) return close(false);          // backdrop = cancel
+      const b = e.target.closest('[data-confirm]');
+      if (b) close(b.dataset.confirm === 'ok');
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close(false);
+      if (e.key === 'Tab') { /* focus trap between the two buttons */ }
+    };
+    overlay.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey);
+  });
+}
 ```
 
-### EXPECTED modifications (13 files — direct v1.6.11 work):
+Call site change (line 189):
+```js
+if (!await confirmModal(title)) return;   // was: if (!confirm(`Delete suggestion: "${title}"?`)) return;
+```
+The handler is already `async`, so `await` works with no other change. Delete logic below it stays intact.
 
-| File | Maps to gate |
-|---|---|
-| `CHANGELOG.md` | gate 5 |
-| `ROADMAP.md` | gate 5 |
-| `account.html` | gate 5 (bump-version) |
-| `admin-fab.js` | gate 3d-apply (Suggestion Queue menu entry) |
-| `admin/new-anime.html` | gate 5 (bump-version) |
-| `admin/new-anime.js` | gate 2b + 3e (suggest/anilistId URL param handler) |
-| `docs/HANDOFF.md` | rolling (Cowork) |
-| `docs/NEXT.md` | gate 5 |
-| `docs/SHIP-OUTPUT.md` | rolling (Code per gate) |
-| `docs/SHIP-PROMPT.md` | rolling (Cowork per gate) |
-| `firebase.json` | gate 1b (firestore block) |
-| `index.html` | gates 3c (CTA banner) + 3d (admin-fab) + 5 (bump + widget bullet) |
-| `scripts/bump-version.js` | gates 1b + 2b (TARGETS additions) + 5b (4 more TARGETS) |
-| `style.css` | gates 3c (banner CSS) + 3d (arrow upsize) |
+**CSS** (`suggestions.css`) — `.confirm-overlay` (fixed, `rgba(0,0,0,0.55)` + `backdrop-filter: blur(8px)`, flex-center, 220ms fade), `.confirm-card` (reuse `.admin-shell` gradient/border-image/glow/18px radius, 220ms `opacity 0→1` + `scale .96→1`), glyph/kicker/body/actions. Buttons reuse existing `.actions button` / `.danger` / `.secondary`. One `@media (prefers-reduced-motion: reduce)` block zeroing the transitions/animations.
 
-### EXPECTED new (untracked) files — 8 files per gate-6 §39:
-
-`firestore.rules`, `firestore.indexes.json` (gate 1b); `suggest.html`, `suggest.js`, `suggest.css` (gate 1b); `admin/suggestions.html`, `admin/suggestions.js`, `admin/suggestions.css` (gate 2b). ✓ All 8 accounted for.
-
-### 🟡 SURFACE — 7 unexpected files outside Code's v1.6.11 build gates
-
-These appear in the working tree but were NOT touched by any gate Code executed during this ship:
-
-**Modified (6):**
-
-| File | Diff size | Note |
-|---|---|---|
-| `docs/AI-PRIMER.md` | +22 / -? lines | Not edited by any v1.6.11 Code gate |
-| `docs/CODE-PROMPTS.md` | +2 / -1 lines | Not edited by any v1.6.11 Code gate |
-| `docs/SKILLS/README.md` | +8 / -? lines | Not edited by any v1.6.11 Code gate |
-| `docs/SKILLS/hotfix-skill.md` | +4 / -? lines | Not edited by any v1.6.11 Code gate |
-| `docs/SKILLS/release-skill.md` | +35 / -? lines | Not edited by any v1.6.11 Code gate (largest of the surface set) |
-| `docs/SKILLS/widget-update-skill.md` | +2 / -? lines | Not edited by any v1.6.11 Code gate |
-
-**New untracked (1):**
-
-| File | Note |
-|---|---|
-| `docs/COWORK-STYLE.md` | New file, not created by any Code gate |
-
-These look like Cowork-managed doc improvements made out-of-band between gates (consistent with the rolling docs pattern). **Not blocking v1.6.11 ship** — they're docs-only, no code impact. But per gate-6 §41 ("If you see anything else untracked or unexpected, surface it"), flagging for Cowork's confirmation before gate-7 stages them.
-
-**Two paths forward:**
-1. **Ship as-is** — if these are Cowork-intentional doc improvements that should ride with the v1.6.11 commit, just proceed to gate 7 with `git add -A`.
-2. **Selective stage** — if any of these should NOT ship with v1.6.11, gate 7 stages explicit files instead of `-A`.
-
-Recommend path 1 (ship all together) unless Cowork knows of a reason to exclude.
+### Line-count delta
+~**+11** HTML, ~**+30** JS, ~**+55** CSS. ≈ **+96 total**.
 
 ---
 
-## Stop-condition audit (gate 6 §4 "don't half-state")
+## Item 3 — Reviewed rows move to a separate section
 
-| Stop | Status |
+### Recon findings
+- Currently a single `<ul id="suggestions-list">` (suggestions.html:50).
+- `.suggestion-row.reviewed` is `opacity: 0.5` (hover 0.75) at suggestions.css:121–126 — the in-place dim Blake wants replaced.
+- Five spots reference the single list and need updating: `renderSkeleton()` (62), `updateStats()` (68), `renderQueue()` (132–141), the reviewed-click handler (165–186), and the delete cleanup (198–201).
+- `updateStats()` (suggestions.js:67) already computes `newCount`/`reviewedCount` by scanning `.reviewed` — that logic ports cleanly to a two-list model (count `.children` of each).
+
+### Proposed implementation — vertical stacked sections
+**HTML** — replace the single `<ul>` with two labelled sections:
+
+```html
+<section id="section-new" class="queue-section">
+  <div class="section-header"><span class="section-kicker">NEW <span class="jp-mini">新着</span></span></div>
+  <ul id="suggestions-list-new" class="suggestions-list"></ul>
+</section>
+<section id="section-reviewed" class="queue-section" hidden>
+  <div class="section-header"><span class="section-kicker">REVIEWED <span class="jp-mini">承認済</span></span></div>
+  <ul id="suggestions-list-reviewed" class="suggestions-list"></ul>
+</section>
+```
+
+**JS**:
+- `renderQueue()` splits `snaps.docs` into new vs `status === 'reviewed'`, renders each into its list, and shows/hides each `<section>` based on whether it has rows.
+- Reviewed-click handler: after the `updateDoc` succeeds, **move the `<li>` DOM node** from `#suggestions-list-new` to `#suggestions-list-reviewed` (a ~320ms slide transition), then reveal `#section-reviewed` if it was hidden and re-hide `#section-new` if it emptied.
+- `renderSkeleton()` targets `#suggestions-list-new` only.
+- `updateStats()` reads `.children.length` of each list instead of scanning `.reviewed`.
+- Delete cleanup: empty-card check becomes "both lists empty."
+
+### Line-count delta
+~**+10** HTML, ~**+35** JS (split/move logic), ~**+30** CSS (section headers reusing kicker pattern + slide transition). ≈ **+75 total**. The old `.reviewed { opacity }` rule is repurposed per open-question #3.
+
+### Stop-condition check
+`loadQueue`/`renderQueue` match the gate-3d-apply shape — no structural drift. `.suggestion-row.reviewed` styling has **not** drifted (still the simple opacity rule). No surprises.
+
+---
+
+## Item 4 — Document DM-style inbox feature (docs-only)
+
+### Recon findings — proposed homes
+- **NEXT.md:** No literal "v1.8.x" header exists, but NEXT.md:50 is the `v1.8.0 — AniList tab` line — the v1.8.x neighborhood. **Recommend** inserting the DM-inbox entry as a new `v1.8.x` bullet immediately after line 50, since it explicitly "pairs with the planned notification/comment overhaul" and is admin+visitor UI work in that era. (Alternative: the "Big-vision ideas" block at lines 92–99 — but that loses the version anchor, so I prefer the v1.8.x slot.)
+- **ROADMAP.md:** Phase C is shipped (verification scaffolding). The closest existing home is **Big-vision ideas → "Admin mode UI"** (ROADMAP.md:322), which already covers admin moderation surfaces. **Recommend** a one-line bullet appended to the Big-vision ideas section right after Admin mode UI.
+
+### Proposed text
+**NEXT.md** (new bullet after line 50):
+> **v1.8.x — Suggestion DM Inbox.** Admin can respond directly to whoever submitted a suggestion + tell them if Blake liked it. Pairs with the planned notification/comment overhaul. Visitor side gets an Inbox UI; admin side gets a per-suggestion reply thread. **Auth prerequisite:** visitors need a stable identity (email or anon Firebase Auth UID) captured at suggestion-submission time — requires a schema change on `suggestions` docs. Estimated v1.8.x or later.
+
+**ROADMAP.md** (one-liner in Big-vision ideas):
+> **Suggestion DM inbox.** Admin replies directly to suggestion submitters (DM-style), gated on capturing a stable submitter identity. Pairs with the notification/comment overhaul.
+
+Both lines get the `<!-- author: Code | date: 2026-06-02 -->` marker per project rule #2.
+
+### Line-count delta
+~**+2** NEXT.md, ~**+2** ROADMAP.md. Docs-only — no test required (project rule #7 exception).
+
+---
+
+## Answers to the 5 open questions for Blake
+
+| # | Question | Recommendation | Why |
+|---|----------|----------------|-----|
+| 1 | Delete glyph: ⚠️ or 🗑️? | **🗑️** | The error card already owns ⚠️ (suggestions.html:59). Using 🗑️ keeps the delete-confirm visually distinct from the error state and literally names the action. |
+| 2 | Kicker text | **Keep `DELETE SUGGESTION 削除`** | 削除 = "deletion" — accurate, and matches the existing kicker pattern (`QUEUE EMPTY 空`, `COULDN'T LOAD 接続`). |
+| 3 | Reviewed-section opacity | **Full opacity** (drop the 0.5 dim) | Once rows live under their own "REVIEWED 承認済" header, the header carries the meaning. A half-faded section just hurts readability. Repurpose the old `.reviewed` rule rather than delete it. |
+| 4 | Move animation | **320ms slide** | Matches the existing motion vocabulary — the delete-collapse already uses `max-height 320ms` (suggestions.css:98). Reduced-motion = instant move. |
+| 5 | Stats counter location | **Keep at top**, add a small count to each section header | The top `X NEW · Y REVIEWED` is the glanceable summary; per-section counts in the headers add local clarity without removing the existing widget. Lowest-risk, both worlds. |
+
+---
+
+## Total estimated footprint (if all approved)
+- **JS:** ~+67 lines (`suggestions.js`)
+- **HTML:** ~+21 lines (`suggestions.html`)
+- **CSS:** ~+85 lines (`suggestions.css`)
+- **Docs:** ~+4 lines (NEXT.md + ROADMAP.md)
+- Plus version-bump strings (1.6.11 → 1.6.12) across `suggestions.html`, the two main HTML files, CHANGELOG, ROADMAP per the version-bump checklist.
+
+---
+
+## Stop-condition audit
+
+| Stop condition (from SHIP-PROMPT) | Status |
 |---|---|
-| `npm test` fails | ✓ Not hit (7/7) |
-| Mirror drift | ✓ Not hit (all 6 specific checks pass; asymmetry is intentional per rule #8) |
-| `git diff` shows rogue change | 🟡 7 unexpected files surfaced — not strictly "rogue" (look like Cowork doc work), but not from any Code gate. Reporting per §41 rather than blocking. |
+| If `loadQueue()` / `renderQueue()` are structured very differently than the gate-3d-apply shape, surface the current state | ✓ **No drift.** `loadQueue()` (suggestions.js:223) and `renderQueue()` (131) match the gate-3d-apply shape — catch-branch hides empty+stats+shows error; success path hides empty but is missing the error-hide. Exactly the documented bug, nothing more. |
+| If `.suggestion-row.reviewed` styling has drifted, surface the current rules | ✓ **No drift.** Still the simple `opacity: 0.5` (hover `0.75`) at suggestions.css:121–126. No additional reviewed-state rules have crept in. |
+| If `docs/NEXT.md` or `ROADMAP.md` don't have an obvious home for the DM feature, propose where it should land | 🟡 **No literal "v1.8.x" header exists** in NEXT.md — proposed landing after the `v1.8.0 — AniList tab` bullet (line 50) as a new v1.8.x entry; ROADMAP home proposed in Big-vision ideas after "Admin mode UI" (line 322). Surfaced + recommended, not silently placed. |
+| Anomalies outside gate scope | ✓ One flagged: the memory `[[feedback-no-native-dialogs]]` cited in the prompt isn't actually on disk (`memory/MEMORY.md` missing). Not blocking. No code anomalies found; nothing fixed unilaterally. |
+
+No stop conditions block the proposal. This is a clean gate-0 propose.
 
 ---
 
 ## One-liner reply
 
-Gate 6 done with all 3 sub-steps green: **(1)** `npm test` 7/7 (19.4s); **(2)** `firebase.json` ↔ `.gitignore` mirror correctly asymmetric per project rule #8 — sensitive files in BOTH (PERSONAL.md, AUDIT_*.md, .env, node_modules), committed-but-don't-deploy files in firebase-ignore ONLY (UpdateLog/, docs/SHIP-*.md, docs/HANDOFF.md, tests/, playwright.config.js, package.json, package-lock.json) — plus all 6 gate-6 §19-24 specific checks pass (firestore.rules + firestore.indexes.json correctly NOT firebase-ignored; SHIP-*.md + HANDOFF.md + tests/ + playwright config + package.json + package-lock.json + playwright-report/ + test-results/ correctly ARE firebase-ignored); **(3)** `git diff --stat HEAD` shows 20 modified + 9 untracked files totaling +590/-201 net, with the **13 expected modifications** (CHANGELOG, ROADMAP, account.html, admin-fab.js, admin/new-anime.html + .js, NEXT.md, firebase.json, index.html, scripts/bump-version.js, style.css, plus rolling HANDOFF/SHIP-OUTPUT/SHIP-PROMPT) and **8 expected new files** (firestore.rules, firestore.indexes.json, 3× suggest.*, 3× admin/suggestions.*) all mapping cleanly to v1.6.11 build gates, BUT **7 unexpected items surfaced** for Cowork's confirmation before gate 7 — 6 modified docs files (docs/AI-PRIMER.md, docs/CODE-PROMPTS.md, docs/SKILLS/README.md, docs/SKILLS/hotfix-skill.md, docs/SKILLS/release-skill.md +35 lines being the largest, docs/SKILLS/widget-update-skill.md) + 1 new docs file (docs/COWORK-STYLE.md) that appear Cowork-managed (likely out-of-band doc improvements between gates, consistent with the rolling-docs pattern) — **not blocking, no code impact**, recommend ship-as-is at gate 7 unless Cowork flags a reason to exclude; no real stop conditions hit; ready for gate 7 (commit + push) once Cowork confirms the 7 surfaces.
+Gate 0 recon done on all 4 v1.6.12 items, full proposal written to `docs/SHIP-OUTPUT.md`, nothing applied (PROPOSE-FIRST); **Item 1** error-card bug confirmed exactly as Blake's screenshot showed — `renderQueue()` success path (suggestions.js:131) never clears `#suggestions-error`, fix is +2 lines at the top of `loadQueue()`; **Item 2** branded delete modal is net-new (no overlay modal exists in `admin/` — the only "confirm" in new-anime.js is an inline deploy row), proposed as a promise-based `confirmModal(title)` reusing the existing `.admin-shell` gradient + `.danger` button, with a clean one-line swap of the `confirm()` call at suggestions.js:189 (~+96 lines HTML/JS/CSS); **Item 3** reviewed-row split proposed as two stacked `<section>`s (`#suggestions-list-new` + `#suggestions-list-reviewed`) with a 320ms DOM-move on Mark Reviewed (~+75 lines), and confirmed `loadQueue`/`renderQueue` + `.reviewed` styling have NOT drifted; **Item 4** DM-inbox documented (docs-only) with proposed homes in NEXT.md (new v1.8.x bullet after the AniList-tab line) + ROADMAP.md (Big-vision ideas near "Admin mode UI"); all 5 open questions answered with recommendations (🗑️ glyph to stay distinct from the ⚠️ error card; keep `DELETE SUGGESTION 削除` kicker; full opacity in the reviewed section since the header carries the meaning; 320ms slide to match the existing `max-height 320ms` motion vocabulary; keep the top stats counter + add per-section counts); no stop conditions hit; awaiting Blake's 5 answers + go before a gate-1-apply prompt.

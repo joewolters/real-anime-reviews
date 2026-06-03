@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Suggestions Queue — Real Anime Reviews</title>
-  <script>window.APP_VERSION="1.6.11"</script>
+  <script>window.APP_VERSION="1.6.12"</script>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Admin-only suggestion queue — not indexed." />
 
-  <link rel="stylesheet" href="../style.css?v=1.6.11" />
-  <link rel="stylesheet" href="../mobile.css?v=1.6.11" media="(max-width: 900px)" />
-  <link rel="stylesheet" href="suggestions.css?v=1.6.11" />
+  <link rel="stylesheet" href="../style.css?v=1.6.12" />
+  <link rel="stylesheet" href="../mobile.css?v=1.6.12" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=1.6.12" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
@@ -47,7 +47,22 @@
         <div class="suggestions-stats" id="queue-stats" hidden></div>
       </div>
 
-      <ul id="suggestions-list" class="suggestions-list"></ul>
+      <div id="suggestions-queue">
+        <section id="section-new" class="queue-section" hidden>
+          <div class="section-header">
+            <span class="section-kicker">NEW <span class="jp-mini">新着</span></span>
+            <span class="section-count" id="count-new"></span>
+          </div>
+          <ul id="suggestions-list-new" class="suggestions-list"></ul>
+        </section>
+        <section id="section-reviewed" class="queue-section" hidden>
+          <div class="section-header">
+            <span class="section-kicker">REVIEWED <span class="jp-mini">承認済</span></span>
+            <span class="section-count" id="count-reviewed"></span>
+          </div>
+          <ul id="suggestions-list-reviewed" class="suggestions-list"></ul>
+        </section>
+      </div>
 
       <div id="suggestions-empty" class="suggestions-empty-card" hidden>
         <div class="empty-glyph" aria-hidden="true">📭</div>
@@ -65,7 +80,22 @@
     </div>
   </main>
 
-  <script type="module" src="../firebase.js?v=1.6.11"></script>
-  <script type="module" src="suggestions.js?v=1.6.11"></script>
+  <!-- v1.6.12 item 2 — branded delete-confirmation modal. Lives OUTSIDE
+       .admin-shell: that shell has backdrop-filter, which would make a
+       position:fixed descendant relative to it and clip it via overflow:hidden. -->
+  <div id="confirm-modal" class="confirm-overlay" hidden>
+    <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="confirm-glyph" aria-hidden="true">🗑️</div>
+      <div class="confirm-kicker">DELETE SUGGESTION <span class="jp-mini">削除</span></div>
+      <p class="confirm-body" id="confirm-title"></p>
+      <div class="confirm-actions">
+        <button type="button" class="secondary" data-confirm="cancel">Cancel</button>
+        <button type="button" class="danger" data-confirm="ok">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="../firebase.js?v=1.6.12"></script>
+  <script type="module" src="suggestions.js?v=1.6.12"></script>
 </body>
 </html>
