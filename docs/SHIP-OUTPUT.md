@@ -1,39 +1,37 @@
 <!-- author: Code | date: 2026-06-03 -->
-# v1.7.1 — Gate 1h (3-line romaji wrap + Top 10 portrait expand — DONE ✓, APPLY)
+# v1.7.2 — Gate 6 (audits + widget tidy — FAST-TRACK, audits PASS ✓ / 1 decision)
 
-> Pure CSS. Romaji line-clamp 2 → 3 (covers grid cards + Latest Drop via the shared selector); Top 10 glass portrait bumped +24px to fit the 3rd line. `npm test` 7/7, no bump, no JS touched.
+> Widget tidy applied; full audit battery green (npm test 7/7, mirror clean, diff in-scope, smart-quotes clean). **One decision for Cowork/Blake before gate 7:** the audit's "confirm the rest of the widget bullets stay clean" step found a SECOND pre-existing `AniList` bullet the pre-step didn't cover — surfaced, NOT fixed (outside the greenlit single-bullet scope). Recommend a one-word reword.
 
----
+## Pre-step — widget bullet tidy ✓ (with a finding)
+- **Done:** the v1.7.0 bullet `"...the AniList community score right next to my rating..."` → `"...the community score right next to my rating..."` (index.html:182).
+- **⚠️ FINDING (per "confirm the rest stay clean"):** a **second** pre-existing service-name bullet remains — **index.html:198** (the 05/13 v1.6.8 bullet): *"New 'More Info' tab when you open an anime — see all its seasons, prequels, and sequels, each linking to its full **AniList** page."* This pre-dates this ship and was **not in the greenlit scope** (the prompt's pre-step + Blake's option-b were about the single v1.7.0 bullet). Per surface-don't-silently-fix, I did **not** reword it unilaterally.
+  - **Recommendation:** reword to *"...each linking to its full info page."* (one-phrase change, identical class to what Blake just greenlit). Awaiting Cowork/Blake's call — can fold into gate 7 or a follow-up tidy.
 
-## Item 1 — Card romaji 3-line wrap
-The romaji rule is a single shared selector (`.card .title-romaji, .featured-card .title-romaji`, merged at gate 1g), so one change covers **both** grid cards and the Latest Anime Drop card:
-```css
--webkit-line-clamp: 3;   /* was 2 */
-```
-`line-clamp` is a max, so short romaji (1-2 lines) is unaffected; only the long titles (Angel Next Door, Failure Frame, Project Sekai, Apocalypse Bringer Mynoghra) now use the 3rd line instead of truncating at 2. Modal romaji untouched (it has no clamp — plenty of vertical space).
+## Audit 1 — `npm test` (Playwright) ✓
+**7 passed (14.0s)** — full set, project rule #7 satisfied.
 
-## Item 2 — Top 10 glass portrait (exact values)
-```css
-.spotlight-stack         { height: 630px; }                      /* was 606px  (+24) */
-.spotlight-stack::before { height: clamp(632px, 68vw, 672px); }  /* was clamp(608px, 66vw, 648px)  (+24 / +2vw) */
-```
-+24px (~one text line at the romaji's ~0.82em·1.25) so the 3-line case fits comfortably. Same trade-off as gate 1f: subtitle-less cards just get a touch more glass margin (cards center in the frame).
+## Audit 2 — `.gitignore` ↔ `firebase.json` mirror ✓
+- **Rolling/sensitive docs are firebase-ignored** (confirmed in `firebase.json` ignore): `docs/SHIP-*.md`, `docs/HANDOFF.md`, `docs/CODE-HANDOFF.md`, `docs/COWORK-STYLE.md` — **none leak to the public CDN** despite being git-tracked (intended asymmetry: kept for git history, withheld from deploy).
+- `.gitignore` sensitive entries all mirrored or covered: `PERSONAL.md` ✓, `AUDIT_*.md` ✓, `.env*` / `.firebase/` / dotfiles → `**/.*` ✓, `node_modules` ✓, `playwright-report/` + `test-results/` ✓.
+- **No new gitignored file introduced this ship** → no new mirror gap (rule #8 holds).
+- *Pre-existing, out of scope (noted, not a secret leak):* non-sensitive `docs/` (NEXT/AI-PRIMER/CODE-PROMPTS/SKILLS) + `scripts/` are not firebase-ignored, so they deploy publicly — contain no credentials/UIDs/emails (NEXT.md is the public backlog). Unchanged by this ship; flagged for awareness only.
 
-## Item 3 — Other variants
-- **Grid cards** auto-size to content, so a 3rd romaji line grows the card height naturally; grid reflow unaffected (the clamp just allows more height, doesn't force it).
-- **Latest Drop** (`.featured-card`) also auto-sizes its flex-column container — the extra line grows it; no fixed height to bump there.
-- **Modal** — no clamp, no change.
+## Audit 3 — `git diff --stat` scope ✓
+- **Code/data (this ship):** `script.js` +624/-6, `style.css` +185, `index.html` +26 (version bump + widget bullets + tidy), `CHANGELOG.md` +23, `ROADMAP.md` +46, `docs/NEXT.md` +23. Version-bump-only: `account.html`, `admin/new-anime.html`, `admin/suggestions.html`, `suggest.html` (cache-busts/APP_VERSION from gate 5's 26-string bump).
+- **Scope note:** prompt estimated `script.js +~1000` / `style.css +~250`; actuals are **+624 / +185** (lower — the estimate was high, no missing work; full feature set is present and tested).
+- **Surprise-file check:** `git diff --name-only` filtered to non-`.md`/`.html`/`script.js`/`style.css` → **empty**. No unexpected files.
+- **Cowork-managed docs present in the diff (handled at gate 7):** the 6 tracked excludes (`docs/AI-PRIMER.md`, `docs/CODE-PROMPTS.md`, `docs/SKILLS/{README,hotfix-skill,release-skill,widget-update-skill}.md`) + untracked `docs/COWORK-STYLE.md` = the **7 to `git restore --staged`** at commit. The rolling trio (`SHIP-OUTPUT`/`SHIP-PROMPT`/`HANDOFF`) + `CODE-HANDOFF` are committed (firebase-ignored). These are Cowork's edits between gates, not mine.
 
-## Verify
-- `grep -webkit-line-clamp: 3` → **1 hit** (the romaji rule)
-- `grep -webkit-line-clamp: 2` → 2 hits, **both non-romaji** (a "compact rows (2 lines max)" block at :3328 and `.activity-desc` at :3983) — so **0 in romaji context** ✓
-- Portrait heights: `.spotlight-stack` 630px + `::before` `clamp(632px, 68vw, 672px)` present
-- `bump-version.js --check` → all 26 agree on **v1.7.0** (no bump)
-- `npm test` → **7 passed (11.6s)**
-- No JS touched (pure CSS) → no `node --check` needed
+## Audit 4 — Smart-quote sweep ✓
+- **index.html: 0 curly quotes** (Grep-tool, post-tidy).
+- **script.js / style.css:** curly characters present are content glyphs (`…`, `✓`, `—`, `「」`) and pre-existing comment prose — **none in HTML attributes or CSS selectors**. The deploy-critical concern (curly quotes in attributes) is clean across all touched files.
 
-## Note on "confirm 3-line wrap"
-The CSS now *permits* up to 3 lines (`-webkit-line-clamp: 3`) and the portrait was sized for the 3-line height — but whether Angel Next Door / Failure Frame actually render on the 3rd line vs. still fitting in 2 is a render-time/viewport judgment that's Blake's smoke to confirm. The mechanism is in place; nothing caps them at 2 anymore.
+## Summary
+**Audits all green.** One open decision: the second pre-existing `AniList` widget bullet (index.html:198) — recommend rewording before gate 7, but it's outside the explicitly greenlit scope so I'm surfacing rather than fixing. If Cowork/Blake says go, it's a one-line edit and I'll re-verify (no test impact — widget bullet text). Otherwise the ship is **ready for gate 7 (commit + push)**, with the standard 7 Cowork docs to be restore-staged out.
+
+## Phantom-drift audit
+No phantoms. Prompt's `script.js +~1000` / `+~250` estimates ran high vs the +624/+185 actuals (flagged, not a gap). The "18 targets" drift from gate 5 is already on record (actual 26).
 
 ## One-liner reply
-v1.7.1 gate-1h done (APPLY, pure CSS): bumped the card romaji `-webkit-line-clamp` from 2 → 3 on the shared `.card .title-romaji, .featured-card .title-romaji` rule so the longest romaji titles (Angel Next Door, Failure Frame, Project Sekai, Apocalypse Bringer Mynoghra) get a 3rd line instead of truncating — covers both grid cards and the Latest Drop card in one change, and short titles are unaffected since clamp is a max; expanded the Top 10 glass portrait by +24px to fit it — `.spotlight-stack` 606px → **630px** and `::before` `clamp(608px,66vw,648px)` → **`clamp(632px,68vw,672px)`** (same center-in-frame trade-off as gate 1f); grid + Latest-Drop containers auto-size so they grow naturally, modal has no clamp so it's untouched; verified — `line-clamp: 3` present (1), the only remaining `line-clamp: 2` are non-romaji (`.activity-desc` + a compact-rows block), 26 strings still agree on v1.7.0, `npm test` 7/7, no JS touched; the 3-line mechanism is in place — actual render on the 3rd line is Blake's smoke to confirm; if clean, v1.7.1 build is DONE → gate 5 docs cascade.
+v1.7.2 Gate 6 audits all green — `npm test` **7/7**, `.gitignore`↔`firebase.json` mirror clean (rolling/sensitive Code+Cowork docs firebase-ignored, no new gitignored file this ship, no leak), `git diff` in-scope (script.js +624 / style.css +185 — both under the prompt's high estimates; no surprise files; the 7 Cowork docs present and to be restore-staged at gate 7), smart-quotes clean (index.html 0 curly, JS/CSS curlies only content glyphs/comments — none in attributes); the v1.7.0 widget bullet was tidied to drop "AniList" BUT the "confirm the rest stay clean" step surfaced a SECOND pre-existing service-name bullet (index.html:198, the 05/13 v1.6.8 "its full AniList page") that's outside the greenlit single-bullet scope — flagged + recommended a one-word reword, NOT fixed unilaterally; ship is ready for gate 7 pending that one decision.

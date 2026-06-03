@@ -431,6 +431,48 @@ query ($id: Int) {
   }
 }`;
 
+  // v1.7.2 — Per-node query for the multi-fetch traversal (fetchMediaById).
+  // Returns the node's own display fields + streamingEpisodes + ONE level of
+  // relation edges. Relation-edge nodes carry FULL display fields (same shape
+  // as MORE_INFO_QUERY_BY_ID's relations block — proven complexity-safe, it is
+  // the live query) so non-spine grouped neighbours render at Gate 2 with zero
+  // extra fetches. Deliberately does NOT nest relations-within-relations (that
+  // is the mega-query that 500s on Demon Slayer — gotcha 12); multi-hop depth
+  // comes from re-fetching each spine node by id, not from query nesting.
+  const MORE_INFO_QUERY_NODE = `
+query ($id: Int) {
+  Media(id: $id, type: ANIME) {
+    id
+    title { romaji english }
+    format
+    episodes
+    seasonYear
+    type
+    status
+    studios { nodes { name isAnimationStudio } }
+    averageScore
+    coverImage { large }
+    streamingEpisodes { title }
+    relations {
+      edges {
+        relationType
+        node {
+          id
+          title { romaji english }
+          format
+          episodes
+          seasonYear
+          type
+          status
+          studios { nodes { name isAnimationStudio } }
+          averageScore
+          coverImage { large }
+        }
+      }
+    }
+  }
+}`;
+
   // v1.6.8 — Build a relations-edge-shaped node from a local animeData entry.
   // Many AniList fields are unavailable from local catalog data (romaji, year,
   // episodes, format); renderer omits these gracefully. v1.7.0 backfill will
@@ -508,6 +550,221 @@ query ($id: Int) {
     return result;
   }
 
+  // ──────────────────────────────────────────────────────────────────────
+  // v1.7.2 — MULTI-FETCH DATA LAYER (Gate 1)
+  // Parallel batched per-node fetches -> BFS multi-hop spine traversal ->
+  // { spine, groups, episodesBySeason, failedCount }. Wired as a SIBLING of
+  // the legacy fetchRelationsFromAniList path; NOT yet consumed by render
+  // (Gate 2 swaps renderMoreInfoPanel onto this). The legacy 1-hop path stays
+  // fully intact so the live modal is unaffected during the gate1->gate2 gap.
+  // ──────────────────────────────────────────────────────────────────────
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, Math.max(0, ms | 0)));
+  }
+
+  // Single Media(id:) fetch via MORE_INFO_QUERY_NODE. Honors a 429 with ONE
+  // retry that respects the Retry-After header (seconds; falls back to 1000ms).
+  // Returns { node, relationEdges, streamingEpisodes } or null on any failure.
+  async function fetchMediaById(id, _retried) {
+    if (!id) return null;
+    try {
+      const res = await fetch(ANILIST_ENDPOINT_PUBLIC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ query: MORE_INFO_QUERY_NODE, variables: { id } }),
+      });
+      if (res.status === 429 && !_retried) {
+        const raHeader = parseInt(res.headers.get('Retry-After') || '', 10);
+        const waitMs = Number.isFinite(raHeader) ? raHeader * 1000 : 1000;
+        await sleep(waitMs);
+        return fetchMediaById(id, true);
+      }
+      if (!res.ok) return null;
+      const body = await res.json();
+      if (body.errors?.length) return null;
+      const media = body.data?.Media;
+      if (!media || !media.id) return null;
+      return {
+        node: {
+          id: media.id,
+          title: media.title || { romaji: null, english: null },
+          format: media.format || null,
+          episodes: media.episodes || null,
+          seasonYear: media.seasonYear || null,
+          type: media.type || null,
+          status: media.status || null,
+          studios: media.studios || { nodes: [] },
+          averageScore: media.averageScore || null,
+          coverImage: media.coverImage || { large: '' },
+        },
+        relationEdges: media.relations?.edges || [],
+        streamingEpisodes: media.streamingEpisodes || [],
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Fetch many ids in chunks of <=4 via Promise.all, 250ms between chunks to
+  // stay under AniList's rate budget (locked decision #1). Returns an array
+  // index-aligned to `ids` (null where that id's fetch failed).
+  async function fetchBatch(ids) {
+    const out = [];
+    for (let i = 0; i < ids.length; i += 4) {
+      const chunk = ids.slice(i, i + 4);
+      const settled = await Promise.all(chunk.map(id => fetchMediaById(id)));
+      for (const r of settled) out.push(r);
+      if (i + 4 < ids.length) await sleep(250);
+    }
+    return out;
+  }
+
+  // v1.7.2 — Spine relation types we recurse through; every other ANIME relation
+  // is collected one hop out and grouped (no recursion). Caps past the seen-set:
+  // 30 nodes / 10 hops (belt-and-suspenders — the seen-set is the real cycle
+  // guard; caps only fire on pathological graphs).
+  const SPINE_RELATIONS = ['PREQUEL', 'PARENT', 'SEQUEL'];
+  const TRAVERSE_NODE_CAP = 30;
+  const TRAVERSE_DEPTH_CAP = 10;
+
+  // BFS the franchise from startId. Recurses spine edges (PREQUEL/PARENT/SEQUEL,
+  // TYPE=ANIME); collects non-spine ANIME neighbours one hop out into `groups`
+  // keyed by relationType (display taken straight from the edge node — no extra
+  // fetch). Aggregates each spine season's streamingEpisodes. Returns:
+  //   { spine:            [ { ...displayNode, isSource } ]  (year-sorted),
+  //     groups:           { RELATION_TYPE: [ { ...displayNode, relationType } ] },
+  //     episodesBySeason: [ { id, title, seasonYear, episodes:[{title}] } ],
+  //     failedCount:      int (sub-fetches that returned null) }
+  async function traverseFranchise(startId) {
+    const empty = { spine: [], groups: {}, episodesBySeason: [], failedCount: 0 };
+    if (!startId) return empty;
+
+    const seen = new Set([startId]);   // every id ever spine-enqueued (cycle guard)
+    const grouped = new Set();         // ids already placed in a group (dedupe)
+    const spineNodesById = new Map();  // id -> display node
+    const groups = {};
+    const episodesBySeason = [];
+    let failedCount = 0;
+    let depth = 0;
+    let frontier = [startId];
+
+    while (frontier.length && depth < TRAVERSE_DEPTH_CAP && spineNodesById.size < TRAVERSE_NODE_CAP) {
+      // never fetch more than the remaining node-cap room this hop
+      const room = TRAVERSE_NODE_CAP - spineNodesById.size;
+      const batchIds = frontier.slice(0, room);
+      const results = await fetchBatch(batchIds);
+      const nextFrontier = [];
+
+      results.forEach((r, i) => {
+        const id = batchIds[i];
+        if (!r || !r.node) { failedCount++; return; }
+        spineNodesById.set(id, r.node);
+
+        if (r.streamingEpisodes && r.streamingEpisodes.length) {
+          episodesBySeason.push({
+            id,
+            title: (r.node.title && (r.node.title.english || r.node.title.romaji)) || '',
+            seasonYear: r.node.seasonYear || null,
+            episodes: r.streamingEpisodes,
+          });
+        }
+
+        for (const edge of (r.relationEdges || [])) {
+          const n = edge && edge.node;
+          if (!n || n.type !== 'ANIME' || !n.id) continue;
+          if (SPINE_RELATIONS.includes(edge.relationType)) {
+            if (!seen.has(n.id)) { seen.add(n.id); nextFrontier.push(n.id); }
+          } else if (!grouped.has(n.id) && !seen.has(n.id)) {
+            grouped.add(n.id);
+            (groups[edge.relationType] = groups[edge.relationType] || [])
+              .push({ ...n, relationType: edge.relationType });
+          }
+        }
+      });
+
+      frontier = nextFrontier;
+      depth++;
+    }
+
+    const spine = Array.from(spineNodesById.entries())
+      .map(([id, node]) => ({ ...node, isSource: id === startId }))
+      .sort((a, b) => (a.seasonYear || 0) - (b.seasonYear || 0) || (a.id - b.id));
+    episodesBySeason.sort((a, b) => (a.seasonYear || 0) - (b.seasonYear || 0) || (a.id - b.id));
+
+    return { spine, groups, episodesBySeason, failedCount };
+  }
+
+  // ── L2 localStorage cache (24h TTL, APP_VERSION-keyed, prefix-swept) ──
+  // L1 is a dedicated in-memory Map (NOT the legacy moreInfoCache, whose value
+  // shape differs — keeping them separate avoids a shape collision during the
+  // gate1->gate2 gap). All localStorage access is try/caught: disabled storage
+  // or a quota error degrades silently to memory-only.
+  const franchiseTreeCache = new Map();
+  const FRANCHISE_CACHE_PREFIX = 'rar:moreinfo:';
+  const FRANCHISE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  let franchiseCacheSwept = false;
+
+  function franchiseCacheVerKey() {
+    return FRANCHISE_CACHE_PREFIX + 'v' + (window.APP_VERSION || '0') + ':';
+  }
+  function franchiseCacheKey(aniListId) {
+    return franchiseCacheVerKey() + aniListId;
+  }
+
+  // Drop any cache entries from a previous APP_VERSION (once per session).
+  function sweepFranchiseCache() {
+    if (franchiseCacheSwept) return;
+    franchiseCacheSwept = true;
+    try {
+      const keepPrefix = franchiseCacheVerKey();
+      const stale = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf(FRANCHISE_CACHE_PREFIX) === 0 && k.indexOf(keepPrefix) !== 0) {
+          stale.push(k);
+        }
+      }
+      stale.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+    } catch (_) {}
+  }
+
+  function readFranchiseCache(aniListId) {
+    try {
+      const raw = localStorage.getItem(franchiseCacheKey(aniListId));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.ts !== 'number' || !parsed.tree) return null;
+      if (Date.now() - parsed.ts > FRANCHISE_CACHE_TTL_MS) return null;
+      return parsed.tree;
+    } catch (_) { return null; }
+  }
+
+  function writeFranchiseCache(aniListId, tree) {
+    sweepFranchiseCache();
+    try {
+      localStorage.setItem(franchiseCacheKey(aniListId), JSON.stringify({ ts: Date.now(), tree }));
+    } catch (_) {}
+  }
+
+  // v1.7.2 — Cached entry point Gate 2's render layer will call. Backwards compat
+  // (item 7): entries without AniListId return null so the caller falls back to
+  // the legacy single-hop fetchRelationsForModal/title-search path. Lookup order:
+  // L1 memory -> L2 localStorage -> network traverse (then fill both tiers).
+  async function traverseFranchiseForModal(anime, forceRefresh) {
+    if (!anime || !anime.AniListId) return null;
+    const id = anime.AniListId;
+    if (!forceRefresh) {
+      if (franchiseTreeCache.has(id)) return franchiseTreeCache.get(id);
+      const cached = readFranchiseCache(id);
+      if (cached) { franchiseTreeCache.set(id, cached); return cached; }
+    }
+    const tree = await traverseFranchise(id);
+    franchiseTreeCache.set(id, tree);
+    writeFranchiseCache(id, tree);
+    return tree;
+  }
+
   // v1.6.8 — Pure renderer: returns an HTML string, never touches the DOM.
   // States: 'loading' / 'success' / 'empty' / 'error' (error routes to 'empty'
   // for v1.6.8 — single friendly fallback message). Success-state logic mirrors
@@ -523,6 +780,14 @@ query ($id: Int) {
     }
     if (state === 'empty' || state === 'error') {
       return '<div class="more-info-empty">No franchise info available yet.</div>';
+    }
+
+    // v1.7.2 — franchise (multi-hop) branch: consumes the traverseFranchise tree
+    // { spine, groups, episodesBySeason, failedCount } (+ source recommendations/
+    // staff merged in by the call-site). The legacy 1-hop branch below is
+    // untouched and still serves no-AniListId fallback entries.
+    if (state === 'franchise') {
+      return renderFranchisePanel(sourceAnime, result);
     }
 
     const sourceId = result?.sourceId || null;
@@ -562,6 +827,298 @@ query ($id: Int) {
       + renderEpisodeList(streamingEpisodes, sourceAnime)
       + renderRecommendations(recommendations)
       + renderStaffCredits(staffEdges);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // v1.7.2 — FRANCHISE (multi-hop) RENDER LAYER (Gate 2)
+  // Consumes the traverseFranchise tree: spine chain (year-ordered, connector
+  // line, --current source) -> grouped non-spine sections (relationType, "show
+  // all N" when >6, in-catalog pill) -> per-season collapsible episodes (source
+  // season open) -> source recommendations + staff -> partial-fail notice (+
+  // retry). No service name in any interrupting copy.
+  // ──────────────────────────────────────────────────────────────────────
+
+  // Lazy AniListId -> catalog slug map (for the "Reviewed" in-catalog pill;
+  // matching rows open Blake's own modal instead of the external entry page).
+  let _aniIdToSlug = null;
+  function catalogSlugForAniListId(aniListId) {
+    if (!aniListId) return null;
+    if (!_aniIdToSlug) {
+      _aniIdToSlug = new Map();
+      try {
+        const list = (typeof window !== 'undefined' && Array.isArray(window.animeData))
+          ? window.animeData
+          : (Array.isArray(animeData) ? animeData : []);
+        list.forEach(a => {
+          if (a && a.AniListId) _aniIdToSlug.set(Number(a.AniListId), slug(a.Title || ''));
+        });
+      } catch (_) {}
+    }
+    return _aniIdToSlug.get(Number(aniListId)) || null;
+  }
+
+  // Friendly section labels for non-spine relation groups + their display order.
+  const FRANCHISE_GROUP_LABELS = {
+    SIDE_STORY: 'SIDE STORIES',
+    ALTERNATIVE: 'ALTERNATIVE VERSIONS',
+    SPIN_OFF: 'SPIN-OFFS',
+    SUMMARY: 'RECAPS',
+    PARENT: 'PARENT STORY',
+    CHARACTER: 'SHARED CHARACTERS',
+    OTHER: 'OTHER',
+  };
+  const FRANCHISE_GROUP_ORDER = ['SIDE_STORY', 'ALTERNATIVE', 'SPIN_OFF', 'SUMMARY', 'PARENT', 'CHARACTER', 'OTHER'];
+  const FRANCHISE_GROUP_COMPACT = 6;
+
+  function franchiseGroupLabel(relationType) {
+    if (FRANCHISE_GROUP_LABELS[relationType]) return FRANCHISE_GROUP_LABELS[relationType];
+    return String(relationType || 'OTHER').replace(/_/g, ' ').toUpperCase();
+  }
+
+  // One franchise row (spine or group). isSource -> --current highlight; rows in
+  // Blake's catalog get the "Reviewed" pill + data-catalog-slug (click opens the
+  // internal modal); others get data-anilist-id (click opens the external page).
+  function renderFranchiseEntry(node, kicker) {
+    const cover = node.coverImage?.large || '';
+    const english = node.title?.english || node.title?.romaji || '(untitled)';
+    const romaji = (node.title?.romaji && node.title.romaji !== english) ? node.title.romaji : '';
+    const year = node.seasonYear || '';
+    const eps = node.episodes ? `${node.episodes} eps` : '';
+    const studios = Array.from(new Set(
+      (node.studios?.nodes || [])
+        .filter(s => s.isAnimationStudio !== false)
+        .map(s => s.name)
+        .filter(Boolean)
+    )).join(', ');
+    const metaParts = [year, eps, studios].filter(Boolean);
+
+    const catalogSlug = catalogSlugForAniListId(node.id);
+    let entryClass = 'more-info-entry';
+    if (node.isSource) entryClass += ' more-info-entry--current';
+    let clickAttrs = '';
+    if (catalogSlug) {
+      entryClass += ' more-info-entry--clickable';
+      clickAttrs = ` data-catalog-slug="${escapeHtml(catalogSlug)}"`;
+    } else if (node.id) {
+      entryClass += ' more-info-entry--clickable';
+      clickAttrs = ` data-anilist-id="${escapeHtml(String(node.id))}"`;
+    }
+
+    const coverHtml = cover
+      ? `<img class="more-info-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">`
+      : '<div class="more-info-cover more-info-cover--placeholder"></div>';
+    const scoreHtml = node.averageScore
+      ? `<span class="more-info-score-badge">${escapeHtml(String(node.averageScore))}</span>`
+      : '';
+    const romajiHtml = romaji ? `<div class="more-info-romaji">${escapeHtml(romaji)}</div>` : '';
+    const fmtBadgeHtml = node.format
+      ? `<span class="more-info-rec-format-badge" style="position: static;">${escapeHtml(node.format)}</span>`
+      : '';
+    const metaTextHtml = metaParts.length ? escapeHtml(metaParts.join(' · ')) : '';
+    const metaInner = fmtBadgeHtml && metaTextHtml
+      ? `${fmtBadgeHtml} ${metaTextHtml}`
+      : (fmtBadgeHtml || metaTextHtml);
+    const metaHtml = metaInner ? `<div class="more-info-meta">${metaInner}</div>` : '';
+    // v1.7.2 gate 3d — undated / unreleased entries get an UPCOMING kicker
+    // (uses the already-fetched `status` field; source always wins the kicker slot).
+    const isUpcoming = !node.seasonYear || node.status === 'NOT_YET_RELEASED';
+    const kickerText = node.isSource
+      ? 'CURRENTLY VIEWING'
+      : (isUpcoming ? 'UPCOMING' : (kicker || ''));
+    const kickerClass = kickerText === 'UPCOMING'
+      ? 'more-info-relation more-info-relation--upcoming'
+      : 'more-info-relation';
+    const kickerHtml = kickerText ? `<span class="${kickerClass}">${escapeHtml(kickerText)}</span>` : '';
+    const pillHtml = catalogSlug ? '<span class="more-info-catalog-pill">✓ Reviewed</span>' : '';
+
+    return `<div class="${entryClass}"${clickAttrs}>
+    ${coverHtml}
+    <div class="more-info-body">
+      ${kickerHtml}
+      <div class="more-info-english">${escapeHtml(english)}${pillHtml}</div>
+      ${romajiHtml}
+      ${metaHtml}
+    </div>
+    ${scoreHtml}
+  </div>`;
+  }
+
+  // v1.7.2 gate 3d — shared season comparator. Undated entries (null/0/non-number
+  // seasonYear) sort to the BOTTOM (treated as +Infinity); id tiebreak avoids the
+  // Infinity - Infinity = NaN trap. Render-layer only — traverseFranchise's own
+  // pre-sorts stay untouched (render overrides them).
+  function compareSeason(a, b) {
+    const ya = (a && typeof a.seasonYear === 'number' && a.seasonYear > 0) ? a.seasonYear : Infinity;
+    const yb = (b && typeof b.seasonYear === 'number' && b.seasonYear > 0) ? b.seasonYear : Infinity;
+    if (ya === Infinity && yb === Infinity) return ((a && a.id) || 0) - ((b && b.id) || 0);
+    if (ya === Infinity) return 1;
+    if (yb === Infinity) return -1;
+    return (ya - yb) || (((a && a.id) || 0) - ((b && b.id) || 0));
+  }
+
+  // Spine chain — year-ordered (undated to bottom), connector line between rows (CSS).
+  function renderFranchiseSpine(spine) {
+    if (!spine || !spine.length) return '';
+    const rows = spine.slice().sort(compareSeason).map(n => renderFranchiseEntry(n)).join('');
+    return `<div class="more-info-list more-info-spine">${rows}</div>`;
+  }
+
+  // Grouped non-spine sections. Within a group: sort by year. >6 entries ->
+  // first 6 shown + the remainder behind a <details> "Show all N entries".
+  function renderFranchiseGroups(groups) {
+    if (!groups) return '';
+    const keys = Object.keys(groups);
+    if (!keys.length) return '';
+    const ordered = keys.slice().sort((a, b) => {
+      const ia = FRANCHISE_GROUP_ORDER.indexOf(a);
+      const ib = FRANCHISE_GROUP_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+    });
+    let html = '';
+    for (const key of ordered) {
+      const nodes = (groups[key] || []).slice().sort(compareSeason);
+      if (!nodes.length) continue;
+      const header = `<div class="more-info-section-header">${escapeHtml(franchiseGroupLabel(key))}</div>`;
+      let body;
+      if (nodes.length > FRANCHISE_GROUP_COMPACT) {
+        const head = nodes.slice(0, FRANCHISE_GROUP_COMPACT).map(n => renderFranchiseEntry(n)).join('');
+        const rest = nodes.slice(FRANCHISE_GROUP_COMPACT).map(n => renderFranchiseEntry(n)).join('');
+        body = `<div class="more-info-list">${head}</div>`
+          + `<details class="more-info-episodes-details more-info-group-details">`
+          + `<summary>Show all ${nodes.length} entries</summary>`
+          + `<div class="more-info-list">${rest}</div></details>`;
+      } else {
+        body = `<div class="more-info-list">${nodes.map(n => renderFranchiseEntry(n)).join('')}</div>`;
+      }
+      html += `<div class="more-info-group">${header}${body}</div>`;
+    }
+    return html;
+  }
+
+  // v1.7.2 gate 3b — episode-numbering mode persists to localStorage
+  // (PER SEASON default; CONTINUOUS = running count across de-duplicated seasons).
+  const EP_NUMBERING_KEY = 'rar:episodeNumbering';
+  function getEpisodeNumberingMode() {
+    try {
+      return localStorage.getItem(EP_NUMBERING_KEY) === 'continuous' ? 'continuous' : 'perSeason';
+    } catch (_) { return 'perSeason'; }
+  }
+  function setEpisodeNumberingMode(mode) {
+    try {
+      localStorage.setItem(EP_NUMBERING_KEY, mode === 'continuous' ? 'continuous' : 'perSeason');
+    } catch (_) {}
+  }
+
+  // EPISODES section header + the PER SEASON / CONTINUOUS segmented control.
+  function renderEpisodesHeader(mode) {
+    const perActive = mode !== 'continuous';
+    return `<div class="more-info-episodes-head">`
+      + `<div class="more-info-section-header">EPISODES</div>`
+      + `<div class="more-info-ep-toggle" role="group" aria-label="Episode numbering" data-mode="${perActive ? 'perSeason' : 'continuous'}">`
+      + `<span class="more-info-ep-toggle-indicator" aria-hidden="true"></span>`
+      + `<button type="button" class="more-info-ep-mode${perActive ? ' is-active' : ''}" data-ep-mode="perSeason" aria-pressed="${perActive}">Per Season</button>`
+      + `<button type="button" class="more-info-ep-mode${perActive ? '' : ' is-active'}" data-ep-mode="continuous" aria-pressed="${!perActive}">Continuous</button>`
+      + `</div></div>`;
+  }
+
+  // v1.7.2 gate 3b — Per-season collapsible episodes (ALL closed by default).
+  //   Bug 1: signature-dedup — skip any season whose episode-title set already
+  //          rendered (AniList returns identical streamingEpisodes for some
+  //          franchises, e.g. Re:Zero's Director's-Cut listing on every entry).
+  //   Bug 2: strip the "Episode N -" prefix and renumber by sorted position
+  //          (the list arrives descending); empty stripped title -> "Episode {n}".
+  //   Toggle: PER SEASON numbers each season 1..n; CONTINUOUS keeps a running
+  //          counter across the de-duplicated, spine-ordered seasons.
+  //   Bug 3: handled by the caller (renderFranchisePanel) via sourceEpisodeCount.
+  function renderEpisodesBySeason(episodesBySeason, sourceId, mode) {
+    if (!episodesBySeason || !episodesBySeason.length) return '';
+    const continuous = mode === 'continuous';
+    const seenSignatures = new Set();
+    let runningCount = 0;
+    const sections = [];
+
+    for (const season of episodesBySeason.slice().sort(compareSeason)) {
+      const eps = (season.episodes || [])
+        .map((e, i) => {
+          const title = (e && e.title) || '';
+          const m = title.match(/^Episode\s+(\d+)\s*[-–—]\s*/i);
+          return {
+            raw: title,
+            stripped: title.replace(/^Episode\s+\d+\s*[-–—]\s*/i, '').trim(),
+            epNum: m ? parseInt(m[1], 10) : null,
+            origIndex: i,
+          };
+        })
+        .sort((a, b) => {
+          if (a.epNum === null && b.epNum === null) return a.origIndex - b.origIndex;
+          if (a.epNum === null) return 1;
+          if (b.epNum === null) return -1;
+          return a.epNum - b.epNum;
+        });
+      if (!eps.length) continue;
+
+      // Bug 1 — skip seasons whose episode-title set already rendered this panel.
+      const signature = JSON.stringify(eps.map(e => e.raw).slice().sort());
+      if (seenSignatures.has(signature)) continue;
+      seenSignatures.add(signature);
+
+      const rowHtml = eps.map((e, idx) => {
+        const num = continuous ? runningCount + idx + 1 : idx + 1;
+        const label = e.stripped ? `${num} · ${e.stripped}` : `Episode ${num}`;
+        return `<div class="more-info-episode-row">${escapeHtml(label)}</div>`;
+      }).join('');
+      runningCount += eps.length;
+
+      const summaryLabel = (season.title || 'Season') + ' — ' + eps.length + (eps.length === 1 ? ' episode' : ' episodes');
+      sections.push(`<details class="more-info-episodes-details more-info-season">`
+        + `<summary>${escapeHtml(summaryLabel)}</summary>${rowHtml}</details>`);
+    }
+
+    if (!sections.length) return '';
+    return `<div class="more-info-episodes">${renderEpisodesHeader(continuous ? 'continuous' : 'perSeason')}${sections.join('')}</div>`;
+  }
+
+  // Subtle partial-fail notice + progressive retry. No service name in the copy.
+  function renderPartialFail(failedCount) {
+    if (!failedCount || failedCount <= 0) return '';
+    return `<div class="more-info-partial-fail">Some related entries couldn't load right now. `
+      + `<button type="button" class="more-info-retry">Retry</button></div>`;
+  }
+
+  // Assemble the full franchise panel from the tree (+ source recs/staff).
+  function renderFranchisePanel(sourceAnime, tree) {
+    const spine = tree?.spine || [];
+    const groups = tree?.groups || {};
+    const episodesBySeason = tree?.episodesBySeason || [];
+    const failedCount = tree?.failedCount || 0;
+    const recommendations = tree?.recommendations || [];
+    const staffEdges = tree?.staff || [];
+    const sourceId = sourceAnime?.AniListId || null;
+    const mode = getEpisodeNumberingMode();
+
+    if (!spine.length && !Object.keys(groups).length && !episodesBySeason.length) {
+      return '<div class="more-info-empty">No franchise info available yet.</div>';
+    }
+
+    // Bug 3 — graceful empty-state: the source claims episodes (metadata) but the
+    // franchise returned none. Movies / 0-episode-metadata entries stay clean.
+    let episodesHtml = renderEpisodesBySeason(episodesBySeason, sourceId, mode);
+    if (!episodesHtml) {
+      const sourceNode = spine.find(n => n.isSource);
+      const sourceEpisodeCount = (sourceNode && sourceNode.episodes) || 0;
+      if (sourceEpisodeCount > 0) {
+        episodesHtml = '<div class="more-info-episodes">'
+          + '<div class="more-info-section-header">EPISODES</div>'
+          + '<div class="more-info-empty-sub">Episode list not available for this title.</div></div>';
+      }
+    }
+
+    return renderFranchiseSpine(spine)
+      + renderFranchiseGroups(groups)
+      + episodesHtml
+      + renderRecommendations(recommendations)
+      + renderStaffCredits(staffEdges)
+      + renderPartialFail(failedCount);
   }
 
   // v1.6.8 — Render one entry row. Every entry with an AniList id is clickable
@@ -3845,17 +4402,50 @@ function openModal(anime) {
   const moreInfoContent = moreInfoContainer.querySelector('.more-info-content');
   const moreInfoClose = moreInfoContainer.querySelector('.more-info-close');
 
-  moreInfoTab.addEventListener('click', async () => {
-    moreInfoContainer.setAttribute('data-state', 'expanded');
-    moreInfoPanel.setAttribute('aria-hidden', 'false');
+  // v1.7.2 — renders the More Info panel. AniListId entries use the franchise
+  // multi-hop path (traverseFranchiseForModal) + the source's recs/staff from
+  // the cached legacy fetch; no-AniListId entries fall back to the legacy 1-hop
+  // render. forceRefresh bypasses both cache tiers (the partial-fail retry).
+  // lastFranchisePanelData lets the episode-numbering toggle re-render instantly
+  // from the already-fetched tree (no loading flash, no refetch).
+  let lastFranchisePanelData = null;
+  async function runMoreInfo(forceRefresh) {
     moreInfoContent.innerHTML = renderMoreInfoPanel('loading', anime);
 
+    if (anime.AniListId) {
+      const [tree, legacy] = await Promise.all([
+        traverseFranchiseForModal(anime, forceRefresh),
+        fetchRelationsForModal(anime),
+      ]);
+      // Visitor may have collapsed during the fetch — re-check before injecting.
+      if (moreInfoContainer.getAttribute('data-state') !== 'expanded') return;
+      const hasTree = tree && (tree.spine.length || Object.keys(tree.groups).length || tree.episodesBySeason.length);
+      if (hasTree) {
+        const panelData = Object.assign({}, tree, {
+          recommendations: legacy ? legacy.recommendations : [],
+          staff: legacy ? legacy.staff : [],
+        });
+        lastFranchisePanelData = panelData;
+        moreInfoContent.innerHTML = renderMoreInfoPanel('franchise', anime, panelData);
+        return;
+      }
+      // Traversal yielded nothing usable — fall back to the legacy 1-hop render.
+      const okLegacy = legacy && ((legacy.edges && legacy.edges.length > 0) || !!legacy.sourceId);
+      moreInfoContent.innerHTML = renderMoreInfoPanel(okLegacy ? 'success' : 'empty', anime, legacy);
+      return;
+    }
+
+    // Legacy path (no AniListId) — unchanged 1-hop title-search render.
     const result = await fetchRelationsForModal(anime);
-    // Visitor may have collapsed during the fetch — re-check state before injecting.
     if (moreInfoContainer.getAttribute('data-state') !== 'expanded') return;
     const hasContent = (result.edges && result.edges.length > 0) || !!result.sourceId;
-    const state = hasContent ? 'success' : 'empty';
-    moreInfoContent.innerHTML = renderMoreInfoPanel(state, anime, result);
+    moreInfoContent.innerHTML = renderMoreInfoPanel(hasContent ? 'success' : 'empty', anime, result);
+  }
+
+  moreInfoTab.addEventListener('click', () => {
+    moreInfoContainer.setAttribute('data-state', 'expanded');
+    moreInfoPanel.setAttribute('aria-hidden', 'false');
+    runMoreInfo(false);
   });
 
   moreInfoClose.addEventListener('click', () => {
@@ -3864,8 +4454,30 @@ function openModal(anime) {
   });
 
   moreInfoContent.addEventListener('click', (e) => {
+    // Episode-numbering toggle — persist + instant re-render from the cached tree.
+    const modeBtn = e.target.closest('.more-info-ep-mode');
+    if (modeBtn) {
+      e.preventDefault();
+      setEpisodeNumberingMode(modeBtn.dataset.epMode === 'continuous' ? 'continuous' : 'perSeason');
+      if (lastFranchisePanelData) {
+        moreInfoContent.innerHTML = renderMoreInfoPanel('franchise', anime, lastFranchisePanelData);
+      }
+      return;
+    }
+
+    // Partial-fail retry — cache-bypassing re-render.
+    const retryBtn = e.target.closest('.more-info-retry');
+    if (retryBtn) { e.preventDefault(); runMoreInfo(true); return; }
+
     const card = e.target.closest('.more-info-entry--clickable');
     if (!card) return;
+    // In-catalog rows open Blake's own modal; everything else opens the external page.
+    const catalogSlug = card.dataset.catalogSlug;
+    if (catalogSlug) {
+      const list = Array.isArray(window.animeData) ? window.animeData : (Array.isArray(animeData) ? animeData : []);
+      const target = list.find(a => a && slug(a.Title || '') === catalogSlug);
+      if (target) { openModal(target); return; }
+    }
     const anilistId = card.dataset.anilistId;
     if (!anilistId) return;
     window.open(`https://anilist.co/anime/${anilistId}/`, '_blank', 'noopener');

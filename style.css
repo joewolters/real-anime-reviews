@@ -3016,6 +3016,7 @@ body.filter-open { overflow: hidden; }
 .more-info-body {
   flex: 1;
   min-width: 0;
+  padding-right: 30px;   /* v1.7.2 gate 3b — reserve room for the absolute top-right score/format badge so long titles don't clip */
 }
 .more-info-relation {
   font-family: 'Montserrat', sans-serif;
@@ -3139,6 +3140,190 @@ body.filter-open { overflow: hidden; }
   font-size: 0.75rem;
   color: rgba(255,255,255,.85);
   padding: 4px 0;
+}
+
+/* ============================================================================
+   v1.7.2 — Franchise multi-hop panel: spine connector, group sections,
+   per-season episodes, in-catalog pill, partial-fail notice + retry
+   ============================================================================ */
+
+/* Spine chain — subtle connector line between consecutive season rows */
+.more-info-spine {
+  position: relative;
+}
+.more-info-spine .more-info-entry + .more-info-entry::before {
+  content: "";
+  position: absolute;
+  left: 33px;            /* ~center of the 50px cover + 8px row padding */
+  top: -8px;             /* bridges the 8px .more-info-list gap */
+  height: 8px;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(187,134,252,.55), rgba(187,134,252,.18));
+}
+
+/* "Reviewed" in-catalog pill — inline after the English title */
+.more-info-catalog-pill {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #0c0618;
+  background: linear-gradient(180deg, #d7b3ff, #bb86fc);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+/* v1.7.2 gate 3d — UPCOMING kicker accent (undated / not-yet-released rows).
+   Warm amber distinguishes it from the purple CURRENTLY VIEWING / relation kickers;
+   text-only, matching the existing kicker pattern (no animation, mobile-safe). */
+.more-info-relation--upcoming {
+  color: #ffcf8a;
+}
+
+/* Grouped non-spine sections */
+.more-info-group {
+  margin-top: 6px;
+}
+.more-info-group-details summary {
+  margin-top: 6px;
+}
+
+/* Per-season episode collapsibles reuse .more-info-episodes-details; add a
+   rotating disclosure caret to the season summaries */
+.more-info-season > summary {
+  position: relative;
+  padding-left: 22px;
+}
+.more-info-season > summary::before {
+  content: "▶";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  font-size: 8px;
+  transform: translateY(-50%);
+  transition: transform 160ms ease;
+}
+.more-info-season[open] > summary::before {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+/* Partial-fail notice + retry — subtle, generic copy (no service name) */
+.more-info-partial-fail {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(15,5,28,.5);
+  border: 1px solid rgba(187,134,252,.18);
+  font-size: 0.72rem;
+  color: rgba(255,255,255,.6);
+  text-align: center;
+}
+.more-info-retry {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: #bb86fc;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 140ms ease, background 140ms ease;
+}
+.more-info-retry:hover {
+  color: #fff;
+  background: rgba(187,134,252,.18);
+}
+
+/* Reduced-motion: drop the caret rotation + retry transitions */
+@media (prefers-reduced-motion: reduce) {
+  .more-info-season > summary::before,
+  .more-info-retry {
+    transition: none;
+  }
+}
+
+/* v1.7.2 gate 3b — EPISODES header row + PER SEASON / CONTINUOUS segmented control */
+.more-info-episodes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;            /* mobile: toggle drops below the header */
+}
+.more-info-episodes-head .more-info-section-header {
+  margin: 14px 0 6px;
+  border-bottom: none;        /* the head row carries its own spacing */
+  padding-bottom: 0;
+}
+.more-info-ep-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(187,134,252,.32);
+  border-radius: 999px;
+  padding: 2px;
+  background: rgba(15,5,28,.5);
+}
+.more-info-ep-toggle-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  background: linear-gradient(180deg, rgba(187,134,252,.95), rgba(150,90,240,.95));
+  border-radius: 999px;
+  transition: transform 200ms cubic-bezier(.4, 0, .2, 1);
+  z-index: 0;
+}
+.more-info-ep-toggle[data-mode="continuous"] .more-info-ep-toggle-indicator {
+  transform: translateX(100%);
+}
+.more-info-ep-mode {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  background: transparent;
+  border: none;
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: .06em;
+  font-size: 0.74rem;
+  padding: 3px 11px;
+  border-radius: 999px;
+  color: rgba(255,255,255,.5);
+  cursor: pointer;
+  transition: color 140ms ease;
+  white-space: nowrap;
+}
+.more-info-ep-mode.is-active {
+  color: #fff;
+}
+.more-info-ep-mode:not(.is-active):hover {
+  color: rgba(255,255,255,.85);
+}
+
+/* Bug 3 — graceful empty-state inside the EPISODES section */
+.more-info-empty-sub {
+  color: rgba(255,255,255,.5);
+  font-size: 0.75rem;
+  padding: 8px 10px;
+  background: rgba(15,5,28,.45);
+  border-radius: 6px;
+}
+
+/* Reduced-motion: indicator swaps instantly (no slide) */
+@media (prefers-reduced-motion: reduce) {
+  .more-info-ep-toggle-indicator,
+  .more-info-ep-mode {
+    transition: none;
+  }
 }
 
 /* =========================

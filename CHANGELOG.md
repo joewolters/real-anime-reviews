@@ -11,6 +11,29 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-03 -->
+## v1.7.2 — MINOR (2026-06-03)
+
+**The More Info panel overhaul — data architecture + UX redesign.** The franchise panel now walks a show's entire related-anime chain — every season, side story, movie, and unreleased announcement — instead of just its immediate neighbours, with per-season episodes, smarter ordering, an in-catalog cross-link, and a numbering toggle. Closes the multi-season architectural debt deferred since v1.6.10.
+
+**Visitor-facing:**
+
+- **Full franchise chain in the More Info panel.** "Click for More Info" now shows the complete spine — every prequel/sequel season in chronological order with a connecting line and a `CURRENTLY VIEWING` marker on the one you opened — followed by grouped sections for side stories, alternative versions, movies, and more. Long groups collapse behind a "Show all N entries" toggle.
+- **Click-through to reviews on this site.** Any related anime Blake has also reviewed shows a `✓ Reviewed` pill and opens its review right here on the site instead of sending you to an external page. Everything else still opens its external info page in a new tab.
+- **Episodes grouped by season + a numbering toggle.** The episode list now splits per season (each collapsible), with a `PER SEASON` / `CONTINUOUS` toggle — count each season from 1, or straight through the whole franchise. Your choice is remembered. Misleading absolute episode numbers carried over from streaming feeds are normalized so each season starts at 1.
+- **`UPCOMING` label on unreleased entries.** Announced-but-unaired seasons and movies are tagged `UPCOMING` and sorted to the bottom, so they no longer jump ahead of the show you're actually looking at.
+- **Faster repeat opens.** A franchise's panel is cached for 24 hours, so re-opening the same anime loads instantly.
+- **Graceful "no episode list" message** when a show genuinely has no episode data, instead of a silently missing section.
+
+**Behind the scenes:**
+
+- **Multi-fetch data architecture.** A new batched parallel-fetch layer (groups of 3-4 with inter-batch delays + a rate-limit retry) replaces the single relation lookup, feeding a breadth-first franchise walk (cycle-safe, depth/size capped) that recurses the main season chain and collects side entries one hop out. This is the architecture deferred since v1.6.10 — the old nested-relations query returned 500s on relation-heavy shows like Demon Slayer.
+- **Identical-list dedupe.** Some franchises (Re:Zero) return the same episode list on every entry from the streaming feed; byte-identical lists are now collapsed so a season's episodes aren't shown repeatedly.
+- **Two-tier cache** — in-memory plus a version-keyed 24h `localStorage` layer that self-invalidates each ship (prefix-swept).
+- **Partial-fail handling** — if some sub-fetches error, the panel renders what loaded plus a subtle retry, rather than failing whole.
+
+**Implementation files:** `script.js` (multi-fetch + BFS traversal data layer, franchise render layer, episode aggregation + signature dedup + per-season/continuous renumber, numbering toggle, partial-fail/retry, modal wiring, undated-entry sort fix + `UPCOMING` kicker), `style.css` (spine connector line, grouped sections, in-catalog pill, episode header + segmented toggle, partial-fail notice, `UPCOMING` accent, badge-collision padding fix). No new dependencies, no new fonts. The ratified data layer stayed untouched through the later UX/ordering gates (render-layer fixes only).
+
+<!-- author: Code | date: 2026-06-03 -->
 ## v1.7.1 — PATCH (2026-06-03)
 
 **Polish bundle on top of v1.7.0's AniList enrichment — original-language titles, per-anime color, and a premium empty state.**

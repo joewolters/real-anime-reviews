@@ -1,148 +1,216 @@
 <!-- author: Cowork | date: 2026-06-03 -->
-# Session Handoff — v1.6.12 shipped · v1.7.0 queued next
+# Session Handoff — v1.7.1 LIVE · v1.7.2 fully scoped + ready for gate 0
 
-> **v1.6.12 closed 2026-06-03.** Two ships out the door this arc: v1.6.11 (Suggestion Box + admin viewer, the big visitor-facing feature) and v1.6.12 (admin queue iteration patch). Both live on `realanimereviews.com`. Next up is v1.7.0 — AniList backfill + MAL integration for the existing ~44 reviews.
+> **v1.7.0 → v1.7.1 both shipped 2026-06-03.** v1.7.1 confirmed live by Blake at session resume ("its already shipped dont worry"). **v1.7.2 gate 0 propose-first prompt is staged in `docs/SHIP-PROMPT.md`** — Blake to paste the one-liner into Code when ready.
 
 ---
 
 ## Current production
 
-**Live:** `realanimereviews.com` serving **v1.6.12**. Commits: `aaa96f0` (v1.6.11 base), `5a5ab9b` (v1.6.11 state-clear hardening), `ce04594` (v1.6.12 apply), `05158e0` (v1.6.12 iteration 1), `244d22f` (v1.6.12 iteration 2 — `[hidden]` symmetry), `a8c60ac` (ROADMAP close-out). Blake verified prod clean at gate 11.
+**Live:** `realanimereviews.com` serving **v1.7.1** (commit `e78f7d6`). Gate 10 + 11 closed off-Cowork's-radar between sessions.
 
-**Commit chain (recent):** `3539a06` (v1.6.10) → `aaa96f0` (v1.6.11) → `5a5ab9b` (v1.6.11 fix) → `ce04594` (v1.6.12) → `05158e0` (v1.6.12 iter 1) → `244d22f` (v1.6.12 iter 2) → `a8c60ac` (ROADMAP close-out, HEAD/live).
-
-**v1.6.11 shipped scope** — Suggestion Box public form at `/suggest` with live AniList search-as-you-type dropdown (covers + format + year + keyboard nav), selection confirmation card with Ken Burns drift, premium-UI shell + glow + shimmer everywhere, homepage banner CTA at the bottom of the anime grid (sliding 2rem arrow + banner-scale shimmer sweep), admin Suggestions Queue at `/admin/suggestions` accessible from the floating Admin pill, Mode 1 handoff via `?suggest=<title>&anilistId=<id>` URL params (skips the typing + Fetch step), extended `firestore.rules` for the new optional fields (deployed globally), bidirectional transition-coordinated swap choreography on input ↔ selection card, reduced-motion fallbacks everywhere.
-
-**v1.6.12 shipped scope** — Admin queue iteration patch: (1) `loadQueue()` clears stale empty/error cards before each fetch + `renderQueue()` belt-and-suspenders hides error on every success branch; (2) custom branded delete confirmation modal (🗑️ + `DELETE SUGGESTION 削除` kicker, layered gradient card, focus trap, Escape/backdrop cancel) replacing native `confirm()`; (3) NEW / REVIEWED moved to side-by-side `1fr 1fr` CSS-Grid columns (stack at 768px) with inline `Nothing yet` / `Nothing reviewed yet` placeholders, Mark Reviewed reworked from horizontal slide to fade+scale; (4) `[hidden]` symmetry fix on `.suggestions-empty-card` / `.suggestions-error-card` / `.admin-main` (the real reason the cards were sticking around); plus DM-style admin↔visitor inbox feature documented for v1.8.x in NEXT.md + ROADMAP.md (auth prereq: capture visitor identity at submission time).
+**Commit chain (recent):**
+`3539a06` (v1.6.10) → `aaa96f0` (v1.6.11) → `5a5ab9b` (v1.6.11 fix) → `ce04594` (v1.6.12) → `05158e0` (iter 1) → `244d22f` (iter 2) → `a8c60ac` (ROADMAP close-out) → `2ed9874` (v1.7.0) → **`e78f7d6` (v1.7.1, HEAD, on main, prod pending)**.
 
 ---
 
-## Gate structure — LOCKED 12-gate ship (effective v1.6.11+, validated through v1.6.12)
+## v1.7.0 shipped scope (recap)
+
+AniList enrichment foundation ship. Backfilled `AniListId` / `IdMal` / `AniListScore` / `AniListColor` / `TitleEnglish` / `TitleRomaji` on all 44 reviews (40 via interactive picker, 4 manually via `--match` flag for skipped ones at v1.7.1 iteration). Activated `script.js`'s pre-built `Media(id:)` lookup path (v1.6.8 anticipated this). Added the gold RATING / purple ANILIST twin badge to every modal (kicker pattern, identical structure). New CLI `npm run backfill`. Shared `lib/excel-backup.js`. Visitor sees the community score directly.
+
+## v1.7.1 shipped scope (commit `e78f7d6`, live)
+
+Polish bundle on top of v1.7.0. **All visitor-facing.**
+
+- **Romaji subtitle on cards + modal** in Japanese typographic brackets `「 」` (Outfit Light Italic, purple brackets, hover-brighten); 3-line wrap clamp; centered alignment
+- **Japanese native title fallback** — when romaji is meaningfully identical to English (`norm()` comparison strips non-alphanumerics + lowercases), falls back to `TitleNative` rendered in Noto Sans JP. Chainsaw Man shows `「チェンソーマン」`, Death Note shows `「DEATH NOTE」`, etc.
+- **New `--add-native` backfill mode** populates `TitleNative` for all 44 anime via `Media(id:)` queries (300ms delay — flagged as too aggressive for v1.7.2; AniList rate-limits hit on 14 entries during Blake's run, he re-ran successfully after 60s pause)
+- **Per-anime AniListColor accent** on the ANILIST badge with a JS luminance guard (`readableAccent()`) — Chainsaw Man's `#6b1a1a` lifts to readable dusty rose; vivid colors untouched; null colors fall back to brand purple
+- **Premium "no matches" empty-state card** — 🔍 + `NO MATCHES 該当なし` kicker + dynamic body with searched query + `SUGGEST ONE →` CTA linking to `/suggest`. Glyph float + kicker shimmer + 350ms fade-up + ported `.inline-header-btn` shimmer on the CTA. Centered via `grid-column: 1 / -1`.
+- **Widget update-log version chips** above each date section with the rule Blake set:
+  - 1-2 ships in a date → stack chips newest-first
+  - 3+ ships → arrow notation `v<earliest> → v<latest>`
+  - Result: 06/03 stacks `v1.7.1` / `v1.7.0`; 06/02 shows `v1.6.10 → v1.6.12`; 05/13 stacks `v1.6.9` / `v1.6.8`; 05/12 shows `v1.6.7`; 05/11 shows `v1.6.2 → v1.6.6`
+- **`widget-update-skill.md` updated** with the 1-2-stack / 3+-arrow rule for future ships
+- **Latest Anime Drop card** now renders the romaji subtitle (separate render path `buildFeaturedDrop()` at script.js:1480, distinct from `card-render.js`). Centering bug root-caused to `.featured-card { text-align: left }` → flipped to center fixed title + romaji + genre all together
+- **Top 10 carousel glass portrait** expanded twice (gate 1f +56px then gate 1h +24px) to accommodate subtitle line; final: `.spotlight-stack { height: 630px; }` + `::before { height: clamp(632px, 68vw, 672px); }`
+- **4 previously-skipped anime backfilled** via new `--match "<Title>" <id>` flag — My Stepmom's Daughter Is My Ex / Watari-kun's ****** / An Archdemon's Dilemma / Hatsune Miku: Colorful Stage!. All 44 anime now have AniList enrichment.
+- **NEXT.md + ROADMAP.md renumbered** — what was v1.7.1 (multi-fetch) → now **v1.7.2**; what was v1.7.2 (secondary modal) → now **v1.7.3**.
+
+---
+
+## Gate structure — LOCKED 12-gate ship (effective v1.6.11+, validated through v1.7.1)
 
 | # | Gate | Owner | Tier |
 |---|------|-------|------|
 | 0 | Recon + propose plan | Code → Blake approves | PROPOSE-FIRST |
-| 1 | Build core feature | Code → Blake approves | PROPOSE-FIRST |
+| 1 | Build core feature (sub-gates 1a/1b/.../1h for iteration) | Code → Blake approves | PROPOSE-FIRST or APPLY |
 | 2 | Build supporting features | Code → Blake approves | PROPOSE-FIRST |
 | 3 | Reserved for iteration / fixes | Code → Blake approves | PROPOSE-FIRST |
 | 4 | Local browser smoke | Blake | — |
-| 5 | Docs cascade (CHANGELOG + widget bullet + version bump + NEXT.md + ROADMAP, one Code prompt with sub-step checklist) | Code | FAST-TRACK |
-| 6 | Audits (`npm test` 7/7 + `firebase.json` ↔ `.gitignore` mirror + `git diff` review) | Code | FAST-TRACK |
+| 5 | Docs cascade | Code | FAST-TRACK |
+| 6 | Audits | Code | FAST-TRACK |
 | 7 | Commit + push | Code | FAST-TRACK |
-| 8 | Preview deploy (`firebase hosting:channel:deploy preview-v1-6-X` + `firebase deploy --only firestore:rules` IF rules touched) | Code | FAST-TRACK |
+| 8 | Preview deploy (+ rules deploy if touched) | Code | FAST-TRACK |
 | 9 | Preview smoke | Blake | — |
-| 10 | Production deploy (`firebase deploy --only hosting`) on Blake's "ship it" | Code | FAST-TRACK |
+| 10 | Production deploy on Blake's "ship it" | Code | FAST-TRACK |
 | 11 | Production verify | Blake | — |
 
-Sub-gates (`1b` / `2b` / `3b` / `3c` / `3d` / `3e` / `3f` / `3g` etc.) reserved for iteration when smoke or build finds bugs. v1.6.11 used 3b–3g, v1.6.12 used two named iteration rounds — pattern works.
+**Compressed sweeps for fast-track gates work well** — v1.6.12 / v1.7.0 / v1.7.1 all bundled 5+6+7+8 into a single Code prompt with discrete sub-steps, saving round-trips while preserving the integrity boundary.
 
-**Integrity boundary:** Gate 6 (audits) ≠ Gate 7 (commit) ≠ Gate 8 (preview deploy) ≠ Gate 9 (preview smoke) ≠ Gate 10 (prod deploy) ≠ Gate 11 (prod verify). If `npm test` fails at gate 6, nothing has been committed yet → Code fixes the underlying code, retries audit → commits clean. Never half-state.
-
-**Compressed apply for iteration rounds:** sub-iterations (3g-commit+redeploy / v1.6.12 iter 1 / iter 2) successfully bundled apply + test + commit + push + preview-redeploy into a single fast-track sweep for small fixes (<50 lines, no breaking changes). The 12-gate integrity boundaries still hold; the bundling just collapses the typing in chat.
-
-**Round-trip math:** v1.6.11 took ~8 Code prompts main path + 6 iteration rounds = ~14 events; v1.6.12 took ~5 Code prompts main path + 2 iteration rounds = ~7 events. Iteration rounds are where the volume lives — diagnosing first then applying second is faster than guessing.
+**Sub-gate convention for iteration:** v1.7.1 used 1a → 1h (8 iteration sub-gates) before docs cascade. Pattern works for visual polish ships.
 
 ---
 
-## In flight
+## v1.7.2 — pre-scoped, ready for gate 0 (the DE FACTO More Info panel overhaul)
 
-**None.** v1.6.12 closed cleanly. Working tree state below documents the holdover Cowork docs.
+Blake just made the scope-shaping calls. **Per his "Option 3" choice — v1.7.2 + v1.7.3 together ARE the More Info panel overhaul** (data architecture this ship + in-site secondary modal next ship = redesigned panel in practice, distributed across two ships).
+
+### Decisions locked in 2026-06-03 planning session
+
+| # | Decision |
+|---|---|
+| 1 | Safe parallel-fetch concurrency — batch in groups of 3-4 with delays |
+| 2 | Full chain traversal — walk relations as deep as they go, **filter to TYPE=ANIME only** (no manga / light novels / etc.) |
+| 3 | Episode list UI — **Code's creative latitude** (Blake said "let code come up with cool UI ideas") |
+| 4 | Progressive render — each relation row appears as its parallel fetch returns; visitors don't wait on slowest call |
+| 5 | "AniList down" partial-fail message — Code brainstorms with Blake's creative latitude. Cowork's pick: subtle inline notice when 1+ sub-fetch fails (`Some related entries couldn't load — try again later`) |
+| 6 | Visitor interaction details — **Code's creative latitude** (Blake said "you and code think of visitor interactions and what the people might want to see") |
+| 7 | Light localStorage cache — ~24-hour TTL on cached relation data, key by AniListId |
+| 8 | MAL integration — **DEFERRED** to its own ship (v1.7.4 or v1.8.x). MAL IDs are stored but not called this ship. |
+
+### Cowork's brainstorm to feed into Code's propose-first
+
+**For the relations chain UI** (Demon Slayer's arcs, OPM S3, etc.):
+- Group relations by **relation type** with section headers — `SEQUELS`, `MOVIES`, `SPIN-OFFS`, `ALTERNATIVE`, etc. Today's panel is flat
+- Show a small **"in catalog"** indicator on rows linking to Blake's reviews vs. rows that go to AniList
+- Compact mode by default with "show all N entries" expansion for super-long franchises
+- Subtle line connecting strict sequel chains (S1 → S2 → S3) — visual aid
+
+**For the episode list UI** (Re:Zero merged seasons):
+- Collapsible per-season — `▶ Season 1 (25 episodes)` / `▶ Season 2 (50 episodes)` — click expands
+- OR tabs across the top with the list below
+- OR continuous list with subtle season divider lines
+- Could show season cover thumbnail next to each season header
+- Episode rows highlighted when AniList has per-episode scores (separate roadmap polish item; check feasibility this ship)
+
+**For the partial-fail / AniList-down messaging:**
+- Subtle inline notice at the bottom of the panel: `Some related entries couldn't load — try again later`
+- Subtle yellow-tinted card, dismissable
+- Silent partial render (visitors don't know)
+- Cowork's pick: **subtle inline notice when 1+ sub-fetch fails** — honest but not alarming
+
+### Scope items for v1.7.2
+
+1. **Parallel-fetch architecture** — `Promise.all`-based helper, batched in groups of 3-4 with 200-300ms delays between batches (NOT the v1.7.1 `--add-native`'s aggressive 300ms-no-batch pattern that hit rate limits)
+2. **Multi-hop traversal** — recursive walk of TYPE=ANIME relations from a starting AniListId, until exhausted, with cycle detection (some franchises loop back)
+3. **Episode aggregation** — fetch each related season's `streamingEpisodes` separately, merge with season labels
+4. **UX overhaul of the More Info panel** — relation grouping by type, episode list redesign (Code picks final UI from brainstorm), partial-fail messaging
+5. **Light localStorage cache** — ~24h TTL keyed by AniListId, stores the parallel-fetched relation tree
+6. **Backwards compat** — entries without AniListId gracefully fall back to current title-search behavior
+7. **Standing rules apply** — premium UI floor, `[hidden]` symmetry on any new toggleable elements, no AniList in interrupting copy (data attribution like kickers is OK per updated memory)
+
+### Estimated scope: 6-8 hours
+
+Bigger than v1.7.1's polish (~2-3hr build) and v1.7.0's data (~3-4hr) because it bundles data architecture + meaningful UX redesign + caching. PROPOSE-FIRST is essential — recon needs to map current `fetchRelationsFromAniList` + existing relation render + episode list code.
+
+### Code's brainstorming latitude
+
+Blake explicitly said "make sure code also provides its thoughts" on items 3 (episode UI), 5 (down message), and 6 (visitor interactions). The gate 0 propose-first prompt should invite Code to surface 2-3 alternatives per design call.
 
 ---
 
-## Working tree state (post-v1.6.12 ship close)
+## After v1.7.2 — v1.7.x continued (renumbered)
 
-7 Cowork-managed docs are still in the working tree, intentionally excluded from every v1.6.11 + v1.6.12 commit per Blake's explicit call:
+- **v1.7.3 — Watched set feature** (NEW, slotted in 2026-06-03 during v1.7.2 gate 4 smoke). New `WatchedAniListIds` column on `Anime_Master_Table.xlsx` (comma-separated list of every AniListId Blake's single review actually covers — S1 + S2 + OVAs + movies he watched). Sync script reads it into `animeData.js` as an array. `renderFranchiseEntry`'s catalog-pill lookup checks set-membership instead of just primary `AniListId`. Admin form gets a multi-select UI showing the franchise tree (reuses `traverseFranchise` from v1.7.2) with checkboxes — default: all spine entries pre-checked, Blake unchecks stragglers. Mode 1 auto-fills the default. One-time ~20-min backfill across 44 existing reviews. ~4-6 hours.
+- **v1.7.4 — In-site secondary modal** (pushed back from v1.7.3 by the v1.7.3 slot-in). Click any related anime in the More Info panel → opens a secondary modal IN-SITE with that anime's full AniList data (extended description, episode list, characters, staff). Back button returns to primary review modal. Includes watchlist + "Not Reviewed yet" treatment for ALSO LIKED rows not in Blake's catalog. Benefits from v1.7.3 because "✓ REVIEWED" pills will work correctly across all watched seasons by the time this lands. ~5-6 hours.
+- **v1.7.x polish slots** — AniList per-episode scores feasibility check.
+- **v1.7.4 — Future MAL integration slot** (deferred from v1.7.2). Use stored `IdMal` field via Jikan (unofficial MAL API). Could be: fallback when AniList errors, OR parallel data source showing MAL score on modals. UX needs scoping.
+- **v1.8.0 — AniList tab on cards.** Each card gets a separate AniList tab.
+- **v1.8.x — Suggestion DM Inbox** (admin↔visitor messaging).
+- **v1.9.0** — mobile compatibility overhaul.
+- **Phase D — Mode 2** autonomous caretaker.
 
+---
+
+## Working tree state
+
+**Pending Blake decisions (still in working tree, never committed):**
+
+7 Cowork-managed workflow docs Blake explicitly excluded from every commit since v1.6.11:
 - `docs/COWORK-STYLE.md` (untracked)
-- `docs/AI-PRIMER.md` (modified)
-- `docs/CODE-PROMPTS.md` (modified)
-- `docs/SKILLS/README.md` (modified)
-- `docs/SKILLS/hotfix-skill.md` (modified)
-- `docs/SKILLS/release-skill.md` (modified)
-- `docs/SKILLS/widget-update-skill.md` (modified)
+- `docs/AI-PRIMER.md`, `docs/CODE-PROMPTS.md`, `docs/SKILLS/README.md`, `docs/SKILLS/hotfix-skill.md`, `docs/SKILLS/release-skill.md`, `docs/SKILLS/widget-update-skill.md` (all modified)
 
-Plus the rolling SHIP-PROMPT.md + SHIP-OUTPUT.md state per gate.
+`firebase.json` ignore was extended at v1.6.12 to cover `COWORK-STYLE.md` + `CODE-HANDOFF.md` (Code caught the leak risk and added). Blake hasn't ratified whether to ever commit any of these or revert; status = deferred, his call.
 
-**Two of these (`docs/CODE-HANDOFF.md` + `docs/COWORK-STYLE.md`) were added to `firebase.json` ignore during v1.6.12 apply** — Code caught they were not in the ignore list and would have publicly deployed. Verified 404 on prod post-ship. Blake hasn't yet ratified whether to commit them (with the ignore protecting against deploy) OR revert them entirely. Status: deferred — Blake's call when he wants to handle.
+**Plus the rolling SHIP-PROMPT.md + SHIP-OUTPUT.md** — overwritten per gate, committed at gate 7, firebase-ignored so they never deploy.
 
 ---
 
-## Phase B continued — consolidated v1.7.x plan
+## Lessons learned (carry forward — full list)
 
-- **v1.7.0 — AniList backfill + MAL integration** (NEXT). Populate `AniListId` / `IdMal` / `AniListScore` / `AniListColor` for the existing ~44 reviews via Mode 1's pipeline. Excel + animeData.js both updated. Once shipped, every modal fetch can use the precise `Media(id:)` lookup instead of the popularity-sorted `Page(media:)` search. ~3 hours.
-- **v1.7.1 — Multi-fetch + multi-hop revival.** Closes v1.6.10's architectural debt via `Promise.all` parallel fetches. Multi-hop traversal + franchise-episode aggregation. ~4-5 hours.
-- **v1.7.2 — In-site secondary modal.** Built on v1.7.1's data layer. Replaces v1.6.8's "open AniList in new tab" with in-site experience + watchlist + "Not Reviewed yet" treatment. ~5-6 hours.
-- **v1.7.x polish slots** — Romaji subtitle on cards, AniList per-episode scores feasibility.
-
-**v1.8.x queue:**
-- **v1.8.0 — AniList tab on cards.**
-- **v1.8.x — Suggestion DM Inbox** (new — added at v1.6.12 close). Admin replies directly to suggestion submitters; visitor gets an Inbox UI. Auth prereq: capture visitor identity (email or anon Firebase Auth UID) at submission time, requires schema change on `suggestions` docs.
-
-**Phase C+:** v1.9.0 mobile compatibility overhaul.
-
-**Phase D — Mode 2** (autonomous caretaker, gated on Mode 1 in active use + v1.7.0 backfill complete).
-
----
-
-## Lessons learned (carry forward)
-
-1. **Tiered gates** — propose-then-apply for big code/design gates only; fast-track docs cascade / audits / commit / deploys. (`feedback_gate_tiering.md`)
-2. **Code runs deploys** — `firebase hosting:channel:deploy` (gate 8) + `firebase deploy --only hosting` (gate 10) are Code's job. Blake does gate 4 (local smoke), gate 9 (preview smoke), gate 11 (prod verify). (`feedback_deploy_ownership.md`)
-3. **Lean prompts for fast-track gates** — under ~30 lines. Trust Code's accumulated discipline. (`feedback_lean_prompts.md`)
-4. **`[hidden]` attribute symmetry** — every element with non-none `display` that gets `hidden`-toggled needs an explicit `[hidden] { display: none; }` rule. Bug class has bitten 3+ times (gate 3g + v1.6.12 iteration 2 each closed sets of missing rules). NOW a hard-coded check in Cowork prompts for new UI elements. (`feedback_hidden_attribute_symmetry.md`)
-5. **Custom branded modals only** — never `confirm()` / `alert()` / `prompt()` in any UI Blake or visitors see. (`feedback_no_native_dialogs.md`)
-6. **No AniList branding in visitor UI** — error copy, loading states, attribution all use generic phrasing. Admin UI is exempt. (`feedback_no_anilist_in_visitor_ui.md`)
-7. **Catch-branch element IDs need to be updated when elements get split/renamed** — v1.6.12 iter 1 caught the dead `#suggestions-list` reference in `loadQueue()`'s catch (renamed to `-new` / `-reviewed` at gate 0 but the catch was missed). Refactor → grep for the old ID everywhere it could be referenced, not just the success path.
-8. **Premium UI floor on EVERY new element** — gradient + Bebas/Montserrat/Outfit + JP kicker + hover states by default; "minimum CSS to function" is unacceptable starting point. (`feedback_ui_polish_default.md`)
-9. **Code has creative latitude on design** — propose techniques/effects beyond the literal prompt scope; PROPOSE-FIRST is the safety net. (`feedback_creative_latitude.md`)
-10. **AniList query complexity has a budget** — v1.6.10 gate 2's nested-relations mega-query exceeded it. v1.7.1's `Promise.all` parallel approach is the architectural workaround.
-11. **Don't ship features blocked on upstream APIs.** v1.6.10's franchise-episode aggregation got cut; moved to v1.7.1.
-12. **Blake's review model — one review per franchise**, not per season. Will continue to shape v1.7.1's multi-hop traversal.
-13. **Revert paths via `git show <commit>:<file>`** — v1.6.10 gate 2b precedent.
-14. **Firestore rules deploy globally per-project** — no preview channel. v1.6.11 gate 8 + v1.6.12 (no rules touched) both confirmed safe widening doesn't break anything when admin UID-locked.
-15. **Audit ≠ commit ≠ deploy** — v1.6.10 integrity lesson. Keep separate as a discipline; compressed bundling still respects the boundary even when collapsed for typing.
-16. **Workflow-doc deploy leak class** — Code caught at v1.6.12 that internal workflow docs (`docs/CODE-HANDOFF.md`, `docs/COWORK-STYLE.md`) were not in `firebase.json` ignore and would have deployed publicly. Added to ignore (safe-direction action), verified 404 on prod. Same precedent class as PERSONAL.md v1.3.5 and AUDIT_*.md v1.3.9. **Pattern:** when adding any new doc, audit firebase.json ignore symmetry before deploy.
+1. **Tiered gates** — propose-then-apply for big code/design; fast-track docs cascade / audits / commit / deploys. (`feedback_gate_tiering.md`)
+2. **Code runs deploys** — gates 8+10 are Code's. Blake does gates 4, 9, 11. (`feedback_deploy_ownership.md`)
+3. **Lean prompts on fast-track** — under ~30 lines. (`feedback_lean_prompts.md`)
+4. **`[hidden]` symmetry** — every element with non-none display that gets hidden-toggled needs `[hidden] { display: none; }`. Bitten 3+ times (gate 3g, v1.6.12 iter 2). (`feedback_hidden_attribute_symmetry.md`)
+5. **Custom branded modals only** — never `confirm()` / `alert()`. (`feedback_no_native_dialogs.md`)
+6. **No AniList branding in interrupting visitor UI** — generic phrasing in error/loading/empty states; but **data attribution is OK** (`ANILIST` kicker labeling a score is fine, updated 2026-06-03). (`feedback_no_anilist_in_visitor_ui.md`)
+7. **Code has creative latitude on design** — propose elevations; PROPOSE-FIRST is the safety net. (`feedback_creative_latitude.md`)
+8. **Premium UI floor on new elements** — brand parity by default. (`feedback_ui_polish_default.md`)
+9. **AniList rate-limit reality** — 90 req/min cap. v1.7.1 `--add-native` hit 429s with 300ms-no-batch on 14/44. v1.7.2 must batch 3-4 at a time with 200-300ms inter-batch delays.
+10. **AniList query complexity has a budget** — v1.6.10 confirmed. The parallel-fetch architecture in v1.7.2 explicitly works around this.
+11. **Blake's review model — one review per franchise**, not per season. Multi-hop traversal must respect this (the source anime is "Blake's review subject"; related seasons are surfaced as relations, not as separate reviews).
+12. **Workflow-doc deploy leak class** — Code caught at v1.6.12. Pattern: when adding any new doc, audit firebase.json ignore symmetry.
+13. **Phantom-feature catch by Code at v1.7.1 gate 1e** — Cowork referenced `--add-native` / `pickSubtitle` / `TitleNative` as if built at a non-existent prior gate. Code grep-checked, found zero hits, flagged before silently building. Cowork apologized and re-staged a proper build gate. Pattern: Code's habit of grep-verifying references against codebase reality is load-bearing.
+14. **`norm()` slug-style comparison beats raw string** for romaji-vs-english matching. v1.7.1 gate 1g shipped this fix.
+15. **Klee One was a v1.7.1 dead font load** — once Outfit italic replaced it for cards + modal, the import in index.html + admin/new-anime.html became unused. Candidate for future cleanup.
+16. **Compressed sweep pattern** — gates 5+6+7+8 bundle worked cleanly across v1.6.12, v1.7.0, v1.7.1. Pattern is now established.
 
 ---
 
 ## Process rules still apply
 
-- Rule #1 (Excel canonical) — v1.7.0 will write back to Excel via Mode 1's pipeline for the ~44 backfilled reviews.
+- Rule #1 (Excel canonical) — v1.7.2 doesn't write Excel.
 - Rule #2 (author markers) — CHANGELOG + meaningful doc edits.
-- Rule #5 (deploy ladder) — local (gate 4) → preview (gates 8-9) → production (gates 10-11).
-- Rule #7 (`npm test` 7/7 — at gate 6). v1.6.11 added Suggestion Box Playwright tests; v1.7.0 should add backfill tests.
-- Rule #8 (`.gitignore` ↔ `firebase.json` mirror — at gate 6). Now also: audit new docs against firebase.json ignore before deploy (per Lesson 16).
+- Rule #5 (deploy ladder) — local → preview → production.
+- Rule #7 (`npm test` 7/7) at gate 6.
+- Rule #8 (`.gitignore` ↔ `firebase.json` mirror) — at gate 6.
 
 ---
 
-## Rolling files (post-v1.6.12 close)
+## Rolling files (current state)
 
-- `docs/SHIP-PROMPT.md` — currently holds the v1.6.12 gate 10 prompt. Will be overwritten when v1.7.0 gate 0 stages.
-- `docs/SHIP-OUTPUT.md` — currently holds the v1.6.12 gate 10 + close-out report. Will be overwritten per gate.
-- `docs/HANDOFF.md` — this file. Just updated.
-- `docs/COWORK-STYLE.md` — persistent style guide, still untracked per Blake's call.
-
-The 3 SHIP-* / HANDOFF docs are firebase-ignored via the explicit + glob ignore patterns. They roll into the next ship's gate-7 commit.
+- **`docs/SHIP-PROMPT.md`** — **currently staged: v1.7.2 gate 0 propose-first prompt**. Ready for Code on paste of the one-liner.
+- **`docs/SHIP-OUTPUT.md`** — currently holds Code's v1.7.1 gate 5+6+7+8 compressed-sweep apply report. Will be overwritten when next Code prompt runs.
+- **`docs/HANDOFF.md`** — this file. Just updated.
+- **`docs/COWORK-STYLE.md`** — Cowork's tone/conventions style guide. Still untracked per Blake's exclude.
 
 ---
 
-## What the next chat does first (if session pauses)
+## What the next chat does first
 
 1. **Read `docs/AI-PRIMER.md`** for project orientation.
-2. **Read this HANDOFF.md end-to-end** for full state.
+2. **Read this `HANDOFF.md` end-to-end** for full state.
 3. **Read `docs/COWORK-STYLE.md`** for tone + conventions.
-4. **Read `docs/SHIP-OUTPUT.md`** for Code's latest output (v1.6.12 gate 10 + close-out).
-5. **Read `docs/SHIP-PROMPT.md`** — confirms it holds the v1.6.12 gate 10 prompt (no new ship started yet).
-6. **Tell Blake:** *"v1.6.12 is shipped + verified. v1.7.0 (AniList backfill + MAL integration, ~3 hours) is queued next per NEXT.md. Want to start v1.7.0, or pause?"*
-7. If Blake wants to start v1.7.0: stage a propose-first gate 0 prompt covering the recon + plan for the backfill pipeline.
+4. **Read `docs/SHIP-OUTPUT.md`** for Code's last output (v1.7.1 gates 5-8 sweep).
+5. **Read `docs/SHIP-PROMPT.md`** — confirm it holds the **v1.7.2 gate 0 propose-first prompt** (staged at this session pause).
+6. **Tell Blake:**
+   > Confirmed — `docs/SHIP-PROMPT.md` holds the v1.7.2 gate 0 propose-first prompt. **Before that, note: v1.7.1 is at gate 10 pending your explicit `ship it` go-signal for prod deploy** (preview URL `https://real-anime-reviews--preview-v1-7-1-ldw7i7yf.web.app`, commit `e78f7d6` pushed to main). Two paths:
+   >
+   > - **Finish v1.7.1 first:** say `ship it`, I'll re-stage gate 10 prod deploy, then we move to v1.7.2 after gate 11 verify.
+   > - **Start v1.7.2 now:** paste this into Code:
+   >   ```
+   >   Read docs/SHIP-PROMPT.md and follow the v1.7.2 gate 0 propose-first instructions.
+   >   ```
+   > Which?
+7. **Wait for Blake's pick**, then proceed.
 
 ---
 
 ## State summary
 
-- **Production:** v1.6.12 live, commit `a8c60ac` (with the v1.6.12 code at `244d22f`). Blake verified clean at gate 11.
-- **In flight:** None. v1.6.12 ship is complete.
-- **Working tree:** 7 Cowork docs holdover (Blake-excluded) + the rolling SHIP-* files. Two firebase.json ignore entries added at v1.6.12 protecting against future leak.
-- **Open architecture decisions:** None remaining for v1.6.x. v1.7.0 will introduce the backfill pipeline shape — recon happens at gate 0 when Blake's ready.
-- **Next move:** Blake's call — start v1.7.0 (AniList backfill + MAL integration, ~3 hours) or pause.
+- **Production:** v1.7.1 live, commit `e78f7d6`. Gate 10 + 11 closed between sessions.
+- **In flight:** v1.7.2 fully pre-scoped, gate 0 propose-first prompt staged in `docs/SHIP-PROMPT.md`, awaiting Blake's paste-into-Code.
+- **Working tree:** 7 Cowork doc excludes + rolling SHIP-* files.
+- **Open architecture decisions:** None remaining. Blake's 8 v1.7.2 questions all answered. Code has explicit creative latitude on items 3, 5, 6 of the v1.7.2 scope.
+- **Next move:** Blake pastes the v1.7.2 gate 0 one-liner into Code.

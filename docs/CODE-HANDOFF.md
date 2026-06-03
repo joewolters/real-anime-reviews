@@ -1,239 +1,193 @@
-<!-- author: Code | date: 2026-06-02 -->
+<!-- author: Code | date: 2026-06-03 -->
 <!-- AUDIENCE: This file is FOR CODE (another Claude Code instance picking up work). -->
-<!-- NOT for Cowork — Cowork reads docs/HANDOFF.md and writes docs/SHIP-PROMPT.md. -->
+<!-- NOT for Cowork — Cowork reads docs/HANDOFF.md + docs/SHIP-OUTPUT.md and writes docs/SHIP-PROMPT.md. -->
 
 # Code → Code Handoff
 
-> Quick-onboarding doc so a fresh Code session can pick up where the previous Code left off without re-deriving the workflow from scratch. Read this first, then `docs/SHIP-PROMPT.md` for the current gate prompt, then `docs/SHIP-OUTPUT.md` for the previous Code's last report.
+> Quick-onboarding doc so a fresh Code session can pick up immediately without re-deriving the workflow. Read this first, then `docs/SHIP-PROMPT.md` (the current gate's instructions), then `docs/SHIP-OUTPUT.md` (the previous Code's last report).
 
 ---
 
-## Right now (snapshot)
+## Right now (snapshot — 2026-06-03)
 
-**v1.6.11 just hit production at gate 10** (commit `5a5ab9b`, deployed 2026-06-02 21:06:50). Awaiting **gate 11 — Blake's production verify**. Blake's task, not Code's.
+**v1.7.1 is LIVE in production** (commit `e78f7d6`, deployed 2026-06-03 13:55:37, `APP_VERSION="1.7.1"` on realanimereviews.com). v1.7.1 = AniList enrichment polish bundle (Japanese/romaji subtitles + native fallback, per-anime AniListColor badge accent, premium NO-MATCHES empty-state, widget version chips, all-44 backfill, `--add-native`/`TitleNative`).
 
-**Current ship in flight:** v1.6.11 (Suggestion Box + admin viewer). 11 of 12 gates done. After gate 11 clean: ship complete, next ship is v1.7.0 (AniList backfill + MAL integration).
+**Shipped this session, in order:** v1.6.12 (admin queue fixes) → v1.7.0 (AniList backfill + community-score twin badge) → v1.7.1 (polish bundle). All three live.
+
+<!-- author: Cowork | date: 2026-06-03 -->
+**In flight (per `docs/HANDOFF.md`):** **v1.7.2 — the de facto More Info panel overhaul** (~6-8h; data architecture + UX redesign bundled per Blake's "Option 3" call). Gate 1 (data layer: parallel-fetch, BFS multi-hop traversal, localStorage L2 cache) + Gate 2 (UI: spine chain + grouped sections + "✓ Reviewed" pill + partial-fail notice + per-season collapsible episodes) DONE. Gate 3 in flight — iterating on 5 gate 4 smoke bugs (Re:Zero same-episodes-across-seasons, Re:Zero starts at Ep 51, Eminence missing episodes, seasons-open-by-default flip, score-badge-collides-with-title) + the episode counter toggle (PER SEASON / CONTINUOUS). After v1.7.2: **v1.7.3 — Watched-set feature** (new `WatchedAniListIds` Excel column + admin multi-select reusing v1.7.2's `traverseFranchise` + Mode 1 auto-fill + ~20-min backfill across 44 reviews; ~4-6h), then **v1.7.4 — in-site secondary modal** (pushed back from v1.7.3 by the watched-set slot-in; benefits from v1.7.3's multi-season pill correctness), then **v1.8.0 — AniList tab on cards** (at-a-glance verified-source data).
 
 **Live URL:** https://realanimereviews.com (aliased to https://real-anime-reviews.web.app).
 
 ---
 
-## The trio of rolling docs
+## The rolling-docs trio (how Code ↔ Cowork ↔ Blake talk)
 
 | File | Author | Purpose |
 |---|---|---|
-| `docs/SHIP-PROMPT.md` | Cowork writes, Code reads | The current gate's instructions. Cowork overwrites it per gate. |
-| `docs/SHIP-OUTPUT.md` | Code writes, Cowork reads | Code's report after each gate. Cowork digests + summarizes to Blake. **Code overwrites it per gate** (no append). |
-| `docs/HANDOFF.md` | Cowork writes | Cowork's persistent session state — the "where are we" doc Cowork updates between sessions. **Code reads but doesn't write** this one. |
+| `docs/SHIP-PROMPT.md` | Cowork writes, Code reads | The current gate's instructions. Cowork overwrites per gate. |
+| `docs/SHIP-OUTPUT.md` | Code writes, Cowork reads | Code's report. Cowork digests it to Blake. **Code OVERWRITES it EVERY response** (see below) — no append. |
+| `docs/HANDOFF.md` | Cowork writes | Cowork's persistent state. **Code reads but never writes** this one. |
 
-All three are `firebase.json`-ignored via `docs/SHIP-*.md` glob + explicit `docs/HANDOFF.md` entry. They get committed (committed into git for history traceability) but never deployed to the public CDN.
+All firebase-ignored (`docs/SHIP-*.md`, `docs/HANDOFF.md`, `docs/CODE-HANDOFF.md`, `docs/COWORK-STYLE.md`) — committed to git for history, never deployed to the public CDN.
 
-This file (`docs/CODE-HANDOFF.md`) is **Code-to-Code only** — not in the rolling trio. Doesn't need updating per gate.
+**`docs/SHIP-OUTPUT.md` is rewritten EVERY response, not just per gate.** Blake's standing instruction (2026-06-03): *"make sure to replace docs/SHIP-OUTPUT.md every time you issue a response so cowork can read it and then report to me."* Even a recon-only or answer-only turn → write the report there. Blake reads via Cowork, not chat.
 
----
-
-## The 12-gate ship structure (effective v1.6.11+)
-
-```
-0  Recon + propose plan                          [Code → Blake approves]  PROPOSE-FIRST
-1  Build core feature                            [Code → Blake approves]  PROPOSE-FIRST
-2  Build supporting features                     [Code → Blake approves]  PROPOSE-FIRST
-3  Reserved for iteration / fixes                [Code → Blake approves]  PROPOSE-FIRST
-4  Local browser smoke                           [Blake]                  —
-5  Docs cascade (CHANGELOG + widget + bump + NEXT + ROADMAP)  [Code]      FAST-TRACK
-6  Audits (npm test 7/7 + mirror + git diff)     [Code]                   FAST-TRACK
-7  Commit + push                                 [Code]                   FAST-TRACK
-8  Preview deploy (hosting:channel + rules)      [Code]                   FAST-TRACK
-9  Preview smoke                                 [Blake]                  —
-10 Production deploy (hosting + rules if dirty)  [Code, on "ship it"]     FAST-TRACK
-11 Production verify                             [Blake]                  —
-```
-
-**Sub-gates `1b` / `2b` / `3b` / `3c` / `3d`...** reserved for iteration. Used freely when Blake's smoke surfaces a bug or design tweak. Pattern: `gate 3` → `gate 3b apply` → smoke → `gate 3c propose` → `gate 3c apply` → repeat until clean.
-
-**Non-mergeable boundaries** — gates 6/7/8/9/10/11 are separate pauses, not a single sweep. If audits fail at gate 6, nothing has been committed yet → fix code, retry audit. Never half-state.
+This file (`docs/CODE-HANDOFF.md`) is **Code-to-Code only** — not in the rolling trio, doesn't need per-gate updates.
 
 ---
 
-## PROPOSE-FIRST vs FAST-TRACK — the tier difference
+## The 12-gate ship structure
 
-- **PROPOSE-FIRST gates** (0, 1, 2, 3 + sub-gates): write the full proposal to `docs/SHIP-OUTPUT.md`, do NOT apply, wait for Blake's explicit approval via the next Cowork prompt. Cowork writes a `gate-Xb-apply` prompt after Blake approves; THAT prompt is when Code applies.
+```
+0  Recon + propose plan                          [Code → Blake]   PROPOSE-FIRST
+1  Build core feature                            [Code → Blake]   PROPOSE-FIRST
+2  Build supporting features                     [Code → Blake]   PROPOSE-FIRST
+3  Reserved for iteration / fixes                [Code → Blake]   PROPOSE-FIRST
+4  Local browser smoke                           [Blake]          —
+5  Docs cascade (bump + CHANGELOG + widget + NEXT + ROADMAP)  [Code]  FAST-TRACK
+6  Audits (npm test 7/7 + mirror + git diff)     [Code]           FAST-TRACK
+7  Commit + push                                 [Code]           FAST-TRACK
+8  Preview deploy (hosting:channel + rules)      [Code]           FAST-TRACK
+9  Preview smoke                                 [Blake]          —
+10 Production deploy                              [Code, on "ship it"]  FAST-TRACK
+11 Production verify                              [Blake]          —
+```
 
-- **FAST-TRACK gates** (5, 6, 7, 8, 10): execute the prompt's spec directly, no proposal step. Report in `docs/SHIP-OUTPUT.md` after applying. Trust Code's accumulated discipline.
+**Gates often get compressed** — Cowork writes prompts like "Gates 5+6+7+8" (one sweep) or "Gates 1b apply". Follow the prompt's actual scope.
 
-- **Blake-owned gates** (4, 9, 11): browser-only, Blake handles. Code waits.
+**Sub-gates `1b`/`1c`/`1d`…`1h`** are iteration loops. This session's v1.7.1 went 1 → 1b → 1c → … → 1h (eight build iterations on the romaji subtitle alone) before gate 5. Each sub-gate is its own propose-or-apply. Don't expect a clean 0→11; expect lots of `Xb`/`Xc` polish loops driven by Blake's smoke.
+
+**PROPOSE-FIRST gates** (0-3 + sub-gates whose header says "propose"): write the full proposal to `SHIP-OUTPUT.md`, do NOT apply, wait for the next Cowork apply-prompt. **APPLY / FAST-TRACK gates** (the `-apply` sub-gates + 5-8, 10): execute directly, report after. **Blake-owned** (4, 9, 11): browser smoke, Code waits.
+
+---
+
+## ⚠️ The single most important lesson this session: gate-numbering drift / PHANTOM FEATURES
+
+Cowork prompts sometimes **reference work attributed to a "gate" that never actually ran in your session**, and credit features that DO NOT EXIST in the code. Real examples this session:
+- Gate 1d referenced a "gate 1c `-webkit-line-clamp`" that was never written.
+- Gate 1e's Item 3 claimed `--add-native` / `pickSubtitle` / `TitleNative` were "built at gate 1c" — a grep proved **0 hits anywhere**. Cowork even apologized and had gate 1f build them for real.
+
+**Rule: ALWAYS recon the actual file state before "fixing" or "iterating on" something the prompt says already exists.** Never trust "Code already built X at gate Y." `grep`/`Read` first. If the prompt's premise is false, **surface it loudly in the report** (flag the phantom, do NOT silently build the unspecced thing) and let Blake/Cowork decide. Blake values this — it caught a feature he'd otherwise have run a no-op command for.
 
 ---
 
 ## Code's mannerisms (the patterns that work)
 
-### Every gate report has the same shape
-
-In `docs/SHIP-OUTPUT.md`:
-
-1. Author marker `<!-- author: Code | date: YYYY-MM-DD -->` on top
-2. Title: `# vX.Y.Z — Gate N (description — STATUS, TIER)`
-3. Blockquote summary one paragraph
-4. Numbered sections: files written + line counts, decisions baked-in checklist, verification, stop-condition audit, state-for-next-gate, one-liner reply at the bottom
-5. **One-liner reply at the end** — a long single-sentence summary, semicolon-separated. Cowork uses it as the digest line for Blake.
+### Gate report shape (in `docs/SHIP-OUTPUT.md`)
+1. Author marker `<!-- author: Code | date: YYYY-MM-DD -->`
+2. Title: `# vX.Y.Z — Gate N (description — STATUS ✓, TIER)`
+3. Blockquote one-paragraph summary
+4. Numbered/sectioned body: files written + line counts, decisions baked in, verification (all green), stop-condition audit, state-for-next-gate
+5. **A `## One-liner reply` at the bottom** — one long semicolon-separated sentence. Cowork uses it verbatim as Blake's digest line.
 
 ### Chat replies stay terse
+After writing the full report to the doc, the chat reply is ~2-6 bullets/sentences. Don't duplicate the doc. Blake reads via Cowork.
 
-After writing the full report to `docs/SHIP-OUTPUT.md`, the chat reply to Blake is 2-4 sentences max. Blake reads via Cowork, not chat. Don't duplicate the doc in chat — Blake corrected an earlier Code for doing exactly that ("you need to write all of this in a DOC for cowork to read through and then cowork reports to ME").
-
-### Stop-condition audit in every gate report
-
-Every gate prompt lists "Stop conditions" — Code's report has a `## Stop-condition audit` section enumerating each one with ✓ / 🟡 / ❌ status. This is where Code defends against silent scope creep.
+### Verify every gate, report it green
+Standard verify battery: `node --check <each touched .js>`, `node scripts/bump-version.js --check` (expects "all 26 strings agree on vX.Y.Z"), `npm test` (Playwright, expect **7 passed**), targeted greps confirming new selectors/IDs landed + old ones gone, smart-quote check. Production-facing changes (HTML/JS/CSS/animeData.js) require `npm test` before commit (CLAUDE.md rule #7).
 
 ### Surface anomalies, don't silently fix
+Anything outside the gate's explicit scope (adjacent CSS bug, a leak, a phantom feature, a pre-existing issue) → **flag in the report, don't fix unilaterally**. Hard precedents: v1.6.10 gate 2 (an "obvious" scope add broke prod AniList queries → full revert); the firebase.json leak this session (see Gotchas).
 
-If recon finds something outside the gate's explicit scope (e.g. a CSS bug in adjacent code, a pre-existing TARGETS gap), **flag it in the report, don't fix it unilaterally**. Let Cowork decide whether to scope a `gate Xb` for it. v1.6.10 gate 2 was a hard lesson — Code's "obvious" scope addition broke prod-class AniList queries, required a full revert.
-
-### Drift-from-proposal notes
-
-When the actual apply ends up with more lines than the proposal estimated, **flag it explicitly** with the reason (e.g. "comment block expanded for clarity", "fuller reduced-motion coverage", "Cowork additions added more CSS than estimated"). Don't hide it. Blake / Cowork care about scope creep signals.
+### Flag drift from the proposal
+If the apply ends up larger than the estimate, say so with the reason. Blake/Cowork track scope-creep signals.
 
 ---
 
-## Commit discipline (CRITICAL — easy to get wrong)
+## Commit discipline (CRITICAL)
 
-### Author marker
-
-```
-Blake Wolters <196413457+joewolters@users.noreply.github.com>
-```
-
-Set via `git commit --author="Blake Wolters <196413457+joewolters@users.noreply.github.com>"`.
-
-**NEVER** modify `git config user.name` / `user.email`. Per-commit `--author=` flag only.
-
-The numeric `196413457` is Blake's stable GitHub user ID (doesn't change on rename — the username portion was updated when the account renamed from `ReaIGodzilla` → `joewolters` in v1.4.2).
-
-### Forbidden trailers (ZERO of these)
-
-- `Co-Authored-By: Claude ...`
-- `Co-Authored-By: Cowork ...`
-- `🤖 Generated with Claude Code`
-- `Generated with ...`
-
-**Don't add these. Don't let the harness auto-add them.** Use a heredoc for the commit message so you control every byte:
-
+### Author — per-commit `--author=` flag ONLY (never `git config`)
 ```bash
 git commit --author="Blake Wolters <196413457+joewolters@users.noreply.github.com>" -m "$(cat <<'EOF'
-Subject line ≤70 chars
+v1.x.y -- Subject line, ASCII-safe (em-dash -> --, arrow -> ->)
 
-Body paragraph(s), ASCII-safe (em-dashes → --, arrows → ->).
+Body paragraph(s).
 EOF
 )"
 ```
+`196413457` is Blake's stable GitHub user ID (renamed `ReaIGodzilla` → `joewolters` in v1.4.2).
 
-Verify after every commit:
+### ZERO forbidden trailers
+No `Co-Authored-By:` / `🤖` / `Claude Code` / `Generated with`. Use the single-quoted heredoc so the harness can't inject them. Verify after EVERY commit:
 ```bash
-git log -1 --format="%an %ae"
-# Should be: Blake Wolters 196413457+joewolters@users.noreply.github.com
-
-git log -1 --format="%B" | grep -ciE "co-authored-by|🤖|claude code|generated with"
-# Should be: 0
+git log -1 --format="%an %ae"          # Blake Wolters 196413457+joewolters@users.noreply.github.com
+git log -1 --format="%B" | grep -ciE "co-authored-by|🤖|claude code|generated with"   # 0
 ```
 
-### Excludes — Cowork-managed workflow docs stay uncommitted
-
-These 7 files have been intentionally **excluded** from v1.6.11 commits per Blake's gate-7 decision. They remain in the working tree as unstaged modifications:
-
-- `docs/COWORK-STYLE.md` (untracked)
-- `docs/AI-PRIMER.md` (modified)
-- `docs/CODE-PROMPTS.md` (modified)
-- `docs/SKILLS/README.md` (modified)
-- `docs/SKILLS/hotfix-skill.md` (modified)
-- `docs/SKILLS/release-skill.md` (modified)
-- `docs/SKILLS/widget-update-skill.md` (modified)
-
-**If Code stages `git add -A` and commits, it'll sweep these in. To exclude:**
-
+### The 7 Cowork-managed excludes (held out of EVERY Code commit)
+```
+docs/COWORK-STYLE.md  docs/AI-PRIMER.md  docs/CODE-PROMPTS.md
+docs/SKILLS/README.md  docs/SKILLS/hotfix-skill.md
+docs/SKILLS/release-skill.md  docs/SKILLS/widget-update-skill.md
+```
+Pattern:
 ```bash
 git add -A
 git restore --staged docs/COWORK-STYLE.md docs/AI-PRIMER.md docs/CODE-PROMPTS.md docs/SKILLS/README.md docs/SKILLS/hotfix-skill.md docs/SKILLS/release-skill.md docs/SKILLS/widget-update-skill.md
+git diff --cached --name-only   # confirm the 7 are NOT listed
 ```
+`docs/SHIP-OUTPUT.md`, `docs/SHIP-PROMPT.md`, `docs/HANDOFF.md`, `docs/CODE-HANDOFF.md` ARE committed (firebase-ignored, kept for history). Blake hasn't ratified the 7 for commit yet — they stay as working-tree modifications/untracked.
 
-Or stage explicit files instead of `-A`. Confirm via `git status` that these 7 appear under "Changes not staged" / "Untracked" before committing.
+### Prod deploy needs an EXPLICIT go-signal
+Gate 10 = `firebase deploy --only hosting`. **Never auto-deploy to prod without Blake's "ship it."** This session's v1.7.1 gate-10 prompt literally said *"Awaiting his explicit ship it before this gate fires"* — I confirmed the go-signal before deploying. If a gate-10 prompt's go-signal isn't unambiguous in the prompt text, confirm. CLAUDE.md's #1 rule.
 
 ---
 
-## Project-specific gotchas
+## Project gotchas (the ones you'll actually hit)
 
-Read `CLAUDE.md` for the full list. The high-value ones a fresh Code session will hit:
+**Build / tooling:**
+1. **`bump-version.js` has 26 TARGETS.** Adding a new HTML file with `?v=X` cache-busters means adding TARGETS or they go stale. `--check` must say "all 26 strings agree."
+2. **`.gitignore` ↔ `firebase.json` mirror.** Sensitive files in BOTH. **This session's leak:** `docs/CODE-HANDOFF.md` + `docs/COWORK-STYLE.md` were committed/in-tree but NOT firebase-ignored → would have deployed to the public CDN. Fixed by adding them to `firebase.json` ignore (verified 404 post-deploy). NOTE: `scripts/` is NOT firebase-ignored, so `scripts/*.js` DO deploy publicly — pre-existing, contains no secrets, flagged-not-fixed. Write backfill `.bak` files + reports to `Master List/` (OUTSIDE the deploy root) so they never deploy.
+3. **CRLF warnings on `git add` are benign** (Windows LF→CRLF). Ignore them.
 
-1. **PowerShell `Get-Content` defaults to ANSI display** — UTF-8 multi-byte chars (em-dashes, arrows, emoji) look like mojibake on screen. File is fine on disk. Use the `Read` tool (not Bash + Get-Content) when byte fidelity matters.
-2. **Edit tool can silently convert ASCII `"` to curly `"` `"` in HTML attributes** — breaks CSS class matching. After every HTML edit, grep for stray smart quotes in attributes.
-3. **`.gitignore` ↔ `firebase.json` mirror discipline** — sensitive files (`PERSONAL.md`, `AUDIT_*.md`, `.env`) must be in BOTH. Build/tooling artifacts can be `firebase.json`-ignore-only (committed to repo but don't deploy). Rule #8 in `CLAUDE.md`.
-4. **`bump-version.js` has TARGETS for cache-busters** — when adding a new HTML file with `<script src="...?v=X">` or `<link href="...?v=X">`, register those URLs as TARGETS so version bumps sweep them. Otherwise they go stale on future ships. Gate 5b of v1.6.11 was a one-gate fix for this exact bug.
-5. **AniList query complexity has a budget** — nested-relations mega-queries fail on relation-heavy Media (Demon Slayer-class). v1.6.10 gate 2 got reverted for this. Use Demon Slayer's id as the canary when testing new AniList query shapes.
+**CSS (the romaji/badge saga taught these):**
+4. **`[hidden]` loses to author `display:`.** UA `[hidden]{display:none}` (0,1,0) ties any class-based `display:flex` (0,1,0) and loses on cascade order → `element.hidden=true` is a visual no-op. ALWAYS add `.thing[hidden]{display:none}` when a hidden-toggled element sets a non-none display. (v1.6.12 root cause.)
+5. **`.card .info span { color: gold }` catches inner spans.** The rating-span style + the Top-10 `.spotlight-stack .card .info span` gold-pill rule tint ANY `<span>` inside `.card .info`. When adding sub-text inside a card, use a different element (we used `<i class="rb">` for romaji brackets) or override with high specificity / `!important`.
+6. **`-webkit-line-clamp` needs LITERAL inline content.** Brackets as `::before`/`::after` pseudo-elements don't participate in line-clamping. To wrap multi-line with decorative brackets, make them real inline `<i>` glyphs.
+7. **`color-mix()` needs a plain fallback line FIRST.** `background: <plain>; background: <color-mix...>;` so older browsers keep the plain value (used for the per-anime AniListColor badge accent).
+8. **`.admin-shell` (backdrop-filter) is a containing block for `position:fixed`.** A fixed overlay inside it gets clipped by its `overflow:hidden`. Place modals OUTSIDE such ancestors. (v1.6.12 confirm-modal.)
+
+**Verification:**
+9. **bash `grep -c "[""]"` over CJK/multibyte text gives FALSE smart-quote counts** (byte-vs-char). Use the **ripgrep-backed Grep tool** for authoritative smart-quote checks, not bash grep.
+10. **`replace_all` only hits exact-indent matches.** A `native` field add this session hit the 6-space query but missed the 4-space one — always re-grep to confirm the expected hit count after a `replace_all`.
+11. **Can't `node --check` by running a CLI that auto-runs `main()`** — `anilist-backfill.js` calls `main()` on load, so `require()` would execute it. Use `node --check` (syntax only) + `--help` to confirm flags; never run the backfill yourself (Blake runs it).
+
+**AniList:**
+12. **Query complexity budget** — nested-relations mega-queries 500 on relation-heavy Media (Demon Slayer). Use Demon Slayer's id as the canary. v1.7.2's whole design is N+1 per-relation fetches to dodge this.
+
+---
+
+## Key files + scripts (current architecture)
+
+- **Excel is canonical** — `../Master List/Anime_Master_Table.xlsx`, sheet `Anime_Master_Table_claude_final`, 44 rows. Columns now include `AniListId, IdMal, AniListScore, AniListColor, TitleEnglish, TitleRomaji, TitleNative` (all populated). `Master List/` is OUTSIDE the `Current Version/` deploy root.
+- **`scripts/sync-excel-to-js.js`** — Excel → `animeData.js`. Reads/emits the optional AniList fields conditionally. Run via `npm run sync`.
+- **`scripts/anilist-backfill.js`** — the catch-up CLI (`npm run backfill`). Modes: default interactive, `--dry-run`, `--auto` (exact-title auto-pick), `--match "<Title>" <id>` (explicit-id, repeatable), `--add-native` (populate `TitleNative` by id, idempotent). Backs up Excel once, regenerates animeData.js via sync, writes a markdown report to `Master List/`. **Code builds it; Blake runs it at a smoke gate.** Reuses `scripts/lib/excel-backup.js` (`backupExcel`/`checkExcelLock`, also used by `scripts/mode1-server.js`) and `callAniList` exported from `scripts/anilist-fetch.js`.
+- **`card-render.js`** — `window.renderAnimeCardMarkup` (homepage cards + admin preview). Classic script, framework-free. Has its own `slug()` + `pickSubtitle()` (duplicated in `script.js` — keep in sync).
+- **`script.js`** — the homepage + modal monolith (~4900 lines). Modal builder is `openModal()` (~line 3640); `buildFeaturedDrop()` (~1480) renders the Latest Drop card (its OWN render path, NOT card-render.js); helpers like `escapeHtml`/`slug`/`readableAccent`/`pickSubtitle` are top-level in the IIFE; the search empty-state is in `rerenderAll()`.
+- **`pickSubtitle(anime)`** — picks the subtitle: romaji when `norm(rom) !== norm(eng)` (normalize = lowercase + strip non-alphanumerics), else native Japanese (`TitleNative`), else null. `kind:'native'` adds `.is-native` → swaps font to Noto Sans JP. Lives in BOTH card-render.js + script.js.
 
 ---
 
 ## Blake's working style
 
-- Self-described "very basic" coder. **Never assume he knows terms / project structure / terminal commands unless they've been explained in the session.** Step-by-step guidance: which file, which line, what to replace, what the change does.
-- "Show, don't do" — every meaningful change: show plan, show diff, pause for approval, verify after writing, only then stage/commit. (Non-negotiable; see `CLAUDE.md`.)
-- Surgical edits over rewrites. Honest "I'm not sure" over fabricated content. Verify-before-destructive (one cheap diff/check before any delete).
-- Energy fluctuates over long sessions. "What's next?" / "Wait, what were we doing?" is usually a fatigue signal, not a real planning question.
-- Direct feedback. If something looks wrong, he says so — quote his words in the report when surfacing the bug for the next iteration.
+- Self-described "very basic" coder. **Never assume he knows terms / structure / commands unless explained this session.** When guiding him, be surgical: which file, which line, what to type.
+- "Show, don't do" for meaningful changes (plan → diff → approval → verify → commit). But within an approved gate's apply, just execute + report — the gate IS the approval.
+- Direct feedback; he'll say when something's wrong. **Quote his exact words in the report** when surfacing a bug for the next iteration (e.g. *"Couldn't Load still shows up"*).
+- Energy fluctuates; late-session reviews go fast. "What's next?" can be a fatigue signal.
+- He runs the terminal commands you build (backfill, occasionally smoke). He does NOT open Excel — Code handles ALL Excel writes programmatically (hard requirement from v1.7.1 gate 1).
 
 ---
 
-## The rolling-docs trio + the 7 excludes — what's where right now
-
-```
-docs/SHIP-PROMPT.md     ← gate-10 prompt (last gate to fire); the next Cowork prompt
-                          will be either gate 11 (Blake's verify, no Code action)
-                          or gate 10b (if prod has an issue Blake surfaces)
-docs/SHIP-OUTPUT.md     ← Code's gate-10 report (production deploy clean,
-                          v1.6.11 live at 21:06:50)
-docs/HANDOFF.md         ← Cowork-managed. Currently shows v1.6.10 shipped /
-                          v1.6.11 gate 1b done — STALE. Cowork will refresh
-                          when the v1.6.11 ship closes.
-docs/CODE-HANDOFF.md    ← THIS FILE. Code-to-Code only.
-```
-
-The 7 Cowork-managed excludes (see Commit discipline § above) all sit in the working tree right now. New Code shouldn't touch them.
+## What a fresh Code session does first
+1. **Read `CLAUDE.md`** — permanent operating rules.
+2. **Read `docs/HANDOFF.md`** — Cowork's high-level state (may be stale; trust SHIP-OUTPUT more).
+3. **Read `docs/CODE-HANDOFF.md`** (this file) — mannerisms + gotchas.
+4. **Read `docs/SHIP-PROMPT.md`** — the current gate.
+5. **Read `docs/SHIP-OUTPUT.md`** — what just happened.
+6. **Continue from the current gate.** PROPOSE-FIRST → propose; APPLY/FAST-TRACK → execute + report. Gates 4/9/11 are Blake's — wait. And **recon the real file state before trusting any "already built" claim** in the prompt.
 
 ---
 
-## What a fresh Code session should do first
-
-1. **Read `CLAUDE.md`** — the project's permanent operating rules.
-2. **Read `docs/HANDOFF.md`** — Cowork's high-level state.
-3. **Read `docs/CODE-HANDOFF.md`** (this file) — Code-to-Code mannerisms.
-4. **Read `docs/SHIP-PROMPT.md`** — the current gate's instructions.
-5. **Read `docs/SHIP-OUTPUT.md`** — previous Code's last report (for context on what just happened).
-6. **Continue from the current gate.** If the prompt says PROPOSE-FIRST, propose. If FAST-TRACK, execute + report.
-
-If the prompt header says `gate 11` or `gate 4` or `gate 9`, those are Blake's — Code waits. The next Code-action prompt will be either an iteration sub-gate (e.g. `3h`, `10b`) or the next ship's `gate 0`.
-
----
-
-## A few hard-won patterns from v1.6.11
-
-- **Visitor-facing copy NEVER mentions third-party brand names** when the gate prompt says so (gate 3e-apply §22 set this for the Suggestion Box). Class names + DOM IDs + console logs are fine — only what visitors SEE. Always run a `grep -i "anilist" suggest.html suggest.css suggest.js` audit after CSS/HTML edits.
-
-- **`hidden` attribute is overridden by author CSS `display: <non-none>`** (gate 3g root cause). When you set `display: flex` / `block` / etc. on a class, ALSO add `.classname[hidden] { display: none; }` for symmetry. The browser's UA `[hidden] { display: none }` and author `.classname { display: flex }` have the same specificity → author wins on cascade order → `element.hidden = true` becomes a no-op visually.
-
-- **CSS `animation: ...` doesn't reliably replay on `hidden` toggle** (gate 3f root cause). Use `transition: ...` properties + `is-entering` / `is-leaving` state classes + `transitionend`-coordinated JS using the double-rAF pattern (`requestAnimationFrame(() => requestAnimationFrame(() => removeStateClass))`). Single rAF batches both into the same frame and the transition skips.
-
-- **AbortController on in-flight fetches** when doing debounced search-as-you-type. Without it, fast typists see out-of-order results overwrite newer ones if network resolves out of order.
-
-- **The `:has(#status.success)` selector** is a clean way to drive CSS state changes from JS-set classes (gate 3e success-morph). When `suggest.js` is off-limits (gate constraint), `:has()` keeps the morph pure CSS.
-
----
-
-## Cadence reminder
-
-Don't sleep / poll / proactively check on long-running tasks. The harness re-invokes when work finishes. If you must wait for an external state change (CI run, deploy), use a Bash `run_in_background` so the harness notifies on completion.
-
-When running multiple independent commands (lint + test + grep), batch them into a single Bash with `&&` or run multiple Bash tool calls in parallel — don't sequence what doesn't need sequencing.
-
----
-
-## One-liner state summary (paste-ready for context)
-
-v1.6.11 (Suggestion Box + admin viewer) is live in prod as of 2026-06-02 21:06:50 via commit `5a5ab9b`; awaiting Blake's gate-11 production verify; the 12-gate ship structure (PROPOSE-FIRST for build gates 0-3, FAST-TRACK for cascade/audit/commit/deploy gates 5-10, Blake-owned smoke gates 4/9/11) is the working pattern; rolling-docs trio (`docs/SHIP-PROMPT.md` Cowork-writes-Code-reads, `docs/SHIP-OUTPUT.md` Code-writes-Cowork-reads, `docs/HANDOFF.md` Cowork-owned) is where the per-gate handoff happens; 7 Cowork-managed workflow docs stay excluded from every commit Code makes via `git add -A` + `git restore --staged ...`; commit author always Blake Wolters with the canonical email via per-commit `--author=` flag (NEVER `git config`), ZERO forbidden trailers (`Co-Authored-By` / `🤖` / `Claude Code` / `Generated with`), enforced via post-commit grep; next ship after gate 11 closes will be v1.7.0 (AniList backfill + MAL integration, ~3 hours, foundation for v1.7.1's multi-fetch architecture that unblocks the v1.6.10-deferred multi-hop + episode aggregation).
+## One-liner state summary (paste-ready)
+v1.7.1 (AniList enrichment polish bundle) is live in prod as of 2026-06-03 13:55:37 via commit `e78f7d6` (after v1.6.12 + v1.7.0 earlier in the session); next queued ship is v1.7.2 multi-fetch data architecture + multi-hop revival (then v1.7.3 secondary modal, v1.8.0 AniList tab); the workflow is the 12-gate model (PROPOSE-FIRST builds 0-3 + `Xb/Xc/...` iteration sub-gates, FAST-TRACK cascade/audit/commit/deploy 5-8 & 10, Blake-owned smoke 4/9/11), with `docs/SHIP-PROMPT.md` (Cowork→Code) / `docs/SHIP-OUTPUT.md` (Code→Cowork, rewritten EVERY response) / `docs/HANDOFF.md` (Cowork-owned) as the rolling trio; biggest trap is gate-numbering drift where prompts credit phantom features that don't exist — always grep/Read the real file state before iterating and surface phantoms loudly; commits are authored Blake Wolters via per-commit `--author=` (never `git config`) with ZERO forbidden trailers (post-commit grep) and the 7 Cowork docs (`COWORK-STYLE`, `AI-PRIMER`, `CODE-PROMPTS`, `SKILLS/{README,hotfix-skill,release-skill,widget-update-skill}`) restored-staged out of every commit; prod deploy only on Blake's explicit "ship it"; key gotchas this session were the `[hidden]` cascade, the `.card .info span{color:gold}` span-tinting, `-webkit-line-clamp` needing literal inline brackets, `color-mix` plain-fallback-first, the bash-grep byte-vs-char smart-quote false positive (use the Grep tool), and the firebase.json leak (CODE-HANDOFF + COWORK-STYLE now ignored); Excel is canonical with 7 AniList columns populated, the backfill CLI (`npm run backfill` with `--dry-run`/`--auto`/`--match`/`--add-native`) is Code-built-Blake-run, and `pickSubtitle` (normalize-then-compare, native fallback) is duplicated in card-render.js + script.js.
