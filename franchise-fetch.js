@@ -190,12 +190,276 @@ query ($id: Int) {
     return { spine, groups, episodesBySeason, failedCount };
   }
 
+  // ──────────────────────────────────────────────────────────────────────
+  // v1.7.4 (gate 2) — SIBLING detail query for the in-site secondary modal.
+  // ADDITIVE: this does NOT touch MORE_INFO_QUERY_NODE or the traversal above
+  // (those drive the load-bearing homepage franchise tree). It returns the
+  // richer single-anime fields the secondary "deep dive" needs — description,
+  // genres, tags, characters, staff, banner, trailer, links — that the lean
+  // per-node query deliberately omits. Single Media(id:) fetch, one hop only,
+  // no relations-within-relations (query-complexity gotcha #8). Caching is the
+  // CALLER's job (script.js, mirroring the franchiseTreeCache pattern) — this
+  // module stays pure-network + Node-CLI-safe (no localStorage / APP_VERSION).
+  // ──────────────────────────────────────────────────────────────────────
+  const MEDIA_DETAIL_QUERY = `
+query ($id: Int) {
+  Media(id: $id, type: ANIME) {
+    id
+    title { romaji english native }
+    description
+    genres
+    tags { name rank isGeneralSpoiler isMediaSpoiler }
+    bannerImage
+    coverImage { extraLarge large color }
+    averageScore
+    meanScore
+    season
+    seasonYear
+    episodes
+    duration
+    format
+    status
+    studios { nodes { name isAnimationStudio } }
+    externalLinks { site url type }
+    trailer { id site thumbnail }
+    streamingEpisodes { title thumbnail }
+    characters(sort: [ROLE, RELEVANCE], perPage: 12) {
+      edges { role node { id name { full } image { medium } } }
+    }
+    staff(sort: RELEVANCE, perPage: 8) {
+      edges { role node { id name { full } image { medium } } }
+    }
+    recommendations(sort: RATING_DESC, perPage: 8) {
+      nodes { mediaRecommendation { id type title { romaji english } format coverImage { large } averageScore } }
+    }
+  }
+}`;
+
+  // Fetch ONE anime's rich detail by id. Same 429/Retry-After single-retry as
+  // fetchMediaById. Returns a normalized object or null on any failure. The raw
+  // AniList `description` (HTML) is returned verbatim — the caller strips it on
+  // render ("HTML strip on read").
+  async function fetchMediaDetail(id, _retried) {
+    if (!id) return null;
+    try {
+      const res = await fetch(ANILIST_ENDPOINT_PUBLIC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ query: MEDIA_DETAIL_QUERY, variables: { id } }),
+      });
+      if (res.status === 429 && !_retried) {
+        const raHeader = parseInt(res.headers.get('Retry-After') || '', 10);
+        const waitMs = Number.isFinite(raHeader) ? raHeader * 1000 : 1000;
+        await sleep(waitMs);
+        return fetchMediaDetail(id, true);
+      }
+      if (!res.ok) return null;
+      const body = await res.json();
+      if (body.errors?.length) return null;
+      const m = body.data?.Media;
+      if (!m || !m.id) return null;
+
+      const charEdges = (m.characters && m.characters.edges) || [];
+      const staffEdges = (m.staff && m.staff.edges) || [];
+      return {
+        id: m.id,
+        title: m.title || { romaji: null, english: null, native: null },
+        description: m.description || '',
+        genres: Array.isArray(m.genres) ? m.genres : [],
+        // Drop spoiler tags; keep the strongest by rank.
+        tags: (Array.isArray(m.tags) ? m.tags : [])
+          .filter(t => t && t.name && !t.isGeneralSpoiler && !t.isMediaSpoiler)
+          .sort((a, b) => (b.rank || 0) - (a.rank || 0))
+          .map(t => ({ name: t.name, rank: t.rank || 0 })),
+        bannerImage: m.bannerImage || null,
+        coverImage: m.coverImage || { extraLarge: '', large: '', color: null },
+        averageScore: m.averageScore || null,
+        meanScore: m.meanScore || null,
+        season: m.season || null,
+        seasonYear: m.seasonYear || null,
+        episodes: m.episodes || null,
+        duration: m.duration || null,
+        format: m.format || null,
+        status: m.status || null,
+        studios: ((m.studios && m.studios.nodes) || [])
+          .filter(s => s && s.name).map(s => ({ name: s.name, isAnimationStudio: s.isAnimationStudio !== false })),
+        externalLinks: (Array.isArray(m.externalLinks) ? m.externalLinks : [])
+          .filter(l => l && l.url && l.site).map(l => ({ site: l.site, url: l.url, type: l.type || null })),
+        trailer: (m.trailer && m.trailer.id) ? { id: m.trailer.id, site: m.trailer.site || null, thumbnail: m.trailer.thumbnail || null } : null,
+        streamingEpisodes: (Array.isArray(m.streamingEpisodes) ? m.streamingEpisodes : [])
+          .map(e => ({ title: (e && e.title) || '', thumbnail: (e && e.thumbnail) || null })),
+        characters: charEdges
+          .filter(e => e && e.node && e.node.name && e.node.name.full)
+          .map(e => ({ id: e.node.id, name: e.node.name.full, image: (e.node.image && e.node.image.medium) || null, role: e.role || null })),
+        staff: staffEdges
+          .filter(e => e && e.node && e.node.name && e.node.name.full && e.role)
+          .map(e => ({ id: e.node.id, name: e.node.name.full, image: (e.node.image && e.node.image.medium) || null, role: e.role })),
+        recommendations: (((m.recommendations && m.recommendations.nodes) || [])
+          .map(n => n && n.mediaRecommendation)
+          .filter(r => r && r.id && r.type === 'ANIME')
+          .map(r => ({
+            id: r.id,
+            title: r.title || { romaji: null, english: null },
+            format: r.format || null,
+            coverImage: r.coverImage || { large: '' },
+            averageScore: r.averageScore || null,
+          }))),
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // v1.7.4 (gate 3, Surface 3) — CHARACTER + STAFF detail queries for the
+  // tertiary "deep dive" layer. ADDITIVE — independent of MEDIA_DETAIL_QUERY and
+  // the traversal. Character/Staff queries are far lighter than Media (no
+  // complexity risk). Caching is the caller's job (script.js rar:character/rar:staff).
+  // ──────────────────────────────────────────────────────────────────────
+  const CHARACTER_DETAIL_QUERY = `
+query ($id: Int) {
+  Character(id: $id) {
+    id
+    name { full native }
+    image { large }
+    description
+    age
+    gender
+    dateOfBirth { year month day }
+    media(sort: POPULARITY_DESC, perPage: 8) {
+      edges {
+        characterRole
+        voiceActors(language: JAPANESE, sort: RELEVANCE) { id name { full } image { medium } }
+        node { id type title { romaji english } coverImage { large } }
+      }
+    }
+  }
+}`;
+
+  const STAFF_DETAIL_QUERY = `
+query ($id: Int) {
+  Staff(id: $id) {
+    id
+    name { full native }
+    image { large }
+    description
+    age
+    gender
+    dateOfBirth { year month day }
+    primaryOccupations
+    homeTown
+    characters(sort: FAVOURITES_DESC, perPage: 8) {
+      nodes { id name { full } image { medium } }
+    }
+    staffMedia(sort: POPULARITY_DESC, perPage: 8) {
+      edges { staffRole node { id type title { romaji english } coverImage { large } } }
+    }
+  }
+}`;
+
+  function fmtDob(d) {
+    if (!d || !d.year) return null;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const mo = (d.month >= 1 && d.month <= 12) ? months[d.month - 1] : '';
+    return [mo, d.day, d.year].filter(Boolean).join(' ');
+  }
+
+  // Fetch one character's detail by id. Same 429/Retry-After single retry.
+  async function fetchCharacterDetail(id, _retried) {
+    if (!id) return null;
+    try {
+      const res = await fetch(ANILIST_ENDPOINT_PUBLIC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ query: CHARACTER_DETAIL_QUERY, variables: { id } }),
+      });
+      if (res.status === 429 && !_retried) {
+        const ra = parseInt(res.headers.get('Retry-After') || '', 10);
+        await sleep(Number.isFinite(ra) ? ra * 1000 : 1000);
+        return fetchCharacterDetail(id, true);
+      }
+      if (!res.ok) return null;
+      const body = await res.json();
+      if (body.errors?.length) return null;
+      const c = body.data?.Character;
+      if (!c || !c.id) return null;
+      const edges = (c.media && c.media.edges) || [];
+      const vaMap = new Map();
+      edges.forEach(e => (e.voiceActors || []).forEach(v => { if (v && v.id && !vaMap.has(v.id)) vaMap.set(v.id, { id: v.id, name: (v.name && v.name.full) || '', image: (v.image && v.image.medium) || null }); }));
+      return {
+        id: c.id,
+        name: (c.name && c.name.full) || '',
+        native: (c.name && c.name.native) || null,
+        image: (c.image && c.image.large) || null,
+        description: c.description || '',
+        age: c.age || null,
+        gender: c.gender || null,
+        dateOfBirth: fmtDob(c.dateOfBirth),
+        voiceActors: Array.from(vaMap.values()).slice(0, 6),
+        appearances: edges
+          .filter(e => e && e.node && e.node.id && e.node.type === 'ANIME')
+          .map(e => ({ id: e.node.id, title: (e.node.title && (e.node.title.english || e.node.title.romaji)) || '', cover: (e.node.coverImage && e.node.coverImage.large) || null, role: e.characterRole || null }))
+          .slice(0, 8),
+      };
+    } catch (_) { return null; }
+  }
+
+  // Fetch one staff member's detail by id.
+  async function fetchStaffDetail(id, _retried) {
+    if (!id) return null;
+    try {
+      const res = await fetch(ANILIST_ENDPOINT_PUBLIC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ query: STAFF_DETAIL_QUERY, variables: { id } }),
+      });
+      if (res.status === 429 && !_retried) {
+        const ra = parseInt(res.headers.get('Retry-After') || '', 10);
+        await sleep(Number.isFinite(ra) ? ra * 1000 : 1000);
+        return fetchStaffDetail(id, true);
+      }
+      if (!res.ok) return null;
+      const body = await res.json();
+      if (body.errors?.length) return null;
+      const s = body.data?.Staff;
+      if (!s || !s.id) return null;
+      const charNodes = (s.characters && s.characters.nodes) || [];
+      const mediaEdges = (s.staffMedia && s.staffMedia.edges) || [];
+      return {
+        id: s.id,
+        name: (s.name && s.name.full) || '',
+        native: (s.name && s.name.native) || null,
+        image: (s.image && s.image.large) || null,
+        description: s.description || '',
+        age: s.age || null,
+        gender: s.gender || null,
+        dateOfBirth: fmtDob(s.dateOfBirth),
+        occupations: Array.isArray(s.primaryOccupations) ? s.primaryOccupations : [],
+        homeTown: s.homeTown || null,
+        characters: charNodes
+          .filter(n => n && n.id && n.name && n.name.full)
+          .map(n => ({ id: n.id, name: n.name.full, image: (n.image && n.image.medium) || null }))
+          .slice(0, 8),
+        staffMedia: mediaEdges
+          .filter(e => e && e.node && e.node.id && e.node.type === 'ANIME')
+          .map(e => ({ id: e.node.id, title: (e.node.title && (e.node.title.english || e.node.title.romaji)) || '', cover: (e.node.coverImage && e.node.coverImage.large) || null, role: e.staffRole || null }))
+          .slice(0, 8),
+      };
+    } catch (_) { return null; }
+  }
+
   const api = {
     traverseFranchise,
     fetchMediaById,
+    fetchMediaDetail,
+    fetchCharacterDetail,
+    fetchStaffDetail,
     fetchBatch,
     sleep,
     MORE_INFO_QUERY_NODE,
+    MEDIA_DETAIL_QUERY,
+    CHARACTER_DETAIL_QUERY,
+    STAFF_DETAIL_QUERY,
     SPINE_RELATIONS,
     TRAVERSE_NODE_CAP,
     TRAVERSE_DEPTH_CAP,

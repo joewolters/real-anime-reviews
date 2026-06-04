@@ -547,6 +547,60 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// v1.7.4 (gate 3) — per-season review CRUD (local admin only; 127.0.0.1).
+// Writes Current Version/season-reviews/<id>.md and rebuilds index.json directly
+// via the shared builder (fast — no Excel read). Production serves the .md +
+// index.json as static files; these endpoints are the WRITE path for Blake's
+// local /admin/season-reviews panel.
+const { buildSeasonReviewIndex, parseFrontmatter, SEASON_DIR } = require('./lib/season-review-index');
+function seasonReviewPath(id) { return path.join(SEASON_DIR, id + '.md'); }
+function validSeasonId(raw) {
+  const id = parseInt(raw, 10);
+  return (Number.isInteger(id) && id > 0 && String(id) === String(raw).trim()) ? id : null;
+}
+
+app.get('/api/season-review/:id', async (req, res) => {
+  const id = validSeasonId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid id' });
+  try {
+    const text = await fsp.readFile(seasonReviewPath(id), 'utf8');
+    const { meta, body } = parseFrontmatter(text);
+    res.json({ exists: true, id, title: meta.title || '', date: meta.date || '', rating: meta.rating || '', body: String(body || '').replace(/^\n+/, '') });
+  } catch (_) {
+    res.status(404).json({ exists: false, id });
+  }
+});
+
+app.put('/api/season-review/:id', async (req, res) => {
+  const id = validSeasonId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid id' });
+  const { title, rating, body } = req.body || {};
+  if (!body || !String(body).trim()) return res.status(400).json({ error: 'body required' });
+  const today = new Date().toISOString().slice(0, 10);
+  const fm = ['---', `title: ${String(title || '').replace(/[\r\n]+/g, ' ').trim()}`, `aniListId: ${id}`, `date: ${today}`];
+  if (rating != null && String(rating).trim()) fm.push(`rating: ${String(rating).replace(/[\r\n]+/g, ' ').trim()}`);
+  fm.push('---', '', String(body).replace(/\r\n/g, '\n').trim(), '');
+  try {
+    await fsp.mkdir(SEASON_DIR, { recursive: true });
+    await fsp.writeFile(seasonReviewPath(id), fm.join('\n'), 'utf8');
+    const idx = buildSeasonReviewIndex();
+    console.log(`${C.gray}[mode1] /api/season-review${C.reset} PUT ${id} · index now ${idx.count} review(s)`);
+    res.json({ ok: true, id, count: idx.count });
+  } catch (err) {
+    console.error(`${C.red}[mode1] /api/season-review${C.reset} ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/season-review/:id', async (req, res) => {
+  const id = validSeasonId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid id' });
+  try { await fsp.unlink(seasonReviewPath(id)); } catch (_) { /* already gone */ }
+  const idx = buildSeasonReviewIndex();
+  console.log(`${C.gray}[mode1] /api/season-review${C.reset} DELETE ${id} · index now ${idx.count} review(s)`);
+  res.json({ ok: true, id, count: idx.count });
+});
+
 smokeCheckSpawn().then(() => {
   app.listen(PORT, '127.0.0.1', () => {
     console.log('');

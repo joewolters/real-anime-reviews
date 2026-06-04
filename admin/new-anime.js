@@ -1453,3 +1453,52 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+// ============================================================================
+// v1.7.4 (gate 3b) — Review field markdown: live preview + B/I/Link toolbar.
+// Uses the shared window.renderMarkdown (markdown.js) — single source of truth.
+// ============================================================================
+function initReviewMarkdown() {
+  const ta = document.getElementById('review-input');
+  const preview = document.getElementById('review-md-preview');
+  const toolbar = document.getElementById('review-md-toolbar');
+  if (!ta || !preview) return;
+
+  const updatePreview = () => {
+    const v = ta.value;
+    preview.innerHTML = (v && v.trim() && window.renderMarkdown)
+      ? window.renderMarkdown(v)
+      : '<p class="md-preview-empty">Formatted preview appears here as you type.</p>';
+  };
+
+  // Wrap the current selection (or a placeholder) with markdown markers.
+  const wrap = (before, after, placeholder) => {
+    const s = ta.selectionStart, e = ta.selectionEnd, val = ta.value;
+    const sel = val.slice(s, e) || placeholder;
+    ta.value = val.slice(0, s) + before + sel + after + val.slice(e);
+    const ns = s + before.length;
+    ta.setSelectionRange(ns, ns + sel.length);
+    ta.focus();
+    updatePreview();
+  };
+
+  ta.addEventListener('input', updatePreview);
+  if (toolbar) {
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target.closest('.md-btn');
+      if (!btn) return;
+      e.preventDefault();
+      const kind = btn.dataset.md;
+      if (kind === 'bold') wrap('**', '**', 'bold text');
+      else if (kind === 'italic') wrap('*', '*', 'italic text');
+      else if (kind === 'link') wrap('[', '](https://)', 'link text');
+    });
+  }
+  updatePreview();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initReviewMarkdown);
+} else {
+  initReviewMarkdown();
+}

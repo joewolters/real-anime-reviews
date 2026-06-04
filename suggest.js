@@ -441,3 +441,44 @@ document.addEventListener('click', (e) => {
 });
 
 $('suggest-form').addEventListener('submit', handleSubmit);
+
+// ---- Prefill from /suggest?title=&anilistId= -------------------------------
+// v1.7.4 (gate 2b) — the homepage secondary modal's "📝 Request this anime"
+// button links here with the title + AniList id. (This page previously read NO
+// URL params — the v1.6.11 prefill loop only covered the admin queue → Mode 1
+// form, not the public suggest page; added here so the Request button works.)
+// Resolves the exact AniList entry so the suggestion carries anilistId + cover/
+// format (same payload a manual dropdown pick yields), with a bare {id,title}
+// fallback. Card shown synchronously — no transition dependency, reduced-motion-safe.
+function showPrefilledSelection(sel) {
+  selection = sel;
+  populateCard(sel);
+  const wrap = document.querySelector('.suggest-search-wrap');
+  if (wrap) { wrap.hidden = true; wrap.classList.remove('is-leaving', 'is-entering'); }
+  $('suggest-selected').hidden = false;
+}
+
+function prefillSuggestFromQuery() {
+  let params;
+  try { params = new URLSearchParams(location.search); } catch (_) { return; }
+  const title = (params.get('title') || '').trim().slice(0, 200);
+  const aniId = parseInt(params.get('anilistId') || '', 10);
+  if (!title && !Number.isFinite(aniId)) return;
+  if (title) $('suggest-title').value = title;          // raw-title fallback (always)
+  if (!Number.isFinite(aniId) || !title) return;        // no id → leave the typed title
+
+  const bare = { id: aniId, englishTitle: title, romajiTitle: null, coverImage: null, format: null, year: null };
+  searchLite(title).then(results => {
+    const match = (results || []).find(r => r && r.id === aniId);
+    showPrefilledSelection(match ? {
+      id: match.id,
+      englishTitle: match.title?.english || null,
+      romajiTitle: match.title?.romaji || null,
+      coverImage: match.coverImage?.medium || null,
+      format: match.format || null,
+      year: match.seasonYear || null,
+    } : bare);
+  }).catch(() => showPrefilledSelection(bare));
+}
+
+prefillSuggestFromQuery();

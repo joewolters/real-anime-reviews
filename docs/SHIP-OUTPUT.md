@@ -1,75 +1,44 @@
 <!-- author: Code | date: 2026-06-04 -->
-# v1.7.4 — Gate 0 (recon + propose: Modal Architecture Overhaul — PROPOSE-FIRST, PROPOSAL ✓)
+# v1.7.4 — Gate 5 (audits — FAST-TRACK ✓ ALL PASS)
 
-> Full recon done (modal-build path, More Info wiring, franchise query, layout CSS, sync/admin/server, watchlist schema). Nothing applied. Below: per-scope recon + proposal + Δ + creative alternatives + pushback, then answers to the 7 open questions + gate split. **3 stop-conditions surfaced** (new detail query, the "exact width" baseline ambiguity, the always-visible width vs viewport tension).
-
-## Recon — what exists today
-- **`openModal` (`script.js:4067`)** → `modal.classList.add('duo')`, then `modalContent.innerHTML = [more-info-container][sheet--left (main review)][sheet--right (community)]`.
-- **Layout (`style.css:2799`):** `.modal.duo .modal-content { grid-template-columns: auto 1.6fr 1fr; gap:18px }`, `.modal.duo { max-width:1200px; width:96% }`. More Info container **140px collapsed → 260px expanded** (tab slides out, panel `translateX(-100%)→0`). Stacks to 1-col at `@max-width:1000px`.
-- **Click delegation (`script.js:4287`):** ep-toggle / partial-fail retry / catalog-row → `openModal(internal)` / **non-catalog `data-anilist-id` → `window.open('anilist.co/anime/{id}')` at `:4314`** — this is the exact hook the secondary modal replaces.
-- **`franchise-fetch.js` `MORE_INFO_QUERY_NODE`** returns id/title/format/episodes/seasonYear/type/status/studios/averageScore/coverImage/streamingEpisodes/relations — **NO `description`, `genres`, `characters`, `bannerImage`, `tags`**. The secondary modal needs those.
-- **Watchlist already exists** (per prompt recon, confirmed): `users/{uid}/watchlist/{animeId}` (firestore.rules), account tab + per-card watch button (`script.js:264`), catalog-slug-keyed.
+> The full pre-commit audit battery is green. **npm test: 7 passed (15.5s)** (full set). **gitignore↔firebase mirror:** correct — all new deployable files ship, all secrets/docs ignored both places. **diff scope:** matches the expected v1.7.4 shape exactly; the only "extra" files are the 6 Cowork-managed doc excludes (+ COWORK-STYLE), which restore-stage out at gate 6. **Smart-quote sweep (Grep TOOL):** no curly quotes in any HTML attribute, JS string delimiter, or new code. Ready for gate 6 commit.
 
 ---
 
-## Scope 1 — Secondary modal architecture
-**Integration:** replace `window.open(anilist.co)` (`script.js:4314`) with `openSecondaryModal(aniListId)`.
-**⚠️ STOP-CONDITION (needs ratification):** the secondary modal needs richer data (`description`/`genres`/`characters`/`bannerImage`) the **load-bearing** `MORE_INFO_QUERY_NODE` doesn't return. I will **NOT** extend that query (it drives the live homepage traversal). Instead: a **new sibling `MEDIA_DETAIL_QUERY` + `fetchMediaDetail(id)`** in `franchise-fetch.js` — additive, the existing traversal untouched. Requesting OK to add the sibling.
-**Proposal:** `#secondary-modal` overlay at higher z-index than the primary; top-left `← Back to <show title>` (Decision 2); replace-content on related-click within it (Decision 3); per-anime cache `rar:anime:v{APP_VERSION}:{id}` 24h, version-prefix sweep + try/catch (Decision 4, v1.7.2 conventions). Primary stays MOUNTED underneath (the secondary is a layer, not a rebuild) → primary scroll/tab state preserved for free; Back just hides the layer.
-**3 visual treatments (creative latitude):**
-- **(A) Same frame, "gone deeper": slide-in-from-right over a dimmed+blurred primary, accent-shifted header (warmer kicker), Back arrow top-left.** *Why: cohesive world, primary contextually visible behind — premium + oriented.* ← **RECOMMEND**
-- (B) Nested smaller card centered, primary blurred behind. *Why: "focus pop," but breaks layout continuity.*
-- (C) Full-bleed drill-down drawer from the right covering the primary. *Why: immersive, but reads like a page change, not a layer.*
-**Δ:** `script.js` ~+150, `style.css` ~+120, `franchise-fetch.js` ~+30.
+## 1 — `npm test` (Playwright) → PASS
+`npm test` from `Current Version/` → **`7 passed (15.5s)`** — the full passing set (matches the established baseline). No regressions from the v1.7.4 work. Project rule #7 satisfied.
 
-## Scope 2 — Always-visible More Info (layout restructure)
-Remove the tab (Decision 6); render the panel on modal open (call `runMoreInfo` immediately; drop the collapsed state machinery).
-**⚠️ STOP-CONDITION + OPEN-Q (width):** "Main + Community keep EXACTLY current widths" is ambiguous — the `fr` columns currently **reflow**: Main/Community are ≈630/394px when More Info is collapsed (140), ≈556/348px when expanded (260). An always-visible wider More Info (~380px) **with Main/Community pinned exact** forces the modal to ~**1380px**, which exceeds 96% of a 1280px viewport.
-**Proposal:** fix Main/Community at their current **default-open** px (≈630/394) + More Info fixed at 380px, bump `.modal.duo` max-width to ~1380px, **stack to single-column below ~1100px** (extends the existing @1000px stack — desktop-first per Blake's v2-defer). **Need Blake's call:** is the "exact" baseline the collapsed-open widths (630/394) or expanded (556/348)?
-**Δ:** `script.js` ~−15, `style.css` ~+40.
+## 2 — `.gitignore` ↔ `firebase.json` mirror → PASS
+**New deployable files — confirmed NOT ignored (they deploy):** `git check-ignore` returns **none** for `markdown.js`, `season-reviews/index.json`, `admin/season-reviews.{html,js,css}`, `franchise-fetch.js`, `scripts/lib/season-review-index.js`. None match any `firebase.json` ignore pattern either (not dotfiles, not under `docs/`, `node_modules`, `tests/`, etc.) → all serve as public/admin content. Correct.
+**Secrets / non-deploy — confirmed ignored both places:**
+- `.env` → gitignored (`.env`, `.env.*`) + firebase-ignored (`**/.*`). The Anthropic key never deploys.
+- Rolling/internal docs `docs/SHIP-*.md`, `docs/HANDOFF.md`, `docs/CODE-HANDOFF.md`, `docs/COWORK-STYLE.md` → firebase-ignored (explicit entries) so they 404 on prod, while still committed to git (intended).
+- `tests/**`, `playwright.config.js`, `package*.json`, `PERSONAL.md`, `AUDIT_*.md` → firebase-ignored. Unchanged.
+**No mirror change needed** — every new file is public-safe (no secrets) and the secret/doc posture is identical to v1.7.3.
 
-## Scope 3 — Per-season review (storage + sync + render + admin)
-**Storage (refining Cowork's markdown lean):** `season-reviews/<aniListId>.md` (frontmatter: title/aniListId/date; body: prose) — diffable, version-controlled, prose-appropriate. **Plus a sync-emitted index** (`season-reviews/index.json`, or a field in `animeData.js`) listing which AniListIds have reviews — required so the ALSO-LIKED "Reviewed / Not-reviewed" pill resolves at render time **without** probing every file. **Render:** lazy-fetch the `.md` by id when the secondary modal opens (404 = no review).
-**Renderer:** **hand-rolled minimal markdown** (bold/italic/headers/paragraphs/links, ~40 lines) — **no new visitor dep** (avoids `marked`, honors the no-perf-dep constraint).
-**Admin trigger — RECOMMEND (a):** inline **"Edit season review →"** in the secondary modal (admin-gated) → new Mode 1 `/api/season-review` endpoint writes the `.md` locally (same local-server pattern as the chatbot). *Why: most contextual — edit the season you're viewing.* Editor = textarea + live preview pane (same renderer); no rich-text toolbar.
-**Render fallback:** review present → show as primary content; absent → "No specific review for this season yet" + AniList description as body.
-**Alternative storage:** sync pre-renders all `.md` → a `season-reviews.js` bundle (build-time md lib = build-only dep, dep-free at runtime; one fetch but bundle grows with review count). I lean lazy-per-file.
-**Δ:** new `season-reviews/` dir, `sync-excel-to-js.js` ~+30, `script.js` ~+70 (render + fetch + parser), `admin/new-anime.*` + `mode1-server.js` ~+90.
+## 3 — `git diff --stat` scope review → PASS (matches expected)
+26 files changed, +2555 / −336. Every entry is expected v1.7.4 shape:
+- **Large JS/CSS:** `script.js` +949 (secondary+tertiary modals, routing, markdown wiring), `style.css` +988 (3-col + secondary/tertiary/review/polish). ✓
+- **New files:** `markdown.js`, `admin/season-reviews.{html,js,css}`, `scripts/lib/season-review-index.js`, `season-reviews/` (`index.json`). ✓
+- **Edits:** `franchise-fetch.js` +264 (gate-2 detail query + gate-3 char/staff), `admin/new-anime.{html,js,css}` (markdown editor + toolbar), `suggest.js` +41 (param prefill), `admin-fab.js` +14 (admin-gate DRY + menu item), `scripts/mode1-server.js` +54 (`/api/season-review`), `scripts/sync-excel-to-js.js` +13 (index hook), `scripts/bump-version.js` +47 (7 new targets). ✓
+- **Cache-bumped HTML (gate 4):** `index.html`, `account.html`, `admin/new-anime.html`, `admin/suggestions.html`, `suggest.html`, `admin/season-reviews.html`. ✓
+- **Docs:** `CHANGELOG.md`, `ROADMAP.md`, `docs/NEXT.md`. ✓
+**Out-of-scope check — the 6 tracked Cowork excludes** (`docs/AI-PRIMER.md`, `docs/CODE-PROMPTS.md`, `docs/SKILLS/{README,hotfix-skill,release-skill,widget-update-skill}.md`) + untracked `docs/COWORK-STYLE.md` show as modified — **these are NOT my edits** (Cowork-managed) and **restore-stage out of the commit at gate 6** per the exclude pattern. `docs/SHIP-OUTPUT.md` (mine) + `docs/SHIP-PROMPT.md` (Cowork's) are the committed rolling trio. **No genuinely unexpected file in the diff.**
 
-## Scope 4 — Currently-Viewing indicator update
-On secondary open for a franchise id, move the More Info `CURRENTLY VIEWING` highlight to that row; Back restores it to the source. **200ms fade** transition (matches the panel's premium feel; reduced-motion → instant). Δ ~+20 js / +10 css.
+## 4 — Smart-quote sweep (Grep TOOL) → PASS
+Searched the touched HTML/JS/CSS with the **Grep tool** (not bash — avoids the byte-vs-char false positive, gotcha #9):
+- **Curly double-quotes (`“ ”`):** only in pre-existing comments (`script.js`/`style.css`), data text (`animeData.js` descriptions), and intentional curly→straight normalization regexes (`scripts/sync-excel-to-js.js`, `scripts/anilist-backfill.js`). **None in HTML attributes, JS string delimiters, or any new v1.7.4 code.**
+- **Curly quotes in attribute positions (`=‘’“”` / `‘’“”…=`) across all HTML:** **0 matches.**
+- `node --check` already passed on every touched JS file, which would have caught any curly-quote-as-delimiter. The Edit-tool curly-conversion risk did not materialize.
 
-## Scope 5 — "Not Reviewed yet" treatment (Decision 5c — both)
-Amber dot/kicker on ALSO-LIKED cards pre-click (driven by the season-review index) + a header indicator in the secondary modal when viewing a non-catalog entry. Visually distinct from the green `✓ REVIEWED` pill (which v1.7.3 made multi-season-aware). Δ ~+15 js / +15 css.
+## Phantom-drift audit
+None. Each audit was run for real (test executed, `git check-ignore` queried, diff enumerated, Grep tool used) — nothing assumed. The npm-test count (7) was read from the actual run, not the handoff. The "modified but not mine" docs were positively identified as the Cowork excludes rather than flagged as unexpected.
 
-## Forward-compat for v1.7.5 (flag, NOT this ship)
-- Reserve a header/footer **slot for a future "Add to watchlist" button** in the secondary modal so v1.7.5 needs no layout re-shuffle.
-- The watchlist schema is **catalog-slug-keyed**; non-catalog AniListId entries will need a discriminator (`{type:'anilist', aniListId}`) or a parallel sub-collection. **v1.7.5 plan hint.**
+## Minor note (not blocking)
+- `docs/CODE-HANDOFF.md` is **not** in the diff — I haven't refreshed it this session. That's the Code↔Code handoff doc (refreshed between ships, typically at session end), not a gate-5 audit target. Flagging so it gets a refresh before the session closes; it does not block the commit.
 
-## Answers to the 7 open questions
-1. **Storage:** markdown files + sync-emitted index + lazy fetch (recommend); bundle alternative noted.
-2. **Admin trigger:** (a) inline "Edit season review" in the secondary modal → local `/api/season-review`.
-3. **Editor:** textarea + live preview (no toolbar).
-4. **Responsive:** fixed-px columns at ~1380px max-width, stack <1100px — pending the "exact baseline" call.
-5. **Secondary visual:** treatment (A) slide-in over dimmed primary (recommend) + 2 alternatives above.
-6. **Back-restore state:** primary stays mounted under the layer → scroll/tab state preserved automatically; Back hides the layer.
-7. **CURRENTLY VIEWING transition:** 200ms fade.
-
-## Pushback on locks
-None blocking — the 8 locks are coherent. Two items need Blake's input rather than pushback: the **"exact width" baseline** (Q4) and ratification for the **additive sibling detail query** in `franchise-fetch.js` (low-risk, doesn't touch the existing traversal).
-
-## Gate split (endorse Cowork's 3)
-- **Gate 1** — layout restructure (always-visible More Info, remove tab, fixed-px columns + responsive). Foundation.
-- **Gate 2** — secondary modal (overlay/Back/replace-content/Currently-Viewing/cache + the new `MEDIA_DETAIL_QUERY`).
-- **Gate 3** — per-season reviews (markdown storage + sync index + lazy render + hand-rolled parser + admin editor + Mode 1 endpoint).
-- **Estimate:** ~12-18h.
-
-## Decisions for Blake
-1. **"Exact width" baseline** — collapsed-open widths (≈630/394) or expanded (≈556/348)? (drives the layout)
-2. **Secondary visual** — approve treatment (A), or pick B/C?
-3. **Per-season storage** — markdown-files+index+lazy (recommend) vs the pre-rendered bundle?
-4. **Admin trigger** — inline secondary-modal button (recommend) vs standalone route/CLI?
-5. **OK to add the sibling `MEDIA_DETAIL_QUERY`** to `franchise-fetch.js` (additive, the live traversal untouched)?
+## State for gate 6 (commit + push)
+- Working tree is audit-clean. At commit: `git add -A` → `git restore --staged` the **7 Cowork excludes** (`docs/COWORK-STYLE.md`, `docs/AI-PRIMER.md`, `docs/CODE-PROMPTS.md`, `docs/SKILLS/README.md`, `docs/SKILLS/hotfix-skill.md`, `docs/SKILLS/release-skill.md`, `docs/SKILLS/widget-update-skill.md`) → confirm they're absent from `--cached` → commit authored `Blake Wolters <196413457+joewolters@users.noreply.github.com>` with ZERO forbidden trailers (ASCII-safe subject), then verify `%an %ae` + 0 trailer matches. Branch is `main` (every ship). Prod deploy ONLY on Blake's explicit "ship it."
 
 ## One-liner reply
-v1.7.4 Gate 0 recon+proposal written (propose-only) — mapped the modal architecture (`openModal` builds a `duo` grid `[More Info | 1.6fr main | 1fr community]`, More Info collapses 140→260 via a tab, and non-catalog `data-anilist-id` rows currently `window.open(anilist.co)` at script.js:4314 = the secondary-modal hook); proposed a layered `#secondary-modal` (slide-in over a dimmed primary — recommend treatment A of 3, primary stays mounted so Back preserves scroll/tab state, per-anime 24h cache) fed by a **new additive sibling `MEDIA_DETAIL_QUERY`** in franchise-fetch.js (surfaced as a stop-condition — won't touch the load-bearing traversal query, needs ratification); always-visible More Info by removing the tab + fixing Main/Community at their current px and bumping the modal to ~1380px with a <1100px stack (surfaced the width-vs-viewport tension + the "exact baseline" ambiguity as the key open question); per-season reviews as `season-reviews/<id>.md` + a sync-emitted index + lazy fetch + a hand-rolled ~40-line markdown renderer (no visitor dep), authored via an inline admin "Edit season review" button → a local Mode 1 `/api/season-review` endpoint, rendered as the secondary modal's primary content with an AniList-description fallback; plus the CURRENTLY-VIEWING highlight moving on stack-nav (200ms fade), the amber "Not Reviewed yet" pill distinct from the green ✓ REVIEWED, and a reserved watchlist-button slot + schema hint for v1.7.5 (don't build now); endorsed the 3-gate split (~12-18h); 5 decisions queued for Blake (exact-width baseline, secondary visual A/B/C, storage shape, admin trigger, and OK on the sibling query).
+v1.7.4 **Gate 5 (audits) — ALL PASS, ready for gate 6 commit**: `npm test` came back **7 passed (15.5s)** (full set, no regressions); the **gitignore↔firebase mirror is correct** — `git check-ignore` confirms the new deployable files (`markdown.js`, `season-reviews/`, `admin/season-reviews.*`, `franchise-fetch.js`, `scripts/lib/season-review-index.js`) all ship while `.env` (Anthropic key) stays ignored both places via `.env*`/`**/.*` and the rolling/internal docs stay firebase-ignored; the **diff scope matches the expected v1.7.4 shape exactly** (script.js +949, style.css +988, franchise-fetch +264, the new files, the admin/suggest/sync/bump edits, the gate-4 HTML bumps + CHANGELOG/ROADMAP/NEXT) with the only "extra" files being the 6 tracked Cowork doc excludes + COWORK-STYLE that restore-stage out at commit; the **smart-quote sweep via the Grep TOOL is clean** — the only curly doubles are pre-existing comments/data/normalization-regexes, zero curly quotes in any HTML attribute or JS string delimiter or new code, and node --check already vetted every touched JS; flagged one non-blocker (CODE-HANDOFF.md not yet refreshed this session); ready for gate 6 (commit authored Blake, zero trailers, the 7 Cowork excludes restored-out), then preview/prod on your "ship it."

@@ -561,6 +561,19 @@ function main() {
     return;
   }
 
+  // v1.7.4 (gate 3) — refresh the season-review index on every real sync (even if
+  // animeData is unchanged below; reviews live in markdown files independent of
+  // Excel). The mode1 PUT/DELETE endpoints also rebuild it directly.
+  if (!dryRun) {
+    try {
+      const { buildSeasonReviewIndex } = require('./lib/season-review-index');
+      const idx = buildSeasonReviewIndex();
+      console.log(`  Season-review index: ${idx.count} review(s) → season-reviews/index.json`);
+    } catch (e) {
+      console.log(`${C.yellow}!${C.reset} season-review index skipped: ${e.message}`);
+    }
+  }
+
   const newText = renderJsFile(animes);
   const oldText = fs.existsSync(OUTPUT_PATH) ? fs.readFileSync(OUTPUT_PATH, 'utf8') : '';
   const diff = summarizeDiff(oldText, newText);

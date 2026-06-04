@@ -2792,7 +2792,10 @@ body.filter-open { overflow: hidden; }
   background: transparent;
   padding: 0;
   box-shadow: none;
-  max-width: 1200px;
+  /* v1.7.4: fits the locked fixed-px grid. border-box, so max-width includes the
+     16px*2 padding; grid needs 380+630+394 + 2*18 gap = 1440 + 32 = 1472. The
+     gate's ~1380 estimate would clip the community sheet ~92px — corrected here. */
+  max-width: 1472px;
   width: 96%;
 }
 
@@ -2801,8 +2804,13 @@ body.filter-open { overflow: hidden; }
   padding: 0;
   box-shadow: none;
   display: grid;
-  grid-template-columns: auto 1.6fr 1fr;  /* v1.6.8: auto More Info col | left details | right community */
-  gap: 18px;
+  /* v1.7.4 gate-1b: proportional fr columns preserve the locked 380:630:394 ratio
+     (More Info | main review | community). At the 1472px max-width the content area
+     is 1440 and 380+630+394=1404 + 36 gap = 1440, so ultra-wide renders EXACTLY
+     380/630/394 (identical to gate-1 fixed-px); below that all three shrink in
+     lockstep. minmax(0,…) lets tracks shrink past content so nothing overflows. */
+  grid-template-columns: minmax(0, 380fr) minmax(0, 630fr) minmax(0, 394fr);
+  gap: clamp(12px, 1.2vw, 18px);   /* gutters ease in on laptop widths, 18px at ultra-wide */
   align-items: start;
   max-height: 90vh;
   overflow: visible;                 /* sheets handle their own scroll */
@@ -2814,7 +2822,8 @@ body.filter-open { overflow: hidden; }
   background: rgba(30, 0, 60, 0.95);
   border-radius: 15px;
   box-shadow: 0 0 20px rgba(185, 0, 255, 0.7);
-  padding: 24px;
+  padding: clamp(16px, 1.6vw, 24px);  /* v1.7.4 gate-1b: tighter interior on laptops, 24px at ultra-wide */
+  min-width: 0;                        /* allow the fr track to shrink the sheet below its content width */
   max-height: 88vh;
   overflow: auto;
 }
@@ -2842,75 +2851,58 @@ body.filter-open { overflow: hidden; }
   transform: scale(1.06);
 }
 
-/* Stack sheets on narrow screens */
-@media (max-width: 1000px) {
+/* Single-column stack only at mobile widths (v1.7.4 gate-1b: 1100px -> 900px, per
+   Blake's "keep 3-col on laptops, single-stack on mobile"). The proportional fr
+   grid above shrinks gracefully from ultra-wide down to this floor. NOTE: this rule
+   lives in style.css (not mobile.css) because mobile.css has NO duo-modal handling —
+   the duo modal has always stacked here; removing it outright (Cowork's lean) would
+   leave phones with a squished 3-col. Stacked order = Main Review -> More Info ->
+   Community (primary content first; set via `order` so desktop DOM order is unchanged). */
+@media (max-width: 900px) {
+  /* v1.7.4 gate-1c — the stacked column is ONE natural scroll. Gate 1b left the
+     duo modal's overflow:visible (non-scrolling, fixed+centered) plus per-panel
+     max-height:80vh/overflow:auto, so tall stacked content couldn't scroll as a
+     unit and the semi-transparent More Info panel overlapped / bled through the
+     Main Review trailer. Restore the modal's own scroll and drop the per-panel
+     height caps so each panel is a full-height opaque block in the scroll flow. */
+  .modal.duo {
+    overflow-y: auto;
+  }
   .modal.duo .modal-content {
     grid-template-columns: 1fr;
     gap: 14px;
+    max-height: none;     /* let the stack take its full height; the modal scrolls */
+    flex-shrink: 0;       /* don't let the flex parent compress the grid below content */
   }
-  .sheet {
-    max-height: 80vh;
+  /* full-height blocks — no internal scroll, no overlap */
+  .sheet,
+  .more-info-panel {
+    max-height: none;
+    overflow: visible;
   }
-  /* v1.6.8 — let More Info container stack vertically with the sheets */
+  /* let More Info container stack vertically with the sheets */
   .more-info-container {
     width: 100% !important;
+    order: 2;
   }
+  .sheet--left  { order: 1; }
+  .sheet--right { order: 3; }
 }
 
 /* ============================================================================
-   v1.6.8 — More Info panel: collapsed tab + expanded relations panel
+   v1.7.4 — More Info panel: always-visible 3rd column (collapse tab removed)
    ============================================================================ */
 
-/* Container — first child of .modal-content (a 3rd column in the duo grid).
-   Width transitions between collapsed (~40px, just the tab) and expanded
-   (~260px, matches Community Tab on the right). */
+/* Container — first child of .modal-content. The proportional fr grid track sets
+   its width (~380px at ultra-wide, shrinking below); min-width:0 lets it shrink
+   past content. The <900px stack override re-pins it to width:100%. */
 .more-info-container {
   position: relative;
-  width: 140px;
-  transition: width 220ms ease;
+  min-width: 0;
   overflow: visible;
 }
-.more-info-container[data-state="expanded"] {
-  width: 260px;
-}
 
-/* Collapsed-state tab — horizontal pill on the far-left edge of the modal */
-.more-info-tab {
-  position: absolute;
-  top: 18px;
-  left: 0;
-  width: 130px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: linear-gradient(180deg, rgba(40,18,70,.85), rgba(20,6,38,.95));
-  border: 1px solid rgba(187,134,252,.32);
-  border-radius: 12px;
-  color: #bb86fc;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 11px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: opacity 180ms ease, transform 180ms ease, border-color 160ms ease;
-  z-index: 2;
-}
-.more-info-tab:hover {
-  border-color: rgba(187,134,252,.6);
-}
-.more-info-tab-icon {
-  font-size: 9px;
-  line-height: 1;
-}
-.more-info-container[data-state="expanded"] .more-info-tab {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-20px);
-}
-
-/* Expanded-state panel — slides out from the left, matches Community Tab styling */
+/* Panel — always rendered, matches Community Tab styling */
 .more-info-panel {
   position: relative;
   width: 100%;
@@ -2918,42 +2910,8 @@ body.filter-open { overflow: hidden; }
   background: linear-gradient(180deg, rgba(40,18,70,.85), rgba(20,6,38,.95));
   border: 1px solid rgba(187,134,252,.32);
   border-radius: 12px;
-  padding: 14px 12px;
-  opacity: 0;
-  transform: translateX(-100%);
-  transition: opacity 220ms ease, transform 220ms ease;
-  pointer-events: none;
+  padding: clamp(10px, 1vw, 14px) clamp(10px, 0.9vw, 12px);  /* gate-1b: tighter interior on laptops */
   overflow-y: auto;
-}
-.more-info-container[data-state="expanded"] .more-info-panel {
-  opacity: 1;
-  transform: translateX(0);
-  pointer-events: auto;
-}
-
-/* X close — mirrors .sheet .close-button */
-.more-info-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 3;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: #efd9ff;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  transition: background .15s, transform .1s, color .15s;
-}
-.more-info-close:hover {
-  background: rgba(167,139,250,.18);
-  color: #fff;
-  transform: scale(1.06);
 }
 
 /* Header — MORE INFO + 詳細情報 subtitle (reuses existing .jp-mini at style.css:781) */
@@ -2962,7 +2920,6 @@ body.filter-open { overflow: hidden; }
   align-items: baseline;
   gap: 4px;
   margin-bottom: 12px;
-  padding-right: 32px;  /* clearance for the X button */
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(187,134,252,.18);
 }
@@ -3031,11 +2988,13 @@ body.filter-open { overflow: hidden; }
   font-size: 0.85rem;
   color: #fff;
   line-height: 1.2;
+  overflow-wrap: anywhere;   /* gate-1b: long titles wrap inside the shrunk column instead of overflowing */
 }
 .more-info-romaji {
   font-size: 0.72rem;
   color: rgba(255,255,255,.6);
   margin-top: 2px;
+  overflow-wrap: anywhere;
 }
 .more-info-meta {
   font-size: 0.7rem;
@@ -5239,3 +5198,850 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   .featured-card .title-romaji .rb { transition: none !important; }
 }
 
+/* ============================================================================
+   v1.7.4 (gate 2) — SECONDARY "DEEP DIVE" MODAL
+   A LARGE layer that slides in from the right over a dimmed+blurred primary
+   modal. Same purple cosmos as the rest of the site, but a cinematic banner
+   header + accent glow (driven by --accent, the AniList cover colour) signals
+   "you've gone deeper" without feeling like a different site. z-index sits
+   above the primary modal (.modal = 5100) so the primary stays mounted beneath.
+   ============================================================================ */
+.secondary-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+  display: flex;
+  justify-content: flex-end;   /* slide-in drawer anchored to the right */
+}
+.secondary-layer[hidden] { display: none; }   /* [hidden] beats display:flex */
+
+.secondary-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 0, 18, 0.55);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+  opacity: 0;
+  transition: opacity .28s ease;
+}
+.secondary-layer.active .secondary-backdrop { opacity: 1; }
+
+.secondary-modal {
+  position: relative;
+  width: min(1080px, 94vw);    /* LARGE — leaves a sliver of dimmed primary at left */
+  height: 100%;
+  margin-left: auto;
+  background: linear-gradient(180deg, rgba(26,8,46,0.98), rgba(14,3,28,0.99));
+  border-left: 1px solid rgba(187,134,252,0.22);
+  box-shadow: -34px 0 90px rgba(0,0,0,0.55);
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: translateX(48px);
+  transition: transform .32s cubic-bezier(.16,.84,.44,1), opacity .26s ease;
+}
+.secondary-layer.active .secondary-modal { opacity: 1; transform: translateX(0); }
+
+.secondary-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Header band: banner + scrim + cover poster + title block ── */
+.secondary-header {
+  position: relative;
+  padding: 0;
+  isolation: isolate;
+}
+.secondary-banner {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(40,18,70,0.6);
+  background-size: cover;
+  background-position: center 28%;
+  z-index: 0;
+}
+.secondary-banner-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  /* Legibility scrim — kept as its OWN declaration so it survives even if the
+     accent glow below (color-mix) isn't supported. */
+  background: linear-gradient(180deg, rgba(14,3,28,0.30) 0%, rgba(14,3,28,0.78) 62%, rgba(14,3,28,0.99) 100%);
+}
+/* Accent glow — progressive enhancement; if color-mix is unsupported this whole
+   rule is dropped and the scrim above is unaffected. */
+.secondary-banner-scrim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 80% at 85% 0%, color-mix(in srgb, var(--accent, #b900ff) 28%, transparent) 0%, transparent 60%);
+}
+.secondary-header--bare { min-height: 64px; background: rgba(20,6,38,0.96); }
+
+/* Back chip (top-left) + actions (top-right) float over the banner */
+.secondary-back {
+  position: relative;
+  z-index: 3;
+  margin: 16px 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px 9px 12px;
+  background: rgba(14,3,28,0.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(187,134,252,0.34);
+  border-radius: 999px;
+  color: #efd9ff;
+  font: 700 0.74rem/1 'Montserrat', sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  max-width: calc(100% - 90px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background .16s ease, border-color .16s ease, transform .12s ease;
+}
+.secondary-back:hover { background: rgba(40,18,70,0.85); border-color: rgba(187,134,252,0.6); transform: translateX(-2px); }
+
+.secondary-header-actions {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;        /* gate 2b/2b.4: Request now + v1.7.5 watchlist/favorites wrap cleanly */
+  gap: 10px;
+  max-width: min(70%, 460px);
+}
+.secondary-close {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(187,134,252,0.34);
+  border-radius: 50%;
+  background: rgba(14,3,28,0.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #efd9ff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s, transform .1s, border-color .15s;
+}
+.secondary-close:hover { background: rgba(167,139,250,.28); color: #fff; transform: scale(1.06); border-color: rgba(187,134,252,0.6); }
+
+/* "Request this anime" — brand-purple CTA pill, non-catalog only (gate 2b) */
+.secondary-request {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 15px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(187,134,252,0.30), rgba(140,82,222,0.30));
+  border: 1px solid rgba(187,134,252,0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #f3e9ff;
+  font: 800 0.76rem/1 'Montserrat', sans-serif;
+  letter-spacing: .03em;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, transform .12s ease, box-shadow .16s ease;
+}
+.secondary-request:hover {
+  background: linear-gradient(180deg, rgba(187,134,252,0.45), rgba(140,82,222,0.45));
+  border-color: rgba(187,134,252,0.8);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(140,82,222,0.35);
+}
+.secondary-request-icon { font-size: 0.95rem; line-height: 1; }
+
+.secondary-header-body {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(14px, 2vw, 22px);
+  padding: clamp(40px, 7vw, 78px) clamp(18px, 3vw, 30px) clamp(18px, 2.4vw, 24px);
+}
+.secondary-cover {
+  width: clamp(110px, 14vw, 150px);
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+  flex-shrink: 0;
+  border: 1px solid rgba(187,134,252,0.3);
+  box-shadow: 0 12px 36px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.4);
+}
+.secondary-cover--ph { background: rgba(40,18,70,0.7); }
+.secondary-titleblock { min-width: 0; flex: 1; padding-bottom: 4px; }
+.secondary-kickers { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.secondary-unreviewed-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(245,158,11,0.16);
+  border: 1px solid rgba(245,158,11,0.5);
+  color: #ffcf7a;
+  font: 800 0.62rem/1 'Montserrat', sans-serif;
+  letter-spacing: .14em;
+}
+.secondary-unreviewed-kicker::before {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245,158,11,0.8);
+}
+.secondary-reviewed-kicker {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(34,197,94,0.16);
+  border: 1px solid rgba(34,197,94,0.5);
+  color: #86efac;
+  font: 800 0.62rem/1 'Montserrat', sans-serif;
+  letter-spacing: .12em;
+}
+.secondary-title {
+  margin: 0;
+  font: 800 clamp(1.3rem, 2.4vw, 2rem)/1.12 'Montserrat', sans-serif;
+  color: #fff;
+  text-shadow: 0 2px 14px rgba(0,0,0,0.6);
+  overflow-wrap: anywhere;
+}
+.secondary-romaji {
+  margin: 5px 0 0;
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.62);
+  overflow-wrap: anywhere;
+}
+.secondary-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.secondary-meta {
+  font: 600 0.78rem/1.5 'Montserrat', sans-serif;
+  color: rgba(255,255,255,0.72);
+}
+
+/* Context strip — where the visitor is relative to the source franchise */
+.secondary-context {
+  padding: 11px clamp(18px, 3vw, 30px);
+  background: rgba(40,18,70,0.4);
+  border-top: 1px solid rgba(187,134,252,0.16);
+  border-bottom: 1px solid rgba(187,134,252,0.16);
+  color: #d9c4f5;
+  font: 600 0.8rem/1.4 'Montserrat', sans-serif;
+}
+.secondary-context strong { color: #fff; font-weight: 800; }
+.secondary-context::before { content: "↳ "; color: #bb86fc; }
+.secondary-context--discover { background: rgba(40,18,70,0.28); }
+
+/* ── Body: two columns (main + side), single column when narrow ── */
+.secondary-body {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: clamp(18px, 2.6vw, 30px);
+  padding: clamp(18px, 2.6vw, 30px);
+}
+.secondary-col { min-width: 0; display: flex; flex-direction: column; gap: clamp(18px, 2.4vw, 26px); }
+
+.secondary-section { min-width: 0; }
+.secondary-section-title {
+  margin: 0 0 11px;
+  font: 800 0.7rem/1 'Montserrat', sans-serif;
+  letter-spacing: .18em;
+  color: #bb86fc;
+  text-transform: uppercase;
+}
+
+/* Synopsis (collapsible past ~420 chars) */
+.secondary-desc-body { color: rgba(255,255,255,0.86); font-size: 0.92rem; line-height: 1.65; }
+.secondary-desc-body p { margin: 0 0 10px; }
+.secondary-desc-body p:last-child { margin-bottom: 0; }
+.secondary-desc.is-collapsible .secondary-desc-body {
+  max-height: 8.6em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 64%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 64%, transparent 100%);
+  transition: max-height .3s ease;
+}
+.secondary-desc.is-collapsible.is-open .secondary-desc-body {
+  max-height: 200em;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.secondary-readmore {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  color: #bb86fc;
+  font: 800 0.74rem/1 'Montserrat', sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.secondary-readmore:hover { color: #d9b8ff; text-decoration: underline; }
+
+/* Genres + tags pills */
+.secondary-pills { display: flex; flex-wrap: wrap; gap: 7px; }
+.secondary-pill {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(187,134,252,0.14);
+  border: 1px solid rgba(187,134,252,0.32);
+  color: #e7d8ff;
+  font: 700 0.74rem/1 'Montserrat', sans-serif;
+  letter-spacing: .02em;
+}
+.secondary-pill--tag {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.7);
+  font-weight: 600;
+}
+
+/* Trailer embed */
+.secondary-trailer {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(187,134,252,0.22);
+  background: #000;
+}
+.secondary-trailer iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+/* Characters grid */
+.secondary-char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 12px;
+}
+/* v1.7.4 gate-3b — these are <button>s (clickable → tertiary). Reset the UA
+   button chrome (which rendered as a sharp white outline) back to the brand
+   look; keep a purple keyboard focus ring + a clickable hover. */
+.secondary-char {
+  min-width: 0;
+  text-align: center;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.secondary-char:focus { outline: none; }
+.secondary-char:focus-visible { outline: 2px solid rgba(187,134,252,0.7); outline-offset: 3px; border-radius: 11px; }
+.secondary-char-img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 9px;
+  border: 1px solid rgba(187,134,252,0.2);
+  background: rgba(40,18,70,0.6);
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.secondary-char:hover .secondary-char-img {
+  border-color: rgba(187,134,252,0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+}
+.secondary-char-name {
+  margin-top: 6px;
+  font: 700 0.74rem/1.25 'Montserrat', sans-serif;
+  color: #f1e8ff;
+  overflow-wrap: anywhere;
+}
+.secondary-char-role {
+  font-size: 0.64rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(187,134,252,0.85);
+}
+
+/* Staff list (small avatar + role/name) — rows are clickable <button>s. */
+.secondary-staff-list { display: flex; flex-direction: column; gap: 10px; }
+.secondary-staff-row {
+  display: flex; align-items: center; gap: 11px; min-width: 0;
+  width: 100%; text-align: left;
+  background: none; border: none; padding: 4px; margin: -4px;  /* negative margin keeps layout, gives hover room */
+  font: inherit; color: inherit; cursor: pointer;
+  border-radius: 10px;
+  transition: background .15s ease;
+}
+.secondary-staff-row:hover { background: rgba(187,134,252,0.1); }
+.secondary-staff-row:focus { outline: none; }
+.secondary-staff-row:focus-visible { outline: 2px solid rgba(187,134,252,0.7); outline-offset: 1px; }
+.secondary-staff-img {
+  width: 42px; height: 42px;
+  object-fit: cover;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(187,134,252,0.24);
+  background: rgba(40,18,70,0.6);
+}
+.secondary-staff-meta { min-width: 0; display: flex; flex-direction: column; }
+.secondary-staff-role {
+  font: 800 0.6rem/1.2 'Montserrat', sans-serif;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #bb86fc;
+}
+.secondary-staff-name { font-size: 0.86rem; color: #f1e8ff; overflow-wrap: anywhere; }
+
+/* External links */
+.secondary-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.secondary-link {
+  padding: 6px 13px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(187,134,252,0.26);
+  color: #d9c4f5;
+  font: 700 0.76rem/1 'Montserrat', sans-serif;
+  text-decoration: none;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.secondary-link:hover { background: rgba(187,134,252,0.16); border-color: rgba(187,134,252,0.5); color: #fff; }
+
+/* "More like this" — horizontal carousel; clicking swaps content (replace-content) */
+.secondary-recs-block { padding: clamp(4px, 1vw, 8px) clamp(18px, 3vw, 30px) clamp(24px, 3vw, 32px); }
+.secondary-recs {
+  display: flex;
+  align-items: flex-start;   /* gate 2b: top-align so a 2-line title can't push a card up */
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x proximity;
+}
+.secondary-rec {
+  position: relative;
+  flex: 0 0 auto;
+  width: 116px;
+  scroll-snap-align: start;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.secondary-rec-cover {
+  width: 116px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(187,134,252,0.22);
+  background: rgba(40,18,70,0.6);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.secondary-rec:hover .secondary-rec-cover {
+  transform: translateY(-3px);
+  border-color: rgba(187,134,252,0.6);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.5);
+}
+.secondary-rec-title {
+  margin-top: 7px;
+  font: 700 0.76rem/1.3 'Montserrat', sans-serif;
+  color: #ece2ff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.6em;   /* gate 2b: reserve 2 lines so every card is the same height */
+}
+.secondary-rec-pill {
+  position: absolute;
+  top: 7px; left: 7px;
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(34,197,94,0.92);
+  color: #06280f;
+  font: 800 0.72rem/1 'Montserrat', sans-serif;
+}
+.secondary-rec-dot {
+  position: absolute;
+  top: 9px; left: 9px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(14,3,28,0.7), 0 0 8px rgba(245,158,11,0.8);
+}
+
+/* Loading + error states */
+.secondary-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 320px;
+  color: rgba(255,255,255,0.7);
+  font: 600 0.9rem/1 'Montserrat', sans-serif;
+}
+.secondary-spinner {
+  width: 26px; height: 26px;
+  border: 3px solid rgba(187,134,252,0.25);
+  border-top-color: #bb86fc;
+  border-radius: 50%;
+  animation: secondary-spin .8s linear infinite;
+}
+@keyframes secondary-spin { to { transform: rotate(360deg); } }
+.secondary-empty {
+  padding: 60px clamp(18px, 3vw, 30px);
+  text-align: center;
+  color: rgba(255,255,255,0.72);
+  font-size: 0.92rem;
+}
+.secondary-retry {
+  margin-left: 6px;
+  background: rgba(187,134,252,0.18);
+  border: 1px solid rgba(187,134,252,0.45);
+  border-radius: 8px;
+  color: #efd9ff;
+  font: 700 0.8rem/1 'Montserrat', sans-serif;
+  padding: 7px 13px;
+  cursor: pointer;
+}
+.secondary-retry:hover { background: rgba(187,134,252,0.28); }
+
+/* ── CURRENTLY VIEWING highlight move (primary More Info panel) ──
+   When the secondary modal opens for a row that's in the visible franchise tree,
+   the source's --current highlight fades down and the viewed row lights up. */
+.more-info-entry--viewing {
+  border: 1px solid rgba(187,134,252,0.7) !important;
+  background: rgba(60,28,104,0.55) !important;
+  box-shadow: 0 0 0 1px rgba(187,134,252,0.35), 0 0 16px rgba(187,134,252,0.25);
+  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.more-info--viewing-active .more-info-entry--current:not(.more-info-entry--viewing) {
+  border-color: rgba(187,134,252,0.18);
+  background: rgba(40,18,70,0.18);
+  transition: background .2s ease, border-color .2s ease;
+}
+
+/* Amber "not reviewed yet" dot on non-catalog franchise / ALSO-LIKED rows */
+.more-info-unreviewed-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin-left: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245,158,11,0.7);
+  vertical-align: middle;
+}
+
+/* Narrow stack (<900px) — single-column body, drawer goes full-width */
+@media (max-width: 900px) {
+  .secondary-modal { width: 100vw; border-left: none; }
+  .secondary-body { grid-template-columns: 1fr; }
+  .secondary-header-body { flex-direction: row; }
+  .secondary-cover { width: clamp(92px, 26vw, 120px); }
+  /* gate 2b: collapse the Request pill to icon-only so the action row stays tidy */
+  .secondary-request { padding: 0; width: 38px; justify-content: center; }
+  .secondary-request-label { display: none; }
+}
+
+/* Reduced-motion: no slide, no spin, no lift — instant + static */
+@media (prefers-reduced-motion: reduce) {
+  .secondary-backdrop,
+  .secondary-modal { transition: none !important; }
+  .secondary-modal { transform: none !important; }
+  .secondary-spinner { animation: none !important; }
+  .secondary-back:hover,
+  .secondary-request:hover,
+  .secondary-char:hover .secondary-char-img,
+  .secondary-rec:hover .secondary-rec-cover { transform: none !important; }
+  .secondary-request:hover { box-shadow: none !important; }
+  .secondary-desc.is-collapsible .secondary-desc-body { transition: none !important; }
+  .more-info-entry--viewing,
+  .more-info--viewing-active .more-info-entry--current { transition: none !important; }
+}
+
+
+/* ============================================================================
+   v1.7.4 (gate 3, Surface 1) — BLAKE'S REVIEW (per-season) section in the
+   secondary modal. Gold accent distinguishes Blake's voice from AniList purple.
+   ============================================================================ */
+.secondary-review {
+  border-left: 3px solid rgba(245, 200, 90, 0.65);
+  padding-left: 14px;
+  background: linear-gradient(90deg, rgba(245,200,90,0.06), transparent 60%);
+  border-radius: 4px;
+}
+.secondary-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 11px;
+}
+.secondary-review-title { color: #f5c85a; margin: 0; }
+.secondary-review-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(245,200,90,0.14);
+  border: 1px solid rgba(245,200,90,0.45);
+}
+.secondary-review-rating-kicker { font: 800 0.6rem/1 'Montserrat', sans-serif; letter-spacing: .12em; color: #f5c85a; }
+.secondary-review-rating-divider { color: rgba(245,200,90,0.6); }
+.secondary-review-rating-score { font: 800 0.82rem/1 'Montserrat', sans-serif; color: #ffe39a; }
+
+.secondary-review-body { color: rgba(255,255,255,0.9); font-size: 0.95rem; line-height: 1.7; }
+.secondary-review-body p { margin: 0 0 12px; }
+.secondary-review-body p:last-child { margin-bottom: 0; }
+.secondary-review-body h4,
+.secondary-review-body h5,
+.secondary-review-body h6 {
+  margin: 16px 0 8px;
+  color: #fff;
+  font-family: 'Montserrat', sans-serif;
+  line-height: 1.25;
+}
+.secondary-review-body h4 { font-size: 1.02rem; font-weight: 800; }
+.secondary-review-body h5 { font-size: 0.92rem; font-weight: 700; }
+.secondary-review-body h6 { font-size: 0.82rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #d9c4f5; }
+.secondary-review-body ul { margin: 0 0 12px; padding-left: 20px; }
+.secondary-review-body li { margin-bottom: 5px; }
+.secondary-review-body strong { color: #fff; font-weight: 800; }
+.secondary-review-body em { color: #f0e6ff; }
+.secondary-review-body code {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(187,134,252,0.25);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 0.86em;
+  font-family: 'Consolas', 'Menlo', monospace;
+}
+/* v1.7.4 gate-3d — brand-purple styling for markdown-rendered links across EVERY
+   surface that consumes window.renderMarkdown. The renderer emits <a> with no class
+   (markup is off-limits), so we target the rendering CONTAINERS:
+     .tertiary-bio-body  — character/staff bios (gate 3c)
+     .modal-description / .modal-review — main modal (gate 3b; the new-anime preview
+       reuses .modal-review too)
+     .secondary-review-body — secondary modal Blake's Review + the admin season-review
+       editor preview (#sr-editor-preview also carries this class)
+     .md-preview — admin new-anime preview pane
+   Non-markdown links elsewhere on the site are untouched. */
+.tertiary-bio-body a,
+.modal-description a,
+.modal-review a,
+.secondary-review-body a,
+.md-preview a {
+  color: #bb86fc;
+  text-decoration: underline;
+  text-decoration-color: rgba(187,134,252,0.45);
+  text-underline-offset: 2px;
+  transition: color .15s ease, text-decoration-color .15s ease;
+}
+.tertiary-bio-body a:hover,
+.modal-description a:hover,
+.modal-review a:hover,
+.secondary-review-body a:hover,
+.md-preview a:hover {
+  color: #d9b8ff;
+  text-decoration-color: rgba(217,184,255,0.9);
+}
+/* Keep :visited brand-purple (not the muddy default purple). */
+.tertiary-bio-body a:visited,
+.modal-description a:visited,
+.modal-review a:visited,
+.secondary-review-body a:visited,
+.md-preview a:visited { color: #bb86fc; }
+.tertiary-bio-body a:focus-visible,
+.modal-description a:focus-visible,
+.modal-review a:focus-visible,
+.secondary-review-body a:focus-visible,
+.md-preview a:focus-visible { outline: 2px solid rgba(187,134,252,0.7); outline-offset: 2px; border-radius: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .tertiary-bio-body a,
+  .modal-description a,
+  .modal-review a,
+  .secondary-review-body a,
+  .md-preview a { transition: none !important; }
+}
+.secondary-review--empty { background: none; border-left-color: rgba(245,200,90,0.35); }
+.secondary-review-placeholder { color: rgba(255,255,255,0.6); font-style: italic; margin: 0; font-size: 0.9rem; }
+
+/* Inline admin "Edit review" link — sits in the header action row (admin only) */
+.secondary-edit-review {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(14,3,28,0.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(245,200,90,0.5);
+  color: #f5c85a;
+  font: 800 0.74rem/1 'Montserrat', sans-serif;
+  letter-spacing: .03em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .16s ease, border-color .16s ease, transform .12s ease;
+}
+.secondary-edit-review:hover { background: rgba(245,200,90,0.18); border-color: rgba(245,200,90,0.8); transform: translateY(-1px); }
+.secondary-edit-icon { font-size: 0.92rem; line-height: 1; }
+
+@media (max-width: 900px) {
+  .secondary-edit-review { padding: 0; width: 38px; justify-content: center; }
+  .secondary-edit-label { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .secondary-edit-review:hover { transform: none !important; }
+}
+
+/* ============================================================================
+   v1.7.4 (gate 3, Surface 3) — TERTIARY character / staff detail layer.
+   A third drill-down drawer above the secondary (z-index 7000). Same cosmos,
+   a touch narrower so the secondary peeks behind = "one level deeper".
+   ============================================================================ */
+.tertiary-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 7000;
+  display: flex;
+  justify-content: flex-end;
+}
+.tertiary-layer[hidden] { display: none; }
+.tertiary-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(8,0,18,0.5);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity .26s ease;
+}
+.tertiary-layer.active .tertiary-backdrop { opacity: 1; }
+.tertiary-modal {
+  position: relative;
+  width: min(760px, 90vw);
+  height: 100%;
+  margin-left: auto;
+  background: linear-gradient(180deg, rgba(30,12,52,0.99), rgba(15,4,30,1));
+  border-left: 1px solid rgba(187,134,252,0.26);
+  box-shadow: -30px 0 80px rgba(0,0,0,0.55);
+  display: flex; flex-direction: column;
+  opacity: 0; transform: translateX(44px);
+  transition: transform .3s cubic-bezier(.16,.84,.44,1), opacity .24s ease;
+}
+.tertiary-layer.active .tertiary-modal { opacity: 1; transform: translateX(0); }
+.tertiary-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; }
+
+.tertiary-header-bar {
+  position: sticky; top: 0; z-index: 4;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(20,6,38,0.96), rgba(20,6,38,0.7));
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(187,134,252,0.16);
+}
+.tertiary-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: rgba(40,18,70,0.5);
+  border: 1px solid rgba(187,134,252,0.32);
+  border-radius: 999px;
+  color: #efd9ff;
+  font: 800 0.72rem/1 'Montserrat', sans-serif;
+  letter-spacing: .05em; text-transform: uppercase;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .12s ease;
+}
+.tertiary-back:hover { background: rgba(60,28,104,0.7); border-color: rgba(187,134,252,0.6); transform: translateX(-2px); }
+.tertiary-close {
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border: 1px solid rgba(187,134,252,0.3); border-radius: 50%;
+  background: rgba(40,18,70,0.5); color: #efd9ff; font-size: 21px; line-height: 1; cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+.tertiary-close:hover { background: rgba(167,139,250,.28); transform: scale(1.06); }
+
+.tertiary-hero { display: flex; gap: 18px; padding: clamp(16px,2.4vw,26px); align-items: flex-end; }
+.tertiary-hero-img {
+  width: clamp(96px, 13vw, 130px);
+  aspect-ratio: 2 / 3; object-fit: cover; border-radius: 12px; flex-shrink: 0;
+  border: 1px solid rgba(187,134,252,0.3);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+}
+.tertiary-hero-img--ph { background: rgba(40,18,70,0.7); }
+.tertiary-hero-meta { min-width: 0; padding-bottom: 4px; }
+.tertiary-kicker { font: 800 0.66rem/1 'Montserrat', sans-serif; letter-spacing: .14em; color: #bb86fc; margin-bottom: 8px; }
+.tertiary-name { margin: 0; font: 800 clamp(1.3rem,2.2vw,1.8rem)/1.15 'Montserrat', sans-serif; color: #fff; overflow-wrap: anywhere; }
+.tertiary-facts { margin-top: 10px; color: rgba(255,255,255,0.66); font: 600 0.82rem/1.5 'Montserrat', sans-serif; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tertiary-fact-sep { color: rgba(187,134,252,0.5); }
+
+.tertiary-section { padding: 0 clamp(16px,2.4vw,26px); margin-bottom: clamp(18px,2.4vw,24px); }
+.tertiary-section-title { margin: 0 0 11px; font: 800 0.7rem/1 'Montserrat', sans-serif; letter-spacing: .16em; color: #bb86fc; text-transform: uppercase; }
+
+.tertiary-bio-body { color: rgba(255,255,255,0.86); font-size: 0.92rem; line-height: 1.65; }
+.tertiary-bio-body p { margin: 0 0 10px; }
+.tertiary-bio.is-collapsible .tertiary-bio-body {
+  max-height: 9em; overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 66%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 66%, transparent 100%);
+  transition: max-height .3s ease;
+}
+.tertiary-bio.is-collapsible.is-open .tertiary-bio-body { max-height: 200em; -webkit-mask-image: none; mask-image: none; }
+.tertiary-readmore { margin-top: 8px; background: none; border: none; color: #bb86fc; font: 800 0.74rem/1 'Montserrat', sans-serif; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.tertiary-readmore:hover { color: #d9b8ff; text-decoration: underline; }
+
+.tertiary-person-row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
+.tertiary-person { flex: 0 0 auto; width: 84px; background: none; border: none; padding: 0; cursor: pointer; text-align: center; }
+.tertiary-person-img { width: 84px; height: 84px; object-fit: cover; border-radius: 50%; border: 1px solid rgba(187,134,252,0.25); background: rgba(40,18,70,0.6); transition: transform .15s ease, border-color .15s ease; }
+.tertiary-person:hover .tertiary-person-img { transform: scale(1.05); border-color: rgba(187,134,252,0.6); }
+.tertiary-person-name { display: block; margin-top: 6px; font: 700 0.72rem/1.25 'Montserrat', sans-serif; color: #ece2ff; overflow-wrap: anywhere; }
+
+.tertiary-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; align-items: start; }
+.tertiary-media { background: none; border: none; padding: 0; cursor: pointer; text-align: left; min-width: 0; }
+.tertiary-media-cover { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 9px; border: 1px solid rgba(187,134,252,0.2); background: rgba(40,18,70,0.6); transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; display: block; }
+.tertiary-media:hover .tertiary-media-cover { transform: translateY(-3px); border-color: rgba(187,134,252,0.6); box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+.tertiary-media-title { display: block; margin-top: 6px; font: 700 0.74rem/1.3 'Montserrat', sans-serif; color: #ece2ff; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.6em; }
+/* v1.7.4 gate-3c — clamp long staff role text (e.g. "KEY ANIMATION (OPS, OP14, EPS …)")
+   to 2 lines + reserve that height so KNOWN FOR / APPEARS IN cards equalize. */
+.tertiary-media-role {
+  font: 700 0.62rem/1.3 'Montserrat', sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(187,134,252,0.8);
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 1.6em;
+}
+
+.tertiary-loading { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 320px; color: rgba(255,255,255,0.7); font: 600 0.9rem/1 'Montserrat', sans-serif; }
+.tertiary-empty { padding: 60px 24px; text-align: center; color: rgba(255,255,255,0.7); }
+
+@media (max-width: 900px) {
+  .tertiary-modal { width: 100vw; border-left: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tertiary-backdrop, .tertiary-modal { transition: none !important; }
+  .tertiary-modal { transform: none !important; }
+  .tertiary-back:hover, .tertiary-person:hover .tertiary-person-img, .tertiary-media:hover .tertiary-media-cover { transform: none !important; }
+  .tertiary-bio.is-collapsible .tertiary-bio-body { transition: none !important; }
+}

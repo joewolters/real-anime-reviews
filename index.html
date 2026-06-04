@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI." />
   <title>Real Anime Reviews</title>
-  <script>window.APP_VERSION="1.7.3"</script>
+  <script>window.APP_VERSION="1.7.4"</script>
   <!-- Social preview (Discord / iMessage / etc) -->
 <link rel="canonical" href="https://realanimereviews.com/">
 
@@ -21,9 +21,9 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=1.7.3">
-  <link rel="stylesheet" href="mobile.css?v=1.7.3" media="(max-width: 900px)">
-  <link rel="stylesheet" href="admin-fab.css?v=1.7.3">
+  <link rel="stylesheet" href="style.css?v=1.7.4">
+  <link rel="stylesheet" href="mobile.css?v=1.7.4" media="(max-width: 900px)">
+  <link rel="stylesheet" href="admin-fab.css?v=1.7.4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -166,11 +166,21 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v1.7.3</span>
+      <span class="changelog-tag" id="changelog-version">v1.7.4</span>
      Minor Update
     </div>
 
     <div class="changelog-content">
+      <div class="version-section">
+        <div class="version-chips"><span class="version-chip">v1.7.4</span></div>
+        <div class="version-header">06/04/2026</div>
+        <ul class="changelog-list">
+          <li>The franchise panel (every season, side story, and movie) is now always visible when you open an anime — no extra click to expand it.</li>
+          <li>Clicking a related anime now opens a rich detail view right here on the site — synopsis, characters, staff, trailer, and more like it — instead of sending you elsewhere.</li>
+          <li>Each season, movie, or special can now carry its own dedicated review, shown alongside the overall franchise take.</li>
+          <li>Characters and staff are now clickable for full profiles — bios, credits, and where you've seen them before.</li>
+        </ul>
+      </div>
       <div class="version-section">
         <div class="version-chips"><span class="version-chip version-chip-range">v1.7.0<span class="vc-arrow" aria-hidden="true">→</span>v1.7.3</span></div>
         <div class="version-header">06/03/2026</div>
@@ -397,6 +407,7 @@
   document.write(`<script src="animeData.js?v=${v}"><\/script>`);
   document.write(`<script src="card-render.js?v=${v}"><\/script>`);
   document.write(`<script src="franchise-fetch.js?v=${v}"><\/script>`);
+  document.write(`<script src="markdown.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="firebase.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="script.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="admin-fab.js?v=${v}"><\/script>`);

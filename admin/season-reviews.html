@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Season Reviews — Real Anime Reviews</title>
+  <script>window.APP_VERSION="1.7.4"</script>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Admin-only season-review editor — not indexed." />
+
+  <link rel="stylesheet" href="../style.css?v=1.7.4" />
+  <link rel="stylesheet" href="../mobile.css?v=1.7.4" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=1.7.4" />
+  <link rel="stylesheet" href="season-reviews.css?v=1.7.4" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700;800&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="admin-page">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="../index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" id="back-btn" class="inline-header-btn" onclick="location.href='../index.html'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-gate-message">
+      <div class="admin-gate-spinner"></div>
+      <p>Verifying admin access…</p>
+    </div>
+  </div>
+
+  <main class="admin-main" id="admin-main" hidden>
+    <div class="admin-shell">
+
+      <div class="admin-header">
+        <h2 class="admin-title-line">
+          <span class="admin-kicker-inline">SEASON REVIEWS <span class="jp-mini">感想</span></span>
+          <span class="admin-divider">·</span>
+          <span class="admin-title-text">Editor</span>
+        </h2>
+        <div class="sr-stats" id="sr-stats"></div>
+      </div>
+
+      <div id="sr-server-banner" class="sr-server-banner" hidden>
+        ⚠️ Local server not running — start <code>npm run mode1</code> to save reviews. (Browsing the list works without it.)
+      </div>
+
+      <div class="sr-toolbar">
+        <label class="sr-filter-label">Show
+          <select id="sr-filter" class="sr-filter">
+            <option value="all">All seasons</option>
+            <option value="empty">Empty only</option>
+            <option value="reviewed">Reviewed only</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="sr-list" class="sr-list"></div>
+
+    </div>
+  </main>
+
+  <!-- Markdown editor (branded modal; lives outside .admin-shell to avoid the
+       backdrop-filter clip, same as suggestions.html's confirm modal). -->
+  <div id="sr-editor" class="sr-editor-overlay" hidden>
+    <div class="sr-editor-card" role="dialog" aria-modal="true" aria-label="Season review editor">
+      <div class="sr-editor-head">
+        <h3 class="sr-editor-kicker">SEASON REVIEW <span class="sr-editor-id" id="sr-editor-id"></span></h3>
+        <button type="button" class="sr-editor-close" id="sr-editor-cancel" aria-label="Close editor">×</button>
+      </div>
+      <div class="sr-editor-fields">
+        <label class="sr-field">Title <input type="text" id="sr-editor-title" placeholder="e.g. Demon Slayer — Mugen Train Arc"></label>
+        <label class="sr-field sr-field--rating">Rating <input type="text" id="sr-editor-rating" placeholder="8.5"></label>
+      </div>
+      <div class="sr-editor-grid">
+        <div class="sr-editor-pane">
+          <div class="sr-editor-pane-label">MARKDOWN</div>
+          <textarea id="sr-editor-body" placeholder="Write the season review in markdown… **bold**, *italic*, - lists, ## headings, [links](https://…)"></textarea>
+        </div>
+        <div class="sr-editor-pane">
+          <div class="sr-editor-pane-label">PREVIEW</div>
+          <div id="sr-editor-preview" class="sr-editor-preview secondary-review-body"></div>
+        </div>
+      </div>
+      <div class="sr-editor-actions">
+        <button type="button" class="sr-btn sr-btn--danger" id="sr-editor-delete" hidden>Delete</button>
+        <span class="sr-editor-status" id="sr-editor-status"></span>
+        <span class="sr-editor-spacer"></span>
+        <button type="button" class="sr-btn sr-btn--ghost" id="sr-editor-cancel-2" onclick="document.getElementById('sr-editor').hidden=true">Cancel</button>
+        <button type="button" class="sr-btn sr-btn--save" id="sr-editor-save">Save review</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Catalog + AniList fetch helper + shared markdown renderer, bridged to window. -->
+  <script src="../animeData.js"></script>
+  <script src="../franchise-fetch.js"></script>
+  <script src="../markdown.js"></script>
+  <script>window.animeData = (typeof animeData !== 'undefined') ? animeData : (window.animeData || []);</script>
+
+  <script type="module" src="../firebase.js?v=1.7.4"></script>
+  <script type="module" src="season-reviews.js?v=1.7.4"></script>
+</body>
+</html>

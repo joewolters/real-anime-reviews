@@ -10,6 +10,29 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-06-04 -->
+## v1.7.4 — MINOR (2026-06-04)
+
+**Modal Architecture Overhaul.** The anime modal's franchise panel is now always visible; clicking any related anime opens a large in-site detail view instead of an external tab; each season/movie/OVA can carry its own written review; and characters + staff are clickable into full profiles. Built across 10 gates (1 → 3d) on the v1.7.2/v1.7.3 data layer.
+
+**Visitor-facing:**
+
+- **Always-visible franchise panel.** The "More Info" panel (franchise tree, episodes, recommendations) no longer hides behind a "Click for More Info" tab — it's a permanent third column in a 3-column modal (More Info | Main Review | Community) that shrinks proportionally on smaller screens and stacks to a single clean column on narrow/mobile widths.
+- **In-site detail view (secondary modal).** Clicking a related anime used to jump to an external tab; now a large drawer slides in over the dimmed review, showing a banner + cover, full synopsis, genres, tags, a character grid, key staff, the trailer, and a "more like this" row — all in the site's own look. Browse through "more like this" cards and step back one at a time; a "📝 Request this anime" button appears on anything not yet reviewed.
+- **Per-season reviews.** Each season, movie, OVA, or special in a franchise can now have its own dedicated written take, shown in a gold-accented "Blake's Review" section in the detail view — distinct from the overall franchise review on the main modal. The "currently viewing" row in the franchise panel opens the detail view so the source season gets its own review surface too.
+- **Clickable characters + staff.** Character and staff cards open a full profile — bio, voice actors and where you've seen a character before, or a staff member's credits and notable characters — with links in those bios now clickable.
+- **Formatting in reviews.** Reviews and descriptions now support light formatting (bold, italics, links, lists) so write-ups read cleanly.
+
+**Behind the scenes (admin / data):**
+
+- **Per-season review storage + editor.** Reviews live as markdown files (`season-reviews/<id>.md`) with a sync-emitted index; a new `/admin/season-reviews` panel lists every watched season with a live-preview markdown editor (save/delete via a new local `/api/season-review` endpoint that rebuilds the index), reachable from the Admin pill and via an inline "✎ Edit review" link in the detail view (deep-link auto-fills the season title).
+- **Shared markdown renderer.** A single hand-rolled, XSS-safe `markdown.js` (`window.renderMarkdown`) feeds five surfaces — main Review/Description, per-season reviews, character/staff bios, and both admin preview panes — so there's one parser site-wide. The admin new-anime form gained a Review live-preview pane + a B / I / 🔗 toolbar.
+- **Routing split.** `catalogSlugForAniListId` split into `primarySlugForAniListId` (a review's primary id → main franchise modal) + `isWatchedAniListId` (any watched id → green ✓ pill); watched-but-not-primary + the source row now open the secondary modal (with the per-season section), non-watched non-catalog open it without one.
+- **Additive AniList queries.** New sibling queries in `franchise-fetch.js` — `MEDIA_DETAIL_QUERY` (rich single-anime detail + recommendations) and `CHARACTER_DETAIL_QUERY` / `STAFF_DETAIL_QUERY` — alongside per-anime / per-character / per-staff 24h `localStorage` caches (`rar:anime:` / `rar:character:` / `rar:staff:`). The load-bearing traversal query is untouched.
+- **Suggest-page prefill.** The public `/suggest` page now reads `?title=&anilistId=` (it previously read no params) so the detail view's Request button lands on a pre-filled form.
+
+**Implementation files:** new `markdown.js`, `season-reviews/` (+ `index.json`), `scripts/lib/season-review-index.js`, `admin/season-reviews.{html,js,css}`; `script.js` (always-visible layout, secondary + tertiary modals, routing split, markdown wiring), `franchise-fetch.js` (3 additive queries + fetchers), `style.css` (3-col + secondary/tertiary/review styling), `index.html` (3-col + `markdown.js` load), `admin/new-anime.{html,js,css}` (Review preview + toolbar), `admin-fab.js` (Season Reviews link + `window.__rarIsAdmin`), `suggest.js` (param prefill), `scripts/mode1-server.js` (`/api/season-review` CRUD), `scripts/sync-excel-to-js.js` (index emit), `scripts/bump-version.js` (7 new targets, 26 → 33). No new visitor-facing dependencies or fonts.
+
 <!-- author: Code | date: 2026-06-03 -->
 ## v1.7.3 — MINOR (2026-06-03)
 

@@ -23,6 +23,11 @@ const ADMIN_MENU_ITEMS = [
     jp: '提案',
     href: 'admin/suggestions.html',
   },
+  {
+    label: 'Season Reviews',
+    jp: '感想',
+    href: 'admin/season-reviews.html',
+  },
   // Future entries land here:
   // { label: 'Site Health', jp: '監視', href: 'admin/health.html' },
   // { label: 'Audit', jp: '監査', href: 'admin/audit.html' },
@@ -117,7 +122,14 @@ function hideFab() {
 function init() {
   buildFab();
   onAuthStateChanged(auth, (user) => {
-    if (user && user.uid === ADMIN_UID) showFab();
+    const isAdmin = !!(user && user.uid === ADMIN_UID);
+    // v1.7.4 (gate 3) — expose the admin flag so script.js's secondary modal can
+    // show the inline "Edit season review" link (DRY — the UID gate lives here,
+    // not duplicated into the public homepage bundle). Fires an event so an
+    // already-open modal can react.
+    window.__rarIsAdmin = isAdmin;
+    try { window.dispatchEvent(new CustomEvent('rar:admin-change', { detail: { isAdmin } })); } catch (_) {}
+    if (isAdmin) showFab();
     else hideFab();
   });
 }

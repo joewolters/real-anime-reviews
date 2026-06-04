@@ -1033,3 +1033,40 @@
 .status-line.warn {
   color: #ffb84d;
 }
+
+/* ============================================================================
+   v1.7.4 (gate 3b) — Review markdown toolbar + live preview
+   ============================================================================ */
+.md-hint { font-weight: 400; font-size: 0.78rem; color: rgba(255,255,255,0.45); letter-spacing: 0; text-transform: none; }
+.md-toolbar { display: flex; gap: 7px; margin-bottom: 8px; }
+.md-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px;
+  background: rgba(187,134,252,0.12);
+  border: 1px solid rgba(187,134,252,0.34);
+  border-radius: 8px;
+  color: #efd9ff;
+  font: 700 0.82rem/1 'Montserrat', sans-serif;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.md-btn:hover { background: rgba(187,134,252,0.24); border-color: rgba(187,134,252,0.6); }
+.md-btn strong, .md-btn em { font-size: 0.92rem; }
+
+.md-preview-wrap { margin-top: 10px; }
+.md-preview-label { font: 800 0.62rem/1 'Montserrat', sans-serif; letter-spacing: .14em; color: rgba(187,134,252,0.8); margin-bottom: 6px; }
+.md-preview {
+  min-height: 56px;
+  padding: 12px 14px;
+  background: rgba(40,18,70,0.22);
+  border: 1px solid rgba(187,134,252,0.2);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.88);
+  line-height: 1.6;
+}
+.md-preview p { margin: 0 0 8px; }
+.md-preview p:last-child { margin-bottom: 0; }
+.md-preview strong { color: #fff; }
+.md-preview a { color: #bb86fc; }
+.md-preview ul { margin: 0 0 8px; padding-left: 20px; }
+.md-preview-empty { color: rgba(255,255,255,0.4); font-style: italic; }

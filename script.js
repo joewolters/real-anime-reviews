@@ -586,6 +586,67 @@ query ($id: Int) {
     return tree;
   }
 
+  // ── v1.7.4 (gate 2) — per-anime DETAIL cache for the secondary modal ──
+  // Mirrors franchiseTreeCache exactly (L1 Map -> L2 localStorage, 24h TTL,
+  // APP_VERSION-keyed `rar:anime:vX.Y.Z:{id}`, once-per-session prefix sweep,
+  // every storage access try/caught). The network call lives in the shared
+  // franchise-fetch.js (fetchMediaDetail); caching stays here, consistent with
+  // that module's stated design ("caching deliberately stays in script.js").
+  const animeDetailCache = new Map();
+  const ANIME_DETAIL_PREFIX = 'rar:anime:';
+  const ANIME_DETAIL_TTL_MS = 24 * 60 * 60 * 1000;
+  let animeDetailSwept = false;
+
+  function animeDetailVerKey() {
+    return ANIME_DETAIL_PREFIX + 'v' + (window.APP_VERSION || '0') + ':';
+  }
+  function animeDetailKey(id) {
+    return animeDetailVerKey() + id;
+  }
+  function sweepAnimeDetailCache() {
+    if (animeDetailSwept) return;
+    animeDetailSwept = true;
+    try {
+      const keepPrefix = animeDetailVerKey();
+      const stale = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf(ANIME_DETAIL_PREFIX) === 0 && k.indexOf(keepPrefix) !== 0) stale.push(k);
+      }
+      stale.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+    } catch (_) {}
+  }
+  function readAnimeDetailCache(id) {
+    try {
+      const raw = localStorage.getItem(animeDetailKey(id));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.ts !== 'number' || !parsed.detail) return null;
+      if (Date.now() - parsed.ts > ANIME_DETAIL_TTL_MS) return null;
+      return parsed.detail;
+    } catch (_) { return null; }
+  }
+  function writeAnimeDetailCache(id, detail) {
+    sweepAnimeDetailCache();
+    try {
+      localStorage.setItem(animeDetailKey(id), JSON.stringify({ ts: Date.now(), detail }));
+    } catch (_) {}
+  }
+  // L1 memory -> L2 localStorage -> network (then fill both tiers). Returns the
+  // normalized detail object or null; a null (failed) fetch is NOT cached.
+  async function fetchAnimeDetailCached(id, forceRefresh) {
+    if (!id) return null;
+    const key = Number(id);
+    if (!forceRefresh) {
+      if (animeDetailCache.has(key)) return animeDetailCache.get(key);
+      const cached = readAnimeDetailCache(key);
+      if (cached) { animeDetailCache.set(key, cached); return cached; }
+    }
+    const detail = await window.franchiseFetch.fetchMediaDetail(key);
+    if (detail) { animeDetailCache.set(key, detail); writeAnimeDetailCache(key, detail); }
+    return detail;
+  }
+
   // v1.6.8 — Pure renderer: returns an HTML string, never touches the DOM.
   // States: 'loading' / 'success' / 'empty' / 'error' (error routes to 'empty'
   // for v1.6.8 — single friendly fallback message). Success-state logic mirrors
@@ -659,33 +720,44 @@ query ($id: Int) {
   // retry). No service name in any interrupting copy.
   // ──────────────────────────────────────────────────────────────────────
 
-  // Lazy AniListId -> catalog slug map (for the "Reviewed" in-catalog pill;
-  // matching rows open Blake's own modal instead of the external entry page).
-  let _aniIdToSlug = null;
-  function catalogSlugForAniListId(aniListId) {
+  // v1.7.4 (gate 3, Surface 2) — catalog id maps, built lazily once.
+  //   _primaryIdToSlug : ONLY each entry's PRIMARY AniListId → slug. These rows
+  //                      open Blake's MAIN franchise modal (openModal).
+  //   _watchedIds      : EVERY id Blake marked watched (primary + the rest of the
+  //                      WatchedAniListIds set). Drives the green ✓ REVIEWED pill.
+  // Routing: primary → main modal; watched-but-not-primary → SECONDARY modal (with
+  // the per-season review section); non-watched non-catalog → secondary, no review.
+  let _primaryIdToSlug = null;
+  let _watchedIds = null;
+  function _buildCatalogMaps() {
+    if (_primaryIdToSlug) return;
+    _primaryIdToSlug = new Map();
+    _watchedIds = new Set();
+    try {
+      const list = (typeof window !== 'undefined' && Array.isArray(window.animeData))
+        ? window.animeData
+        : (Array.isArray(animeData) ? animeData : []);
+      list.forEach(a => {
+        if (!a) return;
+        const s = slug(a.Title || '');
+        if (a.AniListId) { _primaryIdToSlug.set(Number(a.AniListId), s); _watchedIds.add(Number(a.AniListId)); }
+        if (Array.isArray(a.WatchedAniListIds)) {
+          a.WatchedAniListIds.forEach(id => { if (id) _watchedIds.add(Number(id)); });
+        }
+      });
+    } catch (_) {}
+  }
+  // slug only when `id` is an entry's PRIMARY AniListId (else null).
+  function primarySlugForAniListId(aniListId) {
     if (!aniListId) return null;
-    if (!_aniIdToSlug) {
-      _aniIdToSlug = new Map();
-      try {
-        const list = (typeof window !== 'undefined' && Array.isArray(window.animeData))
-          ? window.animeData
-          : (Array.isArray(animeData) ? animeData : []);
-        list.forEach(a => {
-          if (!a) return;
-          const s = slug(a.Title || '');
-          if (a.AniListId) _aniIdToSlug.set(Number(a.AniListId), s);
-          // v1.7.3 — watched-set: map EVERY AniListId Blake marked watched to this
-          // review's slug, so the ✓ REVIEWED pill + internal-modal click light up
-          // on S2 / movies / OVAs too — not just the primary id. WatchedAniListIds
-          // is empty until the gate-4 backfill, so until then this is identical to
-          // v1.7.2's primary-id-only behaviour (locked Decision 3 fallback).
-          if (Array.isArray(a.WatchedAniListIds)) {
-            a.WatchedAniListIds.forEach(id => { if (id) _aniIdToSlug.set(Number(id), s); });
-          }
-        });
-      } catch (_) {}
-    }
-    return _aniIdToSlug.get(Number(aniListId)) || null;
+    _buildCatalogMaps();
+    return _primaryIdToSlug.get(Number(aniListId)) || null;
+  }
+  // true when `id` is in ANY entry's watched set (primary or otherwise).
+  function isWatchedAniListId(aniListId) {
+    if (!aniListId) return false;
+    _buildCatalogMaps();
+    return _watchedIds.has(Number(aniListId));
   }
 
   // Friendly section labels for non-spine relation groups + their display order.
@@ -723,13 +795,23 @@ query ($id: Int) {
     )).join(', ');
     const metaParts = [year, eps, studios].filter(Boolean);
 
-    const catalogSlug = catalogSlugForAniListId(node.id);
+    // v1.7.4 (gate 3, Surface 2 + gate 3c) — routing:
+    //   • SOURCE (currently-viewing) row → SECONDARY modal for its OWN season
+    //     (data-anilist-id) so the source gets a per-season review surface,
+    //     distinct from the franchise-wide review already open in the main modal.
+    //   • other primary id → main franchise modal (data-catalog-slug).
+    //   • watched-not-primary OR non-catalog → secondary modal (data-anilist-id).
+    const primarySlug = primarySlugForAniListId(node.id);
+    const watched = isWatchedAniListId(node.id);
     let entryClass = 'more-info-entry';
     if (node.isSource) entryClass += ' more-info-entry--current';
     let clickAttrs = '';
-    if (catalogSlug) {
+    if (node.isSource && node.id) {
       entryClass += ' more-info-entry--clickable';
-      clickAttrs = ` data-catalog-slug="${escapeHtml(catalogSlug)}"`;
+      clickAttrs = ` data-anilist-id="${escapeHtml(String(node.id))}"`;
+    } else if (primarySlug) {
+      entryClass += ' more-info-entry--clickable';
+      clickAttrs = ` data-catalog-slug="${escapeHtml(primarySlug)}"`;
     } else if (node.id) {
       entryClass += ' more-info-entry--clickable';
       clickAttrs = ` data-anilist-id="${escapeHtml(String(node.id))}"`;
@@ -760,7 +842,14 @@ query ($id: Int) {
       ? 'more-info-relation more-info-relation--upcoming'
       : 'more-info-relation';
     const kickerHtml = kickerText ? `<span class="${kickerClass}">${escapeHtml(kickerText)}</span>` : '';
-    const pillHtml = catalogSlug ? '<span class="more-info-catalog-pill">✓ Reviewed</span>' : '';
+    // v1.7.4 (gate 2/3, Decision 5) — WATCHED ids (primary + watched-set) get the
+    // green ✓ Reviewed pill; non-watched clickable rows get the amber "not reviewed
+    // yet" dot (source row exempt — it carries the CURRENTLY VIEWING kicker).
+    const pillHtml = watched
+      ? '<span class="more-info-catalog-pill">✓ Reviewed</span>'
+      : ((node.id && !node.isSource)
+          ? '<span class="more-info-unreviewed-dot" title="Not reviewed yet — opens details" aria-label="Not reviewed yet"></span>'
+          : '');
 
     return `<div class="${entryClass}"${clickAttrs}>
     ${coverHtml}
@@ -1059,12 +1148,29 @@ query ($id: Int) {
         ? `<img class="more-info-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">`
         : '<div class="more-info-cover more-info-cover--placeholder"></div>';
       const fmtHtml = fmt ? `<span class="more-info-rec-format-badge">${escapeHtml(fmt)}</span>` : '';
-      const clickAttrs = id ? ` data-anilist-id="${escapeHtml(String(id))}"` : '';
-      const entryClass = id ? 'more-info-entry more-info-entry--clickable' : 'more-info-entry';
+      // v1.7.4 (gate 2/3, Surface 2) — primary id → main modal + green pill;
+      // watched-but-not-primary → secondary modal + green pill; non-watched →
+      // secondary modal + amber "not reviewed yet" dot.
+      const primarySlug = id ? primarySlugForAniListId(id) : null;
+      const watched = id ? isWatchedAniListId(id) : false;
+      let clickAttrs = '';
+      let entryClass = 'more-info-entry';
+      let pillHtml = '';
+      if (primarySlug) {
+        clickAttrs = ` data-catalog-slug="${escapeHtml(primarySlug)}"`;
+        entryClass += ' more-info-entry--clickable';
+        pillHtml = '<span class="more-info-catalog-pill">✓ Reviewed</span>';
+      } else if (id) {
+        clickAttrs = ` data-anilist-id="${escapeHtml(String(id))}"`;
+        entryClass += ' more-info-entry--clickable';
+        pillHtml = watched
+          ? '<span class="more-info-catalog-pill">✓ Reviewed</span>'
+          : '<span class="more-info-unreviewed-dot" title="Not reviewed yet — opens details" aria-label="Not reviewed yet"></span>';
+      }
       return `<div class="${entryClass}"${clickAttrs}>
     ${coverHtml}
     <div class="more-info-body">
-      <div class="more-info-english">${escapeHtml(english)}</div>
+      <div class="more-info-english">${escapeHtml(english)}${pillHtml}</div>
     </div>
     ${fmtHtml}
   </div>`;
@@ -4150,14 +4256,18 @@ function openModal(anime) {
       '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>'
     : '';
 
+  // v1.7.4 gate-3b — render Description + Review through the shared markdown parser
+  // (same one season reviews use). XSS-safe (escapes first); plain-text reviews are
+  // unchanged except newlines now become real line breaks. renderMarkdown emits its
+  // own block tags (<p>/<ul>/…), so no surrounding <p> wrapper.
   const descBlock = anime.Description
-    ? '<div class="modal-description"><p><strong>Description:</strong></p><p>' +
-      anime.Description + '</p></div>'
+    ? '<div class="modal-description"><p><strong>Description:</strong></p>' +
+      window.renderMarkdown(anime.Description) + '</div>'
     : '';
 
   const reviewBlock = anime.Review
-    ? '<div class="modal-review"><p><strong>Review:</strong></p><p>' +
-      anime.Review + '</p></div>'
+    ? '<div class="modal-review"><p><strong>Review:</strong></p>' +
+      window.renderMarkdown(anime.Review) + '</div>'
     : '';
 
   // v1.7.1 — romaji subtitle under the modal title, shown only when it differs
@@ -4187,14 +4297,10 @@ function openModal(anime) {
   // Build duo stage
   modal.classList.add('duo');
   modalContent.innerHTML =
-    // v1.6.8 — More Info container (collapsed tab + expanded panel)
-    '<div class="more-info-container" data-state="collapsed">' +
-      '<button class="more-info-tab" type="button" aria-label="Show more anime information">' +
-        '<span class="more-info-tab-icon">▶</span>' +
-        '<span class="more-info-tab-label">Click for More Info</span>' +
-      '</button>' +
-      '<aside class="more-info-panel" aria-hidden="true">' +
-        '<button class="more-info-close" type="button" aria-label="Close more info panel">×</button>' +
+    // v1.7.4 — More Info panel is always-visible (the v1.6.8 collapse tab +
+    // close button were removed; it's now a permanent 3rd column).
+    '<div class="more-info-container">' +
+      '<aside class="more-info-panel">' +
         '<div class="more-info-header">' +
           '<h3 class="more-info-title">MORE INFO</h3>' +
           '<span class="jp-mini">詳細情報</span>' +
@@ -4226,12 +4332,9 @@ function openModal(anime) {
   modal.classList.add('active');
   updateScrollLock();
 
-  // v1.6.8 — More Info panel wiring: tab opens + fetches, X closes, card-click navigates
-  const moreInfoContainer = modalContent.querySelector('.more-info-container');
-  const moreInfoTab = moreInfoContainer.querySelector('.more-info-tab');
-  const moreInfoPanel = moreInfoContainer.querySelector('.more-info-panel');
-  const moreInfoContent = moreInfoContainer.querySelector('.more-info-content');
-  const moreInfoClose = moreInfoContainer.querySelector('.more-info-close');
+  // v1.7.4 — More Info panel wiring: renders immediately on open (no tab/close);
+  // card-click navigates.
+  const moreInfoContent = modalContent.querySelector('.more-info-content');
 
   // v1.7.2 — renders the More Info panel. AniListId entries use the franchise
   // multi-hop path (traverseFranchiseForModal) + the source's recs/staff from
@@ -4248,8 +4351,6 @@ function openModal(anime) {
         traverseFranchiseForModal(anime, forceRefresh),
         fetchRelationsForModal(anime),
       ]);
-      // Visitor may have collapsed during the fetch — re-check before injecting.
-      if (moreInfoContainer.getAttribute('data-state') !== 'expanded') return;
       const hasTree = tree && (tree.spine.length || Object.keys(tree.groups).length || tree.episodesBySeason.length);
       if (hasTree) {
         const panelData = Object.assign({}, tree, {
@@ -4268,21 +4369,12 @@ function openModal(anime) {
 
     // Legacy path (no AniListId) — unchanged 1-hop title-search render.
     const result = await fetchRelationsForModal(anime);
-    if (moreInfoContainer.getAttribute('data-state') !== 'expanded') return;
     const hasContent = (result.edges && result.edges.length > 0) || !!result.sourceId;
     moreInfoContent.innerHTML = renderMoreInfoPanel(hasContent ? 'success' : 'empty', anime, result);
   }
 
-  moreInfoTab.addEventListener('click', () => {
-    moreInfoContainer.setAttribute('data-state', 'expanded');
-    moreInfoPanel.setAttribute('aria-hidden', 'false');
-    runMoreInfo(false);
-  });
-
-  moreInfoClose.addEventListener('click', () => {
-    moreInfoContainer.setAttribute('data-state', 'collapsed');
-    moreInfoPanel.setAttribute('aria-hidden', 'true');
-  });
+  // v1.7.4 — render the panel immediately on modal open (was tab-gated).
+  runMoreInfo(false);
 
   moreInfoContent.addEventListener('click', (e) => {
     // Episode-numbering toggle — persist + instant re-render from the cached tree.
@@ -4302,7 +4394,8 @@ function openModal(anime) {
 
     const card = e.target.closest('.more-info-entry--clickable');
     if (!card) return;
-    // In-catalog rows open Blake's own modal; everything else opens the external page.
+    // In-catalog rows open Blake's own modal; everything else opens the in-site
+    // secondary "deep dive" modal (v1.7.4 — was window.open(anilist.co)).
     const catalogSlug = card.dataset.catalogSlug;
     if (catalogSlug) {
       const list = Array.isArray(window.animeData) ? window.animeData : (Array.isArray(animeData) ? animeData : []);
@@ -4311,7 +4404,7 @@ function openModal(anime) {
     }
     const anilistId = card.dataset.anilistId;
     if (!anilistId) return;
-    window.open(`https://anilist.co/anime/${anilistId}/`, '_blank', 'noopener');
+    openSecondaryModal(Number(anilistId), anime, moreInfoContent);
   });
 
   // wire close buttons in both sheets
@@ -4371,6 +4464,730 @@ function closeModal() {
     startSpotlightCycle();
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// v1.7.4 (gate 2) — SECONDARY "DEEP DIVE" MODAL
+// In-site replacement for the old window.open(anilist.co). A LARGE layer that
+// slides in from the right over a dimmed+blurred primary modal (which stays
+// MOUNTED underneath — Back just hides this layer, so the primary's scroll/tab
+// state is preserved for free). Shows the rich single-anime detail the primary's
+// franchise tree lacks: banner + cover, synopsis, genres/tags, characters, staff,
+// trailer, links, and a "more like this" strip that swaps content in place
+// (replace-content; no deeper stacks). Fed by fetchAnimeDetailCached (24h cache).
+// ════════════════════════════════════════════════════════════════════════
+
+  // ── v1.7.4 (gate 3, Surface 1) — per-season review (markdown) layer ──
+  // The index (which AniListIds have a written review) is a static JSON the sync
+  // emits; the .md files are static too (production has no server). Session-memory
+  // cache only — Blake's edits appear on the next page load, not 24h later.
+  let _seasonReviewIndex = null;          // Set<number>
+  let _seasonReviewIndexPromise = null;
+  const _seasonReviewCache = new Map();   // id -> { meta, body } | null
+
+  function getSeasonReviewIndex() {
+    if (_seasonReviewIndex) return Promise.resolve(_seasonReviewIndex);
+    if (_seasonReviewIndexPromise) return _seasonReviewIndexPromise;
+    _seasonReviewIndexPromise = fetch('/season-reviews/index.json', { cache: 'no-cache' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { _seasonReviewIndex = new Set(((j && j.ids) || []).map(Number)); return _seasonReviewIndex; })
+      .catch(() => { _seasonReviewIndex = new Set(); return _seasonReviewIndex; });
+    return _seasonReviewIndexPromise;
+  }
+  function hasSeasonReview(id) { return !!(_seasonReviewIndex && _seasonReviewIndex.has(Number(id))); }
+
+  async function fetchSeasonReview(id) {
+    const key = Number(id);
+    if (_seasonReviewCache.has(key)) return _seasonReviewCache.get(key);
+    let parsed = null;
+    try {
+      const r = await fetch('/season-reviews/' + key + '.md', { cache: 'no-cache' });
+      if (r.ok) parsed = parseSeasonReviewText(await r.text());
+    } catch (_) {}
+    _seasonReviewCache.set(key, parsed);
+    return parsed;
+  }
+
+  // Split `---\n frontmatter \n---\n body` (mirror of scripts/lib/season-review-index.js).
+  function parseSeasonReviewText(text) {
+    const s = String(text || '');
+    const m = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/.exec(s);
+    if (!m) return { meta: {}, body: s };
+    const meta = {};
+    m[1].split('\n').forEach(line => {
+      const i = line.indexOf(':');
+      if (i === -1) return;
+      const k = line.slice(0, i).trim();
+      let v = line.slice(i + 1).trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+      if (k) meta[k] = v;
+    });
+    return { meta, body: m[2] };
+  }
+
+  // v1.7.4 (gate 3b) — the markdown renderer was extracted to the shared
+  // markdown.js (classic script loaded before this module). Use window.renderMarkdown
+  // everywhere — single source of truth across visitor + admin surfaces.
+
+  let secondaryEl = null;          // the lazily-built layer (backdrop + modal)
+  let secondaryScrollEl = null;    // inner scroll container that holds the content
+  let secondaryCtx = null;         // { sourceTitle, moreInfoContent, currentId }
+  let secondaryViewingRow = null;  // row in the primary More Info panel we highlighted
+  // v1.7.4 (gate 2b) — replace-content navigation history: [{ id, title }] in the
+  // order visited. Back steps BACKWARD one entry; emptying it returns to primary.
+  let secondaryHistory = [];
+
+  function ensureSecondaryEl() {
+    if (secondaryEl) return;
+    secondaryEl = document.createElement('div');
+    secondaryEl.className = 'secondary-layer';
+    secondaryEl.hidden = true;
+    secondaryEl.innerHTML =
+      '<div class="secondary-backdrop"></div>' +
+      '<div class="secondary-modal" role="dialog" aria-modal="true" aria-label="Anime details" tabindex="-1">' +
+        '<div class="secondary-scroll"></div>' +
+      '</div>';
+    document.body.appendChild(secondaryEl);
+    secondaryScrollEl = secondaryEl.querySelector('.secondary-scroll');
+    secondaryEl.querySelector('.secondary-backdrop').addEventListener('click', secondaryBack);
+    secondaryEl.addEventListener('click', onSecondaryClick);
+  }
+
+  function onSecondaryKeydown(e) {
+    // When the tertiary detail layer is open it owns Esc (its own handler closes
+    // it); bail so we don't step the secondary back underneath it.
+    if (tertiaryEl && !tertiaryEl.hidden) return;
+    // Esc steps BACK one history entry (gate 2b — consistent with the Back chip
+    // and backdrop). stopPropagation keeps the window-level handler (closeModal)
+    // from also tearing down the primary modal beneath.
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); secondaryBack(); }
+  }
+
+  function onSecondaryClick(e) {
+    // Back chip + backdrop step back one history entry; the × closes the whole
+    // layer regardless of depth (the explicit "I'm done" affordance).
+    if (e.target.closest('.secondary-close')) { e.preventDefault(); closeSecondaryModal(); return; }
+    if (e.target.closest('.secondary-back')) { e.preventDefault(); secondaryBack(); return; }
+    const retry = e.target.closest('.secondary-retry');
+    if (retry) { e.preventDefault(); if (secondaryCtx) loadSecondary(secondaryCtx.currentId, true); return; }
+    const more = e.target.closest('.secondary-readmore');
+    if (more) {
+      e.preventDefault();
+      const sec = more.closest('.secondary-desc');
+      if (sec) {
+        const open = sec.classList.toggle('is-open');
+        more.textContent = open ? 'Show less' : 'Read more';
+      }
+      return;
+    }
+    // v1.7.4 (gate 3, Surface 3) — character / staff card → tertiary detail layer.
+    const charCard = e.target.closest('.secondary-char[data-character-id]');
+    if (charCard && charCard.dataset.characterId) { e.preventDefault(); openTertiary('character', Number(charCard.dataset.characterId)); return; }
+    const staffRow = e.target.closest('.secondary-staff-row[data-staff-id]');
+    if (staffRow && staffRow.dataset.staffId) { e.preventDefault(); openTertiary('staff', Number(staffRow.dataset.staffId)); return; }
+    const rec = e.target.closest('.secondary-rec');
+    if (rec) {
+      e.preventDefault();
+      const cslug = rec.dataset.catalogSlug;
+      if (cslug) {
+        // A "more like this" card that IS in Blake's catalog → open his own
+        // review modal (close this layer first so we don't stack two modals).
+        const list = Array.isArray(window.animeData) ? window.animeData : (Array.isArray(animeData) ? animeData : []);
+        const target = list.find(a => a && slug(a.Title || '') === cslug);
+        closeSecondaryModal();
+        if (target) openModal(target);
+        return;
+      }
+      const id = Number(rec.dataset.anilistId);
+      if (id) {
+        const titleEl = rec.querySelector('.secondary-rec-title');
+        pushSecondary(id, titleEl ? titleEl.textContent : '');   // replace-content + history push
+      }
+      return;
+    }
+  }
+
+  // Entry point — replaces the window.open hook. sourceAnime + moreInfoContent
+  // come from the primary modal's open closure (for the Back label + the
+  // currently-viewing highlight).
+  function openSecondaryModal(aniListId, sourceAnime, moreInfoContent) {
+    const id = Number(aniListId);
+    if (!id) return;
+    ensureSecondaryEl();
+    secondaryCtx = {
+      sourceTitle: (sourceAnime && sourceAnime.Title) || '',
+      moreInfoContent: moreInfoContent || null,
+      currentId: id,
+    };
+    secondaryEl.hidden = false;
+    void secondaryEl.offsetWidth;            // reflow so the slide-in transition runs
+    secondaryEl.classList.add('active');
+    document.documentElement.style.overflow = 'hidden';
+    document.addEventListener('keydown', onSecondaryKeydown);
+    secondaryHistory = [{ id, title: null }];   // seed the navigation history
+    loadSecondary(id);
+  }
+
+  // Navigate to a related anime WITHIN the layer (replace-content) + push onto
+  // the history so Back steps back to where we came from.
+  function pushSecondary(aniListId, title) {
+    const id = Number(aniListId);
+    if (!id) return;
+    secondaryHistory.push({ id, title: (title || '').trim() || null });
+    loadSecondary(id);
+  }
+
+  // Back: pop the current entry; render the previous one if any, else return to
+  // the primary modal. (Cache is per-anime, so a replay is instant when warm.)
+  function secondaryBack() {
+    if (!secondaryEl || secondaryEl.hidden) return;
+    if (secondaryHistory.length > 1) {
+      secondaryHistory.pop();
+      loadSecondary(secondaryHistory[secondaryHistory.length - 1].id);
+    } else {
+      closeSecondaryModal();
+    }
+  }
+
+  // The "Back to X" target = the PREVIOUS history entry's title (one step back),
+  // or Blake's source review title when we're at the originally-opened anime.
+  function secondaryBackTitle() {
+    if (secondaryHistory.length > 1) {
+      return secondaryHistory[secondaryHistory.length - 2].title || '';
+    }
+    return secondaryCtx ? secondaryCtx.sourceTitle : '';
+  }
+
+  async function loadSecondary(aniListId, forceRefresh) {
+    const id = Number(aniListId);
+    if (!id || !secondaryEl) return;
+    if (secondaryCtx) secondaryCtx.currentId = id;
+    secondaryScrollEl.scrollTop = 0;
+    const sourceTitle = secondaryCtx ? secondaryCtx.sourceTitle : '';
+    secondaryScrollEl.innerHTML = renderSecondaryModal('loading', null, { backTitle: secondaryBackTitle() });
+    applyViewingHighlight(id);
+    // Detail + the season-review index in parallel (index resolves once, cached).
+    const [detail] = await Promise.all([fetchAnimeDetailCached(id, forceRefresh), getSeasonReviewIndex()]);
+    if (!secondaryEl || secondaryEl.hidden) return;   // user backed out mid-fetch
+    // Lazy-fetch Blake's written season review for this id (if the index says so).
+    let seasonReview = null;
+    if (detail && hasSeasonReview(id)) {
+      seasonReview = await fetchSeasonReview(id);
+      if (!secondaryEl || secondaryEl.hidden) return;
+    }
+    // Backfill the current history entry's title (so future Back labels are right).
+    const top = secondaryHistory[secondaryHistory.length - 1];
+    if (detail && top && top.id === id && !top.title) {
+      top.title = detail.title.english || detail.title.romaji || null;
+    }
+    const meta = { sourceTitle, backTitle: secondaryBackTitle(), inFranchise: !!secondaryViewingRow, seasonReview };
+    secondaryScrollEl.innerHTML = renderSecondaryModal(detail ? 'success' : 'error', detail, meta);
+    secondaryScrollEl.scrollTop = 0;
+  }
+
+  function closeSecondaryModal() {
+    if (!secondaryEl || secondaryEl.hidden) return;
+    secondaryEl.classList.remove('active');
+    document.removeEventListener('keydown', onSecondaryKeydown);
+    restoreViewingHighlight();
+    secondaryHistory = [];
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const done = () => { if (!secondaryEl) return; secondaryEl.hidden = true; secondaryScrollEl.innerHTML = ''; };
+    if (reduce) done(); else setTimeout(done, 280);
+    // Primary modal is still mounted underneath → keep the scroll lock if it's open.
+    document.documentElement.style.overflow = (modal && modal.classList.contains('active')) ? 'hidden' : '';
+    secondaryCtx = null;
+  }
+
+  // Move the primary More Info panel's CURRENTLY VIEWING highlight to the row the
+  // secondary modal is showing (200ms fade via CSS). No-op if the id isn't in the
+  // visible tree. restoreViewingHighlight() puts it back on Back.
+  function applyViewingHighlight(aniListId) {
+    restoreViewingHighlight();
+    const c = secondaryCtx && secondaryCtx.moreInfoContent;
+    if (!c) return;
+    // Secondary modal only opens for data-anilist-id rows (watched-not-primary or
+    // non-catalog); primary ids open the main modal, so anilist-id is the match.
+    const row = c.querySelector('.more-info-entry[data-anilist-id="' + aniListId + '"]');
+    if (!row) return;
+    c.classList.add('more-info--viewing-active');
+    row.classList.add('more-info-entry--viewing');
+    secondaryViewingRow = row;
+  }
+  function restoreViewingHighlight() {
+    if (secondaryViewingRow) {
+      secondaryViewingRow.classList.remove('more-info-entry--viewing');
+      secondaryViewingRow = null;
+    }
+    const c = secondaryCtx && secondaryCtx.moreInfoContent;
+    if (c) c.classList.remove('more-info--viewing-active');
+  }
+
+  // AniList descriptions ship as HTML — convert to safe text with line breaks.
+  function stripAniListHtml(html) {
+    if (!html) return '';
+    return String(html)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'")
+      .replace(/&mdash;/g, '—').replace(/&ndash;/g, '–').replace(/&nbsp;/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  function prettyEnum(s) {
+    return String(s || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+  function prettyStatus(s) {
+    const MAP = { FINISHED: 'Finished', RELEASING: 'Airing', NOT_YET_RELEASED: 'Upcoming', CANCELLED: 'Cancelled', HIATUS: 'Hiatus' };
+    return MAP[s] || prettyEnum(s);
+  }
+  // Key staff: whitelist roles first (in order), then fill to 6 by the API's
+  // relevance order (mirrors renderStaffCredits's intent for the deep-dive).
+  function pickKeyStaff(staff) {
+    if (!staff || !staff.length) return [];
+    const WHITELIST = ['Director', 'Original Creator', 'Original Story', 'Series Composition', 'Character Design', 'Music'];
+    const picked = [];
+    const usedNames = new Set();
+    for (const role of WHITELIST) {
+      const e = staff.find(s => s.role === role && !usedNames.has(s.name));
+      if (e) { picked.push(e); usedNames.add(e.name); }
+    }
+    for (const s of staff) {
+      if (picked.length >= 6) break;
+      if (usedNames.has(s.name)) continue;
+      picked.push(s); usedNames.add(s.name);
+    }
+    return picked.slice(0, 6);
+  }
+
+  // Pure renderer → HTML string. states: 'loading' | 'success' | 'error'.
+  function renderSecondaryModal(state, detail, meta) {
+    meta = meta || {};
+    const backLabel = meta.backTitle ? ('← Back to ' + escapeHtml(meta.backTitle)) : '← Back';
+    // The action row holds (optional) Request → close ×. v1.7.5 watchlist +
+    // favorites buttons drop in BEFORE the close with no reshuffle (the row is
+    // flex + wraps). requestBtn is only built for non-catalog success below.
+    const buildHeaderActions = (requestBtn) =>
+      '<div class="secondary-header-actions">' +
+        (requestBtn || '') +
+        '<button type="button" class="secondary-close" aria-label="Close details">×</button>' +
+      '</div>';
+
+    if (state === 'loading') {
+      return '<div class="secondary-header secondary-header--bare">' +
+          '<button type="button" class="secondary-back">' + backLabel + '</button>' +
+          buildHeaderActions('') +
+        '</div>' +
+        '<div class="secondary-loading"><div class="secondary-spinner" aria-hidden="true"></div><span>Loading details…</span></div>';
+    }
+    if (state === 'error' || !detail) {
+      return '<div class="secondary-header secondary-header--bare">' +
+          '<button type="button" class="secondary-back">' + backLabel + '</button>' +
+          buildHeaderActions('') +
+        '</div>' +
+        '<div class="secondary-empty">Couldn’t load these details right now.' +
+          ' <button type="button" class="secondary-retry">Try again</button></div>';
+    }
+
+    // ── success ──
+    const accent = (detail.coverImage && detail.coverImage.color) || '';
+    const banner = detail.bannerImage || (detail.coverImage && detail.coverImage.extraLarge) || '';
+    const cover = (detail.coverImage && (detail.coverImage.extraLarge || detail.coverImage.large)) || '';
+    const english = detail.title.english || detail.title.romaji || '(untitled)';
+    const romaji = (detail.title.romaji && detail.title.romaji !== english) ? detail.title.romaji : (detail.title.native || '');
+
+    const animStudios = (detail.studios || []).filter(s => s.isAnimationStudio).map(s => s.name);
+    const allStudios = (detail.studios || []).map(s => s.name);
+    const studioStr = Array.from(new Set(animStudios.length ? animStudios : allStudios)).slice(0, 2).join(', ');
+    const seasonYear = [detail.season ? prettyEnum(detail.season) : '', detail.seasonYear || ''].filter(Boolean).join(' ');
+    const metaStr = [
+      detail.format ? prettyEnum(detail.format).toUpperCase() : '',
+      seasonYear,
+      detail.episodes ? (detail.episodes + ' eps') : '',
+      detail.duration ? (detail.duration + ' min') : '',
+      prettyStatus(detail.status),
+      studioStr,
+    ].filter(Boolean).join('  ·  ');
+
+    const avgBadge = detail.averageScore
+      ? '<span class="anilist-badge"><span class="anilist-badge-kicker">ANILIST</span><span class="anilist-badge-divider">·</span><span class="anilist-badge-score">' + (detail.averageScore / 10).toFixed(1) + '</span></span>'
+      : '';
+    // v1.7.4 (gate 3, Surface 2) — "watched" = this id is in Blake's watched set
+    // (he's seen + endorsed it), distinct from whether a written season review
+    // exists yet. The secondary only ever shows watched-not-primary or non-catalog
+    // ids (primary ids open the main modal).
+    const isWatched = isWatchedAniListId(detail.id);
+    const reviewKicker = isWatched
+      ? '<span class="secondary-reviewed-kicker">✓ REVIEWED</span>'
+      : '<span class="secondary-unreviewed-kicker">NOT REVIEWED YET</span>';
+
+    // v1.7.4 (gate 2b) — "Request this anime" pill, non-watched only (a watched
+    // entry is already on Blake's radar). Links to /suggest with title + anilistId.
+    const requestBtn = isWatched
+      ? ''
+      : '<a class="secondary-request" href="/suggest?title=' + encodeURIComponent(english) + '&anilistId=' + encodeURIComponent(String(detail.id)) + '" title="Request this anime from Blake">' +
+          '<span class="secondary-request-icon" aria-hidden="true">📝</span>' +
+          '<span class="secondary-request-label">Request this anime</span></a>';
+
+    // v1.7.4 (gate 3, Surface 1) — inline "Edit season review" link, admin only
+    // (the UID gate lives in admin-fab.js → window.__rarIsAdmin). Routes to the
+    // dedicated admin panel pre-targeting this id.
+    const editReviewBtn = (typeof window !== 'undefined' && window.__rarIsAdmin)
+      ? '<a class="secondary-edit-review" href="admin/season-reviews.html?id=' + encodeURIComponent(String(detail.id)) + '" title="Edit this season review">' +
+          '<span class="secondary-edit-icon" aria-hidden="true">✎</span>' +
+          '<span class="secondary-edit-label">Edit review</span></a>'
+      : '';
+
+    const header =
+      '<div class="secondary-header"' + (accent ? ' style="--accent:' + escapeHtml(accent) + '"' : '') + '>' +
+        '<div class="secondary-banner"' + (banner ? ' style="background-image:url(\'' + escapeHtml(banner) + '\')"' : '') + '></div>' +
+        '<div class="secondary-banner-scrim"></div>' +
+        '<button type="button" class="secondary-back">' + backLabel + '</button>' +
+        buildHeaderActions(editReviewBtn + requestBtn) +
+        '<div class="secondary-header-body">' +
+          (cover ? '<img class="secondary-cover" src="' + escapeHtml(cover) + '" alt="" loading="lazy">' : '<div class="secondary-cover secondary-cover--ph"></div>') +
+          '<div class="secondary-titleblock">' +
+            '<div class="secondary-kickers">' + reviewKicker + '</div>' +
+            '<h2 class="secondary-title">' + escapeHtml(english) + '</h2>' +
+            (romaji ? '<p class="secondary-romaji">' + escapeHtml(romaji) + '</p>' : '') +
+            '<div class="secondary-badges">' + avgBadge + (metaStr ? '<span class="secondary-meta">' + escapeHtml(metaStr) + '</span>' : '') + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    const context = meta.inFranchise
+      ? '<div class="secondary-context">Currently viewing within <strong>' + escapeHtml(meta.sourceTitle) + '</strong>’s franchise</div>'
+      : (meta.sourceTitle ? '<div class="secondary-context secondary-context--discover">Discovered from <strong>' + escapeHtml(meta.sourceTitle) + '</strong></div>' : '');
+
+    // v1.7.4 (gate 3, Surface 1) — BLAKE'S REVIEW section (the per-season prose),
+    // the primary content above the AniList synopsis. Rendered markdown when Blake
+    // has written one; a placeholder for a watched id without one yet; nothing for
+    // a non-watched entry (synopsis is the body there).
+    let reviewHtml = '';
+    if (meta.seasonReview && meta.seasonReview.body && meta.seasonReview.body.trim()) {
+      const fmRating = meta.seasonReview.meta && meta.seasonReview.meta.rating;
+      const ratingBadge = fmRating
+        ? '<span class="secondary-review-rating"><span class="secondary-review-rating-kicker">RATING</span><span class="secondary-review-rating-divider">·</span><span class="secondary-review-rating-score">' + escapeHtml(fmRating) + '</span></span>'
+        : '';
+      reviewHtml = '<section class="secondary-section secondary-review">' +
+          '<div class="secondary-review-head"><h3 class="secondary-section-title secondary-review-title">BLAKE’S REVIEW</h3>' + ratingBadge + '</div>' +
+          '<div class="secondary-review-body">' + window.renderMarkdown(meta.seasonReview.body) + '</div>' +
+        '</section>';
+    } else if (isWatched) {
+      reviewHtml = '<section class="secondary-section secondary-review secondary-review--empty">' +
+          '<h3 class="secondary-section-title secondary-review-title">BLAKE’S REVIEW</h3>' +
+          '<p class="secondary-review-placeholder">No specific review for this season yet — Blake watched it; notes are on the way.</p>' +
+        '</section>';
+    }
+
+    // synopsis (collapsible past ~420 chars)
+    const descText = stripAniListHtml(detail.description);
+    let descHtml = '';
+    if (descText) {
+      const long = descText.length > 420;
+      const para = '<p>' + escapeHtml(descText).replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+      descHtml = '<section class="secondary-section secondary-desc' + (long ? ' is-collapsible' : '') + '">' +
+          '<h3 class="secondary-section-title">SYNOPSIS</h3>' +
+          '<div class="secondary-desc-body">' + para + '</div>' +
+          (long ? '<button type="button" class="secondary-readmore">Read more</button>' : '') +
+        '</section>';
+    }
+
+    const genresHtml = detail.genres.length
+      ? '<section class="secondary-section"><h3 class="secondary-section-title">GENRES</h3><div class="secondary-pills">' +
+          detail.genres.map(g => '<span class="secondary-pill">' + escapeHtml(g) + '</span>').join('') +
+        '</div></section>'
+      : '';
+    const topTags = detail.tags.slice(0, 10);
+    const tagsHtml = topTags.length
+      ? '<section class="secondary-section"><h3 class="secondary-section-title">TAGS</h3><div class="secondary-pills">' +
+          topTags.map(t => '<span class="secondary-pill secondary-pill--tag">' + escapeHtml(t.name) + '</span>').join('') +
+        '</div></section>'
+      : '';
+
+    const yt = (detail.trailer && detail.trailer.site === 'youtube' && detail.trailer.id) ? detail.trailer.id : null;
+    const trailerHtml = yt
+      ? '<section class="secondary-section"><h3 class="secondary-section-title">TRAILER</h3>' +
+          '<div class="secondary-trailer"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt) + '" title="Trailer" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>' +
+        '</section>'
+      : '';
+
+    // v1.7.4 (gate 3, Surface 3) — character/staff cards are clickable (data-*-id)
+    // → open the tertiary detail layer.
+    const charsHtml = detail.characters.length
+      ? '<section class="secondary-section"><h3 class="secondary-section-title">CHARACTERS</h3><div class="secondary-char-grid">' +
+          detail.characters.map(c =>
+            '<button type="button" class="secondary-char" data-character-id="' + escapeHtml(String(c.id || '')) + '">' +
+              (c.image ? '<img class="secondary-char-img" src="' + escapeHtml(c.image) + '" alt="" loading="lazy">' : '<div class="secondary-char-img secondary-char-img--ph"></div>') +
+              '<div class="secondary-char-name">' + escapeHtml(c.name) + '</div>' +
+              (c.role ? '<div class="secondary-char-role">' + escapeHtml(prettyEnum(c.role)) + '</div>' : '') +
+            '</button>'
+          ).join('') +
+        '</div></section>'
+      : '';
+
+    const staffPicked = pickKeyStaff(detail.staff);
+    const staffHtml = staffPicked.length
+      ? '<section class="secondary-section"><h3 class="secondary-section-title">STAFF</h3><div class="secondary-staff-list">' +
+          staffPicked.map(s =>
+            '<button type="button" class="secondary-staff-row" data-staff-id="' + escapeHtml(String(s.id || '')) + '">' +
+              (s.image ? '<img class="secondary-staff-img" src="' + escapeHtml(s.image) + '" alt="" loading="lazy">' : '<div class="secondary-staff-img secondary-staff-img--ph"></div>') +
+              '<div class="secondary-staff-meta"><span class="secondary-staff-role">' + escapeHtml(s.role) + '</span><span class="secondary-staff-name">' + escapeHtml(s.name) + '</span></div>' +
+            '</button>'
+          ).join('') +
+        '</div></section>'
+      : '';
+
+    // links — AniList canonical + a few official/streaming, kept subtle
+    const linkOut = [{ label: 'AniList', url: 'https://anilist.co/anime/' + detail.id }];
+    const LINK_OK = new Set(['Official Site', 'Crunchyroll', 'Netflix', 'Hulu', 'Funimation', 'HIDIVE', 'Amazon Prime Video', 'YouTube']);
+    (detail.externalLinks || []).forEach(l => {
+      if (linkOut.length >= 6) return;
+      if (LINK_OK.has(l.site) || l.type === 'STREAMING') linkOut.push({ label: l.site, url: l.url });
+    });
+    const linksHtml = '<section class="secondary-section"><h3 class="secondary-section-title">LINKS</h3><div class="secondary-links">' +
+        linkOut.slice(0, 6).map(l => '<a class="secondary-link" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(l.label) + '</a>').join('') +
+      '</div></section>';
+
+    const recs = detail.recommendations || [];
+    const recsHtml = recs.length
+      ? '<div class="secondary-recs-block"><h3 class="secondary-section-title">MORE LIKE THIS</h3><div class="secondary-recs">' +
+          recs.map(r => {
+            const t = r.title.english || r.title.romaji || '(untitled)';
+            // primary id → main modal (data-catalog-slug); watched/non-catalog →
+            // secondary replace-content (data-anilist-id). Green ✓ if watched.
+            const pslug = primarySlugForAniListId(r.id);
+            const rwatched = isWatchedAniListId(r.id);
+            const attr = pslug ? ' data-catalog-slug="' + escapeHtml(pslug) + '"' : ' data-anilist-id="' + escapeHtml(String(r.id)) + '"';
+            const rcover = (r.coverImage && r.coverImage.large) || '';
+            const badge = rwatched
+              ? '<span class="secondary-rec-pill">✓</span>'
+              : '<span class="secondary-rec-dot" aria-label="Not reviewed yet"></span>';
+            return '<button type="button" class="secondary-rec"' + attr + '>' +
+                (rcover ? '<img class="secondary-rec-cover" src="' + escapeHtml(rcover) + '" alt="" loading="lazy">' : '<div class="secondary-rec-cover secondary-rec-cover--ph"></div>') +
+                badge +
+                '<div class="secondary-rec-title">' + escapeHtml(t) + '</div>' +
+              '</button>';
+          }).join('') +
+        '</div></div>'
+      : '';
+
+    const body =
+      '<div class="secondary-body">' +
+        '<div class="secondary-col secondary-col--main">' + reviewHtml + descHtml + genresHtml + tagsHtml + trailerHtml + '</div>' +
+        '<div class="secondary-col secondary-col--side">' + charsHtml + staffHtml + linksHtml + '</div>' +
+      '</div>';
+
+    return header + context + body + recsHtml;
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // v1.7.4 (gate 3, Surface 3) — TERTIARY character / staff detail layer.
+  // A third drill-down layer (z-index above the secondary) opened by clicking a
+  // character or staff card. Recommended treatment (a): a tertiary modal that
+  // slides in over the dimmed secondary; Back/Esc/backdrop/× return to the
+  // secondary. Cross-nav (clicking a VA / a staff member's character / an anime
+  // appearance) swaps content in place; appearances jump the SECONDARY to that
+  // anime. Fed by rar:character: / rar:staff: 24h caches (mirror rar:anime:).
+  // ════════════════════════════════════════════════════════════════════════
+
+  // Generic 24h L1+L2 cache factory (DRY — mirrors fetchAnimeDetailCached).
+  function makeDetailCache(prefix, fetchFn) {
+    const mem = new Map();
+    let swept = false;
+    const verKey = () => prefix + 'v' + (window.APP_VERSION || '0') + ':';
+    const keyFor = (id) => verKey() + id;
+    const sweep = () => {
+      if (swept) return; swept = true;
+      try {
+        const keep = verKey(); const stale = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.indexOf(prefix) === 0 && k.indexOf(keep) !== 0) stale.push(k);
+        }
+        stale.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+      } catch (_) {}
+    };
+    const read = (id) => {
+      try {
+        const raw = localStorage.getItem(keyFor(id));
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        if (!p || typeof p.ts !== 'number' || !p.data) return null;
+        if (Date.now() - p.ts > 24 * 60 * 60 * 1000) return null;
+        return p.data;
+      } catch (_) { return null; }
+    };
+    const write = (id, data) => { sweep(); try { localStorage.setItem(keyFor(id), JSON.stringify({ ts: Date.now(), data })); } catch (_) {} };
+    return async (id, force) => {
+      const k = Number(id); if (!k) return null;
+      if (!force) { if (mem.has(k)) return mem.get(k); const c = read(k); if (c) { mem.set(k, c); return c; } }
+      const data = await fetchFn(k);
+      if (data) { mem.set(k, data); write(k, data); }
+      return data;
+    };
+  }
+  const fetchCharacterCached = makeDetailCache('rar:character:', (id) => window.franchiseFetch.fetchCharacterDetail(id));
+  const fetchStaffCached = makeDetailCache('rar:staff:', (id) => window.franchiseFetch.fetchStaffDetail(id));
+
+  let tertiaryEl = null;
+  let tertiaryScrollEl = null;
+
+  function ensureTertiaryEl() {
+    if (tertiaryEl) return;
+    tertiaryEl = document.createElement('div');
+    tertiaryEl.className = 'tertiary-layer';
+    tertiaryEl.hidden = true;
+    tertiaryEl.innerHTML =
+      '<div class="tertiary-backdrop"></div>' +
+      '<div class="tertiary-modal" role="dialog" aria-modal="true" aria-label="Profile" tabindex="-1">' +
+        '<div class="tertiary-scroll"></div>' +
+      '</div>';
+    document.body.appendChild(tertiaryEl);
+    tertiaryScrollEl = tertiaryEl.querySelector('.tertiary-scroll');
+    tertiaryEl.querySelector('.tertiary-backdrop').addEventListener('click', closeTertiary);
+    tertiaryEl.addEventListener('click', onTertiaryClick);
+  }
+
+  function onTertiaryKeydown(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeTertiary(); }
+  }
+
+  function onTertiaryClick(e) {
+    if (e.target.closest('.tertiary-back') || e.target.closest('.tertiary-close')) { e.preventDefault(); closeTertiary(); return; }
+    const more = e.target.closest('.tertiary-readmore');
+    if (more) {
+      e.preventDefault();
+      const sec = more.closest('.tertiary-bio');
+      if (sec) { const open = sec.classList.toggle('is-open'); more.textContent = open ? 'Show less' : 'Read more'; }
+      return;
+    }
+    // An anime appearance/credit → jump the SECONDARY layer to that anime, close tertiary.
+    const media = e.target.closest('.tertiary-media[data-anilist-id]');
+    if (media) {
+      e.preventDefault();
+      const id = Number(media.dataset.anilistId);
+      const titleEl = media.querySelector('.tertiary-media-title');
+      closeTertiary();
+      if (id) pushSecondary(id, titleEl ? titleEl.textContent : '');
+      return;
+    }
+    // A related person (VA / staff's character) → swap tertiary content in place.
+    const person = e.target.closest('.tertiary-person[data-character-id], .tertiary-person[data-staff-id]');
+    if (person) {
+      e.preventDefault();
+      if (person.dataset.characterId) openTertiary('character', Number(person.dataset.characterId));
+      else if (person.dataset.staffId) openTertiary('staff', Number(person.dataset.staffId));
+    }
+  }
+
+  function openTertiary(kind, id) {
+    if (!id) return;
+    ensureTertiaryEl();
+    tertiaryEl.hidden = false;
+    void tertiaryEl.offsetWidth;
+    tertiaryEl.classList.add('active');
+    document.addEventListener('keydown', onTertiaryKeydown);
+    loadTertiary(kind, id);
+  }
+
+  async function loadTertiary(kind, id) {
+    tertiaryScrollEl.scrollTop = 0;
+    tertiaryScrollEl.innerHTML = renderTertiary('loading', kind, null);
+    const data = kind === 'character' ? await fetchCharacterCached(id) : await fetchStaffCached(id);
+    if (!tertiaryEl || tertiaryEl.hidden) return;
+    tertiaryScrollEl.innerHTML = renderTertiary(data ? 'success' : 'error', kind, data);
+    tertiaryScrollEl.scrollTop = 0;
+  }
+
+  function closeTertiary() {
+    if (!tertiaryEl || tertiaryEl.hidden) return;
+    tertiaryEl.classList.remove('active');
+    document.removeEventListener('keydown', onTertiaryKeydown);
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const done = () => { if (!tertiaryEl) return; tertiaryEl.hidden = true; tertiaryScrollEl.innerHTML = ''; };
+    if (reduce) done(); else setTimeout(done, 260);
+  }
+
+  function tertiaryHeader(backText) {
+    return '<div class="tertiary-header-bar">' +
+        '<button type="button" class="tertiary-back">' + escapeHtml(backText || '← Back') + '</button>' +
+        '<button type="button" class="tertiary-close" aria-label="Close">×</button>' +
+      '</div>';
+  }
+  function tertiaryMediaCard(m) {
+    return '<button type="button" class="tertiary-media" data-anilist-id="' + escapeHtml(String(m.id)) + '">' +
+        (m.cover ? '<img class="tertiary-media-cover" src="' + escapeHtml(m.cover) + '" alt="" loading="lazy">' : '<span class="tertiary-media-cover tertiary-media-cover--ph"></span>') +
+        '<span class="tertiary-media-title">' + escapeHtml(m.title || '') + '</span>' +
+        (m.role ? '<span class="tertiary-media-role">' + escapeHtml(prettyEnum(m.role)) + '</span>' : '') +
+      '</button>';
+  }
+  function tertiaryPersonCard(p, kind) {
+    const attr = kind === 'character' ? ' data-character-id="' + escapeHtml(String(p.id)) + '"' : ' data-staff-id="' + escapeHtml(String(p.id)) + '"';
+    return '<button type="button" class="tertiary-person"' + attr + '>' +
+        (p.image ? '<img class="tertiary-person-img" src="' + escapeHtml(p.image) + '" alt="" loading="lazy">' : '<span class="tertiary-person-img tertiary-person-img--ph"></span>') +
+        '<span class="tertiary-person-name">' + escapeHtml(p.name || '') + '</span>' +
+      '</button>';
+  }
+
+  function renderTertiary(state, kind, data) {
+    if (state === 'loading') {
+      return tertiaryHeader('← Back') + '<div class="tertiary-loading"><div class="secondary-spinner" aria-hidden="true"></div><span>Loading…</span></div>';
+    }
+    if (state === 'error' || !data) {
+      return tertiaryHeader('← Back') + '<div class="tertiary-empty">Couldn’t load this profile right now.</div>';
+    }
+    const isChar = kind === 'character';
+    // bio (AniList description → HTML stripped to text, then run through the shared
+    // markdown renderer so [Twitter](url) / AniList links / **bold** etc. render as
+    // real <a>/<strong> — XSS-safe, links open target=_blank rel=noopener). v1.7.4 gate-3c.
+    const bioText = stripAniListHtml(data.description);
+    let bioHtml = '';
+    if (bioText) {
+      const long = bioText.length > 360;
+      const para = window.renderMarkdown(bioText);
+      bioHtml = '<section class="tertiary-section tertiary-bio' + (long ? ' is-collapsible' : '') + '">' +
+          '<div class="tertiary-bio-body">' + para + '</div>' +
+          (long ? '<button type="button" class="tertiary-readmore">Read more</button>' : '') +
+        '</section>';
+    }
+    const factBits = [
+      data.native ? escapeHtml(data.native) : '',
+      data.age ? ('Age ' + escapeHtml(String(data.age))) : '',
+      data.gender ? escapeHtml(data.gender) : '',
+      data.dateOfBirth ? escapeHtml(data.dateOfBirth) : '',
+      (!isChar && data.homeTown) ? escapeHtml(data.homeTown) : '',
+    ].filter(Boolean);
+    const kicker = isChar ? 'CHARACTER' : ((data.occupations && data.occupations.length) ? escapeHtml(data.occupations.join(' · ').toUpperCase()) : 'STAFF');
+
+    const hero =
+      '<div class="tertiary-hero">' +
+        (data.image ? '<img class="tertiary-hero-img" src="' + escapeHtml(data.image) + '" alt="" loading="lazy">' : '<div class="tertiary-hero-img tertiary-hero-img--ph"></div>') +
+        '<div class="tertiary-hero-meta">' +
+          '<div class="tertiary-kicker">' + kicker + '</div>' +
+          '<h2 class="tertiary-name">' + escapeHtml(data.name) + '</h2>' +
+          (factBits.length ? '<div class="tertiary-facts">' + factBits.join('<span class="tertiary-fact-sep">·</span>') + '</div>' : '') +
+        '</div>' +
+      '</div>';
+
+    // character: VAs + appearances; staff: characters + media credits
+    let people = '';
+    if (isChar && data.voiceActors && data.voiceActors.length) {
+      people = '<section class="tertiary-section"><h3 class="tertiary-section-title">VOICE (JP)</h3><div class="tertiary-person-row">' +
+        data.voiceActors.map(v => tertiaryPersonCard(v, 'staff')).join('') + '</div></section>';
+    } else if (!isChar && data.characters && data.characters.length) {
+      people = '<section class="tertiary-section"><h3 class="tertiary-section-title">CHARACTERS</h3><div class="tertiary-person-row">' +
+        data.characters.map(c => tertiaryPersonCard(c, 'character')).join('') + '</div></section>';
+    }
+    const credits = isChar ? (data.appearances || []) : (data.staffMedia || []);
+    const creditsHtml = credits.length
+      ? '<section class="tertiary-section"><h3 class="tertiary-section-title">' + (isChar ? 'APPEARS IN' : 'KNOWN FOR') + '</h3><div class="tertiary-media-grid">' +
+          credits.map(tertiaryMediaCard).join('') + '</div></section>'
+      : '';
+
+    return tertiaryHeader('← Back') + hero + bioHtml + people + creditsHtml;
+  }
 
 
 // keep these listeners

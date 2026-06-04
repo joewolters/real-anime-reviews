@@ -238,6 +238,53 @@ const TARGETS = [
     pattern: /(src="suggestions\.js\?v=)([^"]+)(")/,
     replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
   },
+  // ---- Added in v1.7.4 gate 4 (Season Reviews admin panel) ----
+  // admin/season-reviews.html loads its CSS + module scripts via static
+  // ?v= tags (like admin/suggestions.html). The shared classic scripts it also
+  // loads (animeData.js / franchise-fetch.js / markdown.js) are version-less
+  // there — low cache-risk on an admin-only page — so they're not targeted.
+  {
+    file: 'admin/season-reviews.html',
+    label: 'window.APP_VERSION (season-reviews)',
+    pattern: /(<script>window\.APP_VERSION=")([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/season-reviews.html',
+    label: 'style.css?v= (season-reviews)',
+    pattern: /(href="\.\.\/style\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/season-reviews.html',
+    label: 'mobile.css?v= (season-reviews)',
+    pattern: /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/season-reviews.html',
+    label: 'suggestions.css?v= (season-reviews)',
+    pattern: /(href="suggestions\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/season-reviews.html',
+    label: 'season-reviews.css?v= (season-reviews)',
+    pattern: /(href="season-reviews\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/season-reviews.html',
+    label: 'firebase.js?v= (season-reviews)',
+    pattern: /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/season-reviews.html',
+    label: 'season-reviews.js?v= (season-reviews)',
+    pattern: /(src="season-reviews\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
   // NOTE: All OTHER JS files (script.js, account.js, firebase.js loaded into
   // index.html/account.html/admin/new-anime.html, admin-fab.js, new-anime.js,
   // card-render.js) intentionally are NOT in TARGETS. Those HTML files use
