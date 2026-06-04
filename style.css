@@ -272,6 +272,20 @@ header h1:hover {
     z-index: 999;
 }
 
+/* v1.8.0 (gate 1) — branded scrollbars site-wide (default white bars glared on the
+   modal columns + secondary drawer). Blink/WebKit via ::-webkit-scrollbar; Gecko via
+   scrollbar-color/scrollbar-width. Thumb keeps usable contrast on the dark track. */
+html { scrollbar-width: thin; scrollbar-color: #7c4dd0 rgba(20,6,38,0.55); }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: rgba(20,6,38,0.55); border-radius: 999px; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #a06bf0, #6b34c0);
+  border-radius: 999px;
+  border: 2px solid rgba(20,6,38,0.55);
+}
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #b88bff, #7c4dd0); }
+::-webkit-scrollbar-corner { background: transparent; }
+
 /* MODAL CORE STYLE */
 .modal {
     position: fixed;
@@ -5313,9 +5327,17 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 .secondary-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(8, 0, 18, 0.55);
-  -webkit-backdrop-filter: blur(7px);
-  backdrop-filter: blur(7px);
+  /* v1.8.0 (gate 1b) — Option C "snapshot". The live full-viewport backdrop-filter
+     was the per-repaint Paint tax (Blake's Firefox Profiler on the hover/scroll flow:
+     Paint 41%, 98% Graphics, all self). A live backdrop-filter RE-RESOLVES the blur on
+     every composite — so it can't be made cheap on Gecko/WebKit (G1's Firefox-only
+     layer-promote only nudged 49%->41%). Replaced with a premium STATIC dim (no filter
+     at all) so NO engine pays a re-resolve on hover/scroll. The frost only ever showed
+     in a narrow dimmed sliver (the drawer covers ~94vw), so the visual delta is small;
+     the richer radial+linear dim keeps the "gone deeper" depth. */
+  background:
+    radial-gradient(130% 120% at 6% 40%, rgba(22,7,44,0.52), transparent 62%),
+    linear-gradient(90deg, rgba(8,0,18,0.66), rgba(8,0,18,0.56));
   opacity: 0;
   transition: opacity .28s ease;
 }
@@ -6209,8 +6231,11 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 .tertiary-layer[hidden] { display: none; }
 .tertiary-backdrop {
   position: absolute; inset: 0;
-  background: rgba(8,0,18,0.5);
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  /* v1.8.0 (gate 1b) — static dim (no backdrop-filter), same as .secondary-backdrop.
+     This layer stacked ON the secondary, so removing its live blur is doubly worth it. */
+  background:
+    radial-gradient(130% 120% at 6% 40%, rgba(22,7,44,0.5), transparent 62%),
+    linear-gradient(90deg, rgba(8,0,18,0.62), rgba(8,0,18,0.52));
   opacity: 0; transition: opacity .26s ease;
 }
 .tertiary-layer.active .tertiary-backdrop { opacity: 1; }

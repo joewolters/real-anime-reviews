@@ -4282,7 +4282,7 @@ function openModal(anime) {
     ? '<div class="trailer-container"><iframe src="' +
       trailerSrc +
       '" title="Trailer for ' + escapeHtml(anime.Title) +
-      '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>'
+      '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>'
     : '';
 
   // v1.7.4 gate-3b — render Description + Review through the shared markdown parser
@@ -5160,7 +5160,7 @@ function closeModal() {
     const yt = (detail.trailer && detail.trailer.site === 'youtube' && detail.trailer.id) ? detail.trailer.id : null;
     const trailerHtml = yt
       ? '<section class="secondary-section"><h3 class="secondary-section-title">TRAILER</h3>' +
-          '<div class="secondary-trailer"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt) + '" title="Trailer" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>' +
+          '<div class="secondary-trailer"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt) + '" title="Trailer" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>' +
         '</section>'
       : '';
 

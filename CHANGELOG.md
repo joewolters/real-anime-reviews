@@ -11,6 +11,24 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-04 -->
+## v1.8.0 — MINOR (2026-06-04)
+
+**Smoothness Overhaul (round 1) + branded scrollbars.** A perf-focused ship targeting the modal lag Blake reported on Firefox/Gecko (Chrome was already smooth). Root-caused to the layered modals' live `backdrop-filter`; reworked the blur architecture and added site-wide branded scrollbars. Honest scope note: the felt speed change was marginal — the bigger universal levers (see ROADMAP "Smoothness round 2") are measured and queued, not built here.
+
+**Visitor-facing:**
+
+- **Brand-purple scrollbars site-wide.** The default white scrollbars (glaring on the modal columns + the detail pop-out) are now brand-purple — `::-webkit-scrollbar` on Chromium/WebKit + `scrollbar-color`/`scrollbar-width` on Firefox.
+- **Lighter, cleaner pop-out backdrop.** The detail pop-out's dimmed background was reworked from a live frosted blur to a premium static gradient dim, so it runs lighter across more browsers (especially Firefox) without the constant re-render cost.
+
+**Behind the scenes:**
+
+- **Blur architecture removed (the mechanism-level win).** The secondary + tertiary modal backdrops used a live full-viewport `backdrop-filter`, which **re-resolves the blur on every repaint** (hover/scroll) — the source of the Firefox Paint cost (profiled at ~49%→41%, ~98% Graphics). A live backdrop-filter structurally can't be cached, so it was replaced with a static dim: **every engine stops paying the per-repaint re-resolve tax.** An interim Firefox-only layer-promote (`@supports(-moz-appearance)`) was tried first and removed once the static dim made it moot.
+- **Cross-engine perf investigation.** Profiled the offending pattern on Blink/Gecko/WebKit (all three Playwright engines). Documented finding: the headless harness **cannot isolate the GPU backdrop-filter cost** (dim ≈ backdrop-filter ≈ filter-on-static in headless), so the diagnosis rests on the live `backdrop-filter` re-resolve mechanism + Blake's headed Firefox Profiler, not headless FPS. Verified the modal's hovers already composite (transform/box-shadow, no `filter`), so the lag was purely the blur amplification — no speculative hover surgery added.
+- **Console-warning fix.** Trimmed the trailer iframe `allow` attribute (`autoplay; encrypted-media; picture-in-picture`) to stop Firefox's "unsupported feature" Feature-Policy warnings. Triaged the rest of Blake's Firefox console: the `data:`-URI CORS block + `unreachable code` in a hashed bundle are browser-extension noise (not site code, grep-confirmed); the YouTube-embed cookie/CSP notices are third-party.
+
+**Implementation files:** `style.css` (backdrop-filter → static dims on `.secondary-backdrop`/`.tertiary-backdrop`, branded `::-webkit-scrollbar*` + `scrollbar-color`), `script.js` (trailer iframe `allow` trim, both call sites). No new dependencies or fonts. `bump-version` stays 33 targets.
+
+<!-- author: Code | date: 2026-06-04 -->
 ## v1.7.6 — PATCH (2026-06-04)
 
 **Quick-nags polish.** Five small fixes clearing the backlog before the v1.8.0 Smoothness Overhaul — deliberately render-path-neutral (no new animations or blur) so they don't muddy that ship's before/after.

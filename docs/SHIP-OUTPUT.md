@@ -1,94 +1,59 @@
 <!-- author: Code | date: 2026-06-04 -->
-# v1.7.6 — Gate 0 (recon + propose: quick nags ship — PROPOSE-FIRST ✓)
+# v1.8.0 — Gate 1b (Option C snapshot blur + G2 hover finding + console triage — APPLY ✓)
 
-> Reconned all 5 nag items with file:line evidence. All 5 fit the PATCH scope — **none are render-path-heavy, so none need to move to v1.8.0** (item 1 is ~10 lines of routing wiring; 2 & 4 are CSS-only; 3 is a 1-line array; 5 is a new asset + `<link>` tags). Key recon win: `renderRecommendations` **already implements** the primary→main-modal / watched→secondary routing split (script.js:1181), so the account fix just mirrors it in the `#secondary=` hash handler — and I traced the actual collision source (the "currently viewing source row" opens the secondary for a **primary** id, so saving there creates an `al:<primaryId>` save). Nothing applied. 2 open questions for Blake (the watched-not-primary routing call + the favicon asset).
+> Escalated to **Option C**: removed the **live full-viewport `backdrop-filter`** from `.secondary-backdrop` + `.tertiary-backdrop` (the per-repaint re-resolve tax = Blake's Firefox Paint 41%/98%-Graphics) and replaced it with a **premium static dim** — so **no engine pays a blur re-resolution on hover/scroll**. ⚠️ **Key honest finding on G2:** the secondary modal's hovers **already composite** (transform/box-shadow/border — I verified there is **no `filter` hover anywhere in the modal**), so the modal-hover lag was **100% the backdrop-filter amplification** (each hover repaint re-resolved the viewport blur), which Option C removes — there was no filter-hover surgery to do in the modal, and `.card` already uses the locked `::after` opacity-veil. Per the gate's own "don't stack speculative fixes," I did **not** invent hover changes for no measured gain. Console addendum triaged (one trivial fix, rest confirmed not-ours). `npm test` 8 passed, CSS 1008/1008. **Blake's profiler is the arbiter** — re-smoke steps below.
 
 ---
 
-## Item 1 — Account saved-entry routing fix
+## 1. Option C — snapshot blur (the universal fix)
+- **`.secondary-backdrop` + `.tertiary-backdrop`:** dropped `backdrop-filter: blur()` entirely; replaced with a **static layered dim** (`radial-gradient` depth + `linear-gradient` dim, no filter). Removed the gate-1 Firefox-only `@supports` layer-promote block (moot — there's no live blur left to promote). **Δ** `style.css` ~−16 (net; 2 rules simplified + the `@supports` block deleted).
+- **Why this is the right call (mechanism, since headless can't measure — see §3):** a **live `backdrop-filter` re-resolves the blur on every composite/repaint**; that's structurally why G1's layer-promote only nudged 49%→41% (you can't cache a filter that re-samples the live backdrop). The only way to stop the per-repaint tax on **every** engine is to not run a live backdrop-filter during the interactive phase. A static dim has **zero** filter cost.
+- **⚠️ Visual delta (honest):** the frost is gone — the backdrop is now a clean dark gradient dim instead of a frosted blur. **In practice this is subtle:** the drawer covers ~94vw, so the frost only ever showed in a narrow, already-dimmed left sliver. The richer radial+linear dim keeps the "gone deeper" depth. **If you miss the frost,** I can restore it cheaply by blurring the *static* content behind it once with a cached `filter:blur()` (no live backdrop-filter) — but that's added complexity for a sliver, so I went with the guaranteed-universal dim first. Your eyes decide.
 
-### Recon (verified)
-- `account.js:560` routes **every** anilist save to `index.html#secondary=<aniListId>`.
-- The `#secondary=` hash handler (`script.js` router) calls `openSecondaryModal(id, null, null)` unconditionally.
-- `primarySlugForAniListId(id)` (`script.js:778`) + `isWatchedAniListId(id)` (`:784`) live **inside the script.js IIFE** — **NOT reachable from `account.js`** (separate module; account loads `animeData.js`/`card-render.js`/`franchise-fetch.js` but not these helpers). So the routing decision must live in the hash handler, not account.js.
-- **The collision source (traced, not assumed):** the secondary modal only opens for non-primary ids *except* the **"currently viewing source row"** — clicking the source row in the More Info panel opens the secondary for the **source = primary** id. Saving from there writes `al:<primaryId>`. On the account page that row routes `#secondary=<primaryId>` → secondary modal, when Blake expects the **main franchise modal with his review**. That's exactly his gate-8 flag.
-- **Precedent:** `renderRecommendations` (`script.js:1178-1184`) already does the correct three-way split — `primarySlugForAniListId` → main modal (catalog-slug); watched-not-primary → secondary; non-watched → secondary. The fix is to make the account route obey the same table.
+## 2. G2 hover pass — measured finding (no speculative surgery)
+Checked every hover in the secondary-modal flow:
+- **Secondary pills / cards / rows** (`.secondary-save/-request/-platform/-ep-link:hover`, `.secondary-char/-rec`, `.more-info-entry`) — they hover with **`transform` + `box-shadow` + `border-color` + `background`. None use `filter`.** So the gate's premise ("every `filter`-transition hover forces repaints of the blurred region") had **no `filter` target in the modal** — the lag was purely the **backdrop-filter amplification**: each hover/scroll repaint re-resolved the full-viewport blur. **Option C removes the amplifier**, so those hovers are now cheap on every engine.
+- **`.card` (homepage + modal cards)** — already uses the **locked treatment**: a `::after` brightness veil faded via `opacity` (`.card:hover::after{opacity:1}`) + a composited `transform: scale()`. Nothing to change.
+- **The only real `filter:brightness` hovers** are 3 buttons (`.genre-shuffle-btn`, `#top10-prev/next`, `.inline-header-btn`) — homepage/header (the already-smooth page), tiny bounded elements, now trivially cheap post-Option-C. Removing their brightness would degrade the look for **zero** measured gain.
+- **Decision:** no speculative hover surgery (the gate explicitly says "don't keep stacking speculative fixes"). If Blake's profiler shows residual hover cost (e.g. animated `box-shadow` repaints), the pre-painted-shadow-via-opacity conversion is the next lever — held pending real data. **Δ** 0 (correctly).
 
-### Proposed fix
-In the `#secondary=<aniListId>` hash handler, **before** `openSecondaryModal`:
-```js
-const slug = (typeof primarySlugForAniListId === 'function') ? primarySlugForAniListId(aniListId) : null;
-if (slug) {
-  const entry = list.find(a => makeId(a.Title) === slug);  // reuse the existing #open= resolver
-  if (entry) { showAll(); openModal(entry); /* normalize hash */ return; }
-}
-openSecondaryModal(aniListId, null, null);   // watched-not-primary + non-catalog (unchanged)
-```
-account.js stays as-is (keeps passing `#secondary=<id>`; the handler upgrades primary ids to the main modal). Mirrors v1.7.4 routing exactly.
-- **Δ:** `script.js` ~+10 (hash handler). `account.js` 0.
+## 3. Measurement honesty (why the profiler is the arbiter)
+Ran a decisive cross-engine bench: **dim-only vs live backdrop-filter vs filter-on-static-content**, with a drawer repainting each frame. Result — **all three were identical on every engine** (Gecko ~145fps, WebKit ~40fps/~75%, Blink ~60fps). That proves the **blur is NOT isolable in the headless harness** (the drawer's own repaint dominates; the GPU-compositor backdrop cost that Blake's headed Firefox profiler clearly shows is not reproduced headlessly). So I am **not** reporting headless before/after FPS for this gate — they'd be meaningless. The trustworthy inputs are **(a) the mechanism** (live backdrop-filter re-resolves per repaint; a static dim can't) and **(b) Blake's real Firefox Profiler** (the gate's success bar).
 
-### ⚠️ Open question for Blake (the gate flagged this — "confirm the routing table")
-**Watched-not-primary ids** (e.g. you saved Demon Slayer S2, which is reviewed via the franchise but isn't the primary slug): per the v1.7.4 site-wide split these open the **secondary modal**, which DOES show the gold "BLAKE'S REVIEW" per-season section. **My recommendation: keep them on the secondary** (consistent with the rest of the site + the review is right there). The fix above only redirects **primary** ids to the main modal. Confirm — or, if Blake wants *any* reviewed-franchise save to open the main modal, that's a different table (`isWatchedAniListId` → main modal) and I'd need a way to resolve a watched-not-primary id back to its franchise's primary slug (a new reverse map).
+## 4. Console addendum — triaged
+| # | Message | Verdict | Action |
+|---|---|---|---|
+| 1 | Feature-Policy "skipping unsupported feature accelerometer/clipboard-write/gyroscope…" | **Ours** — the trailer iframe `allow` listed tokens Firefox ignores | **Fixed:** trimmed `allow` to `autoplay; encrypted-media; picture-in-picture` at both call sites (`script.js:4285`, `:5163`). Benign, now silent. |
+| 2 | `Cookie "__Secure-YEC" rejected` + CSP for `youtube.com/embed` | **Not ours** — YouTube embed third-party | none (the iframe is our only YT touchpoint; nothing in our code triggers it) |
+| 3 | `Cross-Origin Request Blocked: data:text/plain;base64,Cg==` | **Not ours** — grep confirms **zero `data:`/`base64` fetches in our JS**; `Cg==` = base64 `"\n"`, classic extension injection | none |
+| 4 | `unreachable code after return` in `15_S4Ql8…js:2724` | **Not ours** — hashed bundle name; our files are unhashed (`script.js` etc.). Extension/YT player | none |
+| 5 | Fingerprinting-protection notice | **Firefox privacy feature** — expected | **Note for Blake:** this can skew profiler/screen metrics, so profiler numbers have some noise floor |
+- **None relate to the perf problem** (that's Paint/backdrop-filter — profiler-confirmed). Items 3 & 4 are almost certainly a browser extension; worth Blake trying a private window (no extensions) for the cleanest profiler trace.
 
-## Item 2 — Title / format-pill overlap (ALSO LIKED, Mononoke)
+## Verification
+| Check | Result |
+|---|---|
+| `node --check script.js` | **OK** (iframe `allow` trim) |
+| CSS brace balance | **1008 / 1008 BALANCED** |
+| `backdrop-filter` on the modal backdrops | **0** (static dims now; grep hits were comment text) |
+| `prefers-reduced-motion` paths | **intact** (the `.secondary-backdrop, .secondary-modal { transition:none }` block untouched) |
+| `[hidden]` symmetry | intact |
+| G1 branded scrollbars | **kept** |
+| `npm test` (Playwright) | **8 passed (14.9s)** |
 
-### Recon (verified)
-- `.more-info-rec-format-badge` (`style.css:3087`) is `position: absolute; top:6px; right:6px`.
-- The spine + group rows override it inline with `position: static` (`script.js:855`, `:1112`) so it flows inline — **but `renderRecommendations` (`:1177`) uses it WITHOUT the override**, so in ALSO LIKED cards the badge is absolute top-right and a short title wraps **under** it. A wide `MOVIE` badge (Mononoke) overlaps more than a `TV` badge → Blake's flag.
+## Bench direction (all 3 engines)
+Decisive run: dim-only ≈ live-backdrop-filter ≈ filter-on-static — **identical per engine** → the harness cannot isolate the backdrop-filter cost (drawer repaint dominates). So no headless FPS claims; **mechanism + Blake's profiler** govern. Mechanism guarantees Option C removes the live backdrop-filter Paint cost on every engine.
 
-### Proposed fix
-CSS-only — reserve horizontal space in the ALSO LIKED card title so it never wraps into the badge zone: add `padding-right` (≈ badge width + gap) to the rec card's title element when an absolute badge is present (scope it to the rec/`.more-info-entry` title, not the spine rows which are already static). Confirm the exact title class at gate 1 (`.more-info-rec-title` per the `:1108` comment, vs the entry-title). No JS, no render-path change.
-- **Δ:** `style.css` ~+2.
-
-## Item 3 — Staff role whitelist expansion
-
-### Recon (verified)
-- `renderStaffCredits` WHITELIST (`script.js:1215`) = `['Director', 'Series Composition', 'Music', 'Character Design']` (the **4-role** More Info panel list). The relevance-ranked fallback fills to 6 (v1.6.10). (The *secondary* modal's `pickKeyStaff` at `:4876` already has 6 — this item is only the panel's 4.)
-
-### Proposed fix
-Add `'Sound Director'` and/or `'Series Director'` to the array (order = display priority — I'd slot `Series Director` after `Director`, `Sound Director` after `Music`). Pure data change; the fallback still tops up to 6.
-- **Δ:** `script.js` +1 (array). **Open: 1 or 2 roles?** I lean both (still capped at 6, fallback absorbs it).
-
-## Item 4 — Season-header styling (More Info panel)
-
-### Recon (verified)
-- The season header is the `<summary>` of `.more-info-season` (`script.js:1020`); it already has a **dedicated** rule (`.more-info-season > summary` at `style.css:3163` — padding-left + a ▶ caret that rotates on `[open]`, reduced-motion-guarded at `:3212`). It does NOT reuse `.more-info-relation`.
-- So the "deferred cosmetic" is just **visual polish on the existing dedicated class**, not a reuse-vs-dedicated decision (the dedicated class already exists — minor phantom in the gate framing).
-
-### Proposed fix
-Enhance `.more-info-season > summary` (kicker-style label / subtle accent bar / weight) to make the season headers read as distinct section dividers. CSS-only on the existing class; no new structure.
-- **Δ:** `style.css` ~+4-6. (Recommend Blake eyeballs a screenshot at gate 1 — "distinct" is subjective.)
-
-## Item 5 — Favicon + Apple touch icons
-
-### Recon (verified)
-- **No favicon at all** — `index.html` has zero `icon`/`apple-touch-icon`/`manifest` links (grep empty). Browsers show the default globe.
-- Brand assets present: `assets/preview.jpg` (wide social OG image, not icon-suitable) + `assets/instagram-icon.png` (the IG glyph, not the site brand). **No logo / square mark exists.**
-
-### Proposed approach
-- **Default I can ship without new art:** hand-author a **`favicon.svg`** — a brand monogram ("RAR" or a stylized "R") on the Call-of-the-Night brand-purple, vector (no image lib needed), crisp at every size. Modern browsers use it directly. Add `<link rel="icon" href="/favicon.svg" type="image/svg+xml">` to `index.html` + `account.html` + `suggest.html` + the admin pages' heads.
-- **Raster fallbacks** (apple-touch-icon 180×180 PNG, `favicon.ico` for legacy) need a real raster — either Blake supplies/approves a PNG, or I generate from the SVG with a one-off tool at gate 1.
-- **New deploy-root files** → no secret, they DEPLOY; verify they're NOT gitignored (they shouldn't be). No `firebase.json` change needed.
-
-### ⚠️ Open question for Blake (the gate flagged this)
-Favicon art: **(a)** I author the SVG monogram now (brand-purple "R/RAR"), raster fallbacks generated from it; **(b)** you supply a custom icon/mascot; or **(c)** ship the SVG monogram now as a placeholder and swap for the **v1.8.3 identity art** (the "anime characters visible on the page" work) when it lands. I lean **(c)** — a clean monogram now (no globe), real character art later.
-
-## Anything that should move to v1.8.0?
-**Nothing.** All 5 are wiring/CSS/data/asset — explicitly NOT render-path or animation/blur changes, so they won't confound the v1.8.0 perf before/after (per the constraint). Item 1 is the only JS-logic touch and it's pure routing.
-
-## Note for the docs cascade (gate 4)
-Per the gate: ROADMAP.md's **stale per-version sections** (old v1.8.0 "AniList tab on cards", v1.8.5, the old v1.9.0 mobile) need restructuring to the locked ladder (v1.7.6 → v1.8.0 Smoothness → v1.8.1 admin edit → v1.8.2 review template → v1.8.3 Identity & Finalization → v1.9.0 community → v1.9.5 UI → v2.0 mobile). I'll fold that into this ship's docs cascade.
-
-## Estimated total
-**Small — ~2-3h, likely 1 build gate + a short favicon sub-gate** (pending Blake's asset call). Item 1 ~10 lines, items 2/3/4 a handful of CSS/array lines, item 5 the SVG + head tags. `bump-version` stays 33 (no new versioned page).
-
-## Open questions for Blake (summary)
-1. **Routing (item 1):** keep watched-not-primary saves on the secondary modal (my rec, mirrors v1.7.4) — or route *every* reviewed-franchise save to the main modal (bigger change, needs a reverse id→primary-slug map)?
-2. **Favicon (item 5):** SVG monogram now / your custom art / monogram-now-swap-at-v1.8.3 (my lean: the last)?
-3. **Staff (item 3):** add both Sound Director + Series Director, or just one?
+## For Blake's re-smoke (the real arbiter)
+In **Firefox**, on the same secondary-modal hover/scroll flow:
+1. **Re-run the Firefox Profiler** (same 15-20s). **Success = Paint collapses to a small fraction** (was 41%). Mechanically it should — there's no live `backdrop-filter` left to re-resolve. (Tip: try a **private window / no extensions** for the cleanest trace — items 3/4 above are extension noise.)
+2. **Hands:** does the pop-out now feel **noticeably smoother** during hover + scroll?
+3. **Visual:** the pop-out backdrop is now a **dark gradient dim** instead of frosted blur — tell me if you miss the frost (I can restore it via cached static-blur if so).
+4. **Scrollbars** are brand-purple (from G1); **Chrome** still buttery (no regression — the dim is cheaper than the blur everywhere).
+- **If Paint still doesn't collapse:** per the gate I STOP and we read what the profiler says is left (likely the drawer's own content paint / box-shadows) rather than stack more speculative fixes.
 
 ## Phantom-drift audit
-Verified, not assumed: the routing helpers are IIFE-scoped (read their defs — account.js genuinely can't call them); the collision is the source-row path (traced the secondary-open call sites, not guessed); `renderRecommendations` already does the split (read `:1178-1184`); the rec badge lacks the `position:static` override that the spine rows have (compared `:855`/`:1112` vs `:1177`); the season header already has a dedicated class (read `style.css:3163` — corrected the gate's "reuse vs dedicated" framing); zero favicon links exist (grep). One gate-framing phantom flagged (item 4's dedicated class already exists).
+Verified, not assumed: confirmed the secondary modal has **no `filter` hovers** (grepped the actual `:hover` rules — the lag was the backdrop amplifier, not filter hovers, so G2's modal surgery would've been a no-op); proved headless can't isolate the blur (dim==backdrop==filter-static); the `data:` URI is **not ours** (grepped for `data:`/`base64`); confirmed both backdrops have no `backdrop-filter` property left (the grep counts were my own comment text); reduced-motion block intact; deleted all throwaway bench files from the deploy root.
 
 ## One-liner reply
-v1.7.6 **Gate 0 (quick-nags recon + propose) DONE — propose-only, nothing applied**: all 5 nags fit the PATCH scope and **none are render-path-heavy** (so none move to v1.8.0) — (1) the account routing fix belongs in the `#secondary=` hash handler not account.js (the routing helpers `primarySlugForAniListId`/`isWatchedAniListId` are IIFE-scoped and unreachable from the account module), it mirrors the split `renderRecommendations` already uses, and I traced the real collision to the "currently viewing source row" opening the secondary for a **primary** id (so its `al:` save then mis-routes) — ~10 lines, with an **open question**: keep watched-not-primary saves on the secondary (my rec, matches v1.7.4 + shows the per-season review) or send every reviewed-franchise save to the main modal (bigger, needs a new reverse map); (2) the ALSO LIKED title/`MOVIE`-pill overlap is because `renderRecommendations` (`:1177`) uses `.more-info-rec-format-badge` WITHOUT the `position:static` override the spine rows have, so the absolute badge overlaps short titles — CSS-only `padding-right` fix; (3) staff whitelist is the 4-role `renderStaffCredits` list (`:1215`) — add Sound Director/Series Director (1-line); (4) the season header already has a dedicated `.more-info-season > summary` class (`style.css:3163` — gate's "reuse vs dedicated" is moot), so it's pure CSS polish; (5) there's **no favicon at all** and no square brand mark (only a wide `preview.jpg` + the IG glyph), so I propose a hand-authored SVG monogram on the brand-purple now with raster fallbacks, leaning toward shipping it as a placeholder and swapping for the v1.8.3 identity art later; total ~2-3h / 1 build gate + a short favicon sub-gate, `bump-version` stays 33, and I'll restructure ROADMAP's stale version sections to the locked ladder at this ship's docs cascade — 3 open questions for Blake (routing table, favicon asset, 1-or-2 staff roles), then approve → gate 1 applies.
+v1.8.0 **Gate 1b (Option C snapshot blur + G2 finding + console triage) DONE — applied, not committed**: escalated to Option C by **removing the live full-viewport `backdrop-filter` from both modal backdrops** (the per-repaint re-resolve tax = your Firefox Paint 41%/98%-Graphics) and swapping in a **premium static gradient dim**, so **no engine pays a blur re-resolution on hover/scroll** — mechanism-guaranteed, since a live backdrop-filter structurally can't be cached (which is why G1's promote only nudged 49%→41%); ⚠️ honest visual delta: the frost is now a clean dark dim, but it only ever showed in a narrow dimmed sliver behind the 94vw drawer so it's subtle (and I can restore frost via cached static-blur if you miss it); **key G2 finding** — I verified the secondary modal's hovers **already composite** (transform/box-shadow/border, **no `filter` anywhere in the modal**), so the modal-hover lag was **entirely the backdrop-filter amplification** Option C just removed, and `.card` already uses the locked opacity-veil — so per the gate's own "don't stack speculative fixes" I did **no** invented hover surgery (the only real `filter:brightness` hovers are 3 buttons on the already-smooth homepage, now trivially cheap); I'm being upfront that **headless can't measure this** (a decisive bench showed dim==backdrop-filter==filter-static on every engine → the harness can't isolate the GPU backdrop cost your headed profiler clearly sees), so **your Firefox profiler re-run is the sole arbiter** (success = Paint collapses from 41% — mechanically it should, there's no live blur left); triaged your console: trimmed our trailer-iframe `allow` attr to silence the Feature-Policy warnings (#1, ours), confirmed the `data:`-URI (#3) + hashed-bundle `unreachable code` (#4) are **extension noise, not ours** (grep-verified no `data:` fetches), #2 is YouTube-embed third-party, and #5 is Firefox fingerprint-protection that can skew profiler metrics (try a private window); kept G1 scrollbars, reduced-motion intact, **`npm test` 8 passed**, CSS 1008/1008 — re-smoke the Firefox profiler and tell me if Paint collapsed + whether you miss the frost; if Paint's still high I STOP and report what's left rather than stack more.
