@@ -1,38 +1,75 @@
-<!-- author: Code | date: 2026-06-03 -->
-# v1.7.3 — Gate 6 (audits — FAST-TRACK, PASS ✓ — caught + fixed a ship-blocker)
+<!-- author: Code | date: 2026-06-04 -->
+# v1.7.4 — Gate 0 (recon + propose: Modal Architecture Overhaul — PROPOSE-FIRST, PROPOSAL ✓)
 
-> Audit battery green AFTER fixing a **ship-blocking bug the audit caught**: the watched-set data was never reaching `animeData.js` (the headline feature would have shipped dead). Root cause + fix below. `npm test` re-passed 7/7 post-fix. Ready for gate 7.
+> Full recon done (modal-build path, More Info wiring, franchise query, layout CSS, sync/admin/server, watchlist schema). Nothing applied. Below: per-scope recon + proposal + Δ + creative alternatives + pushback, then answers to the 7 open questions + gate split. **3 stop-conditions surfaced** (new detail query, the "exact width" baseline ambiguity, the always-visible width vs viewport tension).
 
-## ⚠️ HEADLINE — caught + fixed: watched-set data wasn't in `animeData.js`
-**The discipline paid off.** Cowork's gate-5 prompt asserted "backfill complete — `WatchedAniListIds` + `KnownAniListIds` populated across all 44 rows." I grep'd the real state instead of trusting it and found **`animeData.js` had 0 `WatchedAniListIds`** — so the `✓ REVIEWED` pill would have silently fallen back to primary-id-only (= v1.7.2 behavior), shipping the entire watched-set feature **non-functional**.
+## Recon — what exists today
+- **`openModal` (`script.js:4067`)** → `modal.classList.add('duo')`, then `modalContent.innerHTML = [more-info-container][sheet--left (main review)][sheet--right (community)]`.
+- **Layout (`style.css:2799`):** `.modal.duo .modal-content { grid-template-columns: auto 1.6fr 1fr; gap:18px }`, `.modal.duo { max-width:1200px; width:96% }`. More Info container **140px collapsed → 260px expanded** (tab slides out, panel `translateX(-100%)→0`). Stacks to 1-col at `@max-width:1000px`.
+- **Click delegation (`script.js:4287`):** ep-toggle / partial-fail retry / catalog-row → `openModal(internal)` / **non-catalog `data-anilist-id` → `window.open('anilist.co/anime/{id}')` at `:4314`** — this is the exact hook the secondary modal replaces.
+- **`franchise-fetch.js` `MORE_INFO_QUERY_NODE`** returns id/title/format/episodes/seasonYear/type/status/studios/averageScore/coverImage/streamingEpisodes/relations — **NO `description`, `genres`, `characters`, `bannerImage`, `tags`**. The secondary modal needs those.
+- **Watchlist already exists** (per prompt recon, confirmed): `users/{uid}/watchlist/{animeId}` (firestore.rules), account tab + per-card watch button (`script.js:264`), catalog-slug-keyed.
 
-**Diagnosis (precise):**
-- Excel: `WatchedAniListIds` + `KnownAniListIds` populated **44/44** (cols 20/21) — Blake's backfill DID run correctly.
-- `animeData.js` was regenerated (59473 bytes, matching Cowork's claim) — but with **zero watched data**.
-- **Root cause:** `scripts/sync-excel-to-js.js` *parses* the columns in `rowToAnime` (gate-1 work) but its hand-rolled **serializer** (`:457-458`) only emits explicitly-listed fields — and I never added the emit lines at gate 1. Parse ✓, serialize ✗ → data computed, never written. The backfill report showed Excel writes succeeding, which masked the sync-emit gap.
+---
 
-**Fix (2 lines, in-scope, per the gate-6 "fix the underlying cause and re-run" constraint):** added `WatchedAniListIds`/`KnownAniListIds` emit lines to the serializer (`renderArray`, numeric), re-ran `npm run sync`.
-- **Verified:** `animeData.js` now has **44/44** watched arrays (numeric, e.g. `WatchedAniListIds: [101922,112151,...]`), 44/44 known, valid JS (`node --check`), 59473 → **63716 bytes**, unofficial still **0**. `npm test` → **7 passed** post-fix.
+## Scope 1 — Secondary modal architecture
+**Integration:** replace `window.open(anilist.co)` (`script.js:4314`) with `openSecondaryModal(aniListId)`.
+**⚠️ STOP-CONDITION (needs ratification):** the secondary modal needs richer data (`description`/`genres`/`characters`/`bannerImage`) the **load-bearing** `MORE_INFO_QUERY_NODE` doesn't return. I will **NOT** extend that query (it drives the live homepage traversal). Instead: a **new sibling `MEDIA_DETAIL_QUERY` + `fetchMediaDetail(id)`** in `franchise-fetch.js` — additive, the existing traversal untouched. Requesting OK to add the sibling.
+**Proposal:** `#secondary-modal` overlay at higher z-index than the primary; top-left `← Back to <show title>` (Decision 2); replace-content on related-click within it (Decision 3); per-anime cache `rar:anime:v{APP_VERSION}:{id}` 24h, version-prefix sweep + try/catch (Decision 4, v1.7.2 conventions). Primary stays MOUNTED underneath (the secondary is a layer, not a rebuild) → primary scroll/tab state preserved for free; Back just hides the layer.
+**3 visual treatments (creative latitude):**
+- **(A) Same frame, "gone deeper": slide-in-from-right over a dimmed+blurred primary, accent-shifted header (warmer kicker), Back arrow top-left.** *Why: cohesive world, primary contextually visible behind — premium + oriented.* ← **RECOMMEND**
+- (B) Nested smaller card centered, primary blurred behind. *Why: "focus pop," but breaks layout continuity.*
+- (C) Full-bleed drill-down drawer from the right covering the primary. *Why: immersive, but reads like a page change, not a layer.*
+**Δ:** `script.js` ~+150, `style.css` ~+120, `franchise-fetch.js` ~+30.
 
-## Audit 1 — `npm test` ✓
-**7 passed** (full set) — ran before the fix, and **re-ran after the re-sync** (production-facing `animeData.js` change) → still 7 passed.
+## Scope 2 — Always-visible More Info (layout restructure)
+Remove the tab (Decision 6); render the panel on modal open (call `runMoreInfo` immediately; drop the collapsed state machinery).
+**⚠️ STOP-CONDITION + OPEN-Q (width):** "Main + Community keep EXACTLY current widths" is ambiguous — the `fr` columns currently **reflow**: Main/Community are ≈630/394px when More Info is collapsed (140), ≈556/348px when expanded (260). An always-visible wider More Info (~380px) **with Main/Community pinned exact** forces the modal to ~**1380px**, which exceeds 96% of a 1280px viewport.
+**Proposal:** fix Main/Community at their current **default-open** px (≈630/394) + More Info fixed at 380px, bump `.modal.duo` max-width to ~1380px, **stack to single-column below ~1100px** (extends the existing @1000px stack — desktop-first per Blake's v2-defer). **Need Blake's call:** is the "exact" baseline the collapsed-open widths (630/394) or expanded (556/348)?
+**Δ:** `script.js` ~−15, `style.css` ~+40.
 
-## Audit 2 — `.gitignore` ↔ `firebase.json` mirror ✓
-- **`.env`** (added this ship for the Anthropic key): in `.gitignore` (lines 72/94/95) AND firebase-ignored via `**/.*` (gate-3 confirmed, still holds). **Not tracked** by git. Key never commits/deploys.
-- **New scripts** (`strip-unofficial.js`, `backfill-watched.js`) + `franchise-fetch.js`: **no secrets** (grep clean). `franchise-fetch.js` is a runtime file (deploys, no ignore). The two `scripts/*.js` deploy publicly per the pre-existing precedent — contain no secrets.
-- **Rolling docs** (`HANDOFF`/`SHIP-*`/`COWORK-STYLE`/`CODE-HANDOFF`) still firebase-ignored — no leak-class regression.
+## Scope 3 — Per-season review (storage + sync + render + admin)
+**Storage (refining Cowork's markdown lean):** `season-reviews/<aniListId>.md` (frontmatter: title/aniListId/date; body: prose) — diffable, version-controlled, prose-appropriate. **Plus a sync-emitted index** (`season-reviews/index.json`, or a field in `animeData.js`) listing which AniListIds have reviews — required so the ALSO-LIKED "Reviewed / Not-reviewed" pill resolves at render time **without** probing every file. **Render:** lazy-fetch the `.md` by id when the secondary modal opens (404 = no review).
+**Renderer:** **hand-rolled minimal markdown** (bold/italic/headers/paragraphs/links, ~40 lines) — **no new visitor dep** (avoids `marked`, honors the no-perf-dep constraint).
+**Admin trigger — RECOMMEND (a):** inline **"Edit season review →"** in the secondary modal (admin-gated) → new Mode 1 `/api/season-review` endpoint writes the `.md` locally (same local-server pattern as the chatbot). *Why: most contextual — edit the season you're viewing.* Editor = textarea + live preview pane (same renderer); no rich-text toolbar.
+**Render fallback:** review present → show as primary content; absent → "No specific review for this season yet" + AniList description as body.
+**Alternative storage:** sync pre-renders all `.md` → a `season-reviews.js` bundle (build-time md lib = build-only dep, dep-free at runtime; one fetch but bundle grows with review count). I lean lazy-per-file.
+**Δ:** new `season-reviews/` dir, `sync-excel-to-js.js` ~+30, `script.js` ~+70 (render + fetch + parser), `admin/new-anime.*` + `mode1-server.js` ~+90.
 
-## Audit 3 — `git diff --stat` scope ✓
-Matches the expected shape: large `admin/new-anime.{html,js,css}` (watched tree + chatbot), `script.js` −205 (offset by the `franchise-fetch.js` extraction), `mode1-server.js` +95 (`/api/chat` + caching), `sync-excel-to-js.js` +25 (watched parse + **serialize fix** + unofficial whitelist), `animeData.js` 170 (watched/known arrays + unofficial strip), `index.html` 33 (script tag + widget restore + v1.7.3 bullets + bump), `admin-fab.css` 8 (bottom-left), CHANGELOG/ROADMAP/NEXT, version-bump-only HTML. **New untracked:** `franchise-fetch.js`, `scripts/strip-unofficial.js`, `scripts/backfill-watched.js`. **No unexpected files.** The 7 Cowork excludes (6 tracked: AI-PRIMER, CODE-PROMPTS, SKILLS×4 + untracked COWORK-STYLE) present → restore-staged at gate 7.
+## Scope 4 — Currently-Viewing indicator update
+On secondary open for a franchise id, move the More Info `CURRENTLY VIEWING` highlight to that row; Back restores it to the source. **200ms fade** transition (matches the panel's premium feel; reduced-motion → instant). Δ ~+20 js / +10 css.
 
-## Audit 4 — Smart-quote sweep ✓
-**Clean.** Authoritative Grep-tool check = **0 curly quotes** in every touched code/HTML file (`admin/new-anime.{html,js,css}`, `mode1-server.js`, `franchise-fetch.js`, both CLIs, `index.html`). ⚠️ Note: bash `grep -lE "[“”]"` *false-flagged* all files — that's CODE-HANDOFF gotcha #9 (bash byte-vs-char on multibyte text); the ripgrep-backed Grep tool is authoritative and reports clean.
+## Scope 5 — "Not Reviewed yet" treatment (Decision 5c — both)
+Amber dot/kicker on ALSO-LIKED cards pre-click (driven by the season-review index) + a header indicator in the secondary modal when viewing a non-catalog entry. Visually distinct from the green `✓ REVIEWED` pill (which v1.7.3 made multi-season-aware). Δ ~+15 js / +15 css.
 
-## Final summary
-**Ready for gate 7.** All four audits pass. The one blocker (watched data absent from `animeData.js`) was caught in audit and fixed at the root (sync serializer) + re-verified end-to-end (44/44 in animeData, npm test 7/7). Without the grep-the-real-state check, v1.7.3's headline feature would have shipped dead.
+## Forward-compat for v1.7.5 (flag, NOT this ship)
+- Reserve a header/footer **slot for a future "Add to watchlist" button** in the secondary modal so v1.7.5 needs no layout re-shuffle.
+- The watchlist schema is **catalog-slug-keyed**; non-catalog AniListId entries will need a discriminator (`{type:'anilist', aniListId}`) or a parallel sub-collection. **v1.7.5 plan hint.**
 
-## Phantom-drift audit
-The "backfill done / populated" claim was **half-true** (Excel yes, animeData no) — surfaced + resolved. No other drift. `widget-update-skill.md` (Cowork exclude, 10-cap removed by Cowork) untouched by me.
+## Answers to the 7 open questions
+1. **Storage:** markdown files + sync-emitted index + lazy fetch (recommend); bundle alternative noted.
+2. **Admin trigger:** (a) inline "Edit season review" in the secondary modal → local `/api/season-review`.
+3. **Editor:** textarea + live preview (no toolbar).
+4. **Responsive:** fixed-px columns at ~1380px max-width, stack <1100px — pending the "exact baseline" call.
+5. **Secondary visual:** treatment (A) slide-in over dimmed primary (recommend) + 2 alternatives above.
+6. **Back-restore state:** primary stays mounted under the layer → scroll/tab state preserved automatically; Back hides the layer.
+7. **CURRENTLY VIEWING transition:** 200ms fade.
+
+## Pushback on locks
+None blocking — the 8 locks are coherent. Two items need Blake's input rather than pushback: the **"exact width" baseline** (Q4) and ratification for the **additive sibling detail query** in `franchise-fetch.js` (low-risk, doesn't touch the existing traversal).
+
+## Gate split (endorse Cowork's 3)
+- **Gate 1** — layout restructure (always-visible More Info, remove tab, fixed-px columns + responsive). Foundation.
+- **Gate 2** — secondary modal (overlay/Back/replace-content/Currently-Viewing/cache + the new `MEDIA_DETAIL_QUERY`).
+- **Gate 3** — per-season reviews (markdown storage + sync index + lazy render + hand-rolled parser + admin editor + Mode 1 endpoint).
+- **Estimate:** ~12-18h.
+
+## Decisions for Blake
+1. **"Exact width" baseline** — collapsed-open widths (≈630/394) or expanded (≈556/348)? (drives the layout)
+2. **Secondary visual** — approve treatment (A), or pick B/C?
+3. **Per-season storage** — markdown-files+index+lazy (recommend) vs the pre-rendered bundle?
+4. **Admin trigger** — inline secondary-modal button (recommend) vs standalone route/CLI?
+5. **OK to add the sibling `MEDIA_DETAIL_QUERY`** to `franchise-fetch.js` (additive, the live traversal untouched)?
 
 ## One-liner reply
-v1.7.3 Gate 6 audits **pass — but caught a ship-blocker first**: grepping the real state (not trusting Cowork's "backfill populated" claim) revealed **`animeData.js` had 0 `WatchedAniListIds`** even though Excel was 44/44 populated — root cause was my gate-1 omission (the sync *parsed* the watched columns but the hand-rolled serializer never *emitted* them), so the `✓ REVIEWED` feature would've shipped non-functional (silent fallback to primary-id); fixed with 2 serializer lines, re-synced (animeData 59473→63716, **44/44** numeric watched arrays, unofficial still 0, valid JS), and **re-ran `npm test` → 7 passed**; the rest of the battery is green — `.env` gitignored+firebase-ignored (not tracked, no key leak), no secrets in the 3 new files, rolling docs still firebase-ignored, `git diff --stat` matches the expected scope with no unexpected files (3 new untracked + the 7 Cowork excludes to restore-stage at gate 7), and the smart-quote sweep is clean via the Grep tool (the bash `grep -l` that flagged everything is the known gotcha-9 byte-vs-char false positive); ready for gate 7 commit.
+v1.7.4 Gate 0 recon+proposal written (propose-only) — mapped the modal architecture (`openModal` builds a `duo` grid `[More Info | 1.6fr main | 1fr community]`, More Info collapses 140→260 via a tab, and non-catalog `data-anilist-id` rows currently `window.open(anilist.co)` at script.js:4314 = the secondary-modal hook); proposed a layered `#secondary-modal` (slide-in over a dimmed primary — recommend treatment A of 3, primary stays mounted so Back preserves scroll/tab state, per-anime 24h cache) fed by a **new additive sibling `MEDIA_DETAIL_QUERY`** in franchise-fetch.js (surfaced as a stop-condition — won't touch the load-bearing traversal query, needs ratification); always-visible More Info by removing the tab + fixing Main/Community at their current px and bumping the modal to ~1380px with a <1100px stack (surfaced the width-vs-viewport tension + the "exact baseline" ambiguity as the key open question); per-season reviews as `season-reviews/<id>.md` + a sync-emitted index + lazy fetch + a hand-rolled ~40-line markdown renderer (no visitor dep), authored via an inline admin "Edit season review" button → a local Mode 1 `/api/season-review` endpoint, rendered as the secondary modal's primary content with an AniList-description fallback; plus the CURRENTLY-VIEWING highlight moving on stack-nav (200ms fade), the amber "Not Reviewed yet" pill distinct from the green ✓ REVIEWED, and a reserved watchlist-button slot + schema hint for v1.7.5 (don't build now); endorsed the 3-gate split (~12-18h); 5 decisions queued for Blake (exact-width baseline, secondary visual A/B/C, storage shape, admin trigger, and OK on the sibling query).

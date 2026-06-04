@@ -1,5 +1,9 @@
 <!-- author: Cowork | date: 2026-06-03 -->
-# Session Handoff — v1.7.2 LIVE · v1.7.3 Admin Form Completion + Watched Set (all gate-0b decisions locked, gate 1 staged)
+# Session Handoff — v1.7.3 LIVE · v1.7.4 Modal Architecture Overhaul (gate 0 approved, gate 1 staged)
+
+> **v1.7.4 gate 0 approved 2026-06-04.** 5 of Code's 5 proposals approved. Two refinements for gate 2 + gate 3 staging:
+> 1. **Secondary modal must be LARGE** — Blake's words: *"quite large to fit all information neatly with pictures etc. nice stylized and premium look that isnt clunky and fits everything neatly."* Code's gate-2 visual treatment (A: slide-in from right) needs wider real-estate (~80-90% viewport) to honor this. Bake into gate 2 prompt.
+> 2. **Per-season needs BOTH triggers** — inline "Edit season review →" button in secondary modal AND a dedicated admin panel listing all season reviews (similar to `/admin/suggestions`). Bake into gate 3 prompt. Adds ~2-3h.
 
 > **v1.7.2 shipped 2026-06-03 ~22:19 UTC** (commit `c07755d`). The de facto More Info panel overhaul — multi-fetch architecture + BFS multi-hop traversal + per-season episode aggregation + UX redesign (spine + `--current` + connector line + grouped sections + "✓ Reviewed" in-catalog pill + partial-fail notice + retry + 24h localStorage L2 cache + PER SEASON/CONTINUOUS toggle + UPCOMING kicker + score-badge collision fix). Blake's "ship it" go-signal honored at gate 10; gate 11 prod verify a quick rubber-stamp (preview channel was same commit, smoke clean at gate 9). **v1.7.3 (Watched-set feature) in planning** — design decisions in progress with Blake.
 
@@ -7,7 +11,7 @@
 
 ## Current production
 
-**Live:** `realanimereviews.com` serving **v1.7.2** (commit `c07755d`, deployed 2026-06-03 ~22:19 UTC). Preview channel + `origin/main` + prod all aligned.
+**Live:** `realanimereviews.com` serving **v1.7.3** (commit `74041d6`, deployed 2026-06-04 ~02:46 UTC). Multi-season `✓ REVIEWED` pills functional (44/44 `WatchedAniListIds` in deployed `animeData.js`), official-only platforms, infinite-scroll update log, admin chatbot drawer + watched-set picker live (local-only via Mode 1 + `.env` API key). Preview channel + `origin/main` + prod all aligned.
 
 **Commit chain (recent):**
 `3539a06` (v1.6.10) → `aaa96f0` (v1.6.11) → `5a5ab9b` (v1.6.11 fix) → `ce04594` (v1.6.12) → `05158e0` (iter 1) → `244d22f` (iter 2) → `a8c60ac` (ROADMAP close-out) → `2ed9874` (v1.7.0) → **`e78f7d6` (v1.7.1, HEAD, on main, prod pending)**.

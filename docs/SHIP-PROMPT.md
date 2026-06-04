@@ -1,42 +1,75 @@
-<!-- author: Cowork | date: 2026-06-03 -->
-# v1.7.3 — Gate 7 (commit + push — FAST-TRACK)
+<!-- author: Cowork | date: 2026-06-04 -->
+# v1.7.4 — Gate 1 (build core: MODAL LAYOUT RESTRUCTURE — APPLY)
 
-Audits all green (with the sync-serializer fix that caught a ship-blocker). Standard commit + push.
+Blake approved all 5 gate-0 decisions. Apply gate 1 (layout restructure only — secondary modal is gate 2, per-season is gate 3). No re-propose round. This gate is foundational — gate 2 builds on the new layout.
 
-## Steps
+## Scope this gate (layout only)
 
-1. **Restore-stage the 7 Cowork doc excludes** per convention:
-   - `docs/AI-PRIMER.md`
-   - `docs/CODE-PROMPTS.md`
-   - `docs/COWORK-STYLE.md` (untracked — stays untracked)
-   - `docs/SKILLS/README.md`
-   - `docs/SKILLS/hotfix-skill.md`
-   - `docs/SKILLS/release-skill.md`
-   - `docs/SKILLS/widget-update-skill.md` (Cowork edited at gate 4 to remove the 10-cap rule — stays uncommitted per the convention)
+### 1.1 — Remove the "Click for More Info" tab
 
-2. **Stage everything else** — code (`script.js`, `style.css`, `index.html`, `admin/new-anime.{html,js,css}`, `admin-fab.css`, the new `franchise-fetch.js`, version-bumped HTML files), Excel + animeData (`animeData.js` with the watched-set data now actually serialized), scripts (`mode1-server.js`, `sync-excel-to-js.js`, new `strip-unofficial.js`, new `backfill-watched.js`), CHANGELOG / ROADMAP / NEXT, the rolling trio (`HANDOFF.md` / `SHIP-PROMPT.md` / `SHIP-OUTPUT.md`), `CODE-HANDOFF.md`. Confirm with `git diff --cached --name-only` before commit.
+- Drop the tab markup (the collapsible affordance that today expands the More Info panel)
+- Drop the tab-click handlers + the slide animation between collapsed/expanded states
+- The `<div class="more-info-container">` becomes always-visible (no more collapsed state)
+- Drop any `is-open` / `expanded` class machinery for the panel
 
-3. **Commit** with:
-   - Subject: `v1.7.3: Admin Form Completion + Watched Set + Chatbot Drawer`
-   - Body: 3-4 visitor-facing bullets covering the headline scope (watched-set multi-season ✓ REVIEWED pills, official-only platforms, infinite-scroll update log) + 1-2 admin/architecture lines
-   - Author: `Blake Wolters <196413457+joewolters@users.noreply.github.com>` via per-commit `--author=`
-   - **NO `Co-Authored-By: Claude` / `Co-Authored-By: Cowork` / `🤖 Generated with Claude Code` trailers.** Per `COWORK-STYLE.md` § 9.
+### 1.2 — Always-render More Info on modal open
 
-4. **Post-commit grep** for forbidden trailers: `git log -1 --format=%B | grep -i -E "co-authored-by|generated with"` → must return nothing.
+- Call `runMoreInfo` immediately when `openModal` fires (not on tab-click)
+- Loading state renders immediately if the franchise traversal is mid-fetch (existing v1.7.2 loading skeleton stays)
+- Cache hit = instant render (existing v1.7.2 cache path)
 
-5. **Push** to `main`.
+### 1.3 — Fixed-px column layout
 
-## Constraints
+Per Blake's locked baseline (collapsed/uncollapsed widths — what's visible today before clicking the tab):
 
-- If staging surfaces an unexpected file outside the gate 6 diff scope, stop and flag
-- If post-commit grep finds a trailer, amend the commit (don't push a bad commit)
-- Don't tag the commit
+- **Main review modal (`sheet--left`):** fixed at **630px**
+- **Community Tab (`sheet--right`):** fixed at **394px**
+- **More Info panel:** fixed at **380px** (Code's proposal — slightly wider than today's 260px-expanded state to give the franchise tree room)
+- **`.modal.duo` max-width:** bump from `1200px` → **~1380px** (accommodates the wider More Info)
+- Grid: `grid-template-columns: 380px 630px 394px` (or equivalent flex)
+- `gap` stays at 18px
+
+### 1.4 — Responsive behavior
+
+- Below **1100px viewport** → stack to single column (extends today's `@max-width:1000px` stack)
+- Single-column order at narrow widths: Main Review → More Info → Community Tab (or your call — propose if you have a stronger order). Desktop-first per Blake's v2-defer, but don't catastrophically break narrow.
+- All existing `prefers-reduced-motion` fallbacks preserved
+
+### 1.5 — Cleanup
+
+- Remove now-dead CSS rules for the tab + collapsed state (`.more-info-container.is-collapsed`, `.more-info-tab`, etc. — whatever exists)
+- Remove now-dead JS (tab click handler + slide animation)
+- Keep all the rest of the More Info rendering machinery intact (franchise tree, episode list, "✓ REVIEWED" pills, etc.)
+
+## What's NOT this gate
+
+- **Secondary modal** = gate 2 (with the LARGE visual treatment per Blake's refinement — accommodating pictures + rich content layout)
+- **Per-season review feature** = gate 3 (with BOTH triggers — inline button + dedicated admin panel)
+- **Watchlist extension** = v1.7.5 (deferred)
+- **Per-episode info** = v1.7.5 (deferred)
+
+## Constraints (standing)
+
+- No new visitor-facing fonts/deps; no version bump (gate 5)
+- Premium UI floor — the always-visible More Info should feel intentional, not exposed
+- `prefers-reduced-motion` fallback on any new transitions
+- `[hidden]` symmetry on any element whose visibility you flip
+- Admin UI exempt from no-AniList-in-copy
+
+## Self-verification before declaring done
+
+- `node --check script.js` → OK
+- Open `index.html` mentally + trace: modal opens → More Info renders immediately on the LEFT with franchise tree → main review center stays 630px → community tab right stays 394px → no shrink-on-tab-click behavior remaining
+- Verify no orphaned references to the removed tab (grep `more-info-tab` / `is-collapsed` / similar) → 0 hits expected
+- Confirm visitor sees IDENTICAL primary modal + community widths to today's collapsed-tab state (the un-shrunk state)
+- Mobile.css: confirm narrow stack works at common widths (375 / 414 / 768 / 1000 / 1100 / 1280)
+- `franchise-fetch.js` untouched (gate 2 adds the sibling query, not this gate)
 
 ## Report shape
 
-- Confirm the 7 restore-staged files
-- Final commit hash + subject
-- Post-commit grep result (zero trailers)
-- Push confirmation (branch + remote ref)
+- Per scope item (1.1-1.5): file + line refs touched, Δ js/css/html
+- Confirm modal widths match Blake's locked baseline (630 main / 394 community)
+- Confirm stack-below-1100px works
+- Flag any phantom-drift or unexpected side effects from removing the tab machinery
 
-After gate 7, Cowork stages gate 8 (preview deploy).
+After gate 1 lands, Blake smokes the layout change at gate 1b. Then Cowork stages gate 2 (secondary modal architecture with the LARGE visual treatment per Blake's refinement).
