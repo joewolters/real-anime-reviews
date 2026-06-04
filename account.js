@@ -486,6 +486,48 @@ function clearSavedUI() {
   if (watchEmptyEl) watchEmptyEl.style.display = '';
 }
 
+// v1.7.5 (gate 2) — pretty-print an AniList format enum for the row sub-line.
+function prettyFormat(f) {
+  if (!f) return '';
+  const MAP = { TV: 'TV', TV_SHORT: 'TV Short', MOVIE: 'Movie', SPECIAL: 'Special', OVA: 'OVA', ONA: 'ONA', MUSIC: 'Music' };
+  return MAP[f] || String(f).replace(/_/g, ' ');
+}
+
+// Inner markup for a non-catalog (AniList) saved row: cover + title + FORMAT · YEAR
+// + an ANILIST attribution kicker (the established carve-out — no review pill, the
+// differentiation from catalog rows). esc() covers text + attribute contexts.
+function buildAnilistRowInner(it) {
+  const cover = it.coverImage
+    ? `<img class="saved-cover" src="${esc(it.coverImage)}" alt="" loading="lazy">`
+    : `<span class="saved-cover saved-cover--ph" aria-hidden="true"></span>`;
+  const sub = [prettyFormat(it.format), it.year || ''].filter(Boolean).join(' · ');
+  return cover +
+    `<span class="saved-meta">` +
+      `<span class="saved-title">${esc(it.title || ('AniList #' + it.aniListId))}</span>` +
+      (sub ? `<span class="saved-sub">${esc(sub)}</span>` : '') +
+      `<span class="saved-kicker">ANILIST</span>` +
+    `</span>`;
+}
+
+// Legacy-row backfill: fetch cover/format/year and patch the row in place. Only
+// fires for a row saved before the snapshot existed (new saves carry it), and is
+// a no-op if franchise-fetch.js / network is unavailable.
+async function backfillAnilistRow(openBtn, it) {
+  const ff = window.franchiseFetch;
+  if (!ff || typeof ff.fetchMediaDetail !== 'function') return;
+  try {
+    const d = await ff.fetchMediaDetail(Number(it.aniListId));
+    if (!d) return;
+    openBtn.innerHTML = buildAnilistRowInner({
+      aniListId: it.aniListId,
+      title: it.title || d.title.english || d.title.romaji || ('AniList #' + it.aniListId),
+      coverImage: (d.coverImage && (d.coverImage.extraLarge || d.coverImage.large)) || '',
+      format: d.format || '',
+      year: d.seasonYear || null
+    });
+  } catch (_) { /* leave the snapshot/placeholder row as-is */ }
+}
+
 function renderSaved(listEl, emptyEl, items, kind, uid) {
   if (!listEl || !emptyEl) return;
 
@@ -505,13 +547,33 @@ function renderSaved(listEl, emptyEl, items, kind, uid) {
     const openBtn = document.createElement('button');
     openBtn.className = 'saved-open';
     openBtn.type = 'button';
-    openBtn.textContent = it.title || it.animeId;
     openBtn.title = 'Open details';
-    openBtn.addEventListener('click', () => {
-      // Send them to index and auto-open the modal there
-      location.href = `index.html#open=${encodeURIComponent(it.animeId)}`;
-    });
-    
+
+    if (it.type === 'anilist') {
+      // v1.7.5 (gate 2) — non-catalog row: cover + title + FORMAT · YEAR + kicker,
+      // painted from the saved snapshot (no per-row network). Click opens the
+      // in-site secondary "deep dive" modal by AniList id — never external.
+      li.classList.add('saved-item--anilist');
+      openBtn.classList.add('saved-open--rich');
+      openBtn.innerHTML = buildAnilistRowInner(it);
+      openBtn.addEventListener('click', () => {
+        location.href = `index.html#secondary=${encodeURIComponent(it.aniListId)}`;
+      });
+      if ((!it.coverImage || !it.format) && it.aniListId) backfillAnilistRow(openBtn, it);
+    } else {
+      // v1.7.5 (gate 3) — catalog (reviewed) rows get a subtle green ✓ REVIEWED
+      // affordance, matching the established checkmark vocabulary (secondary-modal
+      // reviewed kicker / carousel ✓ badge). Row stays a text link to the review.
+      openBtn.classList.add('saved-open--catalog');
+      openBtn.innerHTML =
+        '<span class="saved-title-text">' + esc(it.title || it.animeId) + '</span>' +
+        '<span class="saved-reviewed" title="Reviewed by Blake">✓ REVIEWED</span>';
+      openBtn.addEventListener('click', () => {
+        // Send them to index and auto-open the modal there
+        location.href = `index.html#open=${encodeURIComponent(it.animeId)}`;
+      });
+    }
+
     const dateEl = document.createElement('span');
     dateEl.className = 'saved-date';
     dateEl.textContent = formatDate(it.ms);
@@ -558,7 +620,13 @@ function subscribeSavedLists(user) {
         items.push({
           animeId: d.id,
           title: data.title || data.animeTitle || d.id,
-          ms: toMillis(ts)
+          ms: toMillis(ts),
+          // v1.7.5 (gate 2) — non-catalog (AniList) saves carry a snapshot.
+          type: data.type || 'catalog',
+          aniListId: data.aniListId || null,
+          coverImage: data.coverImage || '',
+          format: data.format || '',
+          year: data.year || null
         });
       });
       items.sort((a,b) => (b.ms || 0) - (a.ms || 0));
@@ -577,7 +645,13 @@ function subscribeSavedLists(user) {
         items.push({
           animeId: d.id,
           title: data.title || data.animeTitle || d.id,
-          ms: toMillis(ts)
+          ms: toMillis(ts),
+          // v1.7.5 (gate 2) — non-catalog (AniList) saves carry a snapshot.
+          type: data.type || 'catalog',
+          aniListId: data.aniListId || null,
+          coverImage: data.coverImage || '',
+          format: data.format || '',
+          year: data.year || null
         });
       });
       items.sort((a,b) => (b.ms || 0) - (a.ms || 0));

@@ -222,7 +222,7 @@ query ($id: Int) {
     studios { nodes { name isAnimationStudio } }
     externalLinks { site url type }
     trailer { id site thumbnail }
-    streamingEpisodes { title thumbnail }
+    streamingEpisodes { title thumbnail url site }
     characters(sort: [ROLE, RELEVANCE], perPage: 12) {
       edges { role node { id name { full } image { medium } } }
     }
@@ -287,7 +287,14 @@ query ($id: Int) {
           .filter(l => l && l.url && l.site).map(l => ({ site: l.site, url: l.url, type: l.type || null })),
         trailer: (m.trailer && m.trailer.id) ? { id: m.trailer.id, site: m.trailer.site || null, thumbnail: m.trailer.thumbnail || null } : null,
         streamingEpisodes: (Array.isArray(m.streamingEpisodes) ? m.streamingEpisodes : [])
-          .map(e => ({ title: (e && e.title) || '', thumbnail: (e && e.thumbnail) || null })),
+          .map(e => ({
+            title: (e && e.title) || '',
+            thumbnail: (e && e.thumbnail) || null,
+            // v1.7.5 (gate 3) — url + site for the per-episode in-row expand
+            // (attribution carve-out covers the site name on the ↗ link).
+            url: (e && e.url) || null,
+            site: (e && e.site) || null,
+          })),
         characters: charEdges
           .filter(e => e && e.node && e.node.name && e.node.name.full)
           .map(e => ({ id: e.node.id, name: e.node.name.full, image: (e.node.image && e.node.image.medium) || null, role: e.role || null })),

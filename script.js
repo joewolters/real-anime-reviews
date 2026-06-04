@@ -277,6 +277,33 @@ async function setSave(kind, uid, animeId, title, turnOn) {
   }
 }
 
+// v1.7.5 (gate 1) — non-catalog (AniList) save. Same watchlist/favorites
+// collections, doc id `al:<aniListId>` (the prefix can't collide with kebab-case
+// catalog slugs, so the homepage's whole-collection snapshots carry these for
+// free). A cover/format/year snapshot is stored at write-time so the account
+// page (gate 2) paints with no per-row network. The slug-keyed catalog path in
+// setSave() above is deliberately left untouched.
+function anilistSaveId(aniListId) { return 'al:' + Number(aniListId); }
+
+async function setSaveAnilist(kind, uid, aniListId, snapshot, turnOn) {
+  const id = Number(aniListId);
+  if (!id) return;
+  const ref = doc(db, "users", uid, kind, anilistSaveId(id));
+  if (turnOn) {
+    await setDoc(ref, {
+      type: 'anilist',
+      aniListId: id,
+      title: (snapshot && snapshot.title) || '',
+      coverImage: (snapshot && snapshot.coverImage) || '',
+      format: (snapshot && snapshot.format) || '',
+      year: (snapshot && snapshot.year) || null,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } else {
+    await deleteDoc(ref);
+  }
+}
+
 
 
   // ---------- UTIL ----------
@@ -1929,7 +1956,9 @@ function syncFilterFormToApplied() {
   async function handleToggle(kind, btn) {
     const user = auth.currentUser;
     if (!user) {
-      jiggle(btn);
+      // v1.7.5 (gate 3b) — signed-out save → open the branded Sign in modal
+      // (site-wide decision), replacing the silent jiggle.
+      openAuth('signin');
       return;
     }
 
@@ -4567,6 +4596,24 @@ function closeModal() {
     // layer regardless of depth (the explicit "I'm done" affordance).
     if (e.target.closest('.secondary-close')) { e.preventDefault(); closeSecondaryModal(); return; }
     if (e.target.closest('.secondary-back')) { e.preventDefault(); secondaryBack(); return; }
+    // v1.7.5 (gate 1) — Watchlist / Favorite save pills.
+    const saveBtn = e.target.closest('.secondary-save[data-save-kind]');
+    if (saveBtn) { e.preventDefault(); handleSecondarySave(saveBtn); return; }
+    // v1.7.5 (gate 3) — per-episode in-row expand. The ↗ link lives in the sibling
+    // detail (not inside .secondary-ep), so a link click falls through to navigate.
+    const epBtn = e.target.closest('.secondary-ep');
+    if (epBtn && !epBtn.classList.contains('secondary-ep--bare')) {
+      e.preventDefault();
+      const row = epBtn.closest('.secondary-ep-row');
+      const det = row && row.querySelector('.secondary-ep-detail');
+      if (det) {
+        const opening = det.hasAttribute('hidden');
+        det.toggleAttribute('hidden', !opening);
+        epBtn.setAttribute('aria-expanded', String(opening));
+        epBtn.classList.toggle('is-open', opening);
+      }
+      return;
+    }
     const retry = e.target.closest('.secondary-retry');
     if (retry) { e.preventDefault(); if (secondaryCtx) loadSecondary(secondaryCtx.currentId, true); return; }
     const more = e.target.closest('.secondary-readmore');
@@ -4603,6 +4650,83 @@ function closeModal() {
         pushSecondary(id, titleEl ? titleEl.textContent : '');   // replace-content + history push
       }
       return;
+    }
+  }
+
+  // v1.7.5 (gate 1) — update a save pill's glyph/label/state in place (optimistic
+  // toggle + rollback both route through here).
+  function applySecondarySaveBtn(btn, kind, on) {
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', String(on));
+    const icon = btn.querySelector('.secondary-save-icon');
+    const label = btn.querySelector('.secondary-save-label');
+    if (kind === 'favorites') {
+      if (icon) icon.textContent = on ? '♥' : '♡';
+      if (label) label.textContent = on ? 'Favorited' : 'Favorite';
+      btn.title = on ? 'Remove from favorites' : 'Add to favorites';
+    } else {
+      if (icon) icon.textContent = on ? '✓' : '+';
+      if (label) label.textContent = on ? 'Watchlisted' : 'Watchlist';
+      btn.title = on ? 'Remove from watchlist' : 'Add to watchlist';
+    }
+  }
+
+  // One-shot branded tooltip under the header action row (signed-out save prompt
+  // + save-error message). No native alert() per the standing constraint.
+  let secondarySaveTipTimer = null;
+  function showSecondarySaveTooltip(btn, msg) {
+    if (!secondaryEl) return;
+    const row = btn.closest('.secondary-header-actions') || secondaryEl;
+    let tip = row.querySelector('.secondary-save-tip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'secondary-save-tip';
+      tip.setAttribute('role', 'status');
+      row.appendChild(tip);
+    }
+    tip.textContent = msg || 'Sign in to save';
+    void tip.offsetWidth;                 // reflow so the fade-in transition runs
+    tip.classList.add('is-visible');
+    if (secondarySaveTipTimer) clearTimeout(secondarySaveTipTimer);
+    secondarySaveTipTimer = setTimeout(() => { if (tip) tip.classList.remove('is-visible'); }, 2400);
+  }
+
+  // Optimistic toggle mirroring the per-card handleToggle: flip the visual + the
+  // shared set first, persist, roll back on failure. Snapshot title/cover/format/
+  // year off the loaded detail so the account page can paint with no fetch.
+  async function handleSecondarySave(btn) {
+    const kind = btn.dataset.saveKind;                       // 'watchlist' | 'favorites'
+    const d = secondaryCtx && secondaryCtx.currentDetail;
+    if (!d || !d.id) return;
+    const user = auth.currentUser;
+    // v1.7.5 (gate 3b) — signed-out save → open the branded Sign in modal (the
+    // tooltip is retired on this path; it stays only for the save-error case below).
+    if (!user) { openAuth('signin'); return; }
+
+    const setRef = (kind === 'favorites') ? favoritesSet : watchlistSet;
+    const savedId = anilistSaveId(d.id);
+    const turnOn = !btn.classList.contains('is-on');
+
+    // optimistic UI + shared-set update
+    if (turnOn) setRef.add(savedId); else setRef.delete(savedId);
+    applySecondarySaveBtn(btn, kind, turnOn);
+
+    btn.disabled = true;
+    try {
+      const snapshot = {
+        title: d.title.english || d.title.romaji || '',
+        coverImage: (d.coverImage && (d.coverImage.extraLarge || d.coverImage.large)) || '',
+        format: d.format || '',
+        year: d.seasonYear || null,
+      };
+      await setSaveAnilist(kind, user.uid, d.id, snapshot, turnOn);
+    } catch (err) {
+      // rollback
+      if (turnOn) setRef.delete(savedId); else setRef.add(savedId);
+      applySecondarySaveBtn(btn, kind, !turnOn);
+      showSecondarySaveTooltip(btn, 'Couldn’t save — try again');
+    } finally {
+      btn.disabled = false;
     }
   }
 
@@ -4679,6 +4803,9 @@ function closeModal() {
     if (detail && top && top.id === id && !top.title) {
       top.title = detail.title.english || detail.title.romaji || null;
     }
+    // Stash the loaded detail so the save pills (gate 1) can snapshot title/cover/
+    // format/year at click-time without a re-fetch.
+    if (secondaryCtx) secondaryCtx.currentDetail = detail || null;
     const meta = { sourceTitle, backTitle: secondaryBackTitle(), inFranchise: !!secondaryViewingRow, seasonReview };
     secondaryScrollEl.innerHTML = renderSecondaryModal(detail ? 'success' : 'error', detail, meta);
     secondaryScrollEl.scrollTop = 0;
@@ -4761,6 +4888,111 @@ function closeModal() {
     return picked.slice(0, 6);
   }
 
+  // v1.7.5 (gate 3) — per-episode "thin" expand for the secondary modal. Fed by
+  // detail.streamingEpisodes (MEDIA_DETAIL_QUERY: title + thumbnail + url + site).
+  // Each row is a <button> (keyboard-accessible) that toggles an inline detail
+  // panel (thumbnail + full title + ↗ {site} link). Rows whose payload lacks any
+  // expandable data (e.g. a pre-gate-3 cached entry without url/thumbnail) render
+  // as a non-interactive title line — graceful degrade. Collapsed behind a
+  // <details> past 8 episodes, matching the More Info panel's episode list.
+  function renderSecondaryEpisodes(streamingEpisodes, externalLinks) {
+    if (!streamingEpisodes || !streamingEpisodes.length) return '';
+    // v1.7.5 (gate 3b) — series-level official streaming destinations (AniList
+    // externalLinks type STREAMING), deduped by platform. Shown per-episode
+    // alongside the episode-specific link, minus the episode's own platform.
+    const seriesStreams = [];
+    const seenSites = new Set();
+    (Array.isArray(externalLinks) ? externalLinks : []).forEach(l => {
+      if (!l || l.type !== 'STREAMING' || !l.url || !l.site) return;
+      const key = l.site.toLowerCase();
+      if (seenSites.has(key)) return;
+      seenSites.add(key);
+      seriesStreams.push({ site: l.site, url: l.url });
+    });
+    const epStreamPill = (url, site) =>
+      '<a class="secondary-ep-link" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">↗ ' + escapeHtml(site) + '</a>';
+    const sorted = streamingEpisodes
+      .map((e, i) => {
+        const title = (e && e.title) || '';
+        const m = title.match(/^Episode\s+(\d+)\s*[-–—]/i);
+        return {
+          title,
+          thumbnail: (e && e.thumbnail) || '',
+          url: (e && e.url) || '',
+          site: (e && e.site) || '',
+          epNum: m ? parseInt(m[1], 10) : null,
+          origIndex: i,
+        };
+      })
+      .sort((a, b) => {
+        if (a.epNum === null && b.epNum === null) return a.origIndex - b.origIndex;
+        if (a.epNum === null) return 1;
+        if (b.epNum === null) return -1;
+        return a.epNum - b.epNum;
+      });
+    const rows = sorted.map(r => {
+      const titleSpan = '<span class="secondary-ep-title">' + escapeHtml(r.title || '(untitled episode)') + '</span>';
+      // v1.7.5 (gate 3c) — all official platforms get EQUAL weight + no privileged
+      // position (Blake: don't auto-highlight Crunchyroll). Merge the episode-direct
+      // platform (its deep-link URL wins for that platform) with the series-level
+      // streaming platforms, dedupe by site, render uniform pills sorted A→Z.
+      const platforms = new Map();   // lowercased site -> { site, url }
+      if (r.url && r.site) platforms.set(r.site.toLowerCase(), { site: r.site, url: r.url });
+      seriesStreams.forEach(s => { const k = s.site.toLowerCase(); if (!platforms.has(k)) platforms.set(k, { site: s.site, url: s.url }); });
+      const platformList = Array.from(platforms.values())
+        .sort((a, b) => a.site.toLowerCase().localeCompare(b.site.toLowerCase()));
+      const hasLinks = platformList.length > 0;
+      const canExpand = !!(r.thumbnail || hasLinks);
+      if (!canExpand) {
+        return '<div class="secondary-ep-row"><div class="secondary-ep secondary-ep--bare">' + titleSpan + '</div></div>';
+      }
+      const linkPills = platformList.map(p => epStreamPill(p.url, p.site)).join('');
+      const linksBlock = hasLinks
+        ? '<div class="secondary-ep-links">' + linkPills + '</div>'
+        : '<p class="secondary-ep-empty">No official stream listed for this episode.</p>';
+      const detailInner =
+        (r.thumbnail ? '<img class="secondary-ep-thumb" src="' + escapeHtml(r.thumbnail) + '" alt="" loading="lazy">' : '') +
+        linksBlock;
+      return '<div class="secondary-ep-row">' +
+          '<button type="button" class="secondary-ep" aria-expanded="false">' +
+            titleSpan + '<span class="secondary-ep-caret" aria-hidden="true">▸</span>' +
+          '</button>' +
+          '<div class="secondary-ep-detail" hidden>' + detailInner + '</div>' +
+        '</div>';
+    }).join('');
+    const header = '<h3 class="secondary-section-title">EPISODES</h3>';
+    const body = sorted.length > 8
+      ? '<details class="secondary-ep-list-details"><summary>Show all ' + sorted.length + ' episodes</summary>' + rows + '</details>'
+      : rows;
+    return '<section class="secondary-section secondary-episodes">' + header + body + '</section>';
+  }
+
+  // v1.7.5 (gate 3e) — WHERE TO WATCH section: every official streaming platform
+  // for this anime (detail.externalLinks type STREAMING, deduped by site, A→Z,
+  // equal-weight pills per the gate-3c parity rule). Each pill → the platform's
+  // series page. Omitted entirely when there are no streaming links (premium-clean;
+  // the LINKS section still carries AniList + the official site).
+  function renderSecondaryPlatforms(externalLinks) {
+    const seen = new Set();
+    const list = [];
+    (Array.isArray(externalLinks) ? externalLinks : []).forEach(l => {
+      if (!l || l.type !== 'STREAMING' || !l.url || !l.site) return;
+      const k = l.site.toLowerCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      list.push({ site: l.site, url: l.url });
+    });
+    if (!list.length) return '';
+    list.sort((a, b) => a.site.toLowerCase().localeCompare(b.site.toLowerCase()));
+    const pills = list.map(p =>
+      '<a class="secondary-platform" href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener noreferrer">↗ ' + escapeHtml(p.site) + '</a>'
+    ).join('');
+    return '<section class="secondary-section secondary-platforms">' +
+        '<h3 class="secondary-section-title">WHERE TO WATCH</h3>' +
+        '<div class="secondary-platform-list">' + pills + '</div>' +
+      '</section>';
+  }
+
   // Pure renderer → HTML string. states: 'loading' | 'success' | 'error'.
   function renderSecondaryModal(state, detail, meta) {
     meta = meta || {};
@@ -4839,12 +5071,31 @@ function closeModal() {
           '<span class="secondary-edit-label">Edit review</span></a>'
       : '';
 
+    // v1.7.5 (gate 1) — Watchlist + Favorite save pills. State is read FREE from
+    // the homepage's existing watchlistSet/favoritesSet via the `al:` doc-id (no
+    // new listener). The click handler (onSecondaryClick → handleSecondarySave)
+    // reads the loaded detail off secondaryCtx for the save snapshot.
+    const savedId = anilistSaveId(detail.id);
+    const inWatch = watchlistSet.has(savedId);
+    const inFav = favoritesSet.has(savedId);
+    const saveBtns =
+      '<button type="button" class="secondary-save secondary-save--watch' + (inWatch ? ' is-on' : '') + '"' +
+        ' data-save-kind="watchlist" aria-pressed="' + (inWatch ? 'true' : 'false') + '"' +
+        ' title="' + (inWatch ? 'Remove from watchlist' : 'Add to watchlist') + '">' +
+        '<span class="secondary-save-icon" aria-hidden="true">' + (inWatch ? '✓' : '+') + '</span>' +
+        '<span class="secondary-save-label">' + (inWatch ? 'Watchlisted' : 'Watchlist') + '</span></button>' +
+      '<button type="button" class="secondary-save secondary-save--fav' + (inFav ? ' is-on' : '') + '"' +
+        ' data-save-kind="favorites" aria-pressed="' + (inFav ? 'true' : 'false') + '"' +
+        ' title="' + (inFav ? 'Remove from favorites' : 'Add to favorites') + '">' +
+        '<span class="secondary-save-icon" aria-hidden="true">' + (inFav ? '♥' : '♡') + '</span>' +
+        '<span class="secondary-save-label">' + (inFav ? 'Favorited' : 'Favorite') + '</span></button>';
+
     const header =
       '<div class="secondary-header"' + (accent ? ' style="--accent:' + escapeHtml(accent) + '"' : '') + '>' +
         '<div class="secondary-banner"' + (banner ? ' style="background-image:url(\'' + escapeHtml(banner) + '\')"' : '') + '></div>' +
         '<div class="secondary-banner-scrim"></div>' +
         '<button type="button" class="secondary-back">' + backLabel + '</button>' +
-        buildHeaderActions(editReviewBtn + requestBtn) +
+        buildHeaderActions(editReviewBtn + requestBtn + saveBtns) +
         '<div class="secondary-header-body">' +
           (cover ? '<img class="secondary-cover" src="' + escapeHtml(cover) + '" alt="" loading="lazy">' : '<div class="secondary-cover secondary-cover--ph"></div>') +
           '<div class="secondary-titleblock">' +
@@ -4939,12 +5190,15 @@ function closeModal() {
         '</div></section>'
       : '';
 
-    // links — AniList canonical + a few official/streaming, kept subtle
+    // links — AniList canonical + official/info links, kept subtle. v1.7.5 (gate 3e):
+    // STREAMING links now live in the dedicated WHERE TO WATCH section, so LINKS skips
+    // them (no in-modal duplication) and keeps AniList + Official Site + YouTube.
     const linkOut = [{ label: 'AniList', url: 'https://anilist.co/anime/' + detail.id }];
-    const LINK_OK = new Set(['Official Site', 'Crunchyroll', 'Netflix', 'Hulu', 'Funimation', 'HIDIVE', 'Amazon Prime Video', 'YouTube']);
+    const LINK_OK = new Set(['Official Site', 'YouTube']);
     (detail.externalLinks || []).forEach(l => {
       if (linkOut.length >= 6) return;
-      if (LINK_OK.has(l.site) || l.type === 'STREAMING') linkOut.push({ label: l.site, url: l.url });
+      if (l.type === 'STREAMING') return;
+      if (LINK_OK.has(l.site)) linkOut.push({ label: l.site, url: l.url });
     });
     const linksHtml = '<section class="secondary-section"><h3 class="secondary-section-title">LINKS</h3><div class="secondary-links">' +
         linkOut.slice(0, 6).map(l => '<a class="secondary-link" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(l.label) + '</a>').join('') +
@@ -4973,10 +5227,17 @@ function closeModal() {
         '</div></div>'
       : '';
 
+    // v1.7.5 (gate 3/3b) — per-episode list w/ in-row expand (thumbnail + episode-
+    // direct link + series-level official streaming platforms).
+    const episodesHtml = renderSecondaryEpisodes(detail.streamingEpisodes, detail.externalLinks);
+
+    // v1.7.5 (gate 3e) — WHERE TO WATCH leads the side column (actionable, high-value).
+    const whereToWatchHtml = renderSecondaryPlatforms(detail.externalLinks);
+
     const body =
       '<div class="secondary-body">' +
-        '<div class="secondary-col secondary-col--main">' + reviewHtml + descHtml + genresHtml + tagsHtml + trailerHtml + '</div>' +
-        '<div class="secondary-col secondary-col--side">' + charsHtml + staffHtml + linksHtml + '</div>' +
+        '<div class="secondary-col secondary-col--main">' + reviewHtml + descHtml + episodesHtml + genresHtml + tagsHtml + trailerHtml + '</div>' +
+        '<div class="secondary-col secondary-col--side">' + whereToWatchHtml + charsHtml + staffHtml + linksHtml + '</div>' +
       '</div>';
 
     return header + context + body + recsHtml;
@@ -5711,6 +5972,17 @@ try {
     if (isOpen) {
       history.replaceState({}, '', location.pathname + location.search + '#all');
     }
+  } else if (h.startsWith('#secondary=')) {
+    // v1.7.5 (gate 2) — in-site deep-link to the secondary "deep dive" modal by
+    // AniList id (the account page's non-catalog rows route here). No source row
+    // / moreInfoContent → the Back chip falls back to "← Back" and closing returns
+    // to the homepage. Normalized to #all after open so a refresh doesn't re-fire.
+    const aniListId = Number(decodeURIComponent(h.slice('#secondary='.length)));
+    if (typeof showAll === 'function') showAll();
+    if (aniListId && typeof openSecondaryModal === 'function') {
+      openSecondaryModal(aniListId, null, null);
+    }
+    history.replaceState({}, '', location.pathname + location.search + '#all');
   }
 } catch (e) {
   console.warn('Hash route failed:', e);

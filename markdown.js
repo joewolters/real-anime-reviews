@@ -22,6 +22,11 @@
   function renderMarkdownInline(t) {
     return escapeHtml(t)
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      // v1.7.5 (gate 3) — AniList bios use __double-underscore__ for bold. Run it
+      // after the ** pass and before the single-* italic pass. _single-underscore_
+      // italic is deliberately NOT supported: it collides with snake_case words and
+      // underscores inside the [text](url) link targets handled below.
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');

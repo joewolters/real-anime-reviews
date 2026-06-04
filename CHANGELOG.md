@@ -11,6 +11,31 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-04 -->
+## v1.7.5 — MINOR (2026-06-04)
+
+**Watchlist + Favorites everywhere, per-episode & where-to-watch, platforms refresh.** The watchlist/favorites system now works on any AniList entry (not just catalog cards), the in-site detail view gained per-episode info + a Where to Watch section, signed-out saves prompt sign-in, and all 44 reviews' streaming listings were corrected from AniList. Built across gates 1–3e on the v1.7.4 modal architecture.
+
+**Visitor-facing:**
+
+- **Save anything to watchlist / favorites.** The detail view (secondary modal) now has Watchlist + Favorite buttons, so any season, movie, or special — not just the main catalog cards — can be saved. Signed-out clicks (here and on the homepage cards) open the sign-in box instead of doing nothing.
+- **Account page renders saved non-catalog entries.** Watchlist + favorites tabs now show cover art, title, and format/year for AniList entries you've saved; clicking one opens its detail view in-site (never an external tab). Catalog (reviewed) entries carry a green **✓ REVIEWED** tag.
+- **Per-episode info.** Episode rows in the detail view are clickable — each expands to a thumbnail, full title, and every official place to watch that episode (the episode-direct link plus the show's other official streaming services), all equal-weight with none privileged.
+- **Where to Watch section.** The detail view now leads its sidebar with a Where to Watch section listing every official streaming service for the anime.
+- **Accurate streaming listings.** All 44 reviews' where-to-watch listings were corrected from verified source data (stale/duplicate/typo'd entries cleaned; physical-only titles marked honestly).
+- **Bold formatting in bios.** Character/staff bios now render `__double-underscore__` bold (the style AniList uses), matching the existing `**asterisk**` bold.
+
+**Behind the scenes (admin / data):**
+
+- **Non-catalog save schema (`al:` discriminator).** Non-catalog saves live in the existing `users/{uid}/{watchlist|favorites}` collections under an `al:<aniListId>` doc id with a `{ type:'anilist', aniListId, title, coverImage, format, year }` snapshot saved at write-time (so the account page paints with no per-row fetch). No Firestore rules change — the existing `isOwner(uid)` rules validate no field shape, so the discriminator rides free.
+- **In-site secondary deep-link route.** New `#secondary=<aniListId>` hash route opens the detail view directly (the path the account page's non-catalog rows use); `account.html` loads `franchise-fetch.js` for legacy-row cover backfill.
+- **Per-episode + Where-to-watch data.** `MEDIA_DETAIL_QUERY.streamingEpisodes` gained `url`/`site`; the detail view dedupes/sorts the show's `externalLinks` (type STREAMING) for both the per-episode links and the Where to Watch section. No new AniList query — `externalLinks` was already fetched.
+- **Sign-in modal z-index fix.** The sign-in modal/overlay were raised above the secondary (6000) and tertiary (7000) layers so a save-triggered sign-in renders on top, not behind the open detail view.
+- **Platforms backfill CLI.** New `scripts/backfill-platforms.js` (dry-run + live) rewrites the Excel `Watch` column from each anime's primary-AniListId `externalLinks` (type STREAMING) with a US-centric allowlist + name normalization, Excel backup + lock-check + sync regen, and a report file — used to correct all 44 rows (41 changed). Crunchyroll availability was verified per-title for the defunct-Funimation cases.
+- **Shared markdown.** `__bold__` added to the single-source `markdown.js` (after the `**` pass; `_italic_` deliberately skipped for snake_case/URL-underscore collisions) — all five consumers ride along. Covered by a new test.
+
+**Implementation files:** new `scripts/backfill-platforms.js`, `tests/markdown-bold.spec.js`; `script.js` (secondary-modal save pills + handlers, per-episode expand, Where to Watch section, `#secondary=` route, signed-out → sign-in), `style.css` (save pills, episode expand, platform pills, account green ✓, auth z-index), `account.js` + `account.html` (non-catalog row rendering + `franchise-fetch.js` load), `franchise-fetch.js` (`streamingEpisodes` `url`/`site`), `markdown.js` (`__bold__`), `animeData.js` (regenerated — corrected Platforms). No new visitor-facing dependencies or fonts. `bump-version.js` stays 33 targets (no new versioned page).
+
+<!-- author: Code | date: 2026-06-04 -->
 ## v1.7.4 — MINOR (2026-06-04)
 
 **Modal Architecture Overhaul.** The anime modal's franchise panel is now always visible; clicking any related anime opens a large in-site detail view instead of an external tab; each season/movie/OVA can carry its own written review; and characters + staff are clickable into full profiles. Built across 10 gates (1 → 3d) on the v1.7.2/v1.7.3 data layer.
