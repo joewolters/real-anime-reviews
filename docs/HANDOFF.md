@@ -1,17 +1,47 @@
-<!-- author: Cowork | date: 2026-06-03 -->
-# Session Handoff — v1.7.3 LIVE · v1.7.4 Modal Architecture Overhaul (gate 0 approved, gate 1 staged)
+<!-- author: Cowork | date: 2026-06-04 -->
+# Session Handoff — v1.7.4 LIVE · v1.7.5 (watchlist + favorites + per-episode) up next
 
-> **v1.7.4 gate 0 approved 2026-06-04.** 5 of Code's 5 proposals approved. Two refinements for gate 2 + gate 3 staging:
-> 1. **Secondary modal must be LARGE** — Blake's words: *"quite large to fit all information neatly with pictures etc. nice stylized and premium look that isnt clunky and fits everything neatly."* Code's gate-2 visual treatment (A: slide-in from right) needs wider real-estate (~80-90% viewport) to honor this. Bake into gate 2 prompt.
-> 2. **Per-season needs BOTH triggers** — inline "Edit season review →" button in secondary modal AND a dedicated admin panel listing all season reviews (similar to `/admin/suggestions`). Bake into gate 3 prompt. Adds ~2-3h.
-
-> **v1.7.2 shipped 2026-06-03 ~22:19 UTC** (commit `c07755d`). The de facto More Info panel overhaul — multi-fetch architecture + BFS multi-hop traversal + per-season episode aggregation + UX redesign (spine + `--current` + connector line + grouped sections + "✓ Reviewed" in-catalog pill + partial-fail notice + retry + 24h localStorage L2 cache + PER SEASON/CONTINUOUS toggle + UPCOMING kicker + score-badge collision fix). Blake's "ship it" go-signal honored at gate 10; gate 11 prod verify a quick rubber-stamp (preview channel was same commit, smoke clean at gate 9). **v1.7.3 (Watched-set feature) in planning** — design decisions in progress with Blake.
+> **v1.7.4 shipped 2026-06-04 ~14:20 UTC** (commit `7364500`). The Modal Architecture Overhaul — always-visible 3-col modal layout (More Info | Main | Community) with proportional column shrink, LARGE in-site secondary modal replacing external AniList tabs (banner + cover + synopsis + character grid + staff + trailer + MORE LIKE THIS carousel + replace-content history-back + "📝 Request this anime" button), full per-season review feature (markdown storage in `season-reviews/<id>.md` + sync-emitted index + shared XSS-safe `markdown.js` renderer + gold BLAKE'S REVIEW section in secondary + `/admin/season-reviews` panel with live-preview editor + inline "✎ Edit review" admin link + `/api/season-review` CRUD), routing change (primary AniListId → main modal; watched-but-not-primary + "currently viewing" source row → secondary), clickable characters + staff with tertiary detail layer (bio + VAs + appearances + credits), markdown rendering in main modal reviews + admin form preview pane with B/I/🔗 toolbar, brand-purple markdown link styling across 5 surfaces. Blake's "ship it" go-signal honored at gate 8.
 
 ---
 
 ## Current production
 
-**Live:** `realanimereviews.com` serving **v1.7.3** (commit `74041d6`, deployed 2026-06-04 ~02:46 UTC). Multi-season `✓ REVIEWED` pills functional (44/44 `WatchedAniListIds` in deployed `animeData.js`), official-only platforms, infinite-scroll update log, admin chatbot drawer + watched-set picker live (local-only via Mode 1 + `.env` API key). Preview channel + `origin/main` + prod all aligned.
+**Live:** `realanimereviews.com` serving **v1.7.4** (commit `7364500`, deployed 2026-06-04 ~14:20 UTC). All v1.7.3 functionality intact (44/44 `WatchedAniListIds` in deployed `animeData.js`, official-only platforms, chatbot drawer locally available via Mode 1, infinite-scroll log). New visitor-facing surfaces: always-open More Info, LARGE secondary deep-dive modal, clickable character/staff tertiaries, per-season review surfaces (empty until Blake writes content via `/admin/season-reviews`). Preview channel + `origin/main` + prod all aligned on `7364500`.
+
+---
+
+## ⚡ For the next Cowork chat (session-start instructions)
+
+**v1.7.4 closed cleanly. v1.7.5 gate 0 propose-first prompt is staged in `docs/SHIP-PROMPT.md`** — ready for the new chat to direct Blake to paste the one-liner into Code.
+
+**Read order (per `docs/COWORK-STYLE.md`):**
+1. `docs/AI-PRIMER.md` — project orientation
+2. `docs/HANDOFF.md` (this file) — live state
+3. `docs/COWORK-STYLE.md` — tone + conventions + 12-gate model + Blake's one-liners
+4. `docs/SHIP-OUTPUT.md` — Code's last apply report (v1.7.4 gate 8 prod deploy LIVE)
+5. `docs/SHIP-PROMPT.md` — confirm it holds the **v1.7.5 gate 0 propose-first prompt**
+
+**Then tell Blake:** the v1.7.5 gate 0 propose-first prompt is staged. v1.7.5 is the Watchlist + Favorites schema extension ship (wires the v1.7.4 secondary modal's reserved button slots to the existing Firestore infrastructure for non-catalog AniListId entries) + per-episode click-for-more-info + character/staff polish (incl. `__underscore-bold__` markdown addition). Paste this into Code when ready:
+
+```
+Read docs/SHIP-PROMPT.md and follow the v1.7.5 gate 0 propose-first instructions.
+```
+
+**Don't propose changes to the staged prompt unless Blake asks** — it was deliberately scoped with the v1.7.4 close-out context fresh.
+
+## What this v1.7.4 chat learned (carry-forward for the new Cowork)
+
+These are baked into `docs/COWORK-STYLE.md` + the memory file system already, but worth highlighting:
+
+1. **Always verify state before asserting in SHIP-PROMPTs.** Code's grep-the-real-state discipline caught two Cowork phantom claims this ship (the `/suggest` param wiring at gate 2b, the `WatchedAniListIds` "still empty" claim at gate 3). See memory `feedback_verify_state_assertions`.
+2. **No service-name in visitor copy is a recurring drift.** Cowork drifted three times this session ("check AniList", "jumping to AniList", a widget bullet). Code caught all of them. See memory `feedback_no_anilist_in_visitor_ui`.
+3. **The sync script has separate parse + serialize halves.** Edit BOTH when adding a new animeData field — gate-1 of v1.7.3 missed the serialize half and the headline feature would have shipped dead if gate-6 audit hadn't grep-verified. See `feedback_verify_state_assertions`.
+4. **Use the Grep tool for smart-quote sweep, not bash `grep -l`.** Bash false-positives on multibyte text (CODE-HANDOFF.md gotcha #9).
+5. **The `.env` file holds the Anthropic API key.** Gitignored + firebase-ignored via `**/.*`. Re-verify it 404s on every prod deploy.
+6. **Gate numbering drifts on big ships.** v1.7.4 went 0 → 1/1b/1c → 2/2b → 3/3b/3c/3d → 4 docs → 5 audits → 6 commit → 7 preview → 8 prod (numbering doesn't strictly match the 12-gate model when there are many sub-gates). Code follows the file when prompts disagree.
+7. **Code has full creative latitude on design** — Blake's explicit and repeated grant. Surface 2-3 alternatives on major calls.
+8. **Blake's standing "no mobile testing till v2" decision** still holds. Stack rules in `style.css` handle the narrow path; `mobile.css` is off-limits until v1.9.0.
 
 **Commit chain (recent):**
 `3539a06` (v1.6.10) → `aaa96f0` (v1.6.11) → `5a5ab9b` (v1.6.11 fix) → `ce04594` (v1.6.12) → `05158e0` (iter 1) → `244d22f` (iter 2) → `a8c60ac` (ROADMAP close-out) → `2ed9874` (v1.7.0) → **`e78f7d6` (v1.7.1, HEAD, on main, prod pending)**.
