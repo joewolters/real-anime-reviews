@@ -253,8 +253,10 @@ async function runShipSequence(payload, send, opts = {}) {
   const { dryRun = false, skipDeploy = false } = opts;
   const {
     title, rating, seasons, genre, description, review, tags,
-    watchOfficial, watchUnofficial, studio, trailer, top10Rank,
+    watchOfficial, studio, trailer, top10Rank,
     aniListId, idMal, aniListScore, aniListColor,
+    titleEnglish, titleRomaji, titleNative,
+    watchedAniListIds, knownAniListIds,
     imageSource, imageUrl, imageOverrideFilename, customBullets,
   } = payload;
 
@@ -292,7 +294,13 @@ async function runShipSequence(payload, send, opts = {}) {
     const backup = await backupExcel(EXCEL_PATH);
     send('log', { line: `Excel backup: ${path.basename(backup)}` });
   }
-  const watchCombined = [watchOfficial, watchUnofficial].filter(Boolean).join(', ');
+  const watchCombined = watchOfficial || '';   // v1.7.3 — official only (unofficial removed)
+  // v1.7.3 — belt+suspenders: guarantee the source AniListId is in the watched set.
+  const watchedFinal = (() => {
+    const set = new Set(String(watchedAniListIds || '').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)));
+    if (aniListId) set.add(parseInt(aniListId, 10));
+    return Array.from(set).join(',');
+  })();
   const rowData = [
     title, rating, seasons, genre, description, review, tags, watchCombined, studio, trailer,
     null, null,
@@ -301,6 +309,8 @@ async function runShipSequence(payload, send, opts = {}) {
     idMal ? parseInt(idMal, 10) : null,
     aniListScore ? parseInt(aniListScore, 10) : null,
     aniListColor || null,
+    titleEnglish || null, titleRomaji || null, titleNative || null,
+    watchedFinal || null, knownAniListIds || null,
   ];
   if (!dryRun) await appendExcelRow(rowData);
   send('step', { id: 'excel', label: 'Backup + append row to Excel', status: 'done' });
@@ -396,6 +406,36 @@ async function runShipSequence(payload, send, opts = {}) {
   send('done', { newVersion, awaitingDeploy: false });
 }
 
+// ---- v1.7.3 — chatbot (/api/chat) helpers --------------------------------
+// Read ANTHROPIC_API_KEY from process.env first, then Current Version/.env
+// (gitignored + firebase-ignored). No dotenv dep — a one-line parse is enough.
+function readAnthropicKey() {
+  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY.trim();
+  try {
+    const envPath = path.join(PROJECT_ROOT, '.env');
+    if (!fs.existsSync(envPath)) return null;
+    const m = fs.readFileSync(envPath, 'utf8').match(/^\s*ANTHROPIC_API_KEY\s*=\s*(.+?)\s*$/m);
+    return m ? m[1].replace(/^["']|["']$/g, '').trim() : null;
+  } catch (_) { return null; }
+}
+
+function buildChatSystemPrompt(ctx = {}) {
+  const studios = Array.isArray(ctx.studios) ? ctx.studios.join(', ') : (ctx.studios || '');
+  const genres = Array.isArray(ctx.genres) ? ctx.genres.join(', ') : (ctx.genres || '');
+  const synopsis = String(ctx.description || '').replace(/<[^>]+>/g, '').slice(0, 800);
+  return [
+    `You are an anime assistant helping Blake write a review entry for his site "Real Anime Reviews."`,
+    `You are helping with ONE specific anime:`,
+    `  Title: ${ctx.title || ''}   Romaji: ${ctx.romaji || ''}`,
+    `  Year: ${ctx.year || ''}   Format: ${ctx.format || ''}   Studios: ${studios}`,
+    `  Genres: ${genres}`,
+    `  Synopsis: ${synopsis}`,
+    `Produce concise, ready-to-paste content: descriptions in a natural review voice (1 paragraph,`,
+    `no major spoilers), tags as space-separated #hashtags, or short factual answers. Keep it tight —`,
+    `this lands in form fields. Never name AniList (or any data source) in text meant for the public site.`,
+  ].join('\n');
+}
+
 // ---- Express app ---------------------------------------------------------
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -454,6 +494,57 @@ app.post('/api/deploy', async (req, res) => {
     send('done', {});
   } catch (err) { send('error', { message: err.message }); }
   finally { res.end(); }
+});
+
+// v1.7.3 — chatbot: one-shot Anthropic Messages proxy (Haiku). Raw fetch (no
+// @anthropic-ai/sdk dep). Key from .env; 503 when missing so the drawer can
+// show a helpful setup hint. A future Cloud Function is a drop-in swap.
+app.post('/api/chat', async (req, res) => {
+  const key = readAnthropicKey();
+  if (!key) {
+    return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in .env' });
+  }
+  const { messages, animeContext } = req.body || {};
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages[] required' });
+  }
+  const t0 = Date.now();
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        // v1.7.3 gate 3b — prompt caching on the system block (ephemeral). The
+        // anime-context system prompt is stable across a session's turns; caching
+        // it trims input cost on multi-turn chats. (No-op below Haiku's cache
+        // minimum, but structurally correct + future-proof as the prompt grows.)
+        system: [{ type: 'text', text: buildChatSystemPrompt(animeContext), cache_control: { type: 'ephemeral' } }],
+        messages: messages.map(m => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: String(m.content || ''),
+        })),
+      }),
+    });
+    const body = await apiRes.json().catch(() => ({}));
+    if (!apiRes.ok) {
+      const msg = body?.error?.message || `Anthropic HTTP ${apiRes.status}`;
+      console.error(`${C.red}[mode1] /api/chat${C.reset} ${msg}`);
+      return res.status(apiRes.status >= 500 ? 502 : apiRes.status).json({ error: msg });
+    }
+    const text = (body.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    const u = body.usage || {};
+    console.log(`${C.gray}[mode1] /api/chat${C.reset} ${body.model || 'haiku'} · in ${u.input_tokens ?? '?'} / out ${u.output_tokens ?? '?'} tok · cache w/r ${u.cache_creation_input_tokens ?? 0}/${u.cache_read_input_tokens ?? 0} · ${Date.now() - t0}ms`);
+    res.json({ text });
+  } catch (err) {
+    console.error(`${C.red}[mode1] /api/chat${C.reset} ${err.message}`);
+    res.status(502).json({ error: err.message });
+  }
 });
 
 smokeCheckSpawn().then(() => {

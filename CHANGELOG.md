@@ -11,6 +11,28 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-03 -->
+## v1.7.3 — MINOR (2026-06-03)
+
+**Watched Set + Admin Form Completion.** The `✓ REVIEWED` badge now lights up on *every* entry a review actually covers — not just the primary season — and the admin/Mode 1 workflow gained a chatbot assistant, a watched-set picker, and a few cleanups. Built on a shared franchise-traversal module extracted this ship.
+
+**Visitor-facing:**
+
+- **`✓ REVIEWED` across the whole watched set.** Previously the badge matched only one AniList entry per review, so a franchise review lit up Season 1 only. Each review now carries the full set of entries it covers (`WatchedAniListIds`), so the badge appears on every watched season, movie, OVA, and special site-wide.
+- **Official-only where-to-watch.** Unofficial/aggregator platforms (hianime, 9anime, aniwave) were stripped from all 44 reviews + the data pipeline; the site now lists only official streaming services.
+- **Infinite-scroll update log.** The homepage update log no longer drops old entries at 10 — it scrolls back through every change since detailed logging began (v1.6.1, 2026-05-10).
+
+**Behind the scenes (admin / data):**
+
+- **Shared `franchise-fetch.js` module.** The v1.7.2 multi-fetch + BFS traversal was extracted from `script.js`'s IIFE into a classic-script-safe module (`window.franchiseFetch` + `module.exports`) consumed by the homepage modal, the admin watched-set picker, and the backfill CLI — one implementation, three consumers.
+- **Two new Excel columns** — `WatchedAniListIds` (what was watched) + `KnownAniListIds` (snapshot of the franchise tree at save time, for a future Mode 2 "new arc surfaced" diff); sync parses both into number arrays; the render pill checks set membership (falls back to the primary id when empty).
+- **Admin form rewire** — the FRANCHISE INFO panel became a watched-set **checkbox tree** (multi-hop, FINISHED-only defaults, source ticked + disabled, Select-all/none/spine-only + a live count chip); the per-field `✨ AI` paste-back panels were removed; the Unofficial field was removed; a "Fill from AniList" button was added; the generated row + Mode 1 server now persist both new columns (plus a bonus fill of the long-empty `TitleEnglish/Romaji/Native` columns).
+- **Chatbot drawer (`✨ ASK`)** — a slide-out admin assistant backed by a local `/api/chat` endpoint (Anthropic Haiku, one-shot, ephemeral prompt-cache structure), per-anime `sessionStorage` history, quick-start prompts, auto-clear on publish. Requires `ANTHROPIC_API_KEY` in `.env` (gitignored + firebase-ignored).
+- **Backfill CLI** (`scripts/backfill-watched.js`) — interactive per-row watched-set populator (`--dry-run`, resume-safe, one Excel backup, sync regen) used to populate all 44 rows.
+- Admin floating pill moved bottom-left (was colliding with the search bar); chat drawer raised above the sticky header so its buttons stay clickable.
+
+**Implementation files:** new `franchise-fetch.js`, `scripts/strip-unofficial.js`, `scripts/backfill-watched.js`; `script.js` (extraction + watched-set pill map), `admin/new-anime.{html,js,css}` (checkbox tree + chatbot drawer + AI/Unofficial removal + Fill button), `scripts/mode1-server.js` (`/api/chat` + watched-set persistence), `scripts/sync-excel-to-js.js` (new columns + unofficial whitelist removal), `admin-fab.css` (bottom-left), `index.html` (shared-module script tag + infinite-scroll widget restore), `animeData.js` (regenerated). No new dependencies, no new fonts.
+
+<!-- author: Code | date: 2026-06-03 -->
 ## v1.7.2 — MINOR (2026-06-03)
 
 **The More Info panel overhaul — data architecture + UX redesign.** The franchise panel now walks a show's entire related-anime chain — every season, side story, movie, and unreleased announcement — instead of just its immediate neighbours, with per-season episodes, smarter ordering, an in-catalog cross-link, and a numbering toggle. Closes the multi-season architectural debt deferred since v1.6.10.

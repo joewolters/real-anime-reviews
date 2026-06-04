@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI." />
   <title>Real Anime Reviews</title>
-  <script>window.APP_VERSION="1.7.2"</script>
+  <script>window.APP_VERSION="1.7.3"</script>
   <!-- Social preview (Discord / iMessage / etc) -->
 <link rel="canonical" href="https://realanimereviews.com/">
 
@@ -21,9 +21,9 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=1.7.2">
-  <link rel="stylesheet" href="mobile.css?v=1.7.2" media="(max-width: 900px)">
-  <link rel="stylesheet" href="admin-fab.css?v=1.7.2">
+  <link rel="stylesheet" href="style.css?v=1.7.3">
+  <link rel="stylesheet" href="mobile.css?v=1.7.3" media="(max-width: 900px)">
+  <link rel="stylesheet" href="admin-fab.css?v=1.7.3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -166,15 +166,18 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v1.7.2</span>
+      <span class="changelog-tag" id="changelog-version">v1.7.3</span>
      Minor Update
     </div>
 
     <div class="changelog-content">
       <div class="version-section">
-        <div class="version-chips"><span class="version-chip version-chip-range">v1.7.0<span class="vc-arrow" aria-hidden="true">→</span>v1.7.2</span></div>
+        <div class="version-chips"><span class="version-chip version-chip-range">v1.7.0<span class="vc-arrow" aria-hidden="true">→</span>v1.7.3</span></div>
         <div class="version-header">06/03/2026</div>
         <ul class="changelog-list">
+          <li>The Reviewed badge now lights up on every season, movie, and special I actually watched — not just season 1.</li>
+          <li>Cleaned up where-to-watch — the site now lists only official streaming services.</li>
+          <li>The update log now scrolls back through every change since I started keeping detailed history.</li>
           <li>The 'More Info' panel now maps a show's whole franchise — every season, side story, and movie, plus announced entries tagged UPCOMING.</li>
           <li>If a related anime has its own review here, clicking it opens that review on the site instead of sending you somewhere else.</li>
           <li>Episodes are now grouped by season, with a toggle to number them per-season or straight through the whole franchise.</li>
@@ -203,6 +206,23 @@
         <div class="version-header">05/12/2026</div>
         <ul class="changelog-list">
           <li>Made the tools that add new anime smarter about multi-season franchises.</li>
+        </ul>
+      </div>
+      <!-- author: Code | date: 2026-06-03 — v1.7.3: restored 05/11 + 05/10 sections (infinite-scroll back to the v1.6.1 floor; no more 10-cap drop) -->
+      <div class="version-section">
+        <div class="version-chips"><span class="version-chip version-chip-range">v1.6.2<span class="vc-arrow" aria-hidden="true">→</span>v1.6.6</span></div>
+        <div class="version-header">05/11/2026</div>
+        <ul class="changelog-list">
+          <li>Fixed a bug where some anime cover images didn't fill the card cleanly.</li>
+          <li>Added shipped-on dates to the update log.</li>
+          <li>Grouped the update log so changes appear by date.</li>
+        </ul>
+      </div>
+      <div class="version-section">
+        <div class="version-chips"><span class="version-chip">v1.6.1</span><span class="version-chip">v1.6.0</span></div>
+        <div class="version-header">05/10/2026</div>
+        <ul class="changelog-list">
+          <li>Behind-the-scenes improvements to the tools used to add new reviews.</li>
         </ul>
       </div>
     </div>
@@ -376,6 +396,7 @@
   const v = window.APP_VERSION || "1.0.1";
   document.write(`<script src="animeData.js?v=${v}"><\/script>`);
   document.write(`<script src="card-render.js?v=${v}"><\/script>`);
+  document.write(`<script src="franchise-fetch.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="firebase.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="script.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="admin-fab.js?v=${v}"><\/script>`);

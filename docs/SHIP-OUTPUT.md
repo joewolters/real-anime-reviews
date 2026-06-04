@@ -1,37 +1,38 @@
 <!-- author: Code | date: 2026-06-03 -->
-# v1.7.2 — Gate 6 (audits + widget tidy — FAST-TRACK, audits PASS ✓ / 1 decision)
+# v1.7.3 — Gate 6 (audits — FAST-TRACK, PASS ✓ — caught + fixed a ship-blocker)
 
-> Widget tidy applied; full audit battery green (npm test 7/7, mirror clean, diff in-scope, smart-quotes clean). **One decision for Cowork/Blake before gate 7:** the audit's "confirm the rest of the widget bullets stay clean" step found a SECOND pre-existing `AniList` bullet the pre-step didn't cover — surfaced, NOT fixed (outside the greenlit single-bullet scope). Recommend a one-word reword.
+> Audit battery green AFTER fixing a **ship-blocking bug the audit caught**: the watched-set data was never reaching `animeData.js` (the headline feature would have shipped dead). Root cause + fix below. `npm test` re-passed 7/7 post-fix. Ready for gate 7.
 
-## Pre-step — widget bullet tidy ✓ (with a finding)
-- **Done:** the v1.7.0 bullet `"...the AniList community score right next to my rating..."` → `"...the community score right next to my rating..."` (index.html:182).
-- **⚠️ FINDING (per "confirm the rest stay clean"):** a **second** pre-existing service-name bullet remains — **index.html:198** (the 05/13 v1.6.8 bullet): *"New 'More Info' tab when you open an anime — see all its seasons, prequels, and sequels, each linking to its full **AniList** page."* This pre-dates this ship and was **not in the greenlit scope** (the prompt's pre-step + Blake's option-b were about the single v1.7.0 bullet). Per surface-don't-silently-fix, I did **not** reword it unilaterally.
-  - **Recommendation:** reword to *"...each linking to its full info page."* (one-phrase change, identical class to what Blake just greenlit). Awaiting Cowork/Blake's call — can fold into gate 7 or a follow-up tidy.
+## ⚠️ HEADLINE — caught + fixed: watched-set data wasn't in `animeData.js`
+**The discipline paid off.** Cowork's gate-5 prompt asserted "backfill complete — `WatchedAniListIds` + `KnownAniListIds` populated across all 44 rows." I grep'd the real state instead of trusting it and found **`animeData.js` had 0 `WatchedAniListIds`** — so the `✓ REVIEWED` pill would have silently fallen back to primary-id-only (= v1.7.2 behavior), shipping the entire watched-set feature **non-functional**.
 
-## Audit 1 — `npm test` (Playwright) ✓
-**7 passed (14.0s)** — full set, project rule #7 satisfied.
+**Diagnosis (precise):**
+- Excel: `WatchedAniListIds` + `KnownAniListIds` populated **44/44** (cols 20/21) — Blake's backfill DID run correctly.
+- `animeData.js` was regenerated (59473 bytes, matching Cowork's claim) — but with **zero watched data**.
+- **Root cause:** `scripts/sync-excel-to-js.js` *parses* the columns in `rowToAnime` (gate-1 work) but its hand-rolled **serializer** (`:457-458`) only emits explicitly-listed fields — and I never added the emit lines at gate 1. Parse ✓, serialize ✗ → data computed, never written. The backfill report showed Excel writes succeeding, which masked the sync-emit gap.
+
+**Fix (2 lines, in-scope, per the gate-6 "fix the underlying cause and re-run" constraint):** added `WatchedAniListIds`/`KnownAniListIds` emit lines to the serializer (`renderArray`, numeric), re-ran `npm run sync`.
+- **Verified:** `animeData.js` now has **44/44** watched arrays (numeric, e.g. `WatchedAniListIds: [101922,112151,...]`), 44/44 known, valid JS (`node --check`), 59473 → **63716 bytes**, unofficial still **0**. `npm test` → **7 passed** post-fix.
+
+## Audit 1 — `npm test` ✓
+**7 passed** (full set) — ran before the fix, and **re-ran after the re-sync** (production-facing `animeData.js` change) → still 7 passed.
 
 ## Audit 2 — `.gitignore` ↔ `firebase.json` mirror ✓
-- **Rolling/sensitive docs are firebase-ignored** (confirmed in `firebase.json` ignore): `docs/SHIP-*.md`, `docs/HANDOFF.md`, `docs/CODE-HANDOFF.md`, `docs/COWORK-STYLE.md` — **none leak to the public CDN** despite being git-tracked (intended asymmetry: kept for git history, withheld from deploy).
-- `.gitignore` sensitive entries all mirrored or covered: `PERSONAL.md` ✓, `AUDIT_*.md` ✓, `.env*` / `.firebase/` / dotfiles → `**/.*` ✓, `node_modules` ✓, `playwright-report/` + `test-results/` ✓.
-- **No new gitignored file introduced this ship** → no new mirror gap (rule #8 holds).
-- *Pre-existing, out of scope (noted, not a secret leak):* non-sensitive `docs/` (NEXT/AI-PRIMER/CODE-PROMPTS/SKILLS) + `scripts/` are not firebase-ignored, so they deploy publicly — contain no credentials/UIDs/emails (NEXT.md is the public backlog). Unchanged by this ship; flagged for awareness only.
+- **`.env`** (added this ship for the Anthropic key): in `.gitignore` (lines 72/94/95) AND firebase-ignored via `**/.*` (gate-3 confirmed, still holds). **Not tracked** by git. Key never commits/deploys.
+- **New scripts** (`strip-unofficial.js`, `backfill-watched.js`) + `franchise-fetch.js`: **no secrets** (grep clean). `franchise-fetch.js` is a runtime file (deploys, no ignore). The two `scripts/*.js` deploy publicly per the pre-existing precedent — contain no secrets.
+- **Rolling docs** (`HANDOFF`/`SHIP-*`/`COWORK-STYLE`/`CODE-HANDOFF`) still firebase-ignored — no leak-class regression.
 
 ## Audit 3 — `git diff --stat` scope ✓
-- **Code/data (this ship):** `script.js` +624/-6, `style.css` +185, `index.html` +26 (version bump + widget bullets + tidy), `CHANGELOG.md` +23, `ROADMAP.md` +46, `docs/NEXT.md` +23. Version-bump-only: `account.html`, `admin/new-anime.html`, `admin/suggestions.html`, `suggest.html` (cache-busts/APP_VERSION from gate 5's 26-string bump).
-- **Scope note:** prompt estimated `script.js +~1000` / `style.css +~250`; actuals are **+624 / +185** (lower — the estimate was high, no missing work; full feature set is present and tested).
-- **Surprise-file check:** `git diff --name-only` filtered to non-`.md`/`.html`/`script.js`/`style.css` → **empty**. No unexpected files.
-- **Cowork-managed docs present in the diff (handled at gate 7):** the 6 tracked excludes (`docs/AI-PRIMER.md`, `docs/CODE-PROMPTS.md`, `docs/SKILLS/{README,hotfix-skill,release-skill,widget-update-skill}.md`) + untracked `docs/COWORK-STYLE.md` = the **7 to `git restore --staged`** at commit. The rolling trio (`SHIP-OUTPUT`/`SHIP-PROMPT`/`HANDOFF`) + `CODE-HANDOFF` are committed (firebase-ignored). These are Cowork's edits between gates, not mine.
+Matches the expected shape: large `admin/new-anime.{html,js,css}` (watched tree + chatbot), `script.js` −205 (offset by the `franchise-fetch.js` extraction), `mode1-server.js` +95 (`/api/chat` + caching), `sync-excel-to-js.js` +25 (watched parse + **serialize fix** + unofficial whitelist), `animeData.js` 170 (watched/known arrays + unofficial strip), `index.html` 33 (script tag + widget restore + v1.7.3 bullets + bump), `admin-fab.css` 8 (bottom-left), CHANGELOG/ROADMAP/NEXT, version-bump-only HTML. **New untracked:** `franchise-fetch.js`, `scripts/strip-unofficial.js`, `scripts/backfill-watched.js`. **No unexpected files.** The 7 Cowork excludes (6 tracked: AI-PRIMER, CODE-PROMPTS, SKILLS×4 + untracked COWORK-STYLE) present → restore-staged at gate 7.
 
 ## Audit 4 — Smart-quote sweep ✓
-- **index.html: 0 curly quotes** (Grep-tool, post-tidy).
-- **script.js / style.css:** curly characters present are content glyphs (`…`, `✓`, `—`, `「」`) and pre-existing comment prose — **none in HTML attributes or CSS selectors**. The deploy-critical concern (curly quotes in attributes) is clean across all touched files.
+**Clean.** Authoritative Grep-tool check = **0 curly quotes** in every touched code/HTML file (`admin/new-anime.{html,js,css}`, `mode1-server.js`, `franchise-fetch.js`, both CLIs, `index.html`). ⚠️ Note: bash `grep -lE "[“”]"` *false-flagged* all files — that's CODE-HANDOFF gotcha #9 (bash byte-vs-char on multibyte text); the ripgrep-backed Grep tool is authoritative and reports clean.
 
-## Summary
-**Audits all green.** One open decision: the second pre-existing `AniList` widget bullet (index.html:198) — recommend rewording before gate 7, but it's outside the explicitly greenlit scope so I'm surfacing rather than fixing. If Cowork/Blake says go, it's a one-line edit and I'll re-verify (no test impact — widget bullet text). Otherwise the ship is **ready for gate 7 (commit + push)**, with the standard 7 Cowork docs to be restore-staged out.
+## Final summary
+**Ready for gate 7.** All four audits pass. The one blocker (watched data absent from `animeData.js`) was caught in audit and fixed at the root (sync serializer) + re-verified end-to-end (44/44 in animeData, npm test 7/7). Without the grep-the-real-state check, v1.7.3's headline feature would have shipped dead.
 
 ## Phantom-drift audit
-No phantoms. Prompt's `script.js +~1000` / `+~250` estimates ran high vs the +624/+185 actuals (flagged, not a gap). The "18 targets" drift from gate 5 is already on record (actual 26).
+The "backfill done / populated" claim was **half-true** (Excel yes, animeData no) — surfaced + resolved. No other drift. `widget-update-skill.md` (Cowork exclude, 10-cap removed by Cowork) untouched by me.
 
 ## One-liner reply
-v1.7.2 Gate 6 audits all green — `npm test` **7/7**, `.gitignore`↔`firebase.json` mirror clean (rolling/sensitive Code+Cowork docs firebase-ignored, no new gitignored file this ship, no leak), `git diff` in-scope (script.js +624 / style.css +185 — both under the prompt's high estimates; no surprise files; the 7 Cowork docs present and to be restore-staged at gate 7), smart-quotes clean (index.html 0 curly, JS/CSS curlies only content glyphs/comments — none in attributes); the v1.7.0 widget bullet was tidied to drop "AniList" BUT the "confirm the rest stay clean" step surfaced a SECOND pre-existing service-name bullet (index.html:198, the 05/13 v1.6.8 "its full AniList page") that's outside the greenlit single-bullet scope — flagged + recommended a one-word reword, NOT fixed unilaterally; ship is ready for gate 7 pending that one decision.
+v1.7.3 Gate 6 audits **pass — but caught a ship-blocker first**: grepping the real state (not trusting Cowork's "backfill populated" claim) revealed **`animeData.js` had 0 `WatchedAniListIds`** even though Excel was 44/44 populated — root cause was my gate-1 omission (the sync *parsed* the watched columns but the hand-rolled serializer never *emitted* them), so the `✓ REVIEWED` feature would've shipped non-functional (silent fallback to primary-id); fixed with 2 serializer lines, re-synced (animeData 59473→63716, **44/44** numeric watched arrays, unofficial still 0, valid JS), and **re-ran `npm test` → 7 passed**; the rest of the battery is green — `.env` gitignored+firebase-ignored (not tracked, no key leak), no secrets in the 3 new files, rolling docs still firebase-ignored, `git diff --stat` matches the expected scope with no unexpected files (3 new untracked + the 7 Cowork excludes to restore-stage at gate 7), and the smart-quote sweep is clean via the Grep tool (the bash `grep -l` that flagged everything is the known gotcha-9 byte-vs-char false positive); ready for gate 7 commit.

@@ -1,47 +1,40 @@
 <!-- author: Cowork | date: 2026-06-03 -->
-# v1.7.2 — Gate 7 (widget bullet 2 + commit + push — FAST-TRACK)
+# v1.7.3 — Gate 7 (commit + push — FAST-TRACK)
 
-Blake's "b is fine but also keep pushing through" greenlit fixing pre-existing AniList bullets categorically. Apply the second bullet, then run the standard commit + push.
+Audits all green (with the sync-serializer fix that caught a ship-blocker). Standard commit + push.
 
-## Pre-step — second widget bullet tidy
+## Steps
 
-`index.html:198` (the 05/13 v1.6.8 bullet) → reword `"...each linking to its full AniList page."` → `"...each linking to its full info page."` (per your gate 6 recommendation). One-line edit, no test impact.
-
-After the edit, re-run the smart-quote check on `index.html` only and confirm `<li>` count is still 10 (no accidental structural change).
-
-## Commit + push
-
-1. **Restore-stage the 7 Cowork doc excludes** per the established convention:
+1. **Restore-stage the 7 Cowork doc excludes** per convention:
    - `docs/AI-PRIMER.md`
    - `docs/CODE-PROMPTS.md`
    - `docs/COWORK-STYLE.md` (untracked — stays untracked)
    - `docs/SKILLS/README.md`
    - `docs/SKILLS/hotfix-skill.md`
    - `docs/SKILLS/release-skill.md`
-   - `docs/SKILLS/widget-update-skill.md`
+   - `docs/SKILLS/widget-update-skill.md` (Cowork edited at gate 4 to remove the 10-cap rule — stays uncommitted per the convention)
 
-2. **Stage everything else** — code (`script.js`, `style.css`, `index.html`, version-bumped HTML files), CHANGELOG, ROADMAP, NEXT, the rolling trio (`HANDOFF.md` / `SHIP-PROMPT.md` / `SHIP-OUTPUT.md`), `CODE-HANDOFF.md`. Confirm with `git diff --cached --name-only` before commit.
+2. **Stage everything else** — code (`script.js`, `style.css`, `index.html`, `admin/new-anime.{html,js,css}`, `admin-fab.css`, the new `franchise-fetch.js`, version-bumped HTML files), Excel + animeData (`animeData.js` with the watched-set data now actually serialized), scripts (`mode1-server.js`, `sync-excel-to-js.js`, new `strip-unofficial.js`, new `backfill-watched.js`), CHANGELOG / ROADMAP / NEXT, the rolling trio (`HANDOFF.md` / `SHIP-PROMPT.md` / `SHIP-OUTPUT.md`), `CODE-HANDOFF.md`. Confirm with `git diff --cached --name-only` before commit.
 
 3. **Commit** with:
-   - Subject: `v1.7.2: More Info panel overhaul — multi-fetch architecture, multi-hop traversal, UX redesign`
-   - Body: brief summary of the visitor-facing scope (3-4 bullets max — match prior ship-commit style)
-   - Author: `Blake Wolters <196413457+joewolters@users.noreply.github.com>` (use `--author=` per memory `feedback_no_anilist_in_visitor_ui` adjacent — the Blake commit-author convention)
-   - **NO `Co-Authored-By: Claude` / `Co-Authored-By: Cowork` / `🤖 Generated with Claude Code` trailers.** Per `COWORK-STYLE.md` § 9 — this has bitten before.
+   - Subject: `v1.7.3: Admin Form Completion + Watched Set + Chatbot Drawer`
+   - Body: 3-4 visitor-facing bullets covering the headline scope (watched-set multi-season ✓ REVIEWED pills, official-only platforms, infinite-scroll update log) + 1-2 admin/architecture lines
+   - Author: `Blake Wolters <196413457+joewolters@users.noreply.github.com>` via per-commit `--author=`
+   - **NO `Co-Authored-By: Claude` / `Co-Authored-By: Cowork` / `🤖 Generated with Claude Code` trailers.** Per `COWORK-STYLE.md` § 9.
 
-4. **Post-commit grep** to confirm zero forbidden trailers: `git log -1 --format=%B | grep -i -E "co-authored-by|generated with"` → must return nothing.
+4. **Post-commit grep** for forbidden trailers: `git log -1 --format=%B | grep -i -E "co-authored-by|generated with"` → must return nothing.
 
 5. **Push** to `main`.
 
 ## Constraints
 
-- If staging surfaces an unexpected file outside the gate 6 diff scope, **stop and flag**.
-- If the post-commit grep finds a trailer, amend the commit (don't push the bad commit).
-- Don't tag the commit (tags are out of the gate-7 spec here).
+- If staging surfaces an unexpected file outside the gate 6 diff scope, stop and flag
+- If post-commit grep finds a trailer, amend the commit (don't push a bad commit)
+- Don't tag the commit
 
 ## Report shape
 
-- Confirm bullet tidy + smart-quote/`<li>`=10 verify
-- The 7 restore-staged files
+- Confirm the 7 restore-staged files
 - Final commit hash + subject
 - Post-commit grep result (zero trailers)
 - Push confirmation (branch + remote ref)

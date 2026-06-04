@@ -224,7 +224,8 @@ function transformPlatforms(rawWatch, warnings) {
   if (!rawWatch) return [];
   // First split on comma, then check if any segment contains a known
   // platform name awkwardly merged with another (e.g. "Netflix hianime")
-  const knownPlatforms = ['Crunchyroll', 'Netflix', 'Hulu', 'HIDIVE', 'Amazon Video', 'Amazon Prime Video', 'DisneyPlus', 'Disney+', 'hianime', '9anime', 'aniwave', 'Bilibili', 'Funimation', 'Tubi'];
+  // v1.7.3 — hianime / 9anime / aniwave removed (unofficial platforms dropped site-wide).
+  const knownPlatforms = ['Crunchyroll', 'Netflix', 'Hulu', 'HIDIVE', 'Amazon Video', 'Amazon Prime Video', 'DisneyPlus', 'Disney+', 'Bilibili', 'Funimation', 'Tubi'];
   const segments = String(rawWatch).split(',').map((s) => s.trim()).filter(Boolean);
   const out = [];
   for (const seg of segments) {
@@ -378,6 +379,23 @@ function rowToAnime(row, headers, imageMap, warnings) {
   const titleNative = get('TitleNative');
   if (titleNative) anime.TitleNative = titleNative;
 
+  // v1.7.3 — watched-set columns: comma-separated AniListIds → number arrays.
+  // WatchedAniListIds = the entries Blake watched (drive the ✓ REVIEWED pill);
+  // KnownAniListIds = snapshot of the franchise tree at last save (for Mode 2's
+  // future "new arc surfaced" diff — stored only, no logic this ship). Emitted
+  // only when non-empty (until the gate-4 backfill, all rows are blank → omitted,
+  // so the pill falls back to primary-AniListId behaviour exactly as v1.7.2).
+  for (const f of ['WatchedAniListIds', 'KnownAniListIds']) {
+    const raw = get(f);
+    if (raw) {
+      const ids = String(raw)
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n));
+      if (ids.length) anime[f] = ids;
+    }
+  }
+
   return anime;
 }
 
@@ -438,6 +456,11 @@ function renderJsFile(animes) {
     if (a.TitleEnglish != null) lines.push(`    ,TitleEnglish: ${escapeString(a.TitleEnglish)}`);
     if (a.TitleRomaji != null) lines.push(`    ,TitleRomaji: ${escapeString(a.TitleRomaji)}`);
     if (a.TitleNative != null) lines.push(`    ,TitleNative: ${escapeString(a.TitleNative)}`);
+    // v1.7.3 — watched-set arrays (numeric AniList ids). Parsed in rowToAnime;
+    // these emit lines were the missing half (gate-6 catch) — without them the
+    // ✓ REVIEWED pill silently fell back to primary-id only.
+    if (Array.isArray(a.WatchedAniListIds) && a.WatchedAniListIds.length) lines.push(`    ,WatchedAniListIds: ${renderArray(a.WatchedAniListIds)}`);
+    if (Array.isArray(a.KnownAniListIds) && a.KnownAniListIds.length) lines.push(`    ,KnownAniListIds: ${renderArray(a.KnownAniListIds)}`);
     lines.push('  },');
   }
   lines.push('];');

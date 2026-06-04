@@ -10,11 +10,11 @@
 #admin-fab-root {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  left: 24px;                /* v1.7.3 gate 3c — moved from right to avoid the search bar + chat drawer */
   z-index: 9000;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;   /* was flex-end (right-aligned) */
   gap: 12px;
   pointer-events: auto;
   font-family: 'Montserrat', sans-serif;
@@ -120,7 +120,7 @@
   box-shadow:
     0 16px 48px rgba(0, 0, 0, 0.50),
     0 0 24px rgba(187, 134, 252, 0.20);
-  transform-origin: bottom right;
+  transform-origin: bottom left;   /* v1.7.3 gate 3c — menu now grows from the left FAB */
   animation: admin-fab-menu-in 0.18s ease;
 }
 
@@ -210,7 +210,7 @@
 @media (max-width: 700px) {
   #admin-fab-root {
     bottom: 16px;
-    right: 16px;
+    left: 16px;
   }
   #admin-fab-button {
     padding: 8px 12px;

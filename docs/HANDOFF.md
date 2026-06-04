@@ -1,13 +1,13 @@
 <!-- author: Cowork | date: 2026-06-03 -->
-# Session Handoff — v1.7.1 LIVE · v1.7.2 fully scoped + ready for gate 0
+# Session Handoff — v1.7.2 LIVE · v1.7.3 Admin Form Completion + Watched Set (all gate-0b decisions locked, gate 1 staged)
 
-> **v1.7.0 → v1.7.1 both shipped 2026-06-03.** v1.7.1 confirmed live by Blake at session resume ("its already shipped dont worry"). **v1.7.2 gate 0 propose-first prompt is staged in `docs/SHIP-PROMPT.md`** — Blake to paste the one-liner into Code when ready.
+> **v1.7.2 shipped 2026-06-03 ~22:19 UTC** (commit `c07755d`). The de facto More Info panel overhaul — multi-fetch architecture + BFS multi-hop traversal + per-season episode aggregation + UX redesign (spine + `--current` + connector line + grouped sections + "✓ Reviewed" in-catalog pill + partial-fail notice + retry + 24h localStorage L2 cache + PER SEASON/CONTINUOUS toggle + UPCOMING kicker + score-badge collision fix). Blake's "ship it" go-signal honored at gate 10; gate 11 prod verify a quick rubber-stamp (preview channel was same commit, smoke clean at gate 9). **v1.7.3 (Watched-set feature) in planning** — design decisions in progress with Blake.
 
 ---
 
 ## Current production
 
-**Live:** `realanimereviews.com` serving **v1.7.1** (commit `e78f7d6`). Gate 10 + 11 closed off-Cowork's-radar between sessions.
+**Live:** `realanimereviews.com` serving **v1.7.2** (commit `c07755d`, deployed 2026-06-03 ~22:19 UTC). Preview channel + `origin/main` + prod all aligned.
 
 **Commit chain (recent):**
 `3539a06` (v1.6.10) → `aaa96f0` (v1.6.11) → `5a5ab9b` (v1.6.11 fix) → `ce04594` (v1.6.12) → `05158e0` (iter 1) → `244d22f` (iter 2) → `a8c60ac` (ROADMAP close-out) → `2ed9874` (v1.7.0) → **`e78f7d6` (v1.7.1, HEAD, on main, prod pending)**.

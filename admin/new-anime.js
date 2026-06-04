@@ -122,6 +122,13 @@ const state = {
   imageSource: 'anilist',
   imageOverride: '',
   serverMode: 'remote',
+  // v1.7.3 — watched-set: the multi-hop franchise entries, the checked id Set,
+  // and the full visible id list (KnownAniListIds snapshot for Mode 2's future diff).
+  watchedEntries: [],
+  watchedChecked: null,
+  watchedTreeIds: [],
+  // v1.7.3 — chatbot drawer conversation (mirrored to sessionStorage per anime)
+  chatMessages: [],
 };
 
 // v1.6.5 module-level state for search-as-you-type + preview debounce
@@ -308,41 +315,149 @@ function aggregateFranchise(media) {
   return { seasonCount, totalEpisodes, studios, entries };
 }
 
-// v1.6.7 — Render the FRANCHISE INFO panel from a `franchise` object
-// returned by aggregateFranchise(). Hidden when seasonCount <= 1 (no
-// aggregation worth showing). Each entry's row shows relation type,
-// title, and meta (studios + episodes + year).
-function renderFranchisePanel(franchise) {
+// v1.7.3 — WATCHED-SET checkbox tree (replaces the v1.6.7 single-hop
+// renderFranchisePanel). Fetches the FULL franchise via the shared module
+// (window.franchiseFetch.traverseFranchise — spine + grouped non-spine) and
+// renders a checkbox per entry. Default-checks FINISHED-status entries (locked
+// Decision 1: Blake watches after a season fully releases). The source's own
+// row is ticked + disabled (locked Decision 7, belt+suspenders — also force-
+// injected at row-gen). Checked set → WatchedAniListIds; full visible tree →
+// KnownAniListIds (locked two-column Mode 2 shape). Async: self-renders when the
+// traversal returns (populateForm fires it without awaiting).
+function watchedTitleOf(n) {
+  return (n.title && (n.title.english || n.title.romaji)) || '(untitled)';
+}
+function watchedMeta(n) {
+  const studio = Array.from(new Set(
+    (n.studios?.nodes || []).filter(s => s.isAnimationStudio).map(s => maybeCapitalize(s.name))
+  )).join(', ');
+  const parts = [n.format, n.episodes ? `${n.episodes} ep` : '', n.seasonYear || ''].filter(Boolean);
+  const meta = parts.join(' · ');
+  return studio ? (meta ? `${meta} · ${studio}` : studio) : meta;
+}
+function watchedStatusLabel(s) {
+  if (s === 'NOT_YET_RELEASED') return 'UPCOMING';
+  if (s === 'RELEASING') return 'AIRING';
+  return s || '';
+}
+
+async function renderWatchedSetPanel(media) {
   const panel = $('franchise-info-panel');
-  if (!panel) return;  // form not yet rendered
-  if (!franchise || franchise.seasonCount <= 1) {
+  if (!panel) return;
+  const ul = $('franchise-entries');
+  const sourceId = media && media.id;
+
+  state.watchedEntries = [];
+  state.watchedChecked = new Set();
+  state.watchedTreeIds = [];
+
+  // loading state
+  panel.hidden = false;
+  ul.innerHTML = '<li class="watched-loading">Loading franchise…</li>';
+  updateWatchedCount();
+
+  let tree = null;
+  try {
+    if (window.franchiseFetch && window.franchiseFetch.traverseFranchise) {
+      tree = await window.franchiseFetch.traverseFranchise(sourceId);
+    }
+  } catch (_) { tree = null; }
+
+  // Visitor may have re-fetched a different anime while this resolved — bail if
+  // the current AniList id no longer matches what we started.
+  if (!state.anilist || state.anilist.id !== sourceId) return;
+
+  const hasTree = tree && (tree.spine.length || Object.keys(tree.groups).length);
+  if (!hasTree) {
+    // single entry / fetch failed — hide the panel; watched set is just the
+    // source (force-injected at row-gen so the pill still works for S1).
     panel.hidden = true;
     return;
   }
 
-  $('franchise-season-count').textContent = franchise.seasonCount;
-  $('franchise-total-ep').textContent = franchise.totalEpisodes || '—';
-  $('franchise-studios').textContent = franchise.studios.length
-    ? franchise.studios.map(maybeCapitalize).join(' / ')
-    : '';
+  const entries = [];
+  const seen = new Set();
+  const pushNode = (n, group, isSource) => {
+    if (!n || !n.id || seen.has(n.id)) return;
+    seen.add(n.id);
+    entries.push({
+      id: n.id,
+      title: watchedTitleOf(n),
+      status: n.status || null,
+      meta: watchedMeta(n),
+      cover: (n.coverImage && n.coverImage.large) || '',
+      group,
+      isSource: !!isSource,
+    });
+  };
+  tree.spine.forEach(n => pushNode(n, 'SPINE', n.isSource));
+  for (const [rt, nodes] of Object.entries(tree.groups)) {
+    nodes.forEach(n => pushNode(n, rt, false));
+  }
 
+  state.watchedEntries = entries;
+  state.watchedTreeIds = entries.map(e => e.id);
+  // default-check: FINISHED only + the source (forced)
+  for (const e of entries) {
+    if (e.isSource || e.status === 'FINISHED') state.watchedChecked.add(e.id);
+  }
+  if (sourceId) state.watchedChecked.add(Number(sourceId));
+
+  renderWatchedRows();
+}
+
+function renderWatchedRows() {
   const ul = $('franchise-entries');
-  ul.innerHTML = franchise.entries.map(e => {
-    const title = escapeHtml(e.title?.english || e.title?.romaji || '(no title)');
-    const studio = Array.from(new Set(
-      (e.studios?.nodes || [])
-        .filter(s => s.isAnimationStudio)
-        .map(s => maybeCapitalize(s.name))
-    )).join(', ') || '—';
-    const eps = e.episodes ? `${e.episodes} ep` : '— ep';
-    const year = e.seasonYear || '—';
-    return `<li>
-      <span class="entry-relation">${escapeHtml(e.relationType)}</span>
-      <span class="entry-title">${title}</span>
-      <span class="entry-meta">${escapeHtml(studio)} · ${eps} · ${year}</span>
+  if (!ul) return;
+  const entries = state.watchedEntries || [];
+  ul.innerHTML = entries.map(e => {
+    const checked = state.watchedChecked.has(e.id) ? ' checked' : '';
+    const disabled = e.isSource ? ' disabled' : '';
+    const tag = e.isSource
+      ? '<span class="entry-relation entry-relation--main">MAIN</span>'
+      : `<span class="entry-relation">${escapeHtml(e.group)}</span>`;
+    const cover = e.cover
+      ? `<img class="watched-cover" src="${escapeHtml(e.cover)}" alt="" loading="lazy">`
+      : '<span class="watched-cover watched-cover--ph" aria-hidden="true"></span>';
+    const statusTag = (e.status && e.status !== 'FINISHED')
+      ? `<span class="watched-status">${escapeHtml(watchedStatusLabel(e.status))}</span>` : '';
+    return `<li class="watched-row${e.isSource ? ' is-source' : ''}">
+      <label class="watched-check"${e.isSource ? ' title="The main entry is always included"' : ''}>
+        <input type="checkbox" data-watched-id="${escapeHtml(String(e.id))}"${checked}${disabled}>
+        <span class="watched-box" aria-hidden="true"></span>
+      </label>
+      ${cover}
+      <span class="watched-body">
+        ${tag}
+        <span class="entry-title">${escapeHtml(e.title)} ${statusTag}</span>
+        <span class="entry-meta">${escapeHtml(e.meta)}</span>
+      </span>
     </li>`;
   }).join('');
-  panel.hidden = false;
+  updateWatchedCount();
+}
+
+function updateWatchedCount() {
+  const el = $('watched-count');
+  if (!el) return;
+  const total = (state.watchedEntries || []).length;
+  const sel = state.watchedChecked ? state.watchedChecked.size : 0;
+  el.textContent = total ? `${sel} of ${total} selected` : '—';
+}
+
+// Comma-separated id strings for the row generator / Mode 1 payload.
+// Source AniListId is force-injected into the watched set (belt+suspenders).
+function getWatchedAniListIds() {
+  const set = new Set(state.watchedChecked ? Array.from(state.watchedChecked).map(Number) : []);
+  const src = state.anilist && state.anilist.id;
+  if (src) set.add(Number(src));
+  return Array.from(set).join(',');
+}
+function getKnownAniListIds() {
+  const set = new Set((state.watchedTreeIds || []).map(Number));
+  const src = state.anilist && state.anilist.id;
+  if (src) set.add(Number(src));
+  return Array.from(set).join(',');
 }
 
 // ---- Populate form --------------------------------------------------------
@@ -390,7 +505,7 @@ function populateForm(media) {
 
   const streaming = streamingFromAniList(media.externalLinks);
   $('watch-official-input').value = streaming.join(', ');
-  $('watch-unofficial-input').value = '';
+  const fillBtn = $('fill-official-btn'); if (fillBtn) fillBtn.disabled = false;
   $('anilist-streaming-list').textContent = streaming.length
     ? `AniList STREAMING links: ${streaming.join(', ')}`
     : 'AniList: no STREAMING links — fill in manually.';
@@ -441,8 +556,13 @@ function populateForm(media) {
     setStatus(`Heads up: this entry has a PREQUEL on AniList — aggregation may miss earlier seasons. For the cleanest franchise data, fetch Season 1.`, 'warn');
   }
 
-  // v1.6.7 — render FRANCHISE INFO panel (hidden when seasonCount <= 1).
-  renderFranchisePanel(franchise);
+  // v1.7.3 — render the WATCHED-SET checkbox tree (multi-hop, async).
+  renderWatchedSetPanel(media);
+
+  // v1.7.3 — chat: enable the ✨ ASK summon + load this anime's saved history.
+  const chatSummon = $('chat-summon-btn'); if (chatSummon) chatSummon.disabled = false;
+  loadChatHistory();
+  renderChatThread();
 
   // v1.6.5 — render the live preview card now that AniList data is loaded.
   // All three entry paths (Fetch button, dropdown select, ID-import) land here
@@ -584,11 +704,11 @@ function schedulePreviewUpdate() {
 
 // ---- Generate Excel row + commands (paste workflow) -----------------------
 function combinedWatch() {
+  // v1.7.3 — official platforms only (the unofficial field was removed site-wide).
   const off = $('watch-official-input').value.trim();
-  const unoff = $('watch-unofficial-input').value.trim();
   const seen = new Set();
   const out = [];
-  for (const seg of (off + ',' + unoff).split(',').map(s => s.trim()).filter(Boolean)) {
+  for (const seg of off.split(',').map(s => s.trim()).filter(Boolean)) {
     const key = seg.toLowerCase();
     if (!seen.has(key)) { seen.add(key); out.push(seg); }
   }
@@ -613,11 +733,20 @@ function buildExcelRow() {
   const idMal = a.idMal || '';
   const aniListScore = a.averageScore || '';
   const aniListColor = a.coverImage?.color || '';
+  // v1.7.3 — title variants (fills the pre-existing paste-row gap) + watched-set
+  // columns, so the pasted row matches the full Excel header order through col 21.
+  const titleEnglish = a.title?.english || '';
+  const titleRomaji = a.title?.romaji || '';
+  const titleNative = a.title?.native || '';
+  const watchedIds = getWatchedAniListIds();
+  const knownIds = getKnownAniListIds();
 
   const cols = [
     title, rating, seasons, genre, description, review, tags, watch, studio, trailer,
     '', '',
     top10, aniListId, idMal, aniListScore, aniListColor,
+    titleEnglish, titleRomaji, titleNative,
+    watchedIds, knownIds,
   ];
   return cols.map(v => String(v).replace(/[\t\r\n]+/g, ' ')).join('\t');
 }
@@ -687,7 +816,6 @@ function buildSubmitPayload() {
     review: $('review-input').value.trim(),
     tags: $('tags-input').value.trim(),
     watchOfficial: $('watch-official-input').value.trim(),
-    watchUnofficial: $('watch-unofficial-input').value.trim(),
     studio: $('studio-input').value.trim(),
     trailer: $('trailer-input').value.trim(),
     top10Rank: $('top10-input').value.trim(),
@@ -695,6 +823,11 @@ function buildSubmitPayload() {
     idMal: a.idMal,
     aniListScore: a.averageScore,
     aniListColor: a.coverImage?.color,
+    titleEnglish: a.title?.english || '',
+    titleRomaji: a.title?.romaji || '',
+    titleNative: a.title?.native || '',
+    watchedAniListIds: getWatchedAniListIds(),
+    knownAniListIds: getKnownAniListIds(),
     imageSource: state.imageSource,
     imageUrl: a.coverImage?.extraLarge || a.coverImage?.large || '',
     imageOverrideFilename: state.imageOverride,
@@ -849,52 +982,142 @@ function submitAndShip() {
   streamSse('/api/submit?' + queryFlags.join('&'), payload);
 }
 
-// ---- AI suggestion panel -------------------------------------------------
-function buildAiPrompt(kind) {
-  const m = state.anilist;
-  if (!m) return '';
-  const cleanDesc = (m.description || '').replace(/<[^>]+>/g, '').slice(0, 500);
-  if (kind === 'description') {
-    return `Write a single factual sentence (max ~30 words) describing this anime's premise, suitable for an anime-review website card. Just the premise, no opinions.\n\nTitle: ${m.title?.romaji || ''}\nGenres: ${(m.genres || []).join(', ')}\nFormat: ${m.format || ''}\nEpisodes: ${m.episodes || 'unknown'}\nAniList raw: ${cleanDesc}`;
-  }
-  return `Suggest 4-7 short kebab-case tags for this anime, # prefixed and space-separated (like "#action #fan-service #op-mc"). Match a casual hobbyist tone — concrete, evocative, opinionated. Avoid generic tags like "anime" or "japan".\n\nTitle: ${m.title?.romaji || ''}\nGenres: ${(m.genres || []).join(', ')}\nAniList top tags: ${(m.tags || []).slice(0, 10).map(t => t.name).join(', ')}\nDescription: ${cleanDesc.slice(0, 300)}`;
-}
-
+// ---- Helpers -------------------------------------------------------------
+// v1.7.3 — the paste-back AI panel (buildAiPrompt / openAiPanel) was removed;
+// the chatbot drawer (gate 3) is the only AI surface now. escapeHtml stays —
+// it's used by the watched-set rows + elsewhere.
 function escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
 }
 
-function openAiPanel(kind) {
-  if (!state.anilist) {
-    alert('Fetch the anime from AniList first — Claude needs the metadata to suggest something useful.');
-    return;
-  }
-  const targetId = kind === 'description' ? 'description-input' : 'tags-input';
-  const panelId = kind === 'description' ? 'ai-panel-description' : 'ai-panel-tags';
-  const panel = $(panelId);
-  const prompt = buildAiPrompt(kind);
+// ---- v1.7.3 — chatbot drawer ---------------------------------------------
+// Configurable endpoint — a future Firebase Cloud Function (Option A) drops in
+// by changing this one constant.
+const CHAT_ENDPOINT = '/api/chat';
 
-  panel.innerHTML = `
-    <div class="ai-panel-head">
-      <span>✨ AI suggestion · ${kind}</span>
-      <button type="button" class="ai-panel-close" data-close="${panelId}" aria-label="Close">×</button>
-    </div>
-    <pre class="ai-panel-prompt">${escapeHtml(prompt)}</pre>
-    <div class="ai-panel-actions">
-      <button type="button" class="ai-panel-btn" data-copy-prompt="${panelId}">Copy prompt</button>
-      <button type="button" class="ai-panel-btn" data-open-claude="${panelId}">Open Claude →</button>
-    </div>
-    <textarea class="ai-panel-paste" placeholder="Paste Claude's response here…"></textarea>
-    <div class="ai-panel-actions">
-      <button type="button" class="ai-panel-btn primary" data-use-suggestion="${targetId}|${panelId}">Use this as ${kind === 'description' ? 'Description' : 'Tags'}</button>
-    </div>
-    <p class="ai-panel-tip">Tip: a real one-click AI integration is planned — see <code>docs/ai-integration-design.md</code>.</p>
-  `;
-  panel.hidden = false;
-  panel.dataset.prompt = prompt;
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+function chatKey() {
+  const id = state.anilist && state.anilist.id;
+  return id ? `rar:chat:${id}` : null;
+}
+function chatContext() {
+  const a = state.anilist || {};
+  return {
+    title: a.title?.english || a.title?.romaji || '',
+    romaji: a.title?.romaji || '',
+    year: a.seasonYear || '',
+    format: a.format || '',
+    studios: Array.from(new Set((a.studios?.nodes || []).filter(s => s.isAnimationStudio).map(s => s.name))),
+    genres: a.genres || [],
+    description: a.description || '',
+  };
+}
+function loadChatHistory() {
+  state.chatMessages = [];
+  const k = chatKey();
+  if (!k) return;
+  try {
+    const raw = sessionStorage.getItem(k);
+    if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) state.chatMessages = arr.filter(m => !m.pending); }
+  } catch (_) {}
+}
+function saveChatHistory() {
+  const k = chatKey();
+  if (!k) return;
+  try { sessionStorage.setItem(k, JSON.stringify((state.chatMessages || []).filter(m => !m.pending))); } catch (_) {}
+}
+function clearChatForCurrent() {
+  const k = chatKey();
+  state.chatMessages = [];
+  if (k) { try { sessionStorage.removeItem(k); } catch (_) {} }
+  renderChatThread();
+}
+function openChatDrawer() {
+  const d = $('chat-drawer');
+  if (!d || !state.anilist) return;
+  d.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => d.classList.add('open')));
+  $('chat-summon-btn')?.setAttribute('aria-expanded', 'true');
+  renderChatThread();
+  $('chat-input')?.focus();
+}
+function closeChatDrawer() {
+  const d = $('chat-drawer');
+  if (!d) return;
+  d.classList.remove('open');
+  $('chat-summon-btn')?.setAttribute('aria-expanded', 'false');
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) d.hidden = true;
+  else setTimeout(() => { if (!d.classList.contains('open')) d.hidden = true; }, 280);
+}
+function renderChatThread() {
+  const thread = $('chat-thread');
+  const empty = $('chat-empty');
+  if (!thread) return;
+  const msgs = state.chatMessages || [];
+  if (empty) empty.hidden = msgs.length > 0;
+  thread.innerHTML = msgs.map((m, i) => {
+    if (m.pending) {
+      return '<div class="chat-msg chat-msg--assistant"><div class="chat-bubble"><span class="chat-dots"><i></i><i></i><i></i></span></div></div>';
+    }
+    if (m.error) {
+      const retry = m.retry ? ` <button type="button" class="chat-retry" data-retry="${i}">Retry</button>` : '';
+      return `<div class="chat-msg chat-msg--assistant"><div class="chat-bubble chat-bubble--error">${escapeHtml(m.content)}${retry}</div></div>`;
+    }
+    const cls = m.role === 'user' ? 'chat-msg chat-msg--user' : 'chat-msg chat-msg--assistant';
+    return `<div class="${cls}"><div class="chat-bubble">${escapeHtml(m.content).replace(/\n/g, '<br>')}</div></div>`;
+  }).join('');
+  thread.scrollTop = thread.scrollHeight;
+}
+async function callChatApi() {
+  state.chatMessages.push({ role: 'assistant', pending: true });
+  renderChatThread();
+  const apiMessages = state.chatMessages
+    .filter(m => !m.pending && !m.error)
+    .map(m => ({ role: m.role, content: m.content }));
+  try {
+    const res = await fetch(CHAT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: apiMessages, animeContext: chatContext() }),
+    });
+    state.chatMessages = state.chatMessages.filter(m => !m.pending);
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      let msg;
+      if (res.status === 503) {
+        msg = /API_KEY/i.test(b.error || '')
+          ? 'ANTHROPIC_API_KEY not configured in .env. Add it and restart Mode 1.'
+          : (b.error || 'AI server unavailable.');
+      } else {
+        msg = b.error || `AI request failed (${res.status}).`;
+      }
+      state.chatMessages.push({ role: 'assistant', error: true, retry: true, content: msg });
+    } else {
+      const data = await res.json();
+      state.chatMessages.push({ role: 'assistant', content: data.text || '(no response)' });
+    }
+  } catch (_) {
+    state.chatMessages = state.chatMessages.filter(m => !m.pending);
+    state.chatMessages.push({ role: 'assistant', error: true, retry: true, content: 'AI server not running — start Mode 1 (npm run mode1).' });
+  }
+  renderChatThread();
+  saveChatHistory();
+}
+function sendChat(text) {
+  text = (text || '').trim();
+  if (!text || !state.anilist) return;
+  state.chatMessages.push({ role: 'user', content: text });
+  saveChatHistory();
+  callChatApi();
+}
+function retryChat() {
+  while (state.chatMessages.length && state.chatMessages[state.chatMessages.length - 1].error) {
+    state.chatMessages.pop();
+  }
+  saveChatHistory();
+  callChatApi();
 }
 
 // ---- Wire UI -------------------------------------------------------------
@@ -1038,6 +1261,7 @@ function wire() {
       return;
     }
     $('generate-error').hidden = true;
+    clearChatForCurrent(); // v1.7.3 — auto-clear the chat on publish
     if (state.serverMode === 'local') submitAndShip();
     else showOutput();
   });
@@ -1069,13 +1293,19 @@ function wire() {
 
   $('reset-btn').addEventListener('click', () => {
     for (const id of ['title-input', 'genre-input', 'seasons-input', 'description-input',
-                      'studio-input', 'trailer-input', 'watch-official-input', 'watch-unofficial-input', 'tags-input',
+                      'studio-input', 'trailer-input', 'watch-official-input', 'tags-input',
                       'rating-input', 'top10-input', 'review-input', 'image-filename-input']) {
       $(id).value = '';
     }
     state.anilist = null;
     state.imageSource = 'anilist';
     state.imageOverride = '';
+    state.watchedEntries = [];
+    state.watchedChecked = null;
+    state.watchedTreeIds = [];
+    state.chatMessages = [];
+    const chatSummonBtn = $('chat-summon-btn'); if (chatSummonBtn) chatSummonBtn.disabled = true;
+    closeChatDrawer();
     hideAllSteps();
     setStatus('');
     $('title-input').focus();
@@ -1098,51 +1328,74 @@ function wire() {
     });
   });
 
-  // AI suggest buttons
-  $('suggest-description-btn')?.addEventListener('click', () => openAiPanel('description'));
-  $('suggest-tags-btn')?.addEventListener('click', () => openAiPanel('tags'));
-}
+  // v1.7.3 — watched-set: checkbox changes + quick toggles (delegated on the panel)
+  const fp = $('franchise-info-panel');
+  if (fp) {
+    fp.addEventListener('change', (e) => {
+      const cb = e.target.closest('input[data-watched-id]');
+      if (!cb || !state.watchedChecked) return;
+      const id = Number(cb.dataset.watchedId);
+      if (cb.checked) state.watchedChecked.add(id);
+      else state.watchedChecked.delete(id);
+      updateWatchedCount();
+    });
+    fp.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-watched-toggle]');
+      if (!btn || !state.watchedChecked) return;
+      const mode = btn.dataset.watchedToggle;
+      const entries = state.watchedEntries || [];
+      if (mode === 'all') {
+        entries.forEach(en => state.watchedChecked.add(en.id));
+      } else if (mode === 'none') {
+        state.watchedChecked.clear();
+        entries.forEach(en => { if (en.isSource) state.watchedChecked.add(en.id); }); // source forced
+      } else if (mode === 'spine') {
+        state.watchedChecked.clear();
+        entries.forEach(en => { if (en.group === 'SPINE') state.watchedChecked.add(en.id); });
+      }
+      renderWatchedRows();
+    });
+  }
 
-// Delegated AI panel handlers
-document.addEventListener('click', async (e) => {
-  if (e.target.matches('.ai-panel-close')) {
-    const panel = $(e.target.dataset.close);
-    if (panel) { panel.hidden = true; panel.innerHTML = ''; }
-    return;
-  }
-  if (e.target.matches('[data-copy-prompt]')) {
-    const panel = $(e.target.dataset.copyPrompt);
-    if (panel?.dataset.prompt) {
-      try {
-        await navigator.clipboard.writeText(panel.dataset.prompt);
-        const orig = e.target.textContent;
-        e.target.textContent = 'Copied!';
-        setTimeout(() => { e.target.textContent = orig; }, 1200);
-      } catch { alert('Copy failed.'); }
+  // v1.7.3 — "Fill from AniList" re-applies the official streaming list on demand.
+  $('fill-official-btn')?.addEventListener('click', () => {
+    const m = state.anilist;
+    if (!m) return;
+    $('watch-official-input').value = streamingFromAniList(m.externalLinks).join(', ');
+  });
+
+  // v1.7.3 — chatbot drawer wiring
+  $('chat-summon-btn')?.addEventListener('click', openChatDrawer);
+  $('chat-close-btn')?.addEventListener('click', closeChatDrawer);
+  $('chat-clear-btn')?.addEventListener('click', clearChatForCurrent);
+  const chatForm = $('chat-input-row');
+  chatForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const inp = $('chat-input');
+    const v = inp.value;
+    inp.value = '';
+    inp.style.height = '';
+    sendChat(v);
+  });
+  const chatInput = $('chat-input');
+  chatInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (chatForm.requestSubmit) chatForm.requestSubmit();
+      else { const v = chatInput.value; chatInput.value = ''; sendChat(v); }
     }
-    return;
-  }
-  if (e.target.matches('[data-open-claude]')) {
-    const panel = $(e.target.dataset.openClaude);
-    if (panel?.dataset.prompt) {
-      window.open('https://claude.ai/new?q=' + encodeURIComponent(panel.dataset.prompt), '_blank', 'noopener');
-    }
-    return;
-  }
-  if (e.target.matches('[data-use-suggestion]')) {
-    const [targetId, panelId] = e.target.dataset.useSuggestion.split('|');
-    const panel = $(panelId);
-    const paste = panel?.querySelector('.ai-panel-paste');
-    const value = paste?.value.trim();
-    if (!value) { alert("Paste Claude's response into the box first."); return; }
-    const target = $(targetId);
-    if (target) target.value = value;
-    panel.hidden = true;
-    panel.innerHTML = '';
-    target.focus();
-    return;
-  }
-});
+  });
+  // auto-grow the input up to its max-height
+  chatInput?.addEventListener('input', () => {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+  });
+  $('chat-drawer')?.addEventListener('click', (e) => {
+    const qs = e.target.closest('[data-quickstart]');
+    if (qs) { sendChat(qs.dataset.quickstart); return; }
+    if (e.target.closest('[data-retry]')) { retryChat(); return; }
+  });
+}
 
 // ---- UID gate + init -----------------------------------------------------
 async function init() {
