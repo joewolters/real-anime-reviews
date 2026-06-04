@@ -26,6 +26,9 @@ let XLSX;
 try { XLSX = require('xlsx'); } catch (e) { console.error('ERROR: xlsx missing — run npm install.'); process.exit(2); }
 const { backupExcel, checkExcelLock } = require('./lib/excel-backup');
 const franchiseFetch = require('../franchise-fetch.js');
+// v1.8.1 (gate 4) — mapping/allowlist/override + propose logic now lives in a
+// shared lib so the edit page's "fix platforms" one-click reuses the SAME rules.
+const { PLATFORM_MAP, proposePlatformsForRow } = require('./lib/platform-map');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const EXCEL_PATH = path.resolve(PROJECT_ROOT, '..', 'Master List', 'Anime_Master_Table.xlsx');
@@ -34,41 +37,6 @@ const MASTER_DIR = path.dirname(EXCEL_PATH);
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m',
   red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', cyan: '\x1b[36m', gray: '\x1b[90m',
-};
-
-// AniList site (lowercased) → Blake's pill vocabulary. Keys define the US allowlist.
-const PLATFORM_MAP = {
-  'crunchyroll': 'Crunchyroll',
-  'netflix': 'Netflix',
-  'hulu': 'Hulu',
-  'hidive': 'HIDIVE',
-  'amazon prime video': 'Amazon Video',
-  'amazon video': 'Amazon Video',
-  'prime video': 'Amazon Video',
-  'disney plus': 'Disney+',
-  'disney+': 'Disney+',
-  'disneyplus': 'Disney+',
-  'max': 'Max',
-  'hbo max': 'Max',
-  'tubi': 'Tubi',
-  'tubi tv': 'Tubi',
-};
-// Known-but-intentionally-excluded (regional / defunct) — for clearer flagging.
-const KNOWN_EXCLUDED = new Set(['funimation', 'bilibili', 'bilibili tv', 'iq', 'iqiyi', 'laftel', 'bahamut', 'ani-one', 'anime onegai', 'youtube', 'vrv']);
-
-// Gate 3d manual overrides (Blake-approved, keyed by normalized Title).
-//  - Funimation titles: hand-add Crunchyroll ONLY where verified on Crunchyroll's
-//    streaming catalog (2026-06-04 series-page checks):
-//      • Parasyte: The Maxim → crunchyroll.com/series/G6K53VGGY (streaming) ✓ add
-//      • Death Note         → crunchyroll.com/series/G6QWD3EE6 (streaming) ✓ add
-//      • Boarding School Juliet → Crunchyroll Store/manga only, NO streaming page
-//        (streams on Prime Video) → NO override (stays Amazon Video).
-//  - Hatsune Miku: typo fix + physical-only is honest.
-const normTitle = (s) => String(s || '').toLowerCase().replace(/[‘’']/g, "'").trim();
-const MANUAL_OVERRIDES = {
-  'parasyte: the maxim': { add: ['Crunchyroll'] },
-  'death note': { add: ['Crunchyroll'] },
-  "hatsune miku: colorful stage! a miku who can't sing": { set: ['Blu-ray only'] },
 };
 
 function cellRef(r, c) { return XLSX.utils.encode_cell({ r, c }); }
@@ -82,22 +50,6 @@ function headerIndex(sheet, range, name) {
   return -1;
 }
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
-
-// AniList externalLinks → proposed platform list (normalized, allowlisted, deduped, A→Z).
-// Returns { platforms:[...], filtered:[...] } where `filtered` is the excluded raw site names.
-function proposePlatforms(externalLinks) {
-  const streaming = (externalLinks || []).filter((l) => l && l.type === 'STREAMING' && l.site);
-  const kept = new Map();   // display name -> true (dedupe)
-  const filtered = [];
-  for (const l of streaming) {
-    const key = String(l.site).trim().toLowerCase();
-    const mapped = PLATFORM_MAP[key];
-    if (mapped) kept.set(mapped, true);
-    else filtered.push(l.site);
-  }
-  const platforms = Array.from(kept.keys()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-  return { platforms, filtered };
-}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -155,39 +107,9 @@ ${C.bold}Platforms backfill${C.reset}
       continue;
     }
 
-    const { platforms, filtered } = proposePlatforms(detail.externalLinks);
-    const flags = [];
-    if (filtered.length) {
-      const excluded = filtered.filter((s) => KNOWN_EXCLUDED.has(String(s).toLowerCase()));
-      const unknown = filtered.filter((s) => !KNOWN_EXCLUDED.has(String(s).toLowerCase()));
-      if (excluded.length) flags.push(`excluded(regional/defunct): ${[...new Set(excluded)].join(', ')}`);
-      if (unknown.length) flags.push(`UNMAPPED (Blake's eye): ${[...new Set(unknown)].join(', ')}`);
-    }
-
-    let proposed, action;
-    if (!platforms.length) {
-      // No usable US streaming on AniList → keep existing (never blank).
-      proposed = current;
-      action = 'KEEP';
-      flags.unshift('AniList had no US streaming links — kept existing');
-    } else {
-      proposed = platforms.join(', ');
-      action = (proposed === current) ? 'SAME' : 'CHANGE';
-    }
-
-    // Gate 3d manual overrides (Blake-approved).
-    const ov = MANUAL_OVERRIDES[normTitle(title)];
-    if (ov && ov.set) {
-      proposed = ov.set.join(', ');
-      action = (proposed === current) ? 'SAME' : 'CHANGE';
-      flags.unshift('manual override (gate 3d)');
-    } else if (ov && ov.add) {
-      const merged = new Set(proposed ? proposed.split(',').map(s => s.trim()).filter(Boolean) : []);
-      ov.add.forEach(p => merged.add(p));
-      proposed = Array.from(merged).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).join(', ');
-      action = (proposed === current) ? 'SAME' : 'CHANGE';
-      flags.unshift('manual +' + ov.add.join('/') + ' (verified, gate 3d)');
-    }
+    // Shared propose+override logic (scripts/lib/platform-map.js) — same rules the
+    // edit page's "fix platforms" one-click uses.
+    const { proposed, flags, action } = proposePlatformsForRow(title, detail.externalLinks, current);
 
     reportRows.push({ title, current, proposed, action, flag: flags.join(' · ') });
     const tag = action === 'CHANGE' ? `${C.yellow}CHANGE${C.reset}` : action === 'KEEP' ? `${C.gray}KEEP${C.reset}` : `${C.green}SAME${C.reset}`;

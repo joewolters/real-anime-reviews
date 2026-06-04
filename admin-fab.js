@@ -14,19 +14,24 @@ const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 
 const ADMIN_MENU_ITEMS = [
   {
-    label: '+ Add Anime',
+    label: 'Add Anime',
     jp: '新規追加',
     href: 'admin/new-anime.html',
   },
   {
-    label: 'Suggestion Queue',
-    jp: '提案',
-    href: 'admin/suggestions.html',
+    label: 'Edit a Review',
+    jp: '編集',
+    href: 'admin/edit.html',
   },
   {
     label: 'Season Reviews',
     jp: '感想',
     href: 'admin/season-reviews.html',
+  },
+  {
+    label: 'Suggestion Queue',
+    jp: '提案',
+    href: 'admin/suggestions.html',
   },
   // Future entries land here:
   // { label: 'Site Health', jp: '監視', href: 'admin/health.html' },

@@ -285,6 +285,51 @@ const TARGETS = [
     pattern: /(src="season-reviews\.js\?v=)([^"]+)(")/,
     replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
   },
+  // v1.8.1 — admin/edit.html (Edit a Review page). Same static-?v= pattern as
+  // season-reviews.html (7 targets). Shared classic scripts (animeData.js /
+  // markdown.js) are version-less there, like the other admin pages.
+  {
+    file: 'admin/edit.html',
+    label: 'window.APP_VERSION (edit)',
+    pattern: /(<script>window\.APP_VERSION=")([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/edit.html',
+    label: 'style.css?v= (edit)',
+    pattern: /(href="\.\.\/style\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/edit.html',
+    label: 'mobile.css?v= (edit)',
+    pattern: /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/edit.html',
+    label: 'suggestions.css?v= (edit)',
+    pattern: /(href="suggestions\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/edit.html',
+    label: 'edit.css?v= (edit)',
+    pattern: /(href="edit\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/edit.html',
+    label: 'firebase.js?v= (edit)',
+    pattern: /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/edit.html',
+    label: 'edit.js?v= (edit)',
+    pattern: /(src="edit\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
   // NOTE: All OTHER JS files (script.js, account.js, firebase.js loaded into
   // index.html/account.html/admin/new-anime.html, admin-fab.js, new-anime.js,
   // card-render.js) intentionally are NOT in TARGETS. Those HTML files use

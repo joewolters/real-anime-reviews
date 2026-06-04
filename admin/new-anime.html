@@ -8,14 +8,14 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script>window.APP_VERSION="1.8.0"</script>
+  <script>window.APP_VERSION="1.8.1"</script>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Admin-only Mode 1 page — not indexed." />
 
-  <link rel="stylesheet" href="../style.css?v=1.8.0" />
-  <link rel="stylesheet" href="../mobile.css?v=1.8.0" media="(max-width: 900px)" />
-  <link rel="stylesheet" href="../admin-fab.css?v=1.8.0" />
-  <link rel="stylesheet" href="new-anime.css?v=1.8.0" />
+  <link rel="stylesheet" href="../style.css?v=1.8.1" />
+  <link rel="stylesheet" href="../mobile.css?v=1.8.1" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="../admin-fab.css?v=1.8.1" />
+  <link rel="stylesheet" href="new-anime.css?v=1.8.1" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:ital,wght@0,400;0,500;0,600;1,300;1,400&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -285,6 +285,7 @@
       <div id="card-preview-slot" class="card-preview-slot">
         <p class="preview-placeholder">Card preview appears here once you fetch an anime from AniList.</p>
       </div>
+      <p class="card-preview-note"><span aria-hidden="true">👁</span> Want the real modal preview? Ship it first — then open it from <strong>Edit a Review → Preview live</strong>.</p>
     </aside>
 
     </div>
@@ -320,6 +321,7 @@
     document.write(`<script src="../card-render.js?v=${v}"><\/script>`);
     document.write(`<script src="../franchise-fetch.js?v=${v}"><\/script>`);
     document.write(`<script src="../markdown.js?v=${v}"><\/script>`);
+    document.write(`<script src="modal-scroll-lock.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="../firebase.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="new-anime.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="../admin-fab.js?v=${v}"><\/script>`);

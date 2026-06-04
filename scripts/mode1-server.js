@@ -25,7 +25,9 @@ catch (e) {
   process.exit(2);
 }
 
-const PORT = 8888;
+// Default :8888 (Blake's local). Honors MODE1_PORT so the Playwright server spec
+// can spawn an isolated instance on another port without clashing with a running one.
+const PORT = process.env.MODE1_PORT || 8888;
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const EXCEL_PATH = path.resolve(PROJECT_ROOT, '..', 'Master List', 'Anime_Master_Table.xlsx');
 const ASSETS_DIR = path.resolve(PROJECT_ROOT, 'assets');
@@ -116,6 +118,10 @@ async function downloadFile(url, destPath, { allowOverwrite = false } = {}) {
 // so the AniList backfill CLI reuses the same logic. Call sites below pass
 // EXCEL_PATH explicitly. Behaviour is byte-identical to the prior inline versions.
 const { backupExcel, checkExcelLock } = require('./lib/excel-backup');
+// v1.8.1 (gate 4) — the edit page's "fix platforms" one-click reuses the CLI's
+// mapping/allowlist/override rules + AniList streaming fetch.
+const franchiseFetch = require('../franchise-fetch.js');
+const { proposePlatformsForRow } = require('./lib/platform-map');
 
 // Pre-flight: check the existing animeData.js for a duplicate Title BEFORE
 // mutating Excel. Sync would catch it later, but by then Excel is already
@@ -176,6 +182,57 @@ async function appendExcelRow(rowData) {
   XLSX.writeFile(wb, EXCEL_PATH);
 }
 
+// v1.8.1 — Edit an EXISTING catalog row. Finds the row by slug(Title) and overwrites
+// ONLY the given columns (looked up by HEADER NAME), gated by a hard allowlist so it
+// can never write Title (slug is derived from it), the AniList-derived fields, or
+// KnownAniListIds. Never adds/removes rows; never touches a column not in `fields` or
+// any other row. Returns { rowIndex, changed }.
+const EDITABLE_HEADERS = new Set([
+  'Rating', 'Seasons', 'Genre', 'Description', 'Review', 'Tags',
+  'Watch', 'Studio', 'Trailer', 'Top10Rank', 'WatchedAniListIds',
+]);
+async function updateExcelRow(slug, fields, { dryRun = false } = {}) {
+  if (!fs.existsSync(EXCEL_PATH)) throw new Error(`Excel file not found at ${EXCEL_PATH}`);
+  const wb = XLSX.readFile(EXCEL_PATH);
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
+  // header name -> column index
+  const col = {};
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c })];
+    if (cell && cell.v != null) col[String(cell.v).trim()] = c;
+  }
+  if (col.Title == null) throw new Error('Title column not found in Excel header.');
+  // find the data row whose slug(Title) matches
+  let targetRow = -1;
+  for (let r = range.s.r + 1; r <= range.e.r; r++) {
+    const tCell = sheet[XLSX.utils.encode_cell({ r, c: col.Title })];
+    const t = tCell && tCell.v != null ? String(tCell.v) : '';
+    if (t && slugify(t) === slug) { targetRow = r; break; }
+  }
+  if (targetRow === -1) throw new Error(`No catalog row matches slug "${slug}".`);
+  const changed = [];
+  for (const [header, value] of Object.entries(fields || {})) {
+    if (!EDITABLE_HEADERS.has(header)) continue;   // hard allowlist — never write protected columns
+    const c = col[header];
+    if (c == null) continue;
+    const ref = XLSX.utils.encode_cell({ r: targetRow, c });
+    if (value == null || String(value).trim() === '') {
+      delete sheet[ref];                            // clear the cell
+    } else if (header === 'Top10Rank') {
+      sheet[ref] = { t: 'n', v: parseInt(value, 10) };
+    } else {
+      sheet[ref] = { t: 's', v: String(value) };
+    }
+    changed.push(header);
+  }
+  // range is unchanged (no rows/cols added) — write back (skipped on a dryRun, which
+  // only validates the slug→row lookup + allowlist path; the cells above are mutated
+  // on the in-memory workbook and discarded).
+  if (!dryRun) XLSX.writeFile(wb, EXCEL_PATH);
+  return { rowIndex: targetRow, changed };
+}
+
 async function updateChangelogWidget(newBullets) {
   const html = await fsp.readFile(INDEX_HTML, 'utf8');
   const ulRegex = /(<ul class="changelog-list">)([\s\S]*?)(<\/ul>)/;
@@ -228,6 +285,20 @@ async function addChangelogEntry(version, title) {
   const md = raw.replace(/\r\n/g, '\n');
   const today = new Date().toISOString().slice(0, 10);
   const entry = `<!-- author: Mode 1 | date: ${today} -->\n## v${version} — PATCH (${today})\n\n**Add anime: ${title}.** Shipped via Mode 1's one-click Submit & Ship.\n\n`;
+  const sepIdx = md.indexOf('\n---\n\n');
+  if (sepIdx === -1) throw new Error('Could not find --- separator in CHANGELOG.md');
+  const before = md.slice(0, sepIdx + 6);
+  const after = md.slice(sepIdx + 6);
+  await fsp.writeFile(CHANGELOG_MD, before + entry + after, 'utf8');
+}
+
+// v1.8.1 — CHANGELOG entry for an EDIT ship (Tier-2). Same shape as addChangelogEntry
+// but edit-appropriate copy.
+async function addEditChangelogEntry(version, title) {
+  const raw = await fsp.readFile(CHANGELOG_MD, 'utf8');
+  const md = raw.replace(/\r\n/g, '\n');
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = `<!-- author: Mode 1 | date: ${today} -->\n## v${version} — PATCH (${today})\n\n**Updated the ${title} review.** Edited via the admin edit page (Mode 1 one-click ship).\n\n`;
   const sepIdx = md.indexOf('\n---\n\n');
   if (sepIdx === -1) throw new Error('Could not find --- separator in CHANGELOG.md');
   const before = md.slice(0, sepIdx + 6);
@@ -558,6 +629,120 @@ function validSeasonId(raw) {
   const id = parseInt(raw, 10);
   return (Number.isInteger(id) && id > 0 && String(id) === String(raw).trim()) ? id : null;
 }
+
+// v1.8.1 — Tier-1 "Save": edit an existing catalog row's data fields. Plain JSON
+// (not SSE — it's a quick local write). Lock-check → backup → updateExcelRow(slug) →
+// sync. Does NOT bump/commit/deploy (that's the Tier-2 "Ship" path, gate 2).
+app.put('/api/anime/:slug', async (req, res) => {
+  const slug = String(req.params.slug || '').trim();
+  const fields = (req.body && req.body.fields) || {};
+  const dryRun = !!req.query.dryRun;   // validate the slug→row + allowlist path; no Excel write, no sync
+  if (!slug) return res.status(400).json({ error: 'Missing slug.' });
+  if (!fields || typeof fields !== 'object' || !Object.keys(fields).length) {
+    return res.status(400).json({ error: 'No fields to update.' });
+  }
+  try {
+    if (dryRun) {
+      // No lock-check / no backup / no sync — a dryRun touches nothing on disk.
+      const result = await updateExcelRow(slug, fields, { dryRun: true });
+      return res.json({ ok: true, dryRun: true, slug, rowIndex: result.rowIndex, changed: result.changed });
+    }
+    checkExcelLock(EXCEL_PATH);
+    const backup = await backupExcel(EXCEL_PATH);
+    const result = await updateExcelRow(slug, fields);
+    const code = await runCmd('node', ['scripts/sync-excel-to-js.js'], {}, () => {});
+    if (code !== 0) throw new Error(`sync failed (code ${code})`);
+    res.json({ ok: true, slug, rowIndex: result.rowIndex, changed: result.changed, backup: path.basename(backup) });
+  } catch (err) {
+    console.error(`${C.red}[mode1]${C.reset} Edit failed: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// v1.8.1 (gate 4) — "fix platforms" one-click for the edit page. Fetches the row's
+// AniList streaming links and runs the SAME mapping/allowlist/override rules as the
+// backfill CLI (scripts/lib/platform-map.js). Read-only: returns current → proposed
+// (+ flags) so the client can show a dry-run-style diff and let Blake apply it into
+// the Where-to-watch field (he still Saves normally). No Excel/animeData writes.
+app.post('/api/anime/:slug/platforms', async (req, res) => {
+  const { aniListId, title, current } = req.body || {};
+  const id = parseInt(aniListId, 10);
+  if (!id || isNaN(id)) return res.status(400).json({ error: 'aniListId required.' });
+  try {
+    const detail = await franchiseFetch.fetchMediaDetail(id);
+    if (!detail) return res.status(502).json({ error: 'AniList fetch failed — try again in a moment.' });
+    const { proposed, filtered, flags, action } = proposePlatformsForRow(title || '', detail.externalLinks, current || '');
+    res.json({ current: String(current || '').trim(), proposed, filtered, flags, action });
+  } catch (err) {
+    console.error(`${C.red}[mode1] /api/anime/:slug/platforms${C.reset} ${err.message}`);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// v1.8.1 — Tier-2 "Ship": publish an already-saved edit live. SSE progress (same
+// shape as /api/submit). Reuses Mode 1's existing steps: widget → bump (PATCH) →
+// CHANGELOG → npm test (rule #7) → scoped commit + push → deploy. The client's
+// branded confirm IS the production go-signal (same trust as /api/submit's deploy
+// confirm). The row must already be Tier-1 saved (the client saves first).
+app.post('/api/anime/:slug/ship', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+  const send = (event, data) => { res.write(`event: ${event}\n`); res.write(`data: ${JSON.stringify(data)}\n\n`); };
+  const title = (req.body && req.body.title) || String(req.params.slug || '');
+  try {
+    // 1. widget bullet (prepend; cap 5 — matches Mode 1's widget behaviour)
+    send('step', { id: 'widget', label: 'Update homepage Update Log widget', status: 'running' });
+    const existing = await readExistingBullets();
+    await updateChangelogWidget([`Updated the ${title} review`, ...existing].slice(0, 5));
+    send('step', { id: 'widget', label: 'Update Log widget', status: 'done' });
+
+    // 2. bump (PATCH)
+    const cur = await readCurrentVersion();
+    const nv = nextPatchVersion(cur);
+    send('step', { id: 'bump', label: `Bump version (v${cur} → v${nv})`, status: 'running' });
+    let code = await runCmd('node', ['scripts/bump-version.js', nv], {}, (line) => send('log', { line }));
+    if (code !== 0) throw new Error(`bump-version exited with code ${code}`);
+    send('step', { id: 'bump', label: `Bump version (v${cur} → v${nv})`, status: 'done' });
+
+    // 3. CHANGELOG
+    send('step', { id: 'changelog', label: 'Update CHANGELOG.md', status: 'running' });
+    await addEditChangelogEntry(nv, title);
+    send('step', { id: 'changelog', label: 'Update CHANGELOG.md', status: 'done' });
+
+    // 4. tests (rule #7 — before commit)
+    send('step', { id: 'tests', label: 'Run Playwright tests', status: 'running' });
+    code = await runCmd('npm', ['test'], {}, (line) => send('log', { line }));
+    if (code !== 0) throw new Error(`npm test failed (code ${code}) — fix tests before shipping`);
+    send('step', { id: 'tests', label: 'Run Playwright tests (passed)', status: 'done' });
+
+    // 5. scoped commit + push (all bump-touched pages + the regenerated data)
+    send('step', { id: 'git', label: 'Git commit + push', status: 'running' });
+    const scoped = [
+      'CHANGELOG.md', 'animeData.js', 'index.html', 'account.html', 'suggest.html',
+      'admin/new-anime.html', 'admin/season-reviews.html', 'admin/suggestions.html', 'admin/edit.html',
+    ];
+    code = await runCmd('git', ['add', '--', ...scoped], {}, (line) => send('log', { line }));
+    if (code !== 0) throw new Error(`git add failed (code ${code})`);
+    code = await runCmd('git', ['commit', '-m', `Edit review: ${title}`], {}, (line) => send('log', { line }));
+    if (code !== 0) throw new Error(`git commit failed (code ${code})`);
+    code = await runCmd('git', ['push'], {}, (line) => send('log', { line }));
+    if (code !== 0) throw new Error(`git push failed (code ${code}) — check auth/network`);
+    send('step', { id: 'git', label: 'Git commit + push', status: 'done' });
+
+    // 6. deploy (the confirm-click was the go-signal)
+    send('step', { id: 'deploy', label: 'Deploy to Firebase', status: 'running' });
+    code = await runCmd('firebase', ['deploy', '--only', 'hosting'], {}, (line) => send('log', { line }));
+    if (code !== 0) throw new Error(`firebase deploy failed (code ${code})`);
+    send('step', { id: 'deploy', label: 'Deploy to Firebase', status: 'done' });
+
+    send('done', { newVersion: nv });
+  } catch (err) {
+    console.error(`${C.red}[mode1]${C.reset} Ship failed: ${err.message}`);
+    send('error', { message: err.message });
+  } finally { res.end(); }
+});
 
 app.get('/api/season-review/:id', async (req, res) => {
   const id = validSeasonId(req.params.id);

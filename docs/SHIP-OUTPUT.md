@@ -1,59 +1,79 @@
 <!-- author: Code | date: 2026-06-04 -->
-# v1.8.0 — Gate 1b (Option C snapshot blur + G2 hover finding + console triage — APPLY ✓)
+# v1.8.1 — Gate 4b (7 smoke fixes from Blake's screenshots — APPLY ✓)
 
-> Escalated to **Option C**: removed the **live full-viewport `backdrop-filter`** from `.secondary-backdrop` + `.tertiary-backdrop` (the per-repaint re-resolve tax = Blake's Firefox Paint 41%/98%-Graphics) and replaced it with a **premium static dim** — so **no engine pays a blur re-resolution on hover/scroll**. ⚠️ **Key honest finding on G2:** the secondary modal's hovers **already composite** (transform/box-shadow/border — I verified there is **no `filter` hover anywhere in the modal**), so the modal-hover lag was **100% the backdrop-filter amplification** (each hover repaint re-resolved the viewport blur), which Option C removes — there was no filter-hover surgery to do in the modal, and `.card` already uses the locked `::after` opacity-veil. Per the gate's own "don't stack speculative fixes," I did **not** invent hover changes for no measured gain. Console addendum triaged (one trivial fix, rest confirmed not-ours). `npm test` 8 passed, CSS 1008/1008. **Blake's profiler is the arbiter** — re-smoke steps below.
+> **All 7 G4-smoke items applied + verified green, still uncommitted.** (1) **Scroll-lock** behind every admin overlay via a new shared `admin/modal-scroll-lock.js` (loaded on all 4 admin pages — fixes the page-scrolls-behind-the-modal bug Blake hit, and the same latent bug on season-reviews/suggestions). (2) **Diff is readable now** — the confirm modal is **wider** and long fields show **full, scrollable** before/after text (no 90-char teaser). (3) **Top-10 rank** gets a **branded ▲/▼ stepper** (native spinners hidden, identical in every browser). (4) **Origin-aware Cancel/back** — opened via the site's ✎ → returns to that anime's modal (`index.html#anime=<slug>`); opened from the edit list → returns to the list (behavior table below). (5) **Revert** button → branded "Discard your unsaved edits?" → resets every field incl. the watched tree to the saved values. (6) **"🔧 Fix from AniList" no longer silent** — root cause was the offline no-op (Blake's screenshot showed the read-only banner = server down) landing its message at the far-away status line; it now opens the panel with an **inline** offline/error message, and works end-to-end server-up (live-verified last gate). (7) **new-anime hint** added (Blake's G3 answer): a small brand-toned line on the LIVE PREVIEW card — ship first, then the real modal preview is on Edit. Verified: `node --check` all touched JS, CSS **edit 212/212 · new-anime 223/223**, bump **40**, `npm test` **12 passed**, no stray smart-quotes, all new IDs present.
 
 ---
 
-## 1. Option C — snapshot blur (the universal fix)
-- **`.secondary-backdrop` + `.tertiary-backdrop`:** dropped `backdrop-filter: blur()` entirely; replaced with a **static layered dim** (`radial-gradient` depth + `linear-gradient` dim, no filter). Removed the gate-1 Firefox-only `@supports` layer-promote block (moot — there's no live blur left to promote). **Δ** `style.css` ~−16 (net; 2 rules simplified + the `@supports` block deleted).
-- **Why this is the right call (mechanism, since headless can't measure — see §3):** a **live `backdrop-filter` re-resolves the blur on every composite/repaint**; that's structurally why G1's layer-promote only nudged 49%→41% (you can't cache a filter that re-samples the live backdrop). The only way to stop the per-repaint tax on **every** engine is to not run a live backdrop-filter during the interactive phase. A static dim has **zero** filter cost.
-- **⚠️ Visual delta (honest):** the frost is gone — the backdrop is now a clean dark gradient dim instead of a frosted blur. **In practice this is subtle:** the drawer covers ~94vw, so the frost only ever showed in a narrow, already-dimmed left sliver. The richer radial+linear dim keeps the "gone deeper" depth. **If you miss the frost,** I can restore it cheaply by blurring the *static* content behind it once with a cached `filter:blur()` (no live backdrop-filter) — but that's added complexity for a sliver, so I went with the guaranteed-universal dim first. Your eyes decide.
+## 1. Scroll-lock behind admin modals (bug)
+- **Root cause:** the main site locks scroll in `script.js`'s `updateScrollLock()`, but the **admin pages are separate documents that don't load `script.js`** — so nothing locked the page behind their overlays. Blake saw the background move behind "Save these changes?".
+- **Fix:** new **`admin/modal-scroll-lock.js`** (shared, additive) — a `MutationObserver` watches the known overlay/drawer elements (`.edit-modal`, `.edit-preview-overlay`, `#chat-drawer`, `.sr-editor-overlay`, `.confirm-overlay`) and, while any is visible, sets `documentElement.overflow:hidden` (+ an `admin-modal-open` class). Restores on close. It **observes visibility attributes only — never touches page logic.** Loaded on **edit, new-anime, season-reviews, suggestions** (the latter two had the same latent bug — "while you're there").
+- **Δ** `admin/modal-scroll-lock.js` +52 (new); +1 `<script>` on each of the 4 admin HTML pages (no `?v=` on the 3 classic loads → bump stays 40; new-anime uses its runtime `${v}`).
 
-## 2. G2 hover pass — measured finding (no speculative surgery)
-Checked every hover in the secondary-modal flow:
-- **Secondary pills / cards / rows** (`.secondary-save/-request/-platform/-ep-link:hover`, `.secondary-char/-rec`, `.more-info-entry`) — they hover with **`transform` + `box-shadow` + `border-color` + `background`. None use `filter`.** So the gate's premise ("every `filter`-transition hover forces repaints of the blurred region") had **no `filter` target in the modal** — the lag was purely the **backdrop-filter amplification**: each hover/scroll repaint re-resolved the full-viewport blur. **Option C removes the amplifier**, so those hovers are now cheap on every engine.
-- **`.card` (homepage + modal cards)** — already uses the **locked treatment**: a `::after` brightness veil faded via `opacity` (`.card:hover::after{opacity:1}`) + a composited `transform: scale()`. Nothing to change.
-- **The only real `filter:brightness` hovers** are 3 buttons (`.genre-shuffle-btn`, `#top10-prev/next`, `.inline-header-btn`) — homepage/header (the already-smooth page), tiny bounded elements, now trivially cheap post-Option-C. Removing their brightness would degrade the look for **zero** measured gain.
-- **Decision:** no speculative hover surgery (the gate explicitly says "don't keep stacking speculative fixes"). If Blake's profiler shows residual hover cost (e.g. animated `box-shadow` repaints), the pre-painted-shadow-via-opacity conversion is the next lever — held pending real data. **Δ** 0 (correctly).
+## 2. Diff table readable (was: too small)
+- **`edit.html`** — the save + ship confirm cards get **`edit-modal-card--wide`** (`min(760px,95vw)`, body scrolls at 88vh). **`edit.js`** — `renderDiff` **no longer truncates** (was 90 chars). **`edit.css`** — `.edit-diff-before/.edit-diff-after` are now `white-space:pre-wrap; max-height:168px; overflow-y:auto` so a long Review/Description shows in **full inside a scrollable cell**, rows top-align. Blake can read the whole change.
+- **Δ** `edit.html` +2 classes; `edit.js` −1 trunc fn; `edit.css` ~ +6 lines.
 
-## 3. Measurement honesty (why the profiler is the arbiter)
-Ran a decisive cross-engine bench: **dim-only vs live backdrop-filter vs filter-on-static-content**, with a drawer repainting each frame. Result — **all three were identical on every engine** (Gecko ~145fps, WebKit ~40fps/~75%, Blink ~60fps). That proves the **blur is NOT isolable in the headless harness** (the drawer's own repaint dominates; the GPU-compositor backdrop cost that Blake's headed Firefox profiler clearly shows is not reproduced headlessly). So I am **not** reporting headless before/after FPS for this gate — they'd be meaningless. The trustworthy inputs are **(a) the mechanism** (live backdrop-filter re-resolves per repaint; a static dim can't) and **(b) Blake's real Firefox Profiler** (the gate's success bar).
+## 3. Top-10 rank → branded stepper (was: native white/gray spinner)
+- Native number spinners aren't reliably styleable across engines, so they're **hidden** (`appearance:textfield` + `::-webkit-*-spin-button{appearance:none}`) and replaced with stacked **▲/▼** brand-purple buttons inside the field. `stepTop10(±1)` clamps to **1–10**, and a first press from blank picks an end (▲→1, ▼→10). `tabindex="-1"` keeps tabbing on the input; the field stays directly typeable.
+- **Δ** `edit.html` stepper markup (~6 lines); `edit.js` `stepTop10` + 2 wires; `edit.css` stepper block (~16 lines) + reduced-motion entry.
 
-## 4. Console addendum — triaged
-| # | Message | Verdict | Action |
-|---|---|---|---|
-| 1 | Feature-Policy "skipping unsupported feature accelerometer/clipboard-write/gyroscope…" | **Ours** — the trailer iframe `allow` listed tokens Firefox ignores | **Fixed:** trimmed `allow` to `autoplay; encrypted-media; picture-in-picture` at both call sites (`script.js:4285`, `:5163`). Benign, now silent. |
-| 2 | `Cookie "__Secure-YEC" rejected` + CSP for `youtube.com/embed` | **Not ours** — YouTube embed third-party | none (the iframe is our only YT touchpoint; nothing in our code triggers it) |
-| 3 | `Cross-Origin Request Blocked: data:text/plain;base64,Cg==` | **Not ours** — grep confirms **zero `data:`/`base64` fetches in our JS**; `Cg==` = base64 `"\n"`, classic extension injection | none |
-| 4 | `unreachable code after return` in `15_S4Ql8…js:2724` | **Not ours** — hashed bundle name; our files are unhashed (`script.js` etc.). Extension/YT player | none |
-| 5 | Fingerprinting-protection notice | **Firefox privacy feature** — expected | **Note for Blake:** this can skew profiler/screen metrics, so profiler numbers have some noise floor |
-- **None relate to the perf problem** (that's Paint/backdrop-filter — profiler-confirmed). Items 3 & 4 are almost certainly a browser extension; worth Blake trying a private window (no extensions) for the cleanest profiler trace.
+## 4. Origin-aware Cancel / back (was: always returned to the list)
+- The site's ✎ now passes **`&from=modal`** (`script.js`); the edit page reads it into `formOrigin`. `returnToOrigin()` drives Cancel, the back-link, and Esc; the back-link **label** reflects origin. A list click forces `formOrigin='list'` (guards a stale `from` if a deep-link slug was invalid).
+- **Behavior table:**
+
+  | Entered via | Back-link label | Cancel / back-link / Esc | After Save |
+  |---|---|---|---|
+  | **Edit list** (open `edit.html`, click a row) | `← All reviews` | returns to the **list** | stays on the form |
+  | **Site modal ✎** (`edit.html?slug=X&from=modal`) | `← Back to site` | navigates to **`index.html#anime=X`** (the real modal, now showing saved data) | stays on the form |
+
+  Rationale: Save deliberately **keeps you on the form** (you may save→ship, or save→preview) — the origin only decides where *leaving* goes. Revert (item 5) covers "undo my edits" without leaving.
+- **Δ** `script.js` +`&from=modal`; `edit.js` `formOrigin` + `updateBackLink` + `returnToOrigin` + rewires (~20 lines).
+
+## 5. Revert changes (new affordance)
+- A **Revert** ghost button (left of Cancel) → branded **`#edit-revert-confirm`** ("Discard your unsaved edits? … resets every field including the watched-set tree … can't be undone") → `revertForm()` re-applies `setFieldValues(currentAnime)` and resets `watchedChecked` to a **snapshot** taken when the form loaded (`initialWatchedChecked`, captured in `loadWatchedTree` — **no franchise refetch**). Status: "Reverted to saved values."
+- **Decision:** placed near Save/Cancel (the actions cluster) per "your call"; snapshot-reset (not refetch) keeps it instant and identical to what loaded.
+- **Δ** `edit.html` revert button + confirm modal (~12 lines); `edit.js` `setFieldValues` extraction + revert flow + snapshot (~22 lines).
+
+## 6. "🔧 Fix from AniList" feedback (bug)
+- **Root cause:** when the server was **offline** (Blake's screenshot shows the read-only banner), the handler set a message on the **bottom status line** — far from the button — so it read as "nothing happened." (Server-up it already worked; the endpoint was live-verified last gate: Demon Slayer 101922 → Crunchyroll/Hulu/Netflix.)
+- **Fix:** the panel now **always opens with visible feedback right under the button** — `showFixMsg()` shows an inline offline ("start `npm run mode1`…"), no-AniList-id, or error message (result rows + Apply hidden); the success path hides the message and shows current → proposed + Apply. **No silent state.**
+- **Δ** `edit.html` panel restructure (msg + result wrapper, Apply hidden by default); `edit.js` `showFixMsg` + reworked `fixPlatforms`; `edit.css` msg/result rules.
+
+## 7. new-anime preview hint (Blake's G3 answer)
+- **`new-anime.html`** — a small line under the LIVE PREVIEW card: *"👁 Want the real modal preview? Ship it first — then open it from **Edit a Review → Preview live**."* Brand-toned (`.card-preview-note` in `new-anime.css`), centered, not naggy. Resolves the G3 open question.
+- **Δ** `new-anime.html` +1 line; `new-anime.css` +10 lines.
 
 ## Verification
 | Check | Result |
 |---|---|
-| `node --check script.js` | **OK** (iframe `allow` trim) |
-| CSS brace balance | **1008 / 1008 BALANCED** |
-| `backdrop-filter` on the modal backdrops | **0** (static dims now; grep hits were comment text) |
-| `prefers-reduced-motion` paths | **intact** (the `.secondary-backdrop, .secondary-modal { transition:none }` block untouched) |
-| `[hidden]` symmetry | intact |
-| G1 branded scrollbars | **kept** |
-| `npm test` (Playwright) | **8 passed (14.9s)** |
+| `node --check` edit.js · modal-scroll-lock.js · script.js | **all OK** |
+| `edit.css` / `new-anime.css` brace balance | **212/212** · **223/223** |
+| `bump-version --check` | **all 40 agree** (scroll-lock loads without a versioned target) |
+| smart-quotes in touched files (Grep tool) | **none new** (3 pre-existing in untouched `script.js` *comments*) |
+| new IDs referenced by edit.js present in edit.html | **all 9 present** |
+| scroll-lock loaded on all 4 admin pages | **edit · new-anime · season-reviews · suggestions** |
+| `npm test` (Playwright) | **12 passed (13.9s)** — no regression from the `script.js` ✎ change |
 
-## Bench direction (all 3 engines)
-Decisive run: dim-only ≈ live-backdrop-filter ≈ filter-on-static — **identical per engine** → the harness cannot isolate the backdrop-filter cost (drawer repaint dominates). So no headless FPS claims; **mechanism + Blake's profiler** govern. Mechanism guarantees Option C removes the live backdrop-filter Paint cost on every engine.
-
-## For Blake's re-smoke (the real arbiter)
-In **Firefox**, on the same secondary-modal hover/scroll flow:
-1. **Re-run the Firefox Profiler** (same 15-20s). **Success = Paint collapses to a small fraction** (was 41%). Mechanically it should — there's no live `backdrop-filter` left to re-resolve. (Tip: try a **private window / no extensions** for the cleanest trace — items 3/4 above are extension noise.)
-2. **Hands:** does the pop-out now feel **noticeably smoother** during hover + scroll?
-3. **Visual:** the pop-out backdrop is now a **dark gradient dim** instead of frosted blur — tell me if you miss the frost (I can restore it via cached static-blur if so).
-4. **Scrollbars** are brand-purple (from G1); **Chrome** still buttery (no regression — the dim is cheaper than the blur everywhere).
-- **If Paint still doesn't collapse:** per the gate I STOP and we read what the profiler says is left (likely the drawer's own content paint / box-shadows) rather than stack more speculative fixes.
+## Blake's re-smoke (needs `npm run mode1` for Save/Ship/Fix)
+1. **Scroll-lock:** open a review → **Save** (or Ship/Revert/Preview/✨ASK) → the page **behind the modal no longer scrolls**. Same on new-anime / season-reviews / suggestions modals.
+2. **Diff:** edit the Review (long text) → **Save** → the confirm is **wide** and the changed Review shows **in full** (scroll the cell if huge).
+3. **Top-10:** the rank field has **▲/▼** purple buttons; click them (1–10), looks the same in every browser; you can still type.
+4. **Origin return:** open a review **from the site's ✎** → **Cancel** (or "← Back to site") returns you to **that anime's modal on the site**. Open one **from the edit list** → **Cancel** ("← All reviews") returns to the **list**.
+5. **Revert:** change some fields + tick/untick watched entries → **Revert** → confirm → everything snaps back to the saved values.
+6. **Fix platforms:** with the **server off**, click **🔧 Fix from AniList** → it now **says** the server isn't running (right under the button), not nothing. With the **server on**, it shows Current → Proposed → **Apply**.
+7. **new-anime:** the LIVE PREVIEW card shows the small "ship first, then Preview from Edit" line.
 
 ## Phantom-drift audit
-Verified, not assumed: confirmed the secondary modal has **no `filter` hovers** (grepped the actual `:hover` rules — the lag was the backdrop amplifier, not filter hovers, so G2's modal surgery would've been a no-op); proved headless can't isolate the blur (dim==backdrop==filter-static); the `data:` URI is **not ours** (grepped for `data:`/`base64`); confirmed both backdrops have no `backdrop-filter` property left (the grep counts were my own comment text); reduced-motion block intact; deleted all throwaway bench files from the deploy root.
+- **Item 1 root cause re-derived:** confirmed `updateScrollLock` lives in `script.js` (not loaded on admin pages) — so the fix had to be an admin-side helper, not a reuse; built that. Verified season-reviews (`.sr-editor-overlay`) and suggestions (`.confirm-overlay`) toggle via the **`hidden` attribute** (grepped) so the observer's `attributeFilter` catches them.
+- **Item 6 root cause re-derived:** confirmed the old `fixPlatforms` *did* set a message — on the bottom status line — so "does nothing" was really "feedback was off-screen"; verified the server-up path already worked (endpoint hit last gate) rather than assuming the request was broken.
+- **No Ship-chain changes** (constraint honored) — `mode1-server.js` untouched this gate; all work is client + the new shared helper + the `script.js` ✎ link + new-anime copy.
+- **bump stays 40** — the scroll-lock script loads without a versioned `?v=` target on the 3 classic pages and via runtime `${v}` on new-anime (no bump target needed), so no new target string.
+
+## State for the sweep (next gate)
+- **Still uncommitted; HEAD `38a4baf` / APP_VERSION 1.8.0.** New files across G4+G4b to add: `admin/edit.{html,js,css}`, `admin/chat-drawer.js`, `admin/modal-scroll-lock.js`, `scripts/lib/platform-map.js`, `tests/mode1-server.spec.js`. Touched: `mode1-server.js`, `backfill-platforms.js`, `script.js`, `admin/new-anime.{html,css}`, `admin/season-reviews.html`, `admin/suggestions.html`, `style.css`, `admin/season-reviews.js`, `scripts/bump-version.js`, `animeData.js`, `season-reviews/index.json`.
+- **Sweep audit note:** the new `admin/`/`scripts/lib/`/`tests/` files carry **no secrets** (deploy-safe); verify the gitignore↔firebase mirror as usual. No `firestore.rules` change.
+- **G3 open question is now CLOSED** (item 7 shipped the hint) — nothing left pending Blake before the sweep.
 
 ## One-liner reply
-v1.8.0 **Gate 1b (Option C snapshot blur + G2 finding + console triage) DONE — applied, not committed**: escalated to Option C by **removing the live full-viewport `backdrop-filter` from both modal backdrops** (the per-repaint re-resolve tax = your Firefox Paint 41%/98%-Graphics) and swapping in a **premium static gradient dim**, so **no engine pays a blur re-resolution on hover/scroll** — mechanism-guaranteed, since a live backdrop-filter structurally can't be cached (which is why G1's promote only nudged 49%→41%); ⚠️ honest visual delta: the frost is now a clean dark dim, but it only ever showed in a narrow dimmed sliver behind the 94vw drawer so it's subtle (and I can restore frost via cached static-blur if you miss it); **key G2 finding** — I verified the secondary modal's hovers **already composite** (transform/box-shadow/border, **no `filter` anywhere in the modal**), so the modal-hover lag was **entirely the backdrop-filter amplification** Option C just removed, and `.card` already uses the locked opacity-veil — so per the gate's own "don't stack speculative fixes" I did **no** invented hover surgery (the only real `filter:brightness` hovers are 3 buttons on the already-smooth homepage, now trivially cheap); I'm being upfront that **headless can't measure this** (a decisive bench showed dim==backdrop-filter==filter-static on every engine → the harness can't isolate the GPU backdrop cost your headed profiler clearly sees), so **your Firefox profiler re-run is the sole arbiter** (success = Paint collapses from 41% — mechanically it should, there's no live blur left); triaged your console: trimmed our trailer-iframe `allow` attr to silence the Feature-Policy warnings (#1, ours), confirmed the `data:`-URI (#3) + hashed-bundle `unreachable code` (#4) are **extension noise, not ours** (grep-verified no `data:` fetches), #2 is YouTube-embed third-party, and #5 is Firefox fingerprint-protection that can skew profiler metrics (try a private window); kept G1 scrollbars, reduced-motion intact, **`npm test` 8 passed**, CSS 1008/1008 — re-smoke the Firefox profiler and tell me if Paint collapsed + whether you miss the frost; if Paint's still high I STOP and report what's left rather than stack more.
+v1.8.1 **Gate 4b (7 smoke fixes) DONE — all applied + verified, still uncommitted**: (1) fixed the **page-scrolls-behind-the-modal** bug with a new shared **`admin/modal-scroll-lock.js`** (the admin pages don't load `script.js`'s `updateScrollLock`, so a `MutationObserver` watches the overlays and locks `documentElement.overflow` while any is open — loaded on **all 4** admin pages, fixing the same latent bug on season-reviews/suggestions); (2) made the **diff readable** — wider confirm modal + **full, scrollable** before/after cells (dropped the 90-char truncation); (3) replaced the **Top-10 native spinner** with a **branded ▲/▼ stepper** (hidden native spinners, clamps 1–10, identical cross-browser, field still typeable); (4) **origin-aware Cancel/back** — the site's ✎ now passes `&from=modal` so Cancel/back/Esc return to **`index.html#anime=<slug>`** (that anime's real modal) while a list-opened form returns to the **list** (label flips "← Back to site" vs "← All reviews"; Save deliberately keeps you on the form — table in the report); (5) a **Revert** button → branded "Discard your unsaved edits?" → resets every field **incl. the watched tree** to the saved values via an in-memory snapshot (no refetch); (6) **"🔧 Fix from AniList" is no longer silent** — root cause was the offline no-op dropping its message at the far-away status line, so it now opens the panel with an **inline** offline/error message (and works end-to-end server-up — endpoint live-verified last gate: Demon Slayer 101922 → Crunchyroll/Hulu/Netflix); (7) added Blake's G3-answer **new-anime hint** ("ship first, then Preview live from Edit") on the LIVE PREVIEW card; verified green (`node --check` all touched JS, CSS **212/212 + 223/223**, **bump 40**, **`npm test` 12 passed**, no new smart-quotes, all new IDs present, scroll-lock confirmed on all 4 admin pages) with **no Ship-chain changes** and the **G3 open question now closed** — next is the compressed sweep (CHANGELOG v1.8.1 MINOR + widget + `bump 1.8.1`→40 + ROADMAP/NEXT shipped → audits → Blake-authored commit with the 7 Cowork excludes out → preview → smoke → prod).

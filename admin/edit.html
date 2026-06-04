@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Reviews — Real Anime Reviews</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <script>window.APP_VERSION="1.8.1"</script>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Admin-only review editor — not indexed." />
+
+  <link rel="stylesheet" href="../style.css?v=1.8.1" />
+  <link rel="stylesheet" href="../mobile.css?v=1.8.1" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=1.8.1" />
+  <link rel="stylesheet" href="edit.css?v=1.8.1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700;800&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="admin-page">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="../index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" id="back-btn" class="inline-header-btn" onclick="location.href='../index.html'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-gate-message">
+      <div class="admin-gate-spinner"></div>
+      <p>Verifying admin access…</p>
+    </div>
+  </div>
+
+  <main class="admin-main edit-main" id="admin-main" hidden>
+
+    <div class="edit-server-banner" id="edit-server-banner" hidden>
+      <span class="edit-server-dot" aria-hidden="true"></span>
+      Browsing read-only. To save edits, start the local server: <code>npm run mode1</code>.
+    </div>
+
+    <!-- ===== LIST VIEW ===== -->
+    <section class="edit-shell" id="edit-list-view">
+      <div class="edit-header">
+        <h2 class="edit-title-line">
+          <span class="edit-kicker">EDIT REVIEWS <span class="jp-mini">編集</span></span>
+          <span class="edit-divider">·</span>
+          <span class="edit-title-text">Pick a review to edit</span>
+        </h2>
+        <span class="edit-stats" id="edit-stats"></span>
+      </div>
+      <div class="edit-search-wrap">
+        <input id="edit-search" type="search" placeholder="Search your reviews…" autocomplete="off" aria-label="Search reviews" />
+      </div>
+      <ul class="edit-list" id="edit-list"></ul>
+    </section>
+
+    <!-- ===== FORM VIEW ===== -->
+    <section class="edit-shell" id="edit-form-view" hidden>
+      <button type="button" class="edit-back-link" id="edit-back-link">← All reviews</button>
+
+      <div class="edit-form-head">
+        <img class="edit-form-cover" id="edit-form-cover" alt="" />
+        <div class="edit-form-headmeta">
+          <span class="edit-kicker">EDITING <span class="jp-mini">編集中</span></span>
+          <h2 class="edit-form-title" id="edit-form-title">—</h2>
+          <p class="edit-form-slug">slug: <code id="edit-form-slug">—</code> <span class="edit-slug-lock" title="The slug is the page's identity — locked to protect comments, images, and links.">🔒 locked</span></p>
+        </div>
+        <div class="edit-head-actions">
+          <button type="button" id="chat-summon-btn" class="chat-summon-btn" disabled aria-controls="chat-drawer" aria-expanded="false">✨ ASK</button>
+          <button type="button" class="edit-btn edit-btn--preview" id="edit-preview-btn" title="Open the real review modal (reflects the last SAVED data)"><span aria-hidden="true">👁</span> Preview live</button>
+        </div>
+      </div>
+
+      <form id="edit-form" class="edit-form" novalidate>
+        <div class="edit-grid">
+          <div class="edit-row">
+            <label for="f-title">Title <span class="edit-locked-tag">read-only</span></label>
+            <input id="f-title" type="text" readonly />
+          </div>
+          <div class="edit-row">
+            <label for="f-rating">Rating</label>
+            <input id="f-rating" type="text" placeholder="e.g. 8/10" />
+          </div>
+          <div class="edit-row">
+            <label for="f-seasons">Seasons</label>
+            <input id="f-seasons" type="text" placeholder="e.g. 2 seasons, 1 movie" />
+          </div>
+          <div class="edit-row">
+            <label for="f-top10">Top 10 rank <span class="edit-hint-tag">blank = not ranked</span></label>
+            <div class="edit-stepper">
+              <input id="f-top10" type="number" min="1" max="10" placeholder="—" inputmode="numeric" />
+              <span class="edit-stepper-btns">
+                <button type="button" class="edit-stepper-btn" id="f-top10-up" aria-label="Increase rank" tabindex="-1">▲</button>
+                <button type="button" class="edit-stepper-btn" id="f-top10-down" aria-label="Decrease rank" tabindex="-1">▼</button>
+              </span>
+            </div>
+          </div>
+          <div class="edit-row">
+            <label for="f-genre">Genre</label>
+            <input id="f-genre" type="text" placeholder="e.g. Fantasy / Drama" />
+          </div>
+          <div class="edit-row">
+            <label for="f-studio">Studio</label>
+            <input id="f-studio" type="text" placeholder="e.g. MAPPA" />
+          </div>
+          <div class="edit-row edit-row-wide">
+            <label for="f-platforms">Where to watch <span class="edit-hint-tag">comma-separated</span>
+              <button type="button" class="edit-fix-btn" id="edit-fix-platforms" title="Suggest platforms from AniList (US streaming)">🔧 Fix from AniList</button>
+            </label>
+            <input id="f-platforms" type="text" placeholder="e.g. Crunchyroll, Netflix, Hulu" />
+            <div class="edit-fix-panel" id="edit-fix-panel" hidden>
+              <p class="edit-fix-msg" id="edit-fix-msg" hidden></p>
+              <div class="edit-fix-result" id="edit-fix-result" hidden>
+                <div class="edit-fix-row"><span class="edit-fix-key">Current</span><span class="edit-fix-val" id="edit-fix-current">—</span></div>
+                <div class="edit-fix-row"><span class="edit-fix-key">Proposed</span><span class="edit-fix-val edit-fix-val--proposed" id="edit-fix-proposed">—</span></div>
+                <p class="edit-fix-flags" id="edit-fix-flags" hidden></p>
+              </div>
+              <div class="edit-fix-actions">
+                <button type="button" class="edit-btn edit-btn--ghost edit-btn--sm" id="edit-fix-dismiss">Dismiss</button>
+                <button type="button" class="edit-btn edit-btn--save edit-btn--sm" id="edit-fix-apply" hidden>Apply to field</button>
+              </div>
+            </div>
+          </div>
+          <div class="edit-row edit-row-wide">
+            <label for="f-trailer">Trailer</label>
+            <input id="f-trailer" type="text" placeholder="https://www.youtube.com/embed/VIDEO_ID" />
+          </div>
+          <div class="edit-row edit-row-wide">
+            <label for="f-tags">Tags <span class="edit-hint-tag">space-separated, # optional</span></label>
+            <input id="f-tags" type="text" placeholder="#action #supernatural #fan-service" />
+          </div>
+          <div class="edit-row edit-row-wide">
+            <label for="f-description">Description</label>
+            <textarea id="f-description" rows="3"></textarea>
+          </div>
+        </div>
+
+        <div class="edit-review-block">
+          <div class="edit-review-head">
+            <label for="f-review">Review <span class="edit-hint-tag">markdown supported</span></label>
+          </div>
+          <div class="edit-review-split">
+            <textarea id="f-review" rows="10" placeholder="Write the review…"></textarea>
+            <div class="edit-review-preview" id="f-review-preview" aria-label="Review preview"></div>
+          </div>
+        </div>
+
+        <div class="franchise-info-panel watched-set-panel" id="franchise-info-panel" hidden>
+          <div class="franchise-info-header">WATCHED SET <span class="jp-mini">視聴済み</span></div>
+          <p class="watched-hint">Tick every entry this review covers — the <strong>✓ REVIEWED</strong> badge shows on each one across the site. The main entry is always included.</p>
+          <div class="watched-toolbar">
+            <div class="watched-toggles">
+              <button type="button" class="watched-toggle-btn" data-watched-toggle="all">Select all</button>
+              <button type="button" class="watched-toggle-btn" data-watched-toggle="none">Select none</button>
+              <button type="button" class="watched-toggle-btn" data-watched-toggle="spine">Spine only</button>
+            </div>
+            <span class="watched-count" id="watched-count">—</span>
+          </div>
+          <ul class="franchise-entries watched-entries" id="franchise-entries"></ul>
+        </div>
+
+        <div class="edit-actions">
+          <span class="edit-status" id="edit-status" role="status"></span>
+          <span class="edit-spacer"></span>
+          <button type="button" class="edit-btn edit-btn--ghost" id="edit-revert" title="Discard unsaved edits and reload the saved values">Revert</button>
+          <button type="button" class="edit-btn edit-btn--ghost" id="edit-cancel">Cancel</button>
+          <button type="button" class="edit-btn edit-btn--save" id="edit-save">Save changes</button>
+          <button type="button" class="edit-btn edit-btn--ship" id="edit-ship">Ship live ⤴</button>
+        </div>
+        <p class="edit-ship-note"><strong>Save</strong> updates the data locally (preview on a reload). <strong>Ship live</strong> publishes it to realanimereviews.com (version bump → changelog → tests → commit → deploy).</p>
+      </form>
+    </section>
+
+    <!-- Branded SAVE-confirm with a before→after change diff (no native confirm) -->
+    <div class="edit-modal" id="edit-save-confirm" hidden>
+      <div class="edit-modal-card edit-modal-card--wide">
+        <h3 class="edit-modal-title">Save these changes?</h3>
+        <p class="edit-modal-body">A quick glance at what changed before it's written to the catalog. <strong>Save</strong> updates the data locally — nothing is published.</p>
+        <div class="edit-diff" id="edit-save-diff"></div>
+        <div class="edit-modal-actions">
+          <button type="button" class="edit-btn edit-btn--ghost" id="edit-save-cancel">Cancel</button>
+          <button type="button" class="edit-btn edit-btn--save" id="edit-save-confirm-go">Save changes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Branded revert-confirm (no native confirm) -->
+    <div class="edit-modal" id="edit-revert-confirm" hidden>
+      <div class="edit-modal-card">
+        <h3 class="edit-modal-title">Discard your unsaved edits?</h3>
+        <p class="edit-modal-body">Every field — including the watched-set tree — resets to the values currently saved for this review. This can't be undone.</p>
+        <div class="edit-modal-actions">
+          <button type="button" class="edit-btn edit-btn--ghost" id="edit-revert-cancel">Keep editing</button>
+          <button type="button" class="edit-btn edit-btn--save" id="edit-revert-go">Discard &amp; reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Branded ship-confirm (no native confirm) -->
+    <div class="edit-modal" id="edit-ship-confirm" hidden>
+      <div class="edit-modal-card edit-modal-card--wide">
+        <h3 class="edit-modal-title">Ship this edit live?</h3>
+        <p class="edit-modal-body">This <strong>saves</strong> your changes, then <strong>publishes to realanimereviews.com</strong> — version bump, changelog, Playwright tests, commit + push, and a Firebase deploy. This is the production go-signal.</p>
+        <div class="edit-diff" id="edit-ship-diff"></div>
+        <div class="edit-modal-actions">
+          <button type="button" class="edit-btn edit-btn--ghost" id="edit-ship-cancel">Cancel</button>
+          <button type="button" class="edit-btn edit-btn--ship" id="edit-ship-go">Yes, ship it</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live preview — the REAL homepage modal stack (main → click into secondary),
+         loaded in an iframe with #anime=<slug>. Reflects the last SAVED data. -->
+    <div class="edit-preview-overlay" id="edit-preview-overlay" hidden>
+      <div class="edit-preview-bar">
+        <span class="edit-preview-label">Live preview — <strong id="edit-preview-title">—</strong></span>
+        <button type="button" class="edit-btn edit-btn--ghost" id="edit-preview-close">Close preview ✕</button>
+      </div>
+      <iframe class="edit-preview-frame" id="edit-preview-frame" title="Live review preview" referrerpolicy="no-referrer"></iframe>
+    </div>
+
+    <!-- ✨ ASK drawer (shared admin assistant — same markup/classes/backend as new-anime) -->
+    <aside id="chat-drawer" class="chat-drawer" hidden aria-label="AI assistant">
+      <div class="chat-drawer-header">
+        <span class="chat-drawer-title">✨ ASK</span>
+        <div class="chat-drawer-actions">
+          <button type="button" id="chat-clear-btn" class="chat-header-btn">Clear chat</button>
+          <button type="button" id="chat-close-btn" class="chat-header-btn chat-close" aria-label="Close drawer">✕</button>
+        </div>
+      </div>
+      <div id="chat-thread" class="chat-thread" aria-live="polite"></div>
+      <div id="chat-empty" class="chat-empty">
+        <p class="chat-empty-hint">Ask about this anime — drafts come back ready to paste into the form.</p>
+        <div class="chat-quickstarts">
+          <button type="button" class="chat-quickstart" data-quickstart="Tighten this review's wording without changing my take">Tighten the review wording</button>
+          <button type="button" class="chat-quickstart" data-quickstart="Suggest tags">Suggest tags</button>
+          <button type="button" class="chat-quickstart" data-quickstart="Write a 1-paragraph description">Write a 1-paragraph description</button>
+          <button type="button" class="chat-quickstart" data-quickstart="Who is this show for? (vibe)">Who is this show for? (vibe)</button>
+        </div>
+      </div>
+      <form id="chat-input-row" class="chat-input-row">
+        <textarea id="chat-input" class="chat-input" rows="1" placeholder="Ask anything…" autocomplete="off"></textarea>
+        <button type="submit" id="chat-send-btn" class="chat-send-btn" aria-label="Send message">➤</button>
+      </form>
+    </aside>
+
+    <!-- SSE ship progress -->
+    <div class="edit-modal" id="edit-ship-progress" hidden>
+      <div class="edit-modal-card edit-ship-panel">
+        <h3 class="edit-modal-title" id="edit-ship-heading">Shipping…</h3>
+        <ul class="edit-ship-steps" id="edit-ship-steps"></ul>
+        <div class="edit-modal-actions">
+          <button type="button" class="edit-btn edit-btn--ghost" id="edit-ship-close" hidden>Close</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Catalog + AniList franchise helper + shared markdown renderer, bridged to window. -->
+  <script src="../animeData.js"></script>
+  <script src="../franchise-fetch.js"></script>
+  <script src="../markdown.js"></script>
+  <script src="chat-drawer.js"></script>
+  <script src="modal-scroll-lock.js"></script>
+  <script>window.animeData = (typeof animeData !== 'undefined') ? animeData : (window.animeData || []);</script>
+
+  <script type="module" src="../firebase.js?v=1.8.1"></script>
+  <script type="module" src="edit.js?v=1.8.1"></script>
+</body>
+</html>

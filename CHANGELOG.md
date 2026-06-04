@@ -11,6 +11,30 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-04 -->
+## v1.8.1 — MINOR (2026-06-04)
+
+**The Admin Edit Page.** A premium, brand-parity admin surface for editing existing reviews end-to-end — no more hand-editing Excel. This ship is almost entirely behind-the-scenes tooling; visitors see nothing new except an admin-only edit link that never renders for them.
+
+**Visitor-facing:**
+
+- Nothing user-visible. The only new on-page element — an "edit review" link on a review's badge row — is gated to the admin account and never shown to visitors.
+
+**Behind the scenes (admin tooling):**
+
+- **New `/admin/edit` page.** Lists every catalog review (cover + title, searchable) loaded straight from `animeData.js`, then an editable form for Rating / Seasons / Genre / Studio / Where-to-watch / Trailer / Tags / Top-10 rank / Description and a live-markdown Review preview. Reachable from the admin menu and from an inline "edit review" link on the main review modal (which deep-links straight to that anime's form).
+- **Two save tiers.** A quiet **Save** (Tier-1) writes the edited fields back to Excel through a hard column allowlist — it can never touch the title, the AniList-derived fields, or any other row — then regenerates `animeData.js`. A big-deal **Ship live** (Tier-2) reuses Mode 1's full publish chain (changelog widget -> version bump -> CHANGELOG -> Playwright tests -> commit + push -> deploy) behind a branded confirm that is the production go-signal.
+- **Change-diff confirm.** Both Save and Ship show a readable before -> after table of exactly the fields that changed (long fields shown in full, scrollable) — so an accidental edit can't silently publish. No changes -> the write is skipped.
+- **Interactive watched-set tree.** The franchise checkbox tree (Select all / none / spine, live count, pre-checked from the row's existing set) ported from the new-anime page, so the "reviewed" badges across the site stay correct after an edit.
+- **Live preview overlay.** A "Preview live" button opens the real homepage review modal for that anime in a full-screen iframe (and clicking into a franchise season or "also liked" entry reaches the real deep-dive) — the genuine both-modals experience, reflecting the last saved data.
+- **Revert.** Discards unsaved edits and resets every field, including the watched tree, back to the saved values (branded confirm).
+- **Per-row "Fix from AniList".** One click pulls the row's current US streaming platforms from AniList (same mapping/allowlist/override rules as the platforms backfill, now extracted to a shared `scripts/lib/platform-map.js`), shows current -> proposed, and fills the field on Apply.
+- **The shared assistant on Edit.** The new-anime "ASK" Haiku drawer is mounted on the edit page too (same backend, per-anime history) via a shared drawer module.
+- **Origin-aware navigation.** Opening the form from a review's edit link returns you to that anime's modal on Cancel/back; opening it from the edit list returns you to the list.
+- **Quality + safety.** Page scroll is now locked behind every admin overlay (a shared helper applied to all four admin pages); the Top-10 rank field uses a branded up/down stepper that looks identical across browsers; and a new Playwright spec boots the Mode 1 server and exercises its publish + edit paths in dry-run (no writes) so the pipeline is regression-covered.
+
+**Implementation files:** new `admin/edit.{html,js,css}`, `admin/chat-drawer.js`, `admin/modal-scroll-lock.js`, `scripts/lib/platform-map.js`, `tests/mode1-server.spec.js`; updated `scripts/mode1-server.js` (edit Save/Ship endpoints + per-row platforms + dry-run/test-port hooks), `scripts/backfill-platforms.js` (now reuses the shared platform map), `script.js` (admin edit link), `admin/new-anime.{html,css}` + `admin/season-reviews.html` + `admin/suggestions.html` (scroll-lock + new-anime preview hint), `style.css`. No new dependencies or fonts. `bump-version` is 40 targets.
+
+<!-- author: Code | date: 2026-06-04 -->
 ## v1.8.0 — MINOR (2026-06-04)
 
 **Smoothness Overhaul (round 1) + branded scrollbars.** A perf-focused ship targeting the modal lag Blake reported on Firefox/Gecko (Chrome was already smooth). Root-caused to the layered modals' live `backdrop-filter`; reworked the blur architecture and added site-wide branded scrollbars. Honest scope note: the felt speed change was marginal — the bigger universal levers (see ROADMAP "Smoothness round 2") are measured and queued, not built here.

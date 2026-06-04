@@ -88,7 +88,7 @@ function renderList(catalog) {
     group.className = 'sr-group';
     group.innerHTML =
       '<button type="button" class="sr-group-head" aria-expanded="false">' +
-        (c.image ? '<img class="sr-group-cover" src="../' + escapeHtml(c.image) + '" alt="" loading="lazy">' : '<span class="sr-group-cover sr-group-cover--ph"></span>') +
+        (c.image ? '<img class="sr-group-cover" src="../assets/' + escapeHtml(c.image) + '" alt="" loading="lazy">' : '<span class="sr-group-cover sr-group-cover--ph"></span>') +
         '<span class="sr-group-title">' + escapeHtml(c.title) + '</span>' +
         '<span class="sr-group-count">' + watched.length + ' season' + (watched.length === 1 ? '' : 's') + '</span>' +
         '<span class="sr-group-chevron" aria-hidden="true">▸</span>' +

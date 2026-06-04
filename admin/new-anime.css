@@ -564,6 +564,17 @@
   justify-content: center;
   min-height: 320px;
 }
+/* v1.8.1 gate-4b — small brand-toned affordance: the real modal preview needs a
+   shipped row (a slug), so it lives on the Edit page, not here. */
+.card-preview-note {
+  margin: 12px 2px 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(187, 134, 252, 0.16);
+  font: 500 0.74rem/1.5 'Outfit', sans-serif;
+  color: #b9aecb;
+  text-align: center;
+}
+.card-preview-note strong { color: #d9c9ff; font-weight: 600; }
 .card-preview-slot .card {
   /* The .card class is defined in style.css for the homepage rendering;
      these rules let it sit cleanly inside the preview panel without the

@@ -1,25 +1,26 @@
 <!-- author: Cowork | date: 2026-06-04 -->
-# v1.8.0 — Compressed sweep (docs cascade + audits + commit + preview — FAST-TRACK)
+# v1.8.1 — Final fix + compressed sweep (docs cascade + audits + commit + preview — FAST-TRACK)
 
-Blake's verdict on gate 1b: feels marginally better at best, no visual complaints (frost not missed, scrollbars good). His call: **ship v1.8.0 as-is, ASAP, and move on.** The gate-1b stop-condition (read what the profiler says is left) is overridden by Blake's explicit close-out — the remaining perf levers move to backlog, not built now. Version → **1.8.0**.
+Blake's 4b smoke: all passed. One cosmetic nit, then the sweep. Version → **1.8.1**.
+
+## 0. Fix-platforms "excluded" line (cosmetic, APPLY first)
+
+`excluded(regional/defunct): Bilibili TV` reads like debug output. Make it premium — e.g. a small amber-tinted note row or kicker-style label ("NOT CARRIED · regional/defunct — Bilibili TV") matching the panel's vocabulary. Your visual call, just not raw parenthetical text.
 
 ## Gate: docs cascade
-1. **CHANGELOG.md** v1.8.0 entry — honest framing: blur architecture removed (universal repaint-tax elimination, mechanism-level win), lighter frost radius → static premium dim, branded purple scrollbars site-wide, trailer-iframe console-warning fix, Firefox/cross-engine perf investigation documented (G0 profiling + the headless-can't-measure finding).
-2. **Widget bullets** — visitor-first and DON'T overstate the speed win (Blake felt marginal change). Good angles: the new purple scrollbars, behind-the-scenes work to make the site run lighter in more browsers. No "blazing fast" claims.
-3. `node scripts/bump-version.js 1.8.0` + `--check` (33 expected).
-4. **NEXT.md + ROADMAP.md:**
-   - Mark v1.8.0 shipped (scope: what actually landed — G1+G1b+scrollbars+console fix).
-   - **New backlog entry: "Smoothness round 2 (v1.8.x candidate)"** — the un-built measured levers: G3 render-on-navigate caching (innerHTML rebuild + image re-decode), G4 Firebase SDK defer (~600KB eager on every page, the biggest universal first-load win), image right-sizing (extraLarge→large), G5 perf-regression guard, minify-last (esbuild, the Mode 1 wiring plan from gate 0). Note Blake's verdict ("felt the same after blur removal") + that these are measured, not speculative.
-   - The roadmap ladder otherwise unchanged (next: v1.8.1 admin edit page).
+1. **CHANGELOG.md** v1.8.1 MINOR entry — the Admin Edit Page ship: edit page (list + form + tiered Save/Ship + SSE publish chain), inline ✎ on the modal, watched-set tree, live preview overlay (both modals), diff confirm, Revert, branded stepper, scroll-lock fix (4 admin pages), ✨ASK on edit, Fix-from-AniList per-row, origin-aware nav, Mode-1 Playwright spec, `platform-map.js` extraction, new-anime hint.
+2. **Widget bullets** — visitor-first. NOTE: this ship is ~entirely admin-facing. Visitors got: nothing user-visible except the ✎ (admin-only) — so either ONE modest bullet ("Behind-the-scenes admin tooling so reviews can be fixed and updated faster") or fold it into the next visitor ship's section — follow `widget-update-skill.md`'s visitor-first judgment, don't pad.
+3. `node scripts/bump-version.js 1.8.1` + `--check` (40 expected).
+4. **NEXT.md + ROADMAP.md** — v1.8.1 marked shipped (scope as actually built, incl. the G2b/G4 deferrals that landed and the new-anime convergence flag); ladder next = **v1.8.2 structured review template**.
 
 ## Gate: audits
-`npm test` (8) · `.gitignore` ↔ `firebase.json` mirror · `git diff` review · smart-quote sweep (Grep tool) · confirm `firestore.rules` untouched.
+`npm test` (12) · `.gitignore` ↔ `firebase.json` mirror (new files: `admin/edit.*`, `admin/chat-drawer.js`, `admin/modal-scroll-lock.js`, `scripts/lib/platform-map.js`, `tests/mode1-server.spec.js` — no secrets, deploy-safe; verify) · `git diff` review · smart-quote sweep (Grep tool) · `firestore.rules` untouched check.
 
 ## Gate: commit + push
-Blake-authored, no AI trailers, 7 Cowork excludes out, rolling docs ride in.
+Blake-authored, zero trailers, 7 Cowork excludes out, rolling docs ride in.
 
 ## Gate: preview deploy
-Channel deploy. Post-deploy: `APP_VERSION 1.8.0`, leak checks 404, scrollbar CSS + dim present on-channel.
+Channel deploy. Post-deploy: `APP_VERSION 1.8.1`, `/admin/edit.html` 200 on-channel, leak checks 404 (the 5 standard).
 
 ## Report shape
-Standard sweep report: per-gate results, bullets as written, commit hash, preview URL + checks. Then Blake's preview smoke → "ship it" → prod.
+Standard sweep report + the excluded-line restyle description. Then Blake's preview smoke → "ship it" → prod.

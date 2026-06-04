@@ -4240,6 +4240,12 @@ function openModal(anime) {
   // same kicker/divider/score structure, no external "Rating:" label, bare score
   // (strip a trailing /10 — the kicker supplies the scale, same as the AniList badge).
   const ratingScore = String(anime.Rating || '').replace(/\/\s*10\s*$/, '').trim();
+  // v1.8.1 (gate 2b) — admin-only "✎ Edit review" deep-link, right-aligned in the
+  // empty space on the RATING/ANILIST badge row (Blake's circled spot). UID gate via
+  // window.__rarIsAdmin (admin-fab.js); visitors never see it.
+  const adminEditBadge = (typeof window !== 'undefined' && window.__rarIsAdmin)
+    ? '<a class="modal-admin-edit" href="admin/edit.html?slug=' + encodeURIComponent(animeSlug(anime)) + '&from=modal" title="Edit this review (admin)"><span aria-hidden="true">✎</span> Edit review</a>'
+    : '';
   const ratingHtml =
     '<p class="meta-line meta-line-rating">' +
       '<span class="rating-badge">' +
@@ -4248,6 +4254,7 @@ function openModal(anime) {
         '<span class="rating-badge-score">' + ratingScore + '</span>' +
       '</span>' +
       aniListBadgeHtml +
+      adminEditBadge +
     '</p>';
 
   const genreHtml =
