@@ -1212,7 +1212,7 @@ query ($id: Int) {
   // nothing usable.
   function renderStaffCredits(staffEdges) {
     if (!staffEdges || staffEdges.length === 0) return '';
-    const WHITELIST = ['Director', 'Series Composition', 'Music', 'Character Design'];
+    const WHITELIST = ['Director', 'Series Director', 'Series Composition', 'Music', 'Sound Director', 'Character Design'];
     const picked = [];
     for (const role of WHITELIST) {
       const edge = staffEdges.find(e => e && e.role === role && e.node && e.node.name && e.node.name.full);
@@ -5979,7 +5979,20 @@ try {
     // to the homepage. Normalized to #all after open so a refresh doesn't re-fire.
     const aniListId = Number(decodeURIComponent(h.slice('#secondary='.length)));
     if (typeof showAll === 'function') showAll();
-    if (aniListId && typeof openSecondaryModal === 'function') {
+    // v1.7.6 — a saved id that is an entry's PRIMARY AniListId opens the MAIN
+    // franchise modal (with Blake's review), mirroring renderRecommendations'
+    // routing split; watched-not-primary + non-catalog fall through to the secondary.
+    let openedPrimary = false;
+    const primarySlug = (aniListId && typeof primarySlugForAniListId === 'function') ? primarySlugForAniListId(aniListId) : null;
+    if (primarySlug) {
+      const list = (typeof animeData !== 'undefined' && Array.isArray(animeData)) ? animeData
+        : (Array.isArray(window.animeData) ? window.animeData : []);
+      const mk = (typeof slug === 'function') ? (t) => slug(t)
+        : (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const found = list.find(a => mk(a.Title) === primarySlug);
+      if (found && typeof openModal === 'function') { openModal(found); openedPrimary = true; }
+    }
+    if (!openedPrimary && aniListId && typeof openSecondaryModal === 'function') {
       openSecondaryModal(aniListId, null, null);
     }
     history.replaceState({}, '', location.pathname + location.search + '#all');

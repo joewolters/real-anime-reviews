@@ -11,6 +11,27 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-04 -->
+## v1.7.6 — PATCH (2026-06-04)
+
+**Quick-nags polish.** Five small fixes clearing the backlog before the v1.8.0 Smoothness Overhaul — deliberately render-path-neutral (no new animations or blur) so they don't muddy that ship's before/after.
+
+**Visitor-facing:**
+
+- **Saved reviewed anime open the full review.** Opening a saved anime from your watchlist or favorites now takes you straight to its full franchise review when one exists, instead of the lighter detail view. (Seasons/movies that aren't the main reviewed entry still open the detail view, where their per-season note lives.)
+- **Fixed a layout glitch in "also liked."** A wide format label (like `MOVIE`) could overlap a short title in the "also liked" suggestions — titles now keep clear of the badge.
+- **More crew in the detail panel.** The staff list can now surface a couple more key roles (Series Director, Sound Director).
+- **Cleaner per-season headers.** The per-season episode headers in the franchise panel are now styled as distinct dividers, easier to scan.
+- **The site has its own icon.** A brand favicon (white "R" on purple) now shows in your browser tab and when you save the site to a phone home screen.
+
+**Behind the scenes:**
+
+- **Routing fix location.** The primary-id → main-modal upgrade lives in the `#secondary=<aniListId>` hash handler (where the catalog routing helpers `primarySlugForAniListId`/`isWatchedAniListId` are in scope — they aren't reachable from `account.js`), mirroring `renderRecommendations`' existing three-way split. Watched-not-primary + non-catalog saves keep routing to the secondary modal.
+- **Favicon pipeline.** Downscaled 16/32/180/192/512 PNG rasters generated from `assets/favicon.png` (1254×1254 source kept in `assets/`) via `System.Drawing`; `<link>` icon/apple-touch/manifest tags added to all 7 pages (`index`, `account`, `suggest`, `404`, 3 admin) using root-absolute `/assets/` paths + a new `site.webmanifest`.
+- **ROADMAP restructure.** The stale per-version sections (old v1.8.0 AniList tab, v1.8.5, old v1.9.0 mobile) were renumbered/annotated to the locked post-v1.7.5 ladder.
+
+**Implementation files:** `script.js` (routing handler + staff whitelist), `style.css` (rec-card badge spacing + season-header), `index.html`/`account.html`/`suggest.html`/`404.html`/`admin/*.html` (favicon `<link>`s + version bump), new `site.webmanifest` + `assets/{favicon-16,favicon-32,apple-touch-icon,icon-192,icon-512}.png`. No new visitor-facing dependencies or fonts. `bump-version` stays 33 targets.
+
+<!-- author: Code | date: 2026-06-04 -->
 ## v1.7.5 — MINOR (2026-06-04)
 
 **Watchlist + Favorites everywhere, per-episode & where-to-watch, platforms refresh.** The watchlist/favorites system now works on any AniList entry (not just catalog cards), the in-site detail view gained per-episode info + a Where to Watch section, signed-out saves prompt sign-in, and all 44 reviews' streaming listings were corrected from AniList. Built across gates 1–3e on the v1.7.4 modal architecture.

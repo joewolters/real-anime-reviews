@@ -3096,6 +3096,11 @@ body.filter-open { overflow: hidden; }
   padding: 2px 6px;
   border-radius: 4px;
 }
+/* v1.7.6 — ALSO LIKED cards: the format badge is absolute (top-right corner), so
+   reserve horizontal space in the body — otherwise a short title wraps UNDER a wide
+   badge like "MOVIE" (Blake's Mononoke flag). Scoped to recs (spine rows use a
+   static inline badge, no overlap). */
+.more-info-recommendations .more-info-body { padding-right: 50px; }
 
 /* Staff cluster — Role — Name text rows, non-interactive */
 .more-info-staff {
@@ -3163,6 +3168,17 @@ body.filter-open { overflow: hidden; }
 .more-info-season > summary {
   position: relative;
   padding-left: 22px;
+  /* v1.7.6 — distinct season-divider treatment: uppercase kicker + brand-purple
+     tint + a hairline rule so each season reads as its own section header (was
+     indistinguishable from a plain row). CSS-only, no animation/blur. */
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 700;
+  font-size: .82rem;
+  color: #c9b6ff;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(187,134,252,.16);
 }
 .more-info-season > summary::before {
   content: "▶";
