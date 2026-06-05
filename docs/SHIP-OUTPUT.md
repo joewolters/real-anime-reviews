@@ -1,36 +1,32 @@
 <!-- author: Code | date: 2026-06-05 -->
-# v1.8.3 — Gate 5d (2 polish items — APPLY ✓, uncommitted — LAST build gate)
+# v1.8.3 — PRODUCTION DEPLOY ✅ — LIVE
 
-> **Applied + green (`npm test` 25).** Two small polishes: in admin mode the **provenance line now shares one row with the ✎ Edit pill** under the vote bar (visitors unchanged); and the welcome **quote bubbles now spawn at random heights** (top / middle / bottom), not just from the bottom. No new build items queued — the **sweep is next** after Blake's pass.
+> **Blake said "ship it." `firebase deploy --only hosting` → production complete; live-verified on realanimereviews.com — all green.** v1.8.3 (Website Identity update) is **LIVE**. CODE-HANDOFF refreshed to the live state. Next ship is **v1.8.4 Discovery & Blend** (its own gate-0 design study). Nothing else queued.
 
 ---
 
-## What changed (Δ per file)
-
-### 1. Admin row — provenance joins the Edit pill
-- **`script.js`:** dropped the separate `adminEditRow`; built `underVoteBar` next to `provenanceHtml`: **admin →** one `.modal-admin-edit-row` containing the provenance (left) + the ✎ Edit pill (right); **visitor →** just the standalone centered `.modal-provenance` (no Edit pill, no gap). leftHTML now renders `underVoteBar` after the vote bar.
-- **`style.css`:** `.modal-admin-edit-row` → `justify-content: space-between; align-items:center` and an override so a `.modal-provenance` *inside* the row is left-aligned with no auto margins. Visitor `.modal-provenance` (centered) is untouched.
-
-### 2. Quotes — random vertical spawn
-- **`script.js`:** `launchQuote` now also sets a random **`bottom`** per bubble (`secureRandomInt(88) - 4` → roughly **−4vh … 83vh**), so bubbles appear near the top, middle, or bottom and then drift slowly up from wherever they spawn. Everything else stands: **outer-band X only** (center keep-out), constant slow speed, random 16–34s lifetime, fade in/out. A high-spawn bubble simply rises less before its fade — expected.
-
-## Verification
+## Live verification — realanimereviews.com
 | Check | Result |
 |---|---|
-| `npm test` | **25 passed** |
-| `node --check` script.js | **OK** |
-| `style.css` brace balance | **1152/1152** |
-| visitor provenance | still the centered `.modal-provenance` (g5 test green) |
-| `adminEditRow` leftover | none (replaced by `underVoteBar`) |
-| reduced-motion | unchanged — one static outline bubble |
-| `bump-version` | untouched (sweep) |
+| `/` `APP_VERSION` | **"1.8.3"** ✓ |
+| `/assets/rar_banner.webp` | **200** ✓ |
+| `/assets/icon-192.png` | **200** ✓ |
+| `/docs/SHIP-OUTPUT.md` | **404** ✓ (not leaked) |
+| `/docs/SHIP-PROMPT.md` | **404** ✓ |
+| `/docs/CODE-HANDOFF.md` | **404** ✓ |
+| `/docs/HANDOFF.md` | **404** ✓ |
+| `/tests/welcomed.js` · `/tests/welcome-splash.spec.js` | **404** ✓ |
+| `/.env` · `/playwright.config.js` | **404** ✓ |
 
-## State for next: THE SWEEP (no more build)
-- Uncommitted (G2→G5d; HEAD `857a546`, `APP_VERSION` 1.8.2). **Next is the v1.8.3 sweep:** docs cascade (CHANGELOG widget + CHANGELOG.md + ROADMAP; NEXT.md already carries Cowork's v1.8.3/v1.8.4 update), version bump to **1.8.3** (`bump-version` targets + static fallback + APP_VERSION), audits (`npm test`, gitignore↔firebase mirror, **`git diff` review** incl. `tests/welcomed.js` + `assets/rar_banner.{webp,png}` + the Cowork NEXT.md edit, smart-quote sweep via the Grep tool), then the **Blake-authored commit** (per-commit `--author=`, ZERO trailers, 7 Cowork excludes restore-staged out). **Ships:** `assets/rar_banner.{webp,png}`. **Doesn't deploy:** `tests/*`. Prod only on "ship it."
+- **Commit live:** `3248c73` (Blake-authored, 0 trailers), pushed to `main`, `HEAD == origin/main` confirmed pre-deploy.
+- **Deploy:** `firebase deploy --only hosting` → "Deploy complete!" (hosting only; no Firestore rules changed).
 
-## Blake's quick re-smoke
-1. **Admin row** (needs `npm run mode1` + signed-in admin): open any anime → under "Agree with my Rating?" the **"👁 Blake watched N seasons…"** sits on the **left** and the **✎ Edit review** pill on the **right**, one clean row. (Signed out: just the centered provenance, no pill, no gap — unchanged.)
-2. **Quotes** — fresh browser / private window → the door: the outline quote bubbles now **pop up at random heights** — some near the top, some mid-screen, some low — still only in the side margins, still drifting slowly up and fading in/out.
+## Post-prod
+- **`docs/CODE-HANDOFF.md` refreshed** to the live state: "YOU ARE HERE" now reads v1.8.3 LIVE (`3248c73`, deployed 2026-06-05), with a full map of what shipped (welcome door + per-session gate + flash curtain, Den home, chip filter + Typhoon fixes, live search, continue rail, card/modal provenance, SEO) and **next = v1.8.4 Discovery & Blend gate-0**; the v1.8.4 seeds (Discover/For-You architecture, the background-reveal concept, the Quotes-admin page) are carried forward.
+- **Standing Blake-side TODO (SEO):** in Google Search Console, **Request Indexing** on the homepage so the new favicon/JSON-LD logo replaces the generic globe — the recrawl is on Google's clock (days–weeks), nothing more on our side.
+
+## State / next
+- **v1.8.3 is LIVE.** No build in flight. The next ship is **v1.8.4 (Discovery & Blend)** — Cowork+Code gate-0 design study (three adjacent surfaces: Blake's Reviews / For You / Discover; one card shell + `reviewed` flag; NOT-REVIEWED via the existing secondary modal; plus the v1.8.3 postponements — anime characters on the page + the designed background-reveal concept — and the Quotes-admin page). Seeds are in `docs/CODE-HANDOFF.md` + `docs/NEXT.md`.
 
 ## One-liner reply
-v1.8.3 **Gate 5d (2 polish items) DONE — applied, green (npm test 25), uncommitted — last build gate**: in **admin mode the "👁 Blake watched N seasons" provenance now shares one clean row with the ✎ Edit review pill** under the "Agree with my Rating?" bar (provenance left, pill right via space-between; **visitor view unchanged** — just the centered provenance, no pill, no gap); and the welcome **quote bubbles now spawn at random vertical heights** (top/middle/bottom via a random `bottom` per bubble) instead of all rising from the bottom, with everything else intact (outer-band X / center keep-out, slow drift up, random lifetime, fade in-out, reduced-motion → one static bubble); `node --check` clean, CSS 1152/1152, visitor provenance still green; **no more build items — the v1.8.3 sweep is next** (docs cascade + version bump to 1.8.3 + audits + the Blake-authored commit with the 7 Cowork excludes out) — prod only on your "ship it."
+**v1.8.3 is LIVE in production** — Blake said "ship it," `firebase deploy --only hosting` shipped commit `3248c73` to realanimereviews.com and I live-verified all green: **APP_VERSION 1.8.3**, `/assets/rar_banner.webp` + `/assets/icon-192.png` **200**, and every leak check **404** (SHIP-OUTPUT/SHIP-PROMPT/CODE-HANDOFF/HANDOFF docs, `tests/welcomed.js` + the specs, `.env`, `playwright.config.js`); the Website Identity update is now the live site (per-session welcome door with Blake's banner + slow outline anime-quote bubbles + a pre-paint flash-killing curtain, the BLAKE'S DEN homepage + persistent header + scroll-reveal, the chip filter with live-narrow/Saved/match-count/memory/studio-dedup + the Typhoon type-AND-click fixes, live search + sparse centering, the continue rail, card-footer accents + row alignment, the modal "Blake watched N seasons" provenance, and the SEO icon/JSON-LD); **CODE-HANDOFF is refreshed to the live state** (next = **v1.8.4 Discovery & Blend** gate-0 design study, seeds carried forward) and the only open follow-up is **your** Search Console "Request Indexing" so Google swaps the globe for the site logo on its next crawl — nothing else is queued.

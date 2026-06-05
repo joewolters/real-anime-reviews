@@ -1,10 +1,10 @@
 <!-- author: Code | date: 2026-06-05 -->
 <!-- AUDIENCE: This file is FOR CODE (another Claude Code instance picking up work). -->
 <!-- NOT for Cowork — Cowork reads docs/HANDOFF.md + docs/SHIP-OUTPUT.md and writes docs/SHIP-PROMPT.md. -->
-<!-- STATE: mid-v1.8.3, end of GATE 2 (uncommitted). v1.8.2 LIVE (e6fa47f). Read the "YOU ARE HERE" snapshot below FIRST, then docs/SHIP-PROMPT.md (already staged to v1.8.3 G3). -->
+<!-- STATE: v1.8.3 SHIPPED + LIVE (3248c73, APP_VERSION 1.8.3, deployed 2026-06-05). Next = v1.8.4 Discovery & Blend (its own gate-0 design study). Read the "YOU ARE HERE" snapshot below FIRST. -->
 <!-- Mannerisms + workflow + commit discipline + traps are all below and current — read them; they're how this project runs. -->
 
-⚠️ **Read the "⚠️ YOU ARE HERE" snapshot (next heading) FIRST** — it has the exact current state (mid-v1.8.3, G2 done + uncommitted, G3 staged). The mannerisms / 12-gate workflow / commit discipline / traps that bite hardest are all further down and still accurate — they ARE how we work, read them before you touch code.
+⚠️ **Read the "⚠️ YOU ARE HERE" snapshot (next heading) FIRST** — it has the exact current state (v1.8.3 LIVE; next is v1.8.4's gate-0). The mannerisms / 12-gate workflow / commit discipline / traps that bite hardest are all further down and still accurate — they ARE how we work, read them before you touch code.
 
 # Code → Code Handoff
 
@@ -17,27 +17,27 @@
 
 ---
 
-## ⚠️ YOU ARE HERE (snapshot — 2026-06-05, MID-v1.8.3, end of GATE 2)
+## ⚠️ YOU ARE HERE (snapshot — 2026-06-05, v1.8.3 SHIPPED + LIVE)
 
-**v1.8.2 is the last SHIPPED version — LIVE in prod** (`e6fa47f`, `APP_VERSION="1.8.2"`). **v1.8.3 (Website Identity & Finalization) is IN PROGRESS — built through Gate 2, 100% UNCOMMITTED.** HEAD is still `857a546` (the v1.8.2 docs commit); `APP_VERSION` is still `1.8.2` (the v1.8.3 bump happens in its sweep, gates away).
+**v1.8.3 (Website Identity update) is LIVE in prod** (`3248c73`, `APP_VERSION="1.8.3"`, realanimereviews.com; deployed 2026-06-05). Live-verified: `/` APP_VERSION 1.8.3, `/assets/rar_banner.webp` + `/assets/icon-192.png` 200, all SHIP/HANDOFF/CODE-HANDOFF/tests/.env leak checks 404. **Working tree is clean except this CODE-HANDOFF refresh (the post-prod docs touch-up — commit it with the next docs/handoff commit).**
 
-**⚠️ THERE IS AN UNCOMMITTED v1.8.3 G2 WORKING TREE — don't `git checkout`/`reset` it.** Modified (feature): **`index.html`** (home-view restructure) + **`style.css`** (header backdrop + Blake's Den). Plus the rolling docs. All green (`npm test` **14 passed**) but NOT committed — v1.8.3 commits in its compressed sweep after G5.
+**Next ship is v1.8.4 (Discovery & Blend)** — its own **gate-0 design study** (Cowork+Code). Seeds banked below (carry them forward). No code in flight.
 
 **FIRST STEPS for you (the next Code):**
-1. `docs/SHIP-PROMPT.md` — **already updated by Cowork to the v1.8.3 GATE 3 prompt; ready to read + follow.** (Welcome "Den door" splash + scroll-reveal.)
-2. `docs/SHIP-OUTPUT.md` — what I just did (v1.8.3 **G2**: home restructure + header shell, with **2 flags awaiting Blake's smoke** — see below).
-3. `git status` to confirm you see the uncommitted index.html + style.css before touching anything.
+1. `docs/SHIP-PROMPT.md` — whatever Cowork has staged (likely the v1.8.4 gate-0 brainstorm). Follow ITS gate number.
+2. `docs/SHIP-OUTPUT.md` — the v1.8.3 prod-deploy report (live-verify table).
+3. `git status` + recon the REAL file state before trusting any "already built/done" claim.
 
-### v1.8.3 plan + where the gates are
-**The ship is split:** **v1.8.3 = Identity & polish (LOCAL/CSS, NO AniList)**; **v1.8.4 = Discovery & blend (its own gate-0, seeds banked below).** Blake's locked gate-0/1 picks: **Direction C** (slim persistent header + rail-hub home) · **welcome Mock 1 "Den door"** · **G4/G5 separate** · **characters POSTPONED to v1.8.4** (v1.8.3 keeps scroll-reveal of lines/elements only, NO character art) · brainstorm **#1/#2/#4 IN** (Continue-where-you-left-off rail · static late-night den tint · "Blake watched N seasons" provenance on reviewed cards).
-- **Gate ladder:** G0 recon+propose ✓ · G1 nav/IA + welcome-mocks propose ✓ · **G2 home restructure + header shell ✓ (APPLIED, uncommitted) ← you just inherited this** · **G3 welcome + scroll-reveal (STAGED, next)** · G4 cards-footer-accent + `reviewed`-flag scaffold + filter overhaul (studio dedup etc.) · G5 brainstorm trio · sweep.
-
-### What G2 actually built (so you understand the current DOM)
-`index.html` `#home-view` order is now: **[2 hidden HTML-comment mount points for v1.8.4** — Currently-Airing hero + For-You rail, render NOTHING, no dead UI] → **`#changelog-drop`** (Update Log — UNTOUCHED, still the left-gutter `.side-widget` float) → **`<section class="blakes-den">`** { `.den-header` ("BLAKE'S DEN 隠れ家" kicker + sub) → `.den-top10` (the Top 10 carousel, all IDs intact) → **`#featured-drop.in-den`** (the Latest-Drop card, RELOCATED out of the old right-gutter float into the Den; IDs `#featured-drop`/`#featured-drop-card` preserved so `buildFeaturedDrop` still works) } → **Anime By Genre** (unchanged). `style.css`: `header::before` is now a **persistent** backdrop (was `:hover`-only), + the `.blakes-den` / `.den-*` / `.featured-drop.in-den` rules (the Den is centered + transparent — no full-width panel — so it never collides with the left-gutter Update Log float).
-
-### ⚠️ TWO open flags from G2 — Blake judges at his next smoke; fold his answers into G3
-1. **The right gutter is now EMPTY** (featured moved into the Den; the Update Log stays floating top-left per Blake's "stays in current position"). Asymmetric on wide screens — **by design** (v1.8.4's hero/For-You rail fill that top space). If Blake instead wants the Update Log centered (retiring the gutter layout), that's a quick change.
-2. **The header backdrop is now always-on** (was transparent-until-hover). Pro-site look; one-line revert if he prefers the old hover-only.
+### What v1.8.3 shipped (so you know the current home + welcome + filter shape)
+- **Welcome "door"** (first-visit-of-**session**, `sessionStorage rar:welcomed`): `#welcome-splash` (z 7900) — Blake's banner (`assets/rar_banner.webp`, 140 KB, lazy via `data-src`), textured purple field + lamp glow + SVG crack motif, ようこそ/WELCOME kicker, Bebas wordmark, glowing Enter. **Outline-only comic quote bubbles** (`#welcome-quotes`, `WELCOME_QUOTES` array near `initWelcome` — easy-edit) spawn in OUTER bands only (center keep-out), random X+height, **slow drift up** (CSS-var `--q-dur`/`--q-dist`, constant ~2vh/s, random 16–34s life, max 4, ~6.5s stagger, first after ~4s). A synchronous `<head>` curtain (`html.rar-welcome-pending::before`, JS-only + 5s failsafe) kills the pre-door homepage flash. Exit = `welcomeDoorOut`/`welcomeCardOut`. Reduced-motion → instant door + one static bubble. Esc/Enter/backdrop dismiss. **No footer replay** (per-session only).
+- **Home**: `#home-view` = [2 hidden v1.8.4 mount comments] → `#changelog-drop` (Update Log, left float) → `<section class="blakes-den">` { `.den-header` masthead (Bebas wordmark + flank rules + diamond emblems + 隠れ家) → `.den-top10` (Top 10) → `#featured-drop.in-den` (Latest Drop — PLAIN now; alcove removed) } → `#continue-section` (Continue rail, hidden until history) → Anime By Genre. Header bar persistent (`header::before` always-on). `.reveal` sections fade/rise via `initScrollReveal` (reveal-once, reduced-motion-safe).
+- **Filter** (chips): `.filter-item` = visually-hidden **in-flow zero-size** checkbox (NOT absolute — that caused the Typhoon click scroll-jump) + a `<label>` chip. Live-narrow keeps group headers visible (`.filter-group.is-empty` "no matches"). Saved toggle (`favoritesSet ∪ watchlistSet`), live match-count on Confirm, `localStorage rar:filter:v1` memory, **studio dedup** via `studioKey()` + frequency-canonical in `collectFacets`. matchesFilters compares studios by key. View All + wordmark clear filters+memory.
+- **Search**: live (180ms debounce), `rankBySearch` relevance order (no reshuffle), `.card-container.is-sparse` centers ≤3. ✕ removed; hover-float removed.
+- **Continue rail**: `recordContinue`/`buildContinueRail` (localStorage `rar:continue`, last 6) hooked in `openModal`.
+- **Cards** (`card-render.js`): `.info` shelf + `.card-rating` gold pill + `margin-top:auto` row alignment; `is-reviewed`/`is-not-reviewed` scaffold (v1.8.4 discovery passes `reviewed:false`). Provenance is NOT on cards — it's in the modal.
+- **Modal**: `.modal-provenance` "👁 Blake watched N seasons of this franchise" under the vote bar (from `WatchedAniListIds.length`). Admin: `underVoteBar` puts provenance + the ✎ Edit pill in one `.modal-admin-edit-row` (admin-only).
+- **SEO**: 192 `rel=icon` + Organization/WebSite JSON-LD (logo icon-512) in `<head>`. **Blake-side TODO (still open):** Search Console → Request Indexing on the homepage to trigger the recrawl (logo replaces the globe after Google re-crawls — out of our hands).
+- **Tests 25**; suite-wide `storageState` retired → `tests/welcomed.js` fixture (seeds `sessionStorage rar:welcomed` via `addInitScript`) for interaction specs; first-visit specs import base `@playwright/test`.
 
 ### v1.8.4 seeds (banked — carry into the v1.8.4 gate-0)
 - Discover variants: **currently airing · currently airing BY GENRE · top picks by community**; surfaces should **feel fresh per log-on**.
