@@ -1,10 +1,11 @@
 <!-- author: Code | date: 2026-06-05 -->
 <!-- AUDIENCE: This file is FOR CODE (another Claude Code instance picking up work). -->
 <!-- NOT for Cowork — Cowork reads docs/HANDOFF.md + docs/SHIP-OUTPUT.md and writes docs/SHIP-PROMPT.md. -->
-<!-- STATE: v1.8.3 SHIPPED + LIVE (3248c73, APP_VERSION 1.8.3, deployed 2026-06-05). Next = v1.8.4 Discovery & Blend (its own gate-0 design study). Read the "YOU ARE HERE" snapshot below FIRST. -->
+<!-- STATE: v1.8.3 SHIPPED + LIVE (3248c73, APP_VERSION 1.8.3, deployed 2026-06-05). v1.8.4 (Discovery & Blend) GATE 0 design study is PROPOSED (written to docs/SHIP-OUTPUT.md, NOT applied) and AWAITING Blake's answers to 7 open Qs + a visual-direction pick. Read the "YOU ARE HERE" snapshot below FIRST, then docs/SHIP-PROMPT.md (Cowork has ALREADY staged your next prompt — it's ready to read) + docs/SHIP-OUTPUT.md (the gate-0 proposal you're continuing). -->
+<!-- AUDIENCE REMINDER: this file is FOR CODE (you, the next Claude Code). Cowork reads docs/HANDOFF.md + docs/SHIP-OUTPUT.md and writes docs/SHIP-PROMPT.md — it does NOT read this. -->
 <!-- Mannerisms + workflow + commit discipline + traps are all below and current — read them; they're how this project runs. -->
 
-⚠️ **Read the "⚠️ YOU ARE HERE" snapshot (next heading) FIRST** — it has the exact current state (v1.8.3 LIVE; next is v1.8.4's gate-0). The mannerisms / 12-gate workflow / commit discipline / traps that bite hardest are all further down and still accurate — they ARE how we work, read them before you touch code.
+⚠️ **Read the "⚠️ YOU ARE HERE" snapshot (next heading) FIRST** — it has the exact current state (v1.8.3 LIVE; v1.8.4 gate-0 design study PROPOSED + awaiting Blake's picks). The mannerisms / 12-gate workflow / commit discipline / traps that bite hardest are all further down and still accurate — they ARE how we work, read them before you touch code.
 
 # Code → Code Handoff
 
@@ -17,16 +18,37 @@
 
 ---
 
-## ⚠️ YOU ARE HERE (snapshot — 2026-06-05, v1.8.3 SHIPPED + LIVE)
+## ⚠️ YOU ARE HERE (snapshot — 2026-06-05, v1.8.3 LIVE · v1.8.4 GATE 0 PROPOSED, awaiting Blake)
 
-**v1.8.3 (Website Identity update) is LIVE in prod** (`3248c73`, `APP_VERSION="1.8.3"`, realanimereviews.com; deployed 2026-06-05). Live-verified: `/` APP_VERSION 1.8.3, `/assets/rar_banner.webp` + `/assets/icon-192.png` 200, all SHIP/HANDOFF/CODE-HANDOFF/tests/.env leak checks 404. **Working tree is clean except this CODE-HANDOFF refresh (the post-prod docs touch-up — commit it with the next docs/handoff commit).**
+**v1.8.3 (Website Identity update) is LIVE in prod** (`3248c73`, `APP_VERSION="1.8.3"`, realanimereviews.com; deployed 2026-06-05; docs touch-up `8c94630`). Live-verified all green (APP_VERSION 1.8.3 · banner.webp + icon-192 200 · SHIP/HANDOFF/CODE-HANDOFF/tests/.env all 404).
 
-**Next ship is v1.8.4 (Discovery & Blend)** — its own **gate-0 design study** (Cowork+Code). Seeds banked below (carry them forward). No code in flight.
+**⚠️ YOU ARE MID-v1.8.4 GATE 0 (Discovery & Blend) — PROPOSE-FIRST.** The full **design study is WRITTEN to `docs/SHIP-OUTPUT.md` but NOTHING is applied** (no code, no tests, no commit — `git status` should be clean but for the Cowork-managed docs). It is **AWAITING Blake's answers to 7 open questions + a visual-direction pick** (the gate ends with those Qs). **DO NOT start building until the staged apply-prompt arrives** — Cowork has ALREADY updated `docs/SHIP-PROMPT.md` for you; read it first, it tells you whether Blake answered and what to do next.
 
 **FIRST STEPS for you (the next Code):**
-1. `docs/SHIP-PROMPT.md` — whatever Cowork has staged (likely the v1.8.4 gate-0 brainstorm). Follow ITS gate number.
-2. `docs/SHIP-OUTPUT.md` — the v1.8.3 prod-deploy report (live-verify table).
-3. `git status` + recon the REAL file state before trusting any "already built/done" claim.
+1. **`docs/SHIP-PROMPT.md`** — Cowork's staged prompt (ready to read). Follow ITS gate number. If it carries Blake's gate-0 answers → that's your apply signal for G1; if it's still proposing → keep refining the study, don't build.
+2. **`docs/SHIP-OUTPUT.md`** — the gate-0 design study you're continuing (the whole v1.8.4 plan + the 7 open Qs live here).
+3. `git status` to confirm a clean tree (only the 7 Cowork-managed docs may be dirty), then recon the REAL file state before trusting any claim.
+
+### Where the v1.8.4 plan stands (so you don't re-derive it)
+> **⚠️ The FULL v1.8.4 design study is banked in TWO places:** `docs/SHIP-OUTPUT.md` (rich, but it's a ROLLING doc — gets overwritten the moment you write your first report) AND **`docs/NEXT.md` → the "⭐ v1.8.4 — Discovery & Blend: gate-0 design study" section (DURABLE — read this one if SHIP-OUTPUT has already turned over).** Everything below is the condensed version.
+- **The ship (locked by Blake 2026-06-05):** ONE big ship (no split). **Characters are KILLED** — the **background concept** replaces them as the *sole* visual-identity layer. Quotes-admin page = trailing nice-to-have (optional, last).
+- **Three surfaces:** Blake's Den (the 44, front door, unchanged) · **For You** (his picks + AniList near user taste; signed-out → Trending) · **Discover** (live search pinning his 44 first + Top-10 currently airing + airing-by-genre + community top picks, fresh per log-on). Header grows For-You/Discover via **Direction-C in-page glides**.
+- **My proposed gate order** (in SHIP-OUTPUT): G1 AniList data layer (3 flat queries search/trending/airing on cloned 24h L2 caches, 101922-canary each) → G2 card-shell `reviewed:false` + NOT-REVIEWED sticker + Reviewed/Not-reviewed filter → G3 Discover → G4 For You → G5 header nav + home hole-fill → G6 background layer → G7 brainstorm trio → (G8 optional quotes-admin) → sweep.
+- **Background concept** = a `body::after` black/line-work layer that **lifts per surface** (Den darkest → Discover most open), crossfading on glide (NOT scroll-linked = Gecko-safe). I proposed 2 directions + pick **"Lifting the veil."**
+- **"Fresh per log-on"** = a per-session `sessionStorage` seed → deterministic shuffle of deep candidate pools (stable mid-session, new face each login).
+- **The infra is ALL in place (recon done, file:line in SHIP-OUTPUT):** 2 hidden home mount-points `index.html:186-187`; `franchise-fetch.js` query layer + `module.exports`/`window.franchiseFetch`; 24h L2 cache pattern `script.js:631-667` (clone it); **NOT-REVIEWED modal is FREE** — `openSecondaryModal(id)` `script.js:4994` already renders "NOT REVIEWED YET" + Request; `reviewed:false` card scaffold shipped `card-render.js:62`; `/suggest` 350ms debounce+AbortController `suggest.js:30`.
+- **⚠️ 7 OPEN QUESTIONS gate G1** (header labels · home layout heart-first-vs-airing-on-top · background direction 1/2/3 + reveal-mechanic · airing cache TTL · community-picks copy with NO provider name · filter toggle-vs-segment · two scope-check pitches). They're listed in SHIP-OUTPUT §9 — Blake answers via Cowork; the answers come in the next SHIP-PROMPT.
+- **v1.8.4 seeds** (architecture, the NOT-REVIEWED-is-free saver, the background concept, the quotes-admin page) are in the "### v1.8.4 seeds" section further down — still all valid.
+
+### 💭 Code's creative wants for v1.8.4 (mine, hand them forward — Blake invites design opinions)
+- **Protect the heart.** The single biggest risk this ship is the blend tipping into a firehose. Blake's 44 are the soul; AniList is a *guest in his house*. If a layout choice ever makes the wider world feel co-equal-or-bigger than his curation, it's wrong. Keep the Den first, the world a step sideways. (This is also why I picked "heart-first, world below" for the home and the "darkest in the Den" background — both are hierarchy made physical.)
+- **The "Blake reviewed this" pin is the whole ship in miniature** (pitch #1). If you only land one brainstorm idea, land that — it's the moment a stranger *gets* the blend without reading a word: a live search result that lights up gold because *he's already got a take on it*. Cheap, high-meaning. Fight for it.
+- **The background is the identity now** (characters are dead). Don't treat G6 as decoration — it's the thing that makes door → Den → Discover feel like ONE place. The welcome door's purple + line-work + "in space" language is the seed vocabulary; the whole site should feel like the same room breathing. Build it so the reveal is *felt*, not noticed.
+- **Resist mocking data.** Do G1 (real AniList) first for a reason — every downstream design decision (how many cards fit, how titles wrap, how empty states read) should be made against REAL data, never lorem-ipsum. The catalog is only 44; the world is messy. Design for the mess.
+- **Copy carries the brand.** No provider names anywhere visitor-facing (hard rule), but that's a gift — it forces *Blake's voice* into the empty states and kickers ("NOT REVIEWED YET — want me to?", "what the world's watching", "in your lane"). Write them like he talks. The site already does this (Den, 隠れ家, the footer "about me"); keep it personal.
+- **My honest worry:** the freshness shuffle + live data + scroll effects are all Gecko-sensitive at once for the first time in this project. Stage them so each is individually Profiler-checkable (Blake's headed Firefox Profiler is the arbiter, headless can't measure paint — see the v1.8.0 lessons below). If the background reveal ever needs to be scroll-driven, that's the one to be paranoid about.
+
+### What v1.8.3 shipped (so you know the current home + welcome + filter shape)
 
 ### What v1.8.3 shipped (so you know the current home + welcome + filter shape)
 - **Welcome "door"** (first-visit-of-**session**, `sessionStorage rar:welcomed`): `#welcome-splash` (z 7900) — Blake's banner (`assets/rar_banner.webp`, 140 KB, lazy via `data-src`), textured purple field + lamp glow + SVG crack motif, ようこそ/WELCOME kicker, Bebas wordmark, glowing Enter. **Outline-only comic quote bubbles** (`#welcome-quotes`, `WELCOME_QUOTES` array near `initWelcome` — easy-edit) spawn in OUTER bands only (center keep-out), random X+height, **slow drift up** (CSS-var `--q-dur`/`--q-dist`, constant ~2vh/s, random 16–34s life, max 4, ~6.5s stagger, first after ~4s). A synchronous `<head>` curtain (`html.rar-welcome-pending::before`, JS-only + 5s failsafe) kills the pre-door homepage flash. Exit = `welcomeDoorOut`/`welcomeCardOut`. Reduced-motion → instant door + one static bubble. Esc/Enter/backdrop dismiss. **No footer replay** (per-session only).
