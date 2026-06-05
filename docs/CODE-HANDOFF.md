@@ -1,6 +1,10 @@
-<!-- author: Code | date: 2026-06-04 -->
+<!-- author: Code | date: 2026-06-05 -->
 <!-- AUDIENCE: This file is FOR CODE (another Claude Code instance picking up work). -->
 <!-- NOT for Cowork — Cowork reads docs/HANDOFF.md + docs/SHIP-OUTPUT.md and writes docs/SHIP-PROMPT.md. -->
+<!-- STATE: mid-v1.8.3, end of GATE 2 (uncommitted). v1.8.2 LIVE (e6fa47f). Read the "YOU ARE HERE" snapshot below FIRST, then docs/SHIP-PROMPT.md (already staged to v1.8.3 G3). -->
+<!-- Mannerisms + workflow + commit discipline + traps are all below and current — read them; they're how this project runs. -->
+
+⚠️ **Read the "⚠️ YOU ARE HERE" snapshot (next heading) FIRST** — it has the exact current state (mid-v1.8.3, G2 done + uncommitted, G3 staged). The mannerisms / 12-gate workflow / commit discipline / traps that bite hardest are all further down and still accurate — they ARE how we work, read them before you touch code.
 
 # Code → Code Handoff
 
@@ -13,9 +17,39 @@
 
 ---
 
-## Right now (snapshot — 2026-06-05, v1.8.2 SHIPPED + LIVE)
+## ⚠️ YOU ARE HERE (snapshot — 2026-06-05, MID-v1.8.3, end of GATE 2)
 
-**v1.8.2 (Structured review template) is the LAST shipped version — LIVE in prod** (commit `e6fa47f`, `APP_VERSION="1.8.2"`, realanimereviews.com; deployed 2026-06-04). HEAD == origin/main == prod. Working tree is clean except the rolling docs (this file + `docs/SHIP-OUTPUT.md`, next docs commit). **If you're the next Code: read `docs/SHIP-PROMPT.md` for the staged gate — next ship is v1.8.3 (Website Identity & Finalization).**
+**v1.8.2 is the last SHIPPED version — LIVE in prod** (`e6fa47f`, `APP_VERSION="1.8.2"`). **v1.8.3 (Website Identity & Finalization) is IN PROGRESS — built through Gate 2, 100% UNCOMMITTED.** HEAD is still `857a546` (the v1.8.2 docs commit); `APP_VERSION` is still `1.8.2` (the v1.8.3 bump happens in its sweep, gates away).
+
+**⚠️ THERE IS AN UNCOMMITTED v1.8.3 G2 WORKING TREE — don't `git checkout`/`reset` it.** Modified (feature): **`index.html`** (home-view restructure) + **`style.css`** (header backdrop + Blake's Den). Plus the rolling docs. All green (`npm test` **14 passed**) but NOT committed — v1.8.3 commits in its compressed sweep after G5.
+
+**FIRST STEPS for you (the next Code):**
+1. `docs/SHIP-PROMPT.md` — **already updated by Cowork to the v1.8.3 GATE 3 prompt; ready to read + follow.** (Welcome "Den door" splash + scroll-reveal.)
+2. `docs/SHIP-OUTPUT.md` — what I just did (v1.8.3 **G2**: home restructure + header shell, with **2 flags awaiting Blake's smoke** — see below).
+3. `git status` to confirm you see the uncommitted index.html + style.css before touching anything.
+
+### v1.8.3 plan + where the gates are
+**The ship is split:** **v1.8.3 = Identity & polish (LOCAL/CSS, NO AniList)**; **v1.8.4 = Discovery & blend (its own gate-0, seeds banked below).** Blake's locked gate-0/1 picks: **Direction C** (slim persistent header + rail-hub home) · **welcome Mock 1 "Den door"** · **G4/G5 separate** · **characters POSTPONED to v1.8.4** (v1.8.3 keeps scroll-reveal of lines/elements only, NO character art) · brainstorm **#1/#2/#4 IN** (Continue-where-you-left-off rail · static late-night den tint · "Blake watched N seasons" provenance on reviewed cards).
+- **Gate ladder:** G0 recon+propose ✓ · G1 nav/IA + welcome-mocks propose ✓ · **G2 home restructure + header shell ✓ (APPLIED, uncommitted) ← you just inherited this** · **G3 welcome + scroll-reveal (STAGED, next)** · G4 cards-footer-accent + `reviewed`-flag scaffold + filter overhaul (studio dedup etc.) · G5 brainstorm trio · sweep.
+
+### What G2 actually built (so you understand the current DOM)
+`index.html` `#home-view` order is now: **[2 hidden HTML-comment mount points for v1.8.4** — Currently-Airing hero + For-You rail, render NOTHING, no dead UI] → **`#changelog-drop`** (Update Log — UNTOUCHED, still the left-gutter `.side-widget` float) → **`<section class="blakes-den">`** { `.den-header` ("BLAKE'S DEN 隠れ家" kicker + sub) → `.den-top10` (the Top 10 carousel, all IDs intact) → **`#featured-drop.in-den`** (the Latest-Drop card, RELOCATED out of the old right-gutter float into the Den; IDs `#featured-drop`/`#featured-drop-card` preserved so `buildFeaturedDrop` still works) } → **Anime By Genre** (unchanged). `style.css`: `header::before` is now a **persistent** backdrop (was `:hover`-only), + the `.blakes-den` / `.den-*` / `.featured-drop.in-den` rules (the Den is centered + transparent — no full-width panel — so it never collides with the left-gutter Update Log float).
+
+### ⚠️ TWO open flags from G2 — Blake judges at his next smoke; fold his answers into G3
+1. **The right gutter is now EMPTY** (featured moved into the Den; the Update Log stays floating top-left per Blake's "stays in current position"). Asymmetric on wide screens — **by design** (v1.8.4's hero/For-You rail fill that top space). If Blake instead wants the Update Log centered (retiring the gutter layout), that's a quick change.
+2. **The header backdrop is now always-on** (was transparent-until-hover). Pro-site look; one-line revert if he prefers the old hover-only.
+
+### v1.8.4 seeds (banked — carry into the v1.8.4 gate-0)
+- Discover variants: **currently airing · currently airing BY GENRE · top picks by community**; surfaces should **feel fresh per log-on**.
+- **⚠️ NEW (banked v1.8.3 gate 4b — Blake's background concept, think about during v1.8.4 design):** a designed **black/opaque layer** (gradients, line-work, purple-themed) OVER the existing city backdrop (`assets/call-of-the-night-bg.jpg`), where the backdrop **gradually reveals** as context changes (his Latest-Drop "alcove" from G3b is the seed of this — extend the reveal-toward-the-edges idea site-wide); LATER, **distinct purple-themed backgrounds per page**. He wants this **paired with the postponed character art** (also v1.8.4). No build in v1.8.3 — design-phase input for v1.8.4. (Note: v1.8.3 G5 shipped a *static* per-load den-tint `body::after` — the v1.8.4 concept is the richer, context-reactive evolution of that.)
+- **⚠️ NEW (banked v1.8.3 gate 5 — Blake): a "Quotes admin page"** to manage the welcome-door quotes from a UI instead of the `WELCOME_QUOTES` array in `script.js` (currently the easy-to-edit array near `initWelcome`). He ALSO wants his **chatbot (the ✨ASK drawer, `admin/chat-drawer.js` → `window.RarChatDrawer`) available inside that admin page**. His words: "Build an admin page for that. I want my chatbot in there as well." Pattern to follow: the existing `admin/season-reviews.{html,js,css}` panel (auth-gated via `ADMIN_UID`, classic-script bridges) is the closest template; quotes could persist to a small JSON the homepage fetches (like `season-reviews/index.json`) so the door reads them at runtime. No build in v1.8.3.
+- **Architecture (locked at gate 0):** three ADJACENT surfaces — **Blake's Reviews** (his 44, the front door) / **For You** (his picks + AniList near the user's taste, signed-out→Trending) / **Discover** (live search + clickable "Top 10 currently airing", every card NOT-REVIEWED-stickered). ONE card shell + a `reviewed` flag separates them. **The NOT-REVIEWED modal is FREE: the v1.7.4 secondary modal already renders any AniList id as "NOT REVIEWED YET" + "Request this anime" — a discovery card just calls `openSecondaryModal(id)`.** Reviewing a title (AniList-id match, unchanged admin workflow) auto-upgrades it to a primary catalog card. Data: **3 NEW flat AniList queries** (`search:` / `sort:TRENDING_DESC` / `status:RELEASING`) on the existing 24h `localStorage` L2 cache — **test each against the 101922 Demon-Slayer canary first** (the v1.6.10 500s precedent). For-You candidates = top genres/tags of the user's saved CATALOG entries (mapped through `animeData`); Discover search reuses `/suggest`'s 350ms-debounce + AbortController, pinning his 44 matches first.
+
+---
+
+## (history) v1.8.2 SHIPPED + LIVE
+
+**v1.8.2 (Structured review template) is LIVE in prod** (commit `e6fa47f`, `APP_VERSION="1.8.2"`, realanimereviews.com; deployed 2026-06-04).
 
 ### What v1.8.2 shipped (Structured review template — all live, in `e6fa47f`)
 Reviews can be written in labelled `##` sections (Intro/Animation/Story/Characters/Design/Music/Feel/Extra Thoughts/Overall). **The storage format is ONE markdown string** — `##` headings — unchanged; everything is a render/edit layer on top.
@@ -201,12 +235,18 @@ Commits go to **`main`** directly (every ship). Pre-deploy, verify `git rev-pars
 
 ---
 
-## What's next — v1.8.2 (Structured review template)
+## What's next — v1.8.3 (Website Identity & Finalization) — IN PROGRESS (gate 1, propose-first)
 
-**v1.8.1 is SHIPPED + LIVE (`d60c437`).** The next ship is **v1.8.2 — Structured review template** (the gate-0 seed, from NEXT.md): fixed scannable sections (Intro / Animation / Story / Characters / Design / Music / Feel / Extra Thoughts / Overall) authored as `##` markdown through the shared `markdown.js`, an admin **"Insert template"** button (on the new-anime AND edit Review fields), sticky **jump-pills** on render, and collapsible `<details>`. Pairs naturally with the v1.8.1 edit-page infra.
-- **One carry-forward (optional):** the **new-anime ASK-drawer convergence** — migrate new-anime's inline chat drawer onto the shared `admin/chat-drawer.js` (`window.RarChatDrawer`). Low-risk cleanup; not blocking.
+**v1.8.2 is SHIPPED + LIVE (`e6fa47f`).** v1.8.3 is the identity ship, split from a bigger plan: **v1.8.3 = Identity & polish (local/CSS, no AniList)**, **v1.8.4 = Discovery & blend (its own gate-0)**. Blake's locked gate-0/gate-1 picks (so far): two ships; signed-out For-You = Trending; welcome once-per-browser re-openable; Discover search pins his 44 first; the Currently-Airing hero debuts in **v1.8.4**; **characters POSTPONED to v1.8.4** (v1.8.3 keeps scroll-reveal of lines/elements only); brainstorm #1/#2/#4 IN (continue-rail · static den tint · "watched N seasons" provenance). Nav direction (A/B/C) + welcome mock (1/2) + gate split awaiting his gate-1 pick — proposal in `docs/SHIP-OUTPUT.md`. **Architecture pick (gate 0):** three adjacent surfaces (Blake's Reviews / For You / Discover), ONE card shell + a `reviewed` flag, NOT-REVIEWED cards reuse the EXISTING v1.7.4 secondary modal (it already renders any AniList id as "NOT REVIEWED YET" + Request pill — the big scope-saver). Proposed v1.8.3 gate split: G2 home+header / G3 welcome+reveal / G4 cards+filter / G5 brainstorm-trio → sweep.
 
-**v1.8.x ladder after this:** v1.8.2 structured-review-template · v1.8.3 Website Identity & Finalization · **Smoothness round 2** (below) · v1.9.0 Community/Account · v1.9.5 UI · v2.0 mobile.
+### ⚠️ v1.8.4 seeds (banked — Blake, gate 1) — carry into the v1.8.4 gate-0
+- **Discover variants:** currently airing · currently airing **BY GENRE** · **top picks by community**.
+- The Discover / For-You surfaces should **feel fresh per log-on** (re-shuffle candidates each session).
+- Recommended v1.8.4 data flow (from gate-0): 3 NEW flat AniList queries (search / trending / `status:RELEASING`) on the existing 24h `localStorage` L2 cache, **tested against the 101922 canary first**; For-You candidates = top genres/tags of the user's saved catalog entries; signed-out = Trending; Discover search reuses the `/suggest` debounce+AbortController pattern, pinning his 44 matches first.
+
+- **One carry-forward (optional):** the **new-anime ASK-drawer convergence** — migrate new-anime's inline chat drawer onto the shared `admin/chat-drawer.js` (`window.RarChatDrawer`). Low-risk cleanup; not blocking. (Also: dead `.md-toolbar`/`.md-btn` CSS prune in `new-anime.css`.)
+
+**v1.8.x ladder after this:** v1.8.3 Identity · v1.8.4 Discovery & Blend · **Smoothness round 2** (below) · v1.9.0 Community/Account · v1.9.5 UI · v2.0 mobile.
 
 **Smoothness round 2 (v1.8.x candidate — MEASURED, not speculative; logged in ROADMAP/NEXT).** Blake closed v1.8.0 at "felt marginal" after the blur removal. The bigger UNIVERSAL levers, with evidence:
 1. **Render-on-navigate caching** — the secondary/More-Info modals rebuild `innerHTML` on every Back/open (`script.js:4790/4810/4376`), re-parsing DOM + re-decoding every image. Cache the built node tree / lazy-decode.

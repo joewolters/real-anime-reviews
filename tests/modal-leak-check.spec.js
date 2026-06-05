@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./welcomed');
 
 /**
  * Regression test for the v1.3.8 §1.2 fix.

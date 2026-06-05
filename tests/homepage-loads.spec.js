@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./welcomed');
 
 test.describe('Homepage', () => {
   test('loads with brand and key elements; no console errors', async ({ page }) => {

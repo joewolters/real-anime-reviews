@@ -1,42 +1,36 @@
 <!-- author: Code | date: 2026-06-05 -->
-# v1.8.2 — Production deploy + Re:ZERO/Eminence Excel cleanup (DONE ✓ — LIVE)
+# v1.8.3 — Gate 5d (2 polish items — APPLY ✓, uncommitted — LAST build gate)
 
-> **v1.8.2 is LIVE in production** (`e6fa47f`, APP_VERSION 1.8.2, realanimereviews.com) and the smoke-test data Blake saved during the editor smoke has been **cleaned out of the canonical Excel** — verified, backed up, surgically stripped, and proven correct by a re-sync that matches the shipped clean `animeData.js` byte-for-byte. Structured reviews are live.
+> **Applied + green (`npm test` 25).** Two small polishes: in admin mode the **provenance line now shares one row with the ✎ Edit pill** under the vote bar (visitors unchanged); and the welcome **quote bubbles now spawn at random heights** (top / middle / bottom), not just from the bottom. No new build items queued — the **sweep is next** after Blake's pass.
 
 ---
 
-## 1. Production deploy
-- Pre-deploy invariant **held** (HEAD == origin/main == `e6fa47f`; working tree clean). `firebase deploy --only hosting` from `Current Version/`.
-- **Live verification on realanimereviews.com:**
+## What changed (Δ per file)
 
-  | Check | Result |
-  |---|---|
-  | `/` | **200** · APP_VERSION **1.8.2** |
-  | `admin/section-editor.js` · `admin/section-editor.css` | **200** · **200** |
-  | leak checks (`.env`, `docs/SHIP-OUTPUT.md`, `docs/CODE-HANDOFF.md`, `docs/COWORK-STYLE.md`, `tests/review-sections.spec.js`) | **all 404** |
-  | Re:ZERO review junk-free on prod | **✓** (0 placeholder matches) |
-- Alignment: commit == origin/main == prod (`e6fa47f`).
+### 1. Admin row — provenance joins the Edit pill
+- **`script.js`:** dropped the separate `adminEditRow`; built `underVoteBar` next to `provenanceHtml`: **admin →** one `.modal-admin-edit-row` containing the provenance (left) + the ✎ Edit pill (right); **visitor →** just the standalone centered `.modal-provenance` (no Edit pill, no gap). leftHTML now renders `underVoteBar` after the vote bar.
+- **`style.css`:** `.modal-admin-edit-row` → `justify-content: space-between; align-items:center` and an override so a `.modal-provenance` *inside* the row is left-aligned with no auto margins. Visitor `.modal-provenance` (centered) is untouched.
 
-## 2. Re:ZERO + Eminence Excel cleanup
-**Verified first (didn't assume):** scanned every Review cell for `## ` / `dgsdgsdg` / placeholder markers. Found **two** smoke-touched rows (no season-review `.md` files exist — `index.json` count 0 — so nothing there):
+### 2. Quotes — random vertical spawn
+- **`script.js`:** `launchQuote` now also sets a random **`bottom`** per bubble (`secureRandomInt(88) - 4` → roughly **−4vh … 83vh**), so bubbles appear near the top, middle, or bottom and then drift slowly up from wherever they spawn. Everything else stands: **outer-band X only** (center keep-out), constant slow speed, random 16–34s lifetime, fade in/out. A high-spawn bubble simply rises less before its fade — expected.
 
-| Row | Title | Before | After | What was removed |
-|---|---|---|---|---|
-| 18 | Re:ZERO − Starting Life in Another World | 3196 chars | **737** | the appended `## Intro/## Story/## Animation/…/## Overall` blocks (`**A start** *sometimes* it happens`, `dgsdgsdg…` mashing) |
-| 21 | The Eminence in Shadow | 1408 chars | **458** | the appended `## Intro/## Story/…` blocks (pasted "e tone of the anime…" fragments + empty `## Characters`/`## Extra Thoughts`) |
+## Verification
+| Check | Result |
+|---|---|
+| `npm test` | **25 passed** |
+| `node --check` script.js | **OK** |
+| `style.css` brace balance | **1152/1152** |
+| visitor provenance | still the centered `.modal-provenance` (g5 test green) |
+| `adminEditRow` leftover | none (replaced by `underVoteBar`) |
+| reduced-motion | unchanged — one static outline bubble |
+| `bump-version` | untouched (sweep) |
 
-**Both rows' real prose reviews are byte-intact** — only the placeholder sections after the first `\n\n## ` were stripped (a dry pass printed the full cleaned text for eyeball confirmation before any write). Neither real review ever contained a `##`, so the strip-from-first-`## ` rule is exact.
+## State for next: THE SWEEP (no more build)
+- Uncommitted (G2→G5d; HEAD `857a546`, `APP_VERSION` 1.8.2). **Next is the v1.8.3 sweep:** docs cascade (CHANGELOG widget + CHANGELOG.md + ROADMAP; NEXT.md already carries Cowork's v1.8.3/v1.8.4 update), version bump to **1.8.3** (`bump-version` targets + static fallback + APP_VERSION), audits (`npm test`, gitignore↔firebase mirror, **`git diff` review** incl. `tests/welcomed.js` + `assets/rar_banner.{webp,png}` + the Cowork NEXT.md edit, smart-quote sweep via the Grep tool), then the **Blake-authored commit** (per-commit `--author=`, ZERO trailers, 7 Cowork excludes restore-staged out). **Ships:** `assets/rar_banner.{webp,png}`. **Doesn't deploy:** `tests/*`. Prod only on "ship it."
 
-**Process (Mode-1 convention):** `checkExcelLock` → **`backupExcel`** (`Anime_Master_Table.bak.2026-06-05T02-28-32-179Z.xlsx`) → stripped rows 18 & 21 → `XLSX.writeFile`.
-
-**Proof it matches what shipped:** `npm run sync` → `git diff animeData.js` showed **only the `// Last sync:` timestamp comment changed** — the Review content (and all 44 rows) is **byte-identical to the committed clean `animeData.js`**. That's the load-bearing confirmation: the cleanup reproduced exactly the version that's live. I reverted the cosmetic timestamp and removed the two temp cleanup scripts. **Re-scan: 0 rows with junk markers.** Excel is canonical-clean; a future `npm run sync` produces no junk.
-
-## 3. Handoff refresh
-- `docs/CODE-HANDOFF.md` updated to live v1.8.2: the snapshot (section-template architecture — `markdown.js` parse/compile + extractSections, the Kicker Rail + scroll-spy, the shared `section-editor.js`, the G3 pivot), the **perf note corrected** (the modal frost is BACK by Blake's choice — don't re-remove), the fresh-session pointer, and the paste-ready one-liner. Added a standing reminder: **`git diff`-review before every sweep commit** (this ship's editor smoke wrote test junk into 2 Excel cells → animeData.js, caught at the diff).
-
-## What's next
-- **v1.8.3 — Website Identity & Finalization** (scroll-reveal lines, first-visit welcome, anime characters on the page, card touch-ups + TBD identity features; its gate 0 is a Cowork+Code identity brainstorm). Then Smoothness round 2, v1.9.0 community, v1.9.5 UI, v2.0 mobile.
-- Optional carry-forwards (NEXT backlog): new-anime ASK-drawer convergence onto `chat-drawer.js`; dead `.md-toolbar`/`.md-btn` CSS prune in `new-anime.css`.
+## Blake's quick re-smoke
+1. **Admin row** (needs `npm run mode1` + signed-in admin): open any anime → under "Agree with my Rating?" the **"👁 Blake watched N seasons…"** sits on the **left** and the **✎ Edit review** pill on the **right**, one clean row. (Signed out: just the centered provenance, no pill, no gap — unchanged.)
+2. **Quotes** — fresh browser / private window → the door: the outline quote bubbles now **pop up at random heights** — some near the top, some mid-screen, some low — still only in the side margins, still drifting slowly up and fading in/out.
 
 ## One-liner reply
-v1.8.2 is **LIVE in production** (`e6fa47f`, APP_VERSION 1.8.2 — verified `/` 200, `section-editor.{js,css}` 200, leak checks 404, Re:ZERO junk-free, commit==main==prod) and the **Re:ZERO + Eminence Excel cleanup is done**: I scanned the canonical xlsx (no season-review files exist), found Blake's editor-smoke placeholder `##` sections appended to **two** Review cells (Re:ZERO row 18: 3196→737 chars; Eminence row 21: 1408→458 — only the `## Intro/## Story/…/dgsdgsdg…` blocks removed, real prose byte-intact, confirmed by a dry print before writing), **backed up the xlsx** (`.bak.2026-06-05T02-28-32-179Z`), stripped both, and **proved it** by `npm run sync` → `git diff animeData.js` showing **only the sync-timestamp comment changed** = Review content byte-identical to the shipped clean version, then reverted the timestamp + removed the temp scripts (re-scan: 0 junk rows, Excel canonical-clean so no future sync re-imports it); refreshed `docs/CODE-HANDOFF.md` to live v1.8.2 (incl. the corrected perf note — the modal frost is back by Blake's call, don't re-remove — and a standing "git-diff-review before every sweep commit" reminder); **next is v1.8.3 Website Identity & Finalization** (gate 0 = identity brainstorm).
+v1.8.3 **Gate 5d (2 polish items) DONE — applied, green (npm test 25), uncommitted — last build gate**: in **admin mode the "👁 Blake watched N seasons" provenance now shares one clean row with the ✎ Edit review pill** under the "Agree with my Rating?" bar (provenance left, pill right via space-between; **visitor view unchanged** — just the centered provenance, no pill, no gap); and the welcome **quote bubbles now spawn at random vertical heights** (top/middle/bottom via a random `bottom` per bubble) instead of all rising from the bottom, with everything else intact (outer-band X / center keep-out, slow drift up, random lifetime, fade in-out, reduced-motion → one static bubble); `node --check` clean, CSS 1152/1152, visitor provenance still green; **no more build items — the v1.8.3 sweep is next** (docs cascade + version bump to 1.8.3 + audits + the Blake-authored commit with the 7 Cowork excludes out) — prod only on your "ship it."

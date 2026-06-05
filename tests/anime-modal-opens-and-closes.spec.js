@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./welcomed');
 
 test.describe('Anime modal', () => {
   test('opens on card click and closes via close button', async ({ page }) => {

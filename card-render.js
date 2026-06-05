@@ -52,10 +52,14 @@
     return null;
   }
 
-  function renderAnimeCardMarkup(anime, { animeId, assetBase = 'assets/' } = {}) {
+  function renderAnimeCardMarkup(anime, { animeId, assetBase = 'assets/', reviewed = true } = {}) {
     animeId = animeId || slug(anime.Title);
     const card = document.createElement("div");
-    card.className = "card";
+    // v1.8.3 gate 4 — `reviewed` modifier scaffold. Every catalog card is one of
+    // Blake's reviews (reviewed=true, the default). v1.8.4's discovery/For-You cards
+    // pass reviewed:false to render the "NOT REVIEWED YET" affordance off the same
+    // shell. The class is the seam; v1.8.3 only styles the reviewed state.
+    card.className = "card " + (reviewed ? "is-reviewed" : "is-not-reviewed");
     card.dataset.animeid = animeId;
     // v1.7.1 — romaji subtitle under the title, only when it differs from the
     // displayed title (skips identical-romaji titles like "Chainsaw Man").
@@ -92,8 +96,8 @@
   <div class="info">
     <h3 class="title-text">${anime.Title}</h3>
     ${romaji}
-    <p>${anime.Genre || ""}</p>
-    <span>${anime.Rating || ""}</span>
+    <p class="card-genre">${anime.Genre || ""}</p>
+    <span class="card-rating">${anime.Rating || ""}</span>
   </div>
 `;
     return card;

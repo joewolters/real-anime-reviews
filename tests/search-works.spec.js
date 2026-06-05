@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./welcomed');
 
 test.describe('Search', () => {
   test('filters cards by query and restores when cleared', async ({ page }) => {

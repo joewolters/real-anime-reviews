@@ -45,6 +45,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const top10Next = document.getElementById("top10-next");
   const top10Counter = document.getElementById("top10-counter");
   const recommendedRow = document.getElementById("recommended-row");
+  const continueSection = document.getElementById("continue-section");
+  const continueRow = document.getElementById("continue-row");
   const genreShuffleBtn = document.getElementById("genreShuffleBtn");
   const featuredDrop = document.getElementById("featured-drop");
   const featuredDropCard = document.getElementById("featured-drop-card");
@@ -116,7 +118,6 @@ function updateScrollLock() {
   // Search
   const searchForm = document.getElementById("search-form");
   const searchInput = document.getElementById("site-search");
-  const clearSearchBtn = document.getElementById("clear-search");
 
   // Filter
   const filterBtn = document.getElementById("filter-btn");
@@ -128,7 +129,14 @@ function updateScrollLock() {
   const filterClearBtn = document.getElementById("filter-clear");
   const filterApplyBtn = document.getElementById("filter-apply");
   const summaryEl = document.getElementById("filter-summary");
-  
+  // v1.8.3 gate 4 — filter redesign hooks (live-narrow, Saved quick-filter, counts)
+  const filterSavedBtn   = document.getElementById("filter-saved");
+  const filterSavedCount = document.getElementById("filter-saved-count");
+  const filterNarrowInput = document.getElementById("filter-narrow");
+  const filterNarrowClear = document.getElementById("filter-narrow-clear");
+  const filterNoOpts     = document.getElementById("filter-noopts");
+  const filterApplyCount = document.getElementById("filter-apply-count");
+
 
   // ---------- STATE ----------
   let authMode = 'signin'; // 'signin' | 'signup'
@@ -1341,6 +1349,14 @@ function stripAccidentalPaste(s) {
     if (!s) return [];
     return String(s).split(/[,/&]| and /i).map((x) => x.trim()).filter(Boolean);
   }
+  // v1.8.3 gate 4 — studio dedup key (the v1.6.10 More-Info dedup, hardened for the
+  // filter's real-world variants): strips a leading "Studio " then all non-alphanum,
+  // so "A1 Pictures"/"A-1 Pictures", "Studio Deen"/"Studio DEEN", "Madhouse"/"Studio
+  // Madhouse", and "Zero-G"/"ZERO - G" collapse to one option. Display canonicalization
+  // (which spelling to show) happens in collectFacets.
+  function studioKey(s) {
+    return String(s || "").toLowerCase().replace(/^\s*studio\s+/, "").replace(/[^a-z0-9]/g, "");
+  }
 
   // ---------- AUTH MODAL ----------
   function openAuth(mode = 'signin') {
@@ -1808,17 +1824,36 @@ document.addEventListener('keydown', (e) => {
   function collectFacets() {
     const genres = new Set();
     const tags = new Set();
-    const studios = new Set();
+    const studioFreq = new Map();   // raw display spelling -> occurrence count
     (animeData || []).forEach((a) => {
       getGenres(a).forEach((g) => genres.add(g));
       safeArray(a.Tags).forEach((t) => t && tags.add(t));
-      splitStudios(a.Studio).forEach((s) => studios.add(s));
+      splitStudios(a.Studio).forEach((s) => studioFreq.set(s, (studioFreq.get(s) || 0) + 1));
     });
+    // dedup studios by studioKey; for each key pick the canonical spelling: most
+    // frequent in the data, tie-broken toward proper casing (most lowercase letters)
+    // then alphabetical — yields "A-1 Pictures", "Madhouse", "Studio Deen", "Zero-G".
+    const byKey = new Map();
+    [...studioFreq.keys()].forEach((d) => {
+      const k = studioKey(d);
+      if (!k) return;
+      if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k).push(d);
+    });
+    const studios = [...byKey.values()].map((variants) =>
+      variants.slice().sort((a, b) => {
+        const fa = studioFreq.get(a) || 0, fb = studioFreq.get(b) || 0;
+        if (fb !== fa) return fb - fa;
+        const la = (a.match(/[a-z]/g) || []).length, lb = (b.match(/[a-z]/g) || []).length;
+        if (lb !== la) return lb - la;
+        return a.localeCompare(b);
+      })[0]
+    );
     const sortIns = (arr) => arr.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     return {
       genres: sortIns([...genres]),
       tags: sortIns([...tags]),
-      studios: sortIns([...studios]),
+      studios: sortIns(studios),
     };
   }
 
@@ -1841,6 +1876,36 @@ document.addEventListener('keydown', (e) => {
     renderFacetList(genreListEl, genres, "genre");
     renderFacetList(tagListEl, tags, "tag");
     renderFacetList(studioListEl, studios, "studio");
+    applyFilterNarrow("");   // seed the per-group option counts
+  }
+
+  // v1.8.3 gate 4 — live-narrow the filter options as you type. Visual only (hidden
+  // items keep their checked state), hides empty groups, updates per-group counts,
+  // and shows a "no options" line when nothing matches.
+  function applyFilterNarrow(qRaw) {
+    const q = (qRaw || "").trim().toLowerCase();
+    const groups = filterForm ? filterForm.querySelectorAll(".filter-group") : [];
+    let totalVisible = 0;
+    groups.forEach((group) => {
+      let vis = 0;
+      group.querySelectorAll(".filter-item").forEach((item) => {
+        const label = (item.querySelector("label")?.textContent || "").toLowerCase();
+        const show = !q || label.includes(q);
+        item.hidden = !show;
+        if (show) vis++;
+      });
+      totalVisible += vis;
+      const countEl = group.querySelector(".fg-count");
+      if (countEl) countEl.textContent = q ? String(vis) : (vis ? String(vis) : "");
+      // v1.8.3 gate 5b — the group (its HEADER + count) STAYS visible while narrowing
+      // even at 0 matches, so the panel keeps its structure instead of collapsing to a
+      // near-empty box (the "Typhoon Graphics blanks the panel" report — narrowing to a
+      // single studio used to hide the other two groups entirely). A 0-match group shows
+      // a faint "no matches" line in place of its chips.
+      group.classList.toggle("is-empty", q !== "" && vis === 0);
+    });
+    if (filterNoOpts) filterNoOpts.hidden = totalVisible !== 0;
+    if (filterNarrowClear) filterNarrowClear.hidden = !q;
   }
 
   function getCheckedValues(name) {
@@ -1849,15 +1914,18 @@ document.addEventListener('keydown', (e) => {
   }
 
   // Applied filters only change when Confirm is pressed
-let appliedFilters = { genres: new Set(), tags: new Set(), studios: new Set(), hasAny: false };
+let appliedFilters = { genres: new Set(), tags: new Set(), studios: new Set(), savedOnly: false, hasAny: false };
 
 function readFiltersFromForm() {
   const low = (arr) => arr.map((v) => v.toLowerCase());
   const genres = new Set(low(getCheckedValues("genre")));
   const tags = new Set(low(getCheckedValues("tag")));
-  const studios = new Set(low(getCheckedValues("studio")));
-  const hasAny = genres.size || tags.size || studios.size;
-  return { genres, tags, studios, hasAny };
+  // studios stored as dedup keys so a selected canonical spelling still matches an
+  // anime that carries a variant spelling (e.g. picked "A-1 Pictures" matches "A1 Pictures")
+  const studios = new Set(getCheckedValues("studio").map(studioKey));
+  const savedOnly = !!(filterSavedBtn && filterSavedBtn.getAttribute("aria-pressed") === "true");
+  const hasAny = !!(genres.size || tags.size || studios.size || savedOnly);
+  return { genres, tags, studios, savedOnly, hasAny };
 }
 
 // Anything that renders uses APPLIED filters (not the live checkbox state)
@@ -1870,28 +1938,57 @@ function setAppliedFilters(next) {
     genres: new Set(next.genres),
     tags: new Set(next.tags),
     studios: new Set(next.studios),
+    savedOnly: !!next.savedOnly,
     hasAny: !!next.hasAny
   };
 }
 
 function clearAppliedFilters() {
-  setAppliedFilters({ genres: new Set(), tags: new Set(), studios: new Set(), hasAny: false });
+  setAppliedFilters({ genres: new Set(), tags: new Set(), studios: new Set(), savedOnly: false, hasAny: false });
+}
+
+// v1.8.3 gate 4 — remember the last applied filter across reloads (localStorage).
+const FILTER_MEMORY_KEY = "rar:filter:v1";
+function saveFilterMemory() {
+  try {
+    localStorage.setItem(FILTER_MEMORY_KEY, JSON.stringify({
+      genres: [...appliedFilters.genres],
+      tags: [...appliedFilters.tags],
+      studios: [...appliedFilters.studios],   // stored as dedup keys
+      savedOnly: !!appliedFilters.savedOnly
+    }));
+  } catch (_) {}
+}
+function loadFilterMemory() {
+  let raw = null;
+  try { raw = localStorage.getItem(FILTER_MEMORY_KEY); } catch (_) {}
+  if (!raw) return;
+  let obj; try { obj = JSON.parse(raw); } catch (_) { return; }
+  if (!obj || typeof obj !== "object") return;
+  const genres = new Set((obj.genres || []).map((v) => String(v).toLowerCase()));
+  const tags = new Set((obj.tags || []).map((v) => String(v).toLowerCase()));
+  const studios = new Set((obj.studios || []).map((v) => String(v)));
+  const savedOnly = !!obj.savedOnly;
+  const hasAny = !!(genres.size || tags.size || studios.size || savedOnly);
+  setAppliedFilters({ genres, tags, studios, savedOnly, hasAny });
 }
 
 // When opening the panel, show the currently applied filters in the checkboxes
 function syncFilterFormToApplied() {
   if (!filterForm) return;
 
-  const syncGroup = (name, set) => {
+  const syncGroup = (name, set, keyer) => {
     filterForm.querySelectorAll(`input[name="${name}"]`).forEach((cb) => {
-      const v = (cb.value || "").toLowerCase();
+      const v = keyer ? keyer(cb.value) : (cb.value || "").toLowerCase();
       cb.checked = set.has(v);
     });
   };
 
   syncGroup("genre", appliedFilters.genres);
   syncGroup("tag", appliedFilters.tags);
-  syncGroup("studio", appliedFilters.studios);
+  syncGroup("studio", appliedFilters.studios, studioKey);
+
+  if (filterSavedBtn) filterSavedBtn.setAttribute("aria-pressed", String(!!appliedFilters.savedOnly));
 
   updateFilterUI();
 }
@@ -1899,6 +1996,10 @@ function syncFilterFormToApplied() {
 
   function matchesFilters(anime, f) {
     if (!f.hasAny) return true;
+    if (f.savedOnly) {
+      const id = slug(anime.Title);
+      if (!favoritesSet.has(id) && !watchlistSet.has(id)) return false;
+    }
     if (f.genres.size) {
       const gset = new Set(getGenres(anime).map((x) => x.toLowerCase()));
       if (![...f.genres].some((g) => gset.has(g))) return false;
@@ -1908,7 +2009,7 @@ function syncFilterFormToApplied() {
       if (![...f.tags].some((t) => tset.has(t))) return false;
     }
     if (f.studios.size) {
-      const sset = new Set(splitStudios(anime.Studio).map((x) => x.toLowerCase()));
+      const sset = new Set(splitStudios(anime.Studio).map(studioKey));   // compare by dedup key
       if (![...f.studios].some((s) => sset.has(s))) return false;
     }
     return true;
@@ -1920,20 +2021,42 @@ function syncFilterFormToApplied() {
   const g = (filterForm?.querySelectorAll('input[name="genre"]:checked') || []).length || 0;
   const t = (filterForm?.querySelectorAll('input[name="tag"]:checked') || []).length || 0;
   const s = (filterForm?.querySelectorAll('input[name="studio"]:checked') || []).length || 0;
+  const savedOn = filterSavedBtn && filterSavedBtn.getAttribute("aria-pressed") === "true";
 
   const parts = [];
+  if (savedOn) parts.push("Saved");
   if (g) parts.push(`Genres ${g}`);
   if (t) parts.push(`Tags ${t}`);
   if (s) parts.push(`Studios ${s}`);
 
   summaryEl.textContent = parts.length ? parts.join(" • ") : "No filters applied";
   summaryEl.classList.toggle("is-active", parts.length > 0);
+
+  // v1.8.3 gate 4 — live preview of how many anime the PENDING (form) filters match,
+  // so you see the result size before pressing Confirm. Also keeps the Saved count
+  // fresh. Combined with any active search query for an honest number.
+  const pending = readFiltersFromForm();
+  const q = currentQuery();
+  let count = 0;
+  (animeData || []).forEach((a) => {
+    if (matchesFilters(a, pending) && (!q || matchesSearch(a, q))) count++;
+  });
+  if (filterApplyCount) filterApplyCount.textContent = pending.hasAny || q ? ` (${count})` : "";
+  if (filterApplyBtn) filterApplyBtn.classList.toggle("is-zero", (pending.hasAny || q) && count === 0);
+
+  if (filterSavedCount) {
+    const savedTotal = new Set([...favoritesSet, ...watchlistSet]).size;
+    filterSavedCount.textContent = savedTotal ? ` ${savedTotal}` : "";
+  }
 }
 
 
   function clearAllFilters() {
     if (!filterForm) return;
     filterForm.querySelectorAll('input[type="checkbox"]').forEach((cb) => (cb.checked = false));
+    if (filterSavedBtn) filterSavedBtn.setAttribute("aria-pressed", "false");
+    if (filterNarrowInput) filterNarrowInput.value = "";
+    applyFilterNarrow("");
     updateFilterUI();
   }
 
@@ -2036,7 +2159,12 @@ function positionFeaturedDrop() {
   if (!featuredDrop) return;
 
   // Keep it inside #home-view so it disappears when Home is hidden (View All).
-  if (homeView && featuredDrop.parentElement !== homeView) {
+  // v1.8.3 (gate 3 fix): the card now lives nested inside .blakes-den, so test
+  // CONTAINMENT — not direct-childhood. The old `parentElement !== homeView`
+  // guard was true for the nested card and yanked it back out of the Den on
+  // every init/resize/load. `contains()` keeps the original "stay in home-view"
+  // intent without disturbing its place in the Den.
+  if (homeView && !homeView.contains(featuredDrop)) {
     homeView.insertBefore(featuredDrop, homeView.firstElementChild);
   }
 
@@ -2055,6 +2183,8 @@ function positionFeaturedDrop() {
   function renderGrid(list = animeData) {
     cardContainer.innerHTML = "";
     list.forEach((anime) => cardContainer.appendChild(createCard(anime)));
+    // v1.8.3 gate 4 — 1–3 matches center instead of left-hugging the 4-col track
+    cardContainer.classList.toggle("is-sparse", list.length > 0 && list.length <= 3);
   }
 
   // ---------- SPOTLIGHT (Top 10) ----------
@@ -2404,6 +2534,36 @@ function positionFeaturedDrop() {
 
   function buildGenreRails() {
     rebuildGenreSection();
+  }
+
+  // ===== Continue where you left off (v1.8.3 gate 5) — pure-local recent history =====
+  // Records the slugs of anime the visitor opens (most-recent-first, deduped, capped),
+  // and renders a small rail on the homepage. localStorage only — no account needed.
+  const CONTINUE_KEY = 'rar:continue';
+  const CONTINUE_MAX = 10;       // how many we remember
+  const CONTINUE_VISIBLE = 6;    // v1.8.3 gate 5b — how many show before old ones rotate out
+  function readContinue() {
+    try {
+      const arr = JSON.parse(localStorage.getItem(CONTINUE_KEY) || '[]');
+      return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
+    } catch (_) { return []; }
+  }
+  function recordContinue(animeId) {
+    if (!animeId) return;
+    try {
+      let arr = readContinue().filter((id) => id !== animeId);
+      arr.unshift(animeId);
+      localStorage.setItem(CONTINUE_KEY, JSON.stringify(arr.slice(0, CONTINUE_MAX)));
+    } catch (_) {}
+  }
+  function buildContinueRail() {
+    if (!continueSection || !continueRow) return;
+    const bySlug = new Map((animeData || []).map((a) => [slug(a.Title), a]));
+    const items = readContinue().map((id) => bySlug.get(id)).filter(Boolean).slice(0, CONTINUE_VISIBLE);
+    continueRow.innerHTML = '';
+    if (!items.length) { continueSection.hidden = true; return; }
+    items.forEach((a) => continueRow.appendChild(createCard(a)));
+    continueSection.hidden = false;
   }
 
   function showGenreRails() {
@@ -4271,6 +4431,9 @@ function openModal(anime) {
   stopSpotlightCycle();
   isSpotlightHovered = false;
 
+  // v1.8.3 gate 5 — remember this open for the "Continue where you left off" rail.
+  try { recordContinue(slug(anime.Title)); buildContinueRail(); } catch (_) {}
+
   const tags = safeArray(anime.Tags);
   const platforms = safeArray(anime.Platforms)
     .flatMap((p) => String(p || "").split(/[,\uFF0C\u3001;|/\\\n\r]+/))
@@ -4313,6 +4476,10 @@ function openModal(anime) {
   const adminEditBadge = (typeof window !== 'undefined' && window.__rarIsAdmin)
     ? '<a class="modal-admin-edit" href="admin/edit.html?slug=' + encodeURIComponent(animeSlug(anime)) + '&from=modal" title="Edit this review (admin)"><span aria-hidden="true">✎</span> Edit review</a>'
     : '';
+  // v1.8.3 gate 5c/5d — the admin ✎ Edit pill moved OFF the badge row to sit under the
+  // "Agree with my Rating?" vote bar (Blake's spot). Admin-only. In admin mode it shares
+  // ONE row with the provenance line (built as `underVoteBar` near leftHTML below);
+  // visitors see only the centered provenance. Visitor view otherwise unchanged.
   const ratingHtml =
     '<p class="meta-line meta-line-rating">' +
       '<span class="rating-badge">' +
@@ -4321,7 +4488,6 @@ function openModal(anime) {
         '<span class="rating-badge-score">' + ratingScore + '</span>' +
       '</span>' +
       aniListBadgeHtml +
-      adminEditBadge +
     '</p>';
 
   const genreHtml =
@@ -4382,6 +4548,21 @@ function openModal(anime) {
     ? '<p class="modal-romaji' + (modalSub.kind === 'native' ? ' is-native' : '') + '"><i class="rb">「</i>' + modalSub.text + '<i class="rb">」</i></p>'
     : '';
 
+  // v1.8.3 gate 5b — "Blake watched N seasons" provenance, moved off the cards into the
+  // modal and seated right under the "Agree with my Rating?" vote bar: it substantiates
+  // his rating (here's how much of the franchise he actually watched) at the exact moment
+  // you're deciding whether you agree. From WatchedAniListIds (the ids watched in-franchise).
+  const modalWatchedN = Array.isArray(anime.WatchedAniListIds) ? anime.WatchedAniListIds.length : 0;
+  const provenanceHtml = modalWatchedN > 0
+    ? '<p class="modal-provenance"><span class="mp-eye" aria-hidden="true">&#128065;</span> Blake watched <strong>' +
+      modalWatchedN + '</strong> season' + (modalWatchedN === 1 ? '' : 's') + ' of this franchise</p>'
+    : '';
+  // v1.8.3 gate 5d — admin: provenance + ✎ Edit pill share ONE row under the vote bar;
+  // visitor: just the (centered) provenance line, no Edit pill, no odd gap.
+  const underVoteBar = adminEditBadge
+    ? '<div class="modal-admin-edit-row">' + provenanceHtml + adminEditBadge + '</div>'
+    : provenanceHtml;
+
   // LEFT sheet markup (details + comments)
   const leftHTML =
     '<span class="close-button" aria-label="Close">&times;</span>' +
@@ -4389,6 +4570,7 @@ function openModal(anime) {
     '<h2 class="modal-title">' + anime.Title + '</h2>' +
     modalRomaji +
     officialVotesMarkup(anime) +
+    underVoteBar +
     '<div class="modal-meta">' +
     ratingHtml + genreHtml + seasonsHtml + studioHtml + tagsHtml + platformsHtml +
     '</div>' +
@@ -5679,6 +5861,23 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
     return (searchInput?.value || "").trim();
   }
 
+  // v1.8.3 gate 4 — stable relevance order for live search: exact title, then
+  // title-prefix, then title-substring, then facet-only matches; alpha tie-break.
+  function rankBySearch(list, q) {
+    const needle = norm(q);
+    const score = (a) => {
+      const title = norm(a.Title);
+      if (title === needle) return 0;
+      if (title.startsWith(needle)) return 1;
+      if (title.includes(needle)) return 2;
+      return 3;
+    };
+    return list.slice().sort((a, b) => {
+      const d = score(a) - score(b);
+      return d !== 0 ? d : String(a.Title).localeCompare(String(b.Title));
+    });
+  }
+
   function rerenderAll() {
     const f = readFilters();
     let base = (animeData || []).filter((a) => matchesFilters(a, f));
@@ -5686,6 +5885,7 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
     if (q) base = base.filter((a) => matchesSearch(a, q));
 
     if (!base.length) {
+      cardContainer.classList.remove("is-sparse");
       // v1.7.1 — branded "no results" card (mirrors the suggestions-empty-card
       // vocabulary) replacing the bare text line. SUGGEST ONE always shows —
       // it's a valid action whether the dead-end came from search or filters.
@@ -5701,7 +5901,8 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
         '</div>';
       return;
     }
-    renderGrid(shuffle(base));
+    // stable order while searching (no reshuffle per keystroke); shuffle for filter-only
+    renderGrid(q ? rankBySearch(base, q) : shuffle(base));
   }
 
   function showHome() {
@@ -5737,6 +5938,7 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
   function resetToHome() {
     clearAllFilters();
     clearAppliedFilters();
+    saveFilterMemory();
     if (searchInput) searchInput.value = "";
     inSearchMode = false;
     filterPanel?.classList.remove("open");
@@ -5748,6 +5950,13 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
   viewAllBtn?.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
+    // v1.8.3 gate 4b — "View All Animes" means ALL: clear active filters + search
+    // (and the stored memory) so it's a true reset, not a lingering filtered view.
+    clearAllFilters();
+    clearAppliedFilters();
+    saveFilterMemory();
+    if (searchInput) searchInput.value = "";
+    inSearchMode = false;
     showAll();
   });
   
@@ -5755,6 +5964,12 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
 // Logo/title should hard-refresh the page and return to Home (never stuck on #all)
 homeBtn?.addEventListener("click", (e) => {
   e.preventDefault();
+
+  // v1.8.3 gate 4b — the wordmark resets to a CLEAN home: clear filters + their
+  // stored memory so the reload doesn't restore them. (Reloading mid-browse WITHOUT
+  // clicking the wordmark still restores — the memory feature stays for that flow.)
+  clearAppliedFilters();
+  saveFilterMemory();
 
   // remove any hash routes like #all / #open= / #anime=
   history.replaceState({}, '', location.pathname + location.search);
@@ -5809,22 +6024,29 @@ randomBtn?.addEventListener("click", (e) => {
     });
   }
   if (searchInput) {
+    // v1.8.3 gate 4 — live results as you type (debounced). Empty → back home.
+    let searchDebounce = null;
     searchInput.addEventListener("input", () => {
-      if (searchInput.value.trim() === "" && inSearchMode) {
+      const val = searchInput.value.trim();
+      if (val === "") {
+        if (searchDebounce) { clearTimeout(searchDebounce); searchDebounce = null; }
         inSearchMode = false;
         cardContainer.innerHTML = "";
+        cardContainer.classList.remove("is-sparse");
         showHome();
+        return;
       }
+      if (searchDebounce) clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        searchDebounce = null;
+        inSearchMode = true;
+        if (allView.style.display === "none") showAll();   // first keystroke: enter All view (+ one scroll)
+        else rerenderAll();                                 // subsequent: just re-render in place
+      }, 180);
     });
   }
-  if (clearSearchBtn) {
-    clearSearchBtn.addEventListener("click", () => {
-      inSearchMode = false;
-      searchInput.value = "";
-      cardContainer.innerHTML = "";
-      showHome();
-    });
-  }
+  // v1.8.3 gate 4b — the search ✕ button was removed (Blake's call): clearing the
+  // field text (or blurring) already cancels search via the input handler above.
 
   if (filterBtn && filterPanel) {
     const setFilterOpen = (open) => {
@@ -5832,7 +6054,12 @@ randomBtn?.addEventListener("click", (e) => {
   filterBtn.setAttribute("aria-expanded", String(open));
   document.body.classList.toggle("filter-open", open);
 
-  if (open) syncFilterFormToApplied();
+  if (open) {
+    if (filterNarrowInput) filterNarrowInput.value = "";
+    applyFilterNarrow("");          // start every open with all options visible
+    syncFilterFormToApplied();
+    if (filterNarrowInput) setTimeout(() => { try { filterNarrowInput.focus({ preventScroll: true }); } catch (_) {} }, 30);
+  }
 };
 
     filterBtn.addEventListener("click", (e) => {
@@ -5861,9 +6088,29 @@ randomBtn?.addEventListener("click", (e) => {
       clearAllFilters();
     });
   }
+  if (filterSavedBtn) {
+    filterSavedBtn.addEventListener("click", () => {
+      const on = filterSavedBtn.getAttribute("aria-pressed") === "true";
+      filterSavedBtn.setAttribute("aria-pressed", String(!on));
+      updateFilterUI();
+    });
+  }
+  if (filterNarrowInput) {
+    filterNarrowInput.addEventListener("input", () => applyFilterNarrow(filterNarrowInput.value));
+    // keep Enter inside the narrow box from submitting / leaking to search
+    filterNarrowInput.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+  }
+  if (filterNarrowClear) {
+    filterNarrowClear.addEventListener("click", () => {
+      if (filterNarrowInput) { filterNarrowInput.value = ""; filterNarrowInput.focus(); }
+      applyFilterNarrow("");
+    });
+  }
+
   if (filterApplyBtn) {
   filterApplyBtn.addEventListener("click", () => {
     setAppliedFilters(readFiltersFromForm());
+    saveFilterMemory();   // remember across reloads
 
     // close panel
     filterPanel?.classList.remove("open");
@@ -5976,6 +6223,196 @@ function onScrollHeader() {
     });
   }
 
+  // ===== Welcome door — ambient anime quotes (v1.8.3 gate 4b) =====
+  // EDIT THIS LIST ANYTIME: quotes that slowly scroll up the welcome door. Pulled from
+  // titles in the catalog. Keep `quote` and `source` (shown dim under the quote). This
+  // is a STARTER SET — tweak wording / swap in your favourites freely.
+  const WELCOME_QUOTES = [
+    { quote: "Let the true meaning of almighty be carved into your soul.", source: "Shadow — The Eminence in Shadow" },
+    { quote: "Throughout heaven and earth, I alone am the honored one.", source: "Gojo — Jujutsu Kaisen" },
+    { quote: "I'm just a hero for fun.", source: "Saitama — One Punch Man" },
+    { quote: "Set your heart ablaze.", source: "Rengoku — Demon Slayer" },
+    { quote: "If you don't fight, you can't win.", source: "Eren — Attack on Titan" },
+    { quote: "I'll take a potato chip… and eat it!", source: "Light — Death Note" },
+    { quote: "The journey is what gives the destination its meaning.", source: "Frieren — Frieren: Beyond Journey's End" },
+    { quote: "No matter how many times it takes, I'll save you.", source: "Subaru — Re:Zero" },
+    { quote: "All I ever wanted was an ordinary life.", source: "Denji — Chainsaw Man" },
+    { quote: "Hard work betrays none, but dreams betray many.", source: "Hachiman — My Teen Romantic Comedy" }
+  ];
+
+  // ===== Den-door welcome splash (v1.8.3 gate 3) =====
+  // Shown once per BROWSER SESSION (v1.8.3 gate 5b — sessionStorage, not localStorage):
+  // close the tab → reopen = the door shows again, but in-site navigation within the same
+  // tab (incl. the wordmark reload, which keeps the session) does NOT re-show it. Deferred
+  // until after first paint; banner src lazy; Esc/Enter/backdrop dismiss; reduced-motion →
+  // instant. Own z-tier (CSS 7900).
+  const WELCOME_KEY = 'rar:welcomed';
+  function initWelcome() {
+    const splash = document.getElementById('welcome-splash');
+    if (!splash) return;
+    const enterBtn  = document.getElementById('welcome-enter');
+    const bannerImg = document.getElementById('welcome-banner-img');
+    const quotesLayer = document.getElementById('welcome-quotes');
+    let lastFocus = null;
+    let quoteIdx = 0;
+    let quoteTimer = null;
+    const quotePool = [];
+
+    // Quote bubbles (v1.8.3 gate 5c): outline-only comic speech bubbles (transparent, the
+    // door art shows through; purple text) that fade in at a random OUTER spot, drift up
+    // VERY SLOWLY ("the page is in space"), and fade out at a random time — they need not
+    // reach the top. A center-exclusion keeps them off the banner/wordmark/Enter. A JS
+    // stagger timer only LAUNCHES bubbles; one CSS animation per bubble does the rise (no
+    // per-frame JS). Each bubble gets a random LIFETIME → constant slow speed → random rise
+    // distance (set as CSS vars). Reduced-motion → one static bubble.
+    const QUOTE_MAX = 4;            // max bubbles alive at once
+    const QUOTE_INTERVAL = 6500;   // ms between launches
+    const QUOTE_SPEED = 2.0;       // vh per second — slow drift
+    const QUOTE_LIFE_MIN = 16;     // s
+    const QUOTE_LIFE_VAR = 18;     // + up to this many s (random lifetime)
+
+    function makeQuoteBubble() {
+      const fig = document.createElement('figure');
+      fig.className = 'welcome-quote-bubble';
+      fig.innerHTML = '<blockquote class="wq-text"></blockquote><figcaption class="wq-src"></figcaption>';
+      fig.dataset.busy = '0';
+      quotesLayer.appendChild(fig);
+      return fig;
+    }
+    function fillBubble(fig, q) {
+      fig.querySelector('.wq-text').textContent = '“' + q.quote + '”';
+      fig.querySelector('.wq-src').textContent = q.source || '';
+    }
+    function launchQuote() {
+      if (!quotesLayer || !WELCOME_QUOTES.length) return;
+      let fig = quotePool.find((b) => b.dataset.busy === '0');
+      if (!fig) {
+        if (quotePool.length >= QUOTE_MAX) return;   // at the cap → skip this tick
+        fig = makeQuoteBubble();
+        quotePool.push(fig);
+      }
+      fillBubble(fig, WELCOME_QUOTES[quoteIdx % WELCOME_QUOTES.length]);
+      quoteIdx++;
+      // CENTER EXCLUSION — spawn only in the outer regions (the card/banner/copy live in
+      // the middle). x is fixed for the bubble's life, so it never drifts into the center.
+      const leftSide = secureRandomInt(2) === 0;
+      const pct = leftSide ? (3 + secureRandomInt(20)) : (77 + secureRandomInt(20));
+      fig.style.left = pct + '%';
+      // v1.8.3 gate 5d — random VERTICAL spawn too (top / middle / bottom), then it still
+      // drifts slowly up from wherever it appears (a high spawn just rises less before its
+      // fade — fine). Range: just below the bottom edge up to near the top.
+      fig.style.bottom = (secureRandomInt(88) - 4) + 'vh';
+      // random lifetime → constant slow speed → random rise distance (may not reach top)
+      const life = QUOTE_LIFE_MIN + secureRandomInt(QUOTE_LIFE_VAR + 1);
+      fig.style.setProperty('--q-dur', life + 's');
+      fig.style.setProperty('--q-dist', '-' + Math.round(life * QUOTE_SPEED) + 'vh');
+      fig.dataset.busy = '1';
+      fig.classList.remove('is-rising');
+      void fig.offsetWidth;                          // reflow so the rise restarts
+      fig.classList.add('is-rising');
+      const done = () => {
+        fig.dataset.busy = '0';
+        fig.classList.remove('is-rising');
+        fig.removeEventListener('animationend', done);
+      };
+      fig.addEventListener('animationend', done);
+      setTimeout(done, (life * 1000) + 800);         // fallback if animationend misses
+    }
+    function startQuotes() {
+      if (!quotesLayer || !WELCOME_QUOTES.length) return;
+      quoteIdx = 0;
+      if (REDUCED_MOTION) {                          // one static bubble (outer spot), no motion
+        const fig = quotePool[0] || makeQuoteBubble();
+        if (!quotePool.length) quotePool.push(fig);
+        fillBubble(fig, WELCOME_QUOTES[0]);
+        fig.classList.add('is-static');
+        return;
+      }
+      // v1.8.3 sweep — let the door sit quiet ~4s before the first bubble, then steady cadence
+      if (quoteTimer) { clearTimeout(quoteTimer); clearInterval(quoteTimer); }
+      quoteTimer = setTimeout(function () {
+        launchQuote();
+        quoteTimer = setInterval(launchQuote, QUOTE_INTERVAL);
+      }, 4000);
+    }
+    function stopQuotes() {
+      if (quoteTimer) { clearTimeout(quoteTimer); clearInterval(quoteTimer); quoteTimer = null; }
+      quotePool.forEach((b) => { b.dataset.busy = '0'; b.classList.remove('is-rising'); });
+    }
+
+    function openWelcome() {
+      if (bannerImg && !bannerImg.getAttribute('src') && bannerImg.dataset.src) {
+        bannerImg.src = bannerImg.dataset.src;   // lazy: fetch art only when shown
+      }
+      startQuotes();
+      lastFocus = document.activeElement;
+      splash.hidden = false;
+      splash.setAttribute('aria-hidden', 'false');
+      document.documentElement.classList.remove('rar-welcome-pending');   // door is up → lift the pre-paint curtain
+      document.documentElement.style.overflow = 'hidden';   // lock scroll while open
+      if (!REDUCED_MOTION) {
+        splash.classList.remove('is-out');
+        requestAnimationFrame(() => splash.classList.add('is-in'));
+      }
+      document.addEventListener('keydown', onWelcomeKey, true);
+      if (enterBtn) requestAnimationFrame(() => { try { enterBtn.focus({ preventScroll: true }); } catch (_) {} });
+    }
+
+    function closeWelcome() {
+      try { sessionStorage.setItem(WELCOME_KEY, '1'); } catch (_) {}
+      document.removeEventListener('keydown', onWelcomeKey, true);
+      const finish = () => {
+        splash.hidden = true;
+        splash.setAttribute('aria-hidden', 'true');
+        splash.classList.remove('is-in', 'is-out');
+        document.documentElement.style.overflow = '';
+        stopQuotes();
+        if (lastFocus && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (_) {} }
+      };
+      if (REDUCED_MOTION) { finish(); return; }
+      splash.classList.remove('is-in');
+      splash.classList.add('is-out');
+      let done = false;
+      const once = () => { if (done) return; done = true; splash.removeEventListener('animationend', once); finish(); };
+      splash.addEventListener('animationend', once);
+      setTimeout(once, 560);   // fallback if animationend doesn't fire (exit is ~460ms)
+    }
+
+    function onWelcomeKey(e) {
+      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeWelcome(); }
+    }
+
+    if (enterBtn) enterBtn.addEventListener('click', closeWelcome);
+    splash.addEventListener('click', (e) => { if (e.target === splash) closeWelcome(); });
+
+    let welcomed = '0';
+    try { welcomed = sessionStorage.getItem(WELCOME_KEY) || '0'; } catch (_) {}
+    if (welcomed !== '1') {
+      // two rAFs → let the site paint first, so the splash never blocks first render
+      requestAnimationFrame(() => requestAnimationFrame(openWelcome));
+    }
+  }
+
+  // ===== Scroll-reveal (v1.8.3 gate 3) — reveal-once, compositor-only =====
+  // Adds .reveal-on to <html> (which arms the CSS hide) ONLY when IntersectionObserver
+  // is supported AND motion is allowed, then reveals each .reveal section once as it
+  // enters. No-JS / unsupported / reduced-motion all skip the arm → fully visible.
+  function initScrollReveal() {
+    const els = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+    if (!els.length) return;
+    if (REDUCED_MOTION || typeof IntersectionObserver === 'undefined') return;
+    document.documentElement.classList.add('reveal-on');
+    const io = new IntersectionObserver((entries, obs) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('revealed');
+          obs.unobserve(entry.target);   // reveal-once — never re-hides
+        }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    els.forEach((el) => io.observe(el));
+  }
+
   function init() {
     if (typeof animeData === "undefined") {
       console.error("animeData.js not loaded. Include it before script.js.");
@@ -5988,15 +6425,19 @@ function onScrollHeader() {
     window.addEventListener('resize', () => requestAnimationFrame(positionFeaturedDrop));
     window.addEventListener('load', () => requestAnimationFrame(positionFeaturedDrop));
     buildGenreRails();
+    buildContinueRail();   // v1.8.3 gate 5 — recent-history rail (hidden if empty)
     bindGenreShuffleButton();
     showHome();
+    initScrollReveal();   // v1.8.3 gate 3 — reveal-once home sections
+    initWelcome();        // v1.8.3 gate 3 — first-visit "den door" splash
     if ((location.hash || '') === '#all') {
     showAll();
     }
 
     validateData(animeData);
     buildFilterUI();
-    updateFilterUI();
+    loadFilterMemory();          // v1.8.3 gate 4 — restore last applied filter
+    syncFilterFormToApplied();   // reflect it in the form + summary/counts
     filterPanel?.classList.remove("open");
 
     // Query routes:

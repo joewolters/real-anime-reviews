@@ -1,5 +1,9 @@
-<!-- author: Cowork | date: 2026-06-04 -->
-# Session Handoff — v1.8.1 LIVE · v1.8.2 gate 0 STAGED (structured review template)
+<!-- author: Cowork | date: 2026-06-05 -->
+# Session Handoff — v1.8.2 LIVE (structured reviews) · v1.8.3 Identity in gate-0 discussion
+
+> **2026-06-05 update (mid-session):** v1.8.2 SHIPPED (commit `e6fa47f`, APP_VERSION 1.8.2 verified live; gates 0→3c + sweep + prod all closed 06-04/06-05). Scope as built: Kicker Rail jump-pills + scroll-spy (gold Overall, JP labels) on both Review surfaces; section-aware editor on all three admin surfaces (the raw-`##` plan was pivoted on Blake's smoke — dedicated section blocks now); frost restored on secondary+tertiary backdrops; secondary header action row fixed; drag-reorder, Ctrl+B/I, premium edit-page polish. Tests now 14. Excel smoke-junk in Re:ZERO + Eminence rows cleaned + proven. **Now in flight: v1.8.3 Website Identity & Finalization — clarifying questions with Blake, then a gate-0 brainstorm prompt to Code.** Sections below this line describe the pre-v1.8.2 state; the ⚡ startup script is superseded until rewritten at session close.
+
+# (superseded) Session Handoff — v1.8.1 LIVE · v1.8.2 gate 0 STAGED (structured review template)
 
 > **Written at the close of the 2026-06-04 marathon session** (five ships: v1.7.5 → v1.7.6 → v1.8.0 → v1.8.1, plus the roadmap consolidation). This file is the session bridge — the ⚡ section below is the new chat's startup script.
 

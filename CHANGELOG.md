@@ -10,6 +10,28 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-06-05 -->
+## v1.8.3 — MINOR (2026-06-05)
+
+**Website identity.** The site got a front door and a personality: a first-visit welcome splash, a named "Blake's Den" home section, a redesigned filter, live search, and a handful of premium touches across the cards and modal.
+
+**Visitor-facing:**
+
+- **A welcome "door."** On your first visit each session, the site opens with an atmospheric splash — a banner of Blake's own design faded into a deep-purple field with fine line-work, a ようこそ / WELCOME kicker, the wordmark, and a glowing **Enter**. Outline-style anime quote bubbles drift slowly up the sides like the page is floating in space. Press Enter (or Esc) to step through into the site. It shows once per browser session — close the tab and come back later and it greets you again, but it won't interrupt you while you're browsing.
+- **Blake's Den.** The homepage is reorganized around a proper masthead — **BLAKE'S DEN 隠れ家** — gathering the Top 10 and the latest drop, with the header now a defined, always-present bar. Sections gently fade and rise in as you scroll.
+- **A redesigned filter.** Filters are now tappable **chips** (genres, tags, studios) with a **find-as-you-type** box to narrow the options, a **Saved** quick-filter for your watchlist + favorites, a live count of how many anime match before you apply, and it **remembers your last filter** between reloads. Duplicate studio names (e.g. different spellings of the same studio) are merged into one chip.
+- **Live search.** Typing in the search bar now surfaces matches **instantly** (no need to press Enter), and when only a few results come up they sit **centered** instead of hugging the left. "View All Animes" and the site title now clear any active filters, too.
+- **Continue where you left off.** A new homepage rail shows the last few anime you opened, so you can jump straight back in.
+- **Card + modal touches.** Cards got a subtle "shelf" footer with a gold rating pill, and every row now lines its ratings up cleanly. Opening an anime shows a small **"👁 Blake watched N seasons of this franchise"** line under the rating, so you can see how much of it he actually watched.
+- **Search-result logo.** Behind the scenes, the site now ships proper favicon sizes and a structured-data block so search engines can show the site's own icon instead of a generic globe (this takes effect after the next search-engine crawl).
+
+**Behind the scenes:**
+
+- **Admin:** the **✎ Edit review** deep-link moved out of the rating badges to sit alongside the provenance line, in one clean row under the "Agree with my Rating?" bar (admin-only — visitors never see it).
+- All new motion is reduced-motion-aware (instant / static when the OS prefers reduced motion), and the welcome banner is optimized (2.49 MB → 140 KB WebP) and only loads when the door actually shows.
+
+**Implementation files:** `index.html` (home restructure, welcome splash + curtain, filter panel, head icon/JSON-LD), `style.css` (the Den, header, welcome door + quote bubbles, filter chip redesign, card footer + alignment, modal provenance, scroll-reveal), `script.js` (welcome/quotes/continue-rail/scroll-reveal logic, filter chips + live-narrow + Saved + memory + studio dedup, live search + sparse + relevance order, modal provenance), `card-render.js` (footer classes + `reviewed` scaffold), `assets/rar_banner.{png,webp}`, new Playwright specs (`welcome-splash`, `filter-search`, `g4b-fixes`, `g5` + a `welcomed` fixture). No new dependencies. `bump-version` is 40 targets.
+
 <!-- author: Code | date: 2026-06-04 -->
 ## v1.8.2 — MINOR (2026-06-04)
 

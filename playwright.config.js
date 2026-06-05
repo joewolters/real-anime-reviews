@@ -23,6 +23,11 @@ module.exports = defineConfig({
     baseURL: 'http://127.0.0.1:8765',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // v1.8.3 (gate 5b): the welcome door is now once-per-SESSION (sessionStorage), which
+    // storageState can't seed — so interaction specs import the `tests/welcomed.js`
+    // fixture (an init script seeding sessionStorage rar:welcomed) instead of a global
+    // storageState here. First-visit specs (welcome-splash.spec.js) import
+    // '@playwright/test' directly so the door shows.
   },
 
   projects: [
