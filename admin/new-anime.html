@@ -8,14 +8,15 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script>window.APP_VERSION="1.8.1"</script>
+  <script>window.APP_VERSION="1.8.2"</script>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Admin-only Mode 1 page — not indexed." />
 
-  <link rel="stylesheet" href="../style.css?v=1.8.1" />
-  <link rel="stylesheet" href="../mobile.css?v=1.8.1" media="(max-width: 900px)" />
-  <link rel="stylesheet" href="../admin-fab.css?v=1.8.1" />
-  <link rel="stylesheet" href="new-anime.css?v=1.8.1" />
+  <link rel="stylesheet" href="../style.css?v=1.8.2" />
+  <link rel="stylesheet" href="../mobile.css?v=1.8.2" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="../admin-fab.css?v=1.8.2" />
+  <link rel="stylesheet" href="new-anime.css?v=1.8.2" />
+  <link rel="stylesheet" href="section-editor.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:ital,wght@0,400;0,500;0,600;1,300;1,400&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -177,14 +178,9 @@
           </div>
 
           <div class="admin-row admin-row-wide">
-            <label for="review-input">Review <span class="md-hint">— supports **bold**, *italic*, [links](url), - lists</span></label>
-            <!-- v1.7.4 gate-3b — markdown toolbar + live preview for the Review field -->
-            <div class="md-toolbar" id="review-md-toolbar" role="toolbar" aria-label="Formatting">
-              <button type="button" class="md-btn" data-md="bold" title="Bold (wrap selection in **)"><strong>B</strong></button>
-              <button type="button" class="md-btn" data-md="italic" title="Italic (wrap selection in *)"><em>I</em></button>
-              <button type="button" class="md-btn" data-md="link" title="Link">🔗 Link</button>
-            </div>
-            <textarea id="review-input" rows="6" placeholder="What did you actually think?"></textarea>
+            <label>Review <span class="md-hint">— sections + markdown (bold / italic / links / lists)</span></label>
+            <!-- v1.8.2 gate-3b — section-aware Review editor (shared admin/section-editor.js) -->
+            <div id="review-editor"></div>
             <div class="md-preview-wrap">
               <div class="md-preview-label">PREVIEW</div>
               <div id="review-md-preview" class="md-preview modal-review"></div>
@@ -321,6 +317,7 @@
     document.write(`<script src="../card-render.js?v=${v}"><\/script>`);
     document.write(`<script src="../franchise-fetch.js?v=${v}"><\/script>`);
     document.write(`<script src="../markdown.js?v=${v}"><\/script>`);
+    document.write(`<script src="section-editor.js?v=${v}"><\/script>`);
     document.write(`<script src="modal-scroll-lock.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="../firebase.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="new-anime.js?v=${v}"><\/script>`);

@@ -11,6 +11,25 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-04 -->
+## v1.8.2 — MINOR (2026-06-04)
+
+**Structured, scannable reviews.** Reviews can now be written in labelled sections (Intro / Animation / Story / Characters / Design / Music / Feel / Extra Thoughts / Overall) so you can jump straight to the part you care about — with a behind-the-scenes editor rebuilt so each section is its own field.
+
+**Visitor-facing:**
+
+- **Jump-to-section pills on reviews.** When a review is written in sections, a row of pills appears above it (Animation, Story, Music…). Click one to jump to that section; the active pill highlights as you scroll, and the **Overall** section gets a gold accent matching the rating badge. Each pill carries a small Japanese label, in keeping with the site's bilingual styling. A plain unsectioned review looks exactly as before — the pills only appear when there are sections.
+- **The frosted backdrop is back.** Opening a review's deep-dive (and the character/staff detail layer) again blurs the page behind it — the richer "frosted glass" depth, restored on both layers.
+- **Tidier deep-dive header.** The action row at the top of the deep-dive modal (Request / Watchlist / Favorite / close) now sits in one clean line instead of wrapping and clipping over the banner art.
+
+**Behind the scenes (admin tooling):**
+
+- **Section-aware Review editor** on all three admin surfaces (edit page, season reviews, add-new-anime). Instead of typing raw heading syntax, each section is a dedicated block: a title picker (the nine standard sections with their Japanese labels, or a custom title), its own body field, a B / I / link toolbar, delete, and **drag-and-drop** (or ▲/▼) reordering. An "Add all nine" button drops the full template; the picker greys out sections already added. **Ctrl/⌘ + B / I** work inside any field. The stored format is unchanged (one markdown string), and the editor round-trips existing reviews losslessly — the 44 legacy reviews load as a single intro block to be carved into sections at will.
+- **Premium edit-page polish** — a larger, sticky live-preview pane (with the real pill rail), a kicker-styled Review heading, and a framed Save/Ship helper.
+- New Playwright coverage for the section round-trip and the markdown renderer's section ids (14 specs).
+
+**Implementation files:** `markdown.js` (anchorable heading ids + `extractSections` + `parseReviewSections`/`compileReviewSections` + the section template), new `admin/section-editor.{js,css}`, `script.js` (the pill rail + scroll-spy on both review surfaces, the secondary header bar), `style.css` (pill/header styling, the restored backdrops, the header bar), `admin/edit.{html,js,css}` + `admin/season-reviews.{html,js}` + `admin/new-anime.{html,js}` (the editor swap), `tests/review-template.spec.js` + `tests/review-sections.spec.js`. No new dependencies. `bump-version` is 40 targets.
+
+<!-- author: Code | date: 2026-06-04 -->
 ## v1.8.1 — MINOR (2026-06-04)
 
 **The Admin Edit Page.** A premium, brand-parity admin surface for editing existing reviews end-to-end — no more hand-editing Excel. This ship is almost entirely behind-the-scenes tooling; visitors see nothing new except an admin-only edit link that never renders for them.

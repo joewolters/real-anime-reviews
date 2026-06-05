@@ -721,7 +721,7 @@ function buildExcelRow() {
   const seasons = $('seasons-input').value.trim();
   const genre = $('genre-input').value.trim();
   const description = $('description-input').value.trim();
-  const review = $('review-input').value.trim();
+  const review = reviewValue();
   const tags = $('tags-input').value.trim();
   const watch = combinedWatch();
   const studio = $('studio-input').value.trim();
@@ -777,7 +777,7 @@ function validateBeforeGenerate() {
   if (!$('title-input').value.trim()) errors.push('Title is empty.');
   if (!/^\d+(\.\d+)?\/10$/.test($('rating-input').value.trim())) errors.push('Rating must be X/10 or X.Y/10.');
   if (!$('description-input').value.trim()) errors.push('Description is empty.');
-  if (!$('review-input').value.trim()) errors.push('Review is empty.');
+  if (!reviewValue()) errors.push('Review is empty.');
   if (!$('genre-input').value.trim()) errors.push('Genre is empty.');
   if (!$('seasons-input').value.trim()) errors.push('Seasons is empty.');
   if (!$('tags-input').value.trim()) errors.push('Tags is empty.');
@@ -813,7 +813,7 @@ function buildSubmitPayload() {
     seasons: $('seasons-input').value.trim(),
     genre: $('genre-input').value.trim(),
     description: $('description-input').value.trim(),
-    review: $('review-input').value.trim(),
+    review: reviewValue(),
     tags: $('tags-input').value.trim(),
     watchOfficial: $('watch-official-input').value.trim(),
     studio: $('studio-input').value.trim(),
@@ -1294,9 +1294,10 @@ function wire() {
   $('reset-btn').addEventListener('click', () => {
     for (const id of ['title-input', 'genre-input', 'seasons-input', 'description-input',
                       'studio-input', 'trailer-input', 'watch-official-input', 'tags-input',
-                      'rating-input', 'top10-input', 'review-input', 'image-filename-input']) {
+                      'rating-input', 'top10-input', 'image-filename-input']) {
       $(id).value = '';
     }
+    if (reviewEditor) reviewEditor.load('');   // clear the section-aware Review editor
     state.anilist = null;
     state.imageSource = 'anilist';
     state.imageOverride = '';
@@ -1458,42 +1459,23 @@ if (document.readyState === 'loading') {
 // v1.7.4 (gate 3b) — Review field markdown: live preview + B/I/Link toolbar.
 // Uses the shared window.renderMarkdown (markdown.js) — single source of truth.
 // ============================================================================
+// v1.8.2 (gate 3b) — the Review field is now the shared section-aware editor
+// (admin/section-editor.js); its per-section B/I/🔗 toolbars replace the old single
+// toolbar, and reviewValue() compiles the sections back to the stored markdown.
+let reviewEditor = null;
+function reviewValue() { return reviewEditor ? reviewEditor.value().trim() : ''; }
 function initReviewMarkdown() {
-  const ta = document.getElementById('review-input');
+  const mountEl = document.getElementById('review-editor');
   const preview = document.getElementById('review-md-preview');
-  const toolbar = document.getElementById('review-md-toolbar');
-  if (!ta || !preview) return;
-
+  if (!mountEl || !preview) return;
   const updatePreview = () => {
-    const v = ta.value;
-    preview.innerHTML = (v && v.trim() && window.renderMarkdown)
-      ? window.renderMarkdown(v)
+    const md = reviewEditor ? reviewEditor.value() : '';
+    preview.innerHTML = (md && md.trim())
+      ? (window.RarSectionEditor ? window.RarSectionEditor.previewHtml(md)
+        : (window.renderMarkdown ? window.renderMarkdown(md) : ''))
       : '<p class="md-preview-empty">Formatted preview appears here as you type.</p>';
   };
-
-  // Wrap the current selection (or a placeholder) with markdown markers.
-  const wrap = (before, after, placeholder) => {
-    const s = ta.selectionStart, e = ta.selectionEnd, val = ta.value;
-    const sel = val.slice(s, e) || placeholder;
-    ta.value = val.slice(0, s) + before + sel + after + val.slice(e);
-    const ns = s + before.length;
-    ta.setSelectionRange(ns, ns + sel.length);
-    ta.focus();
-    updatePreview();
-  };
-
-  ta.addEventListener('input', updatePreview);
-  if (toolbar) {
-    toolbar.addEventListener('click', (e) => {
-      const btn = e.target.closest('.md-btn');
-      if (!btn) return;
-      e.preventDefault();
-      const kind = btn.dataset.md;
-      if (kind === 'bold') wrap('**', '**', 'bold text');
-      else if (kind === 'italic') wrap('*', '*', 'italic text');
-      else if (kind === 'link') wrap('[', '](https://)', 'link text');
-    });
-  }
+  if (window.RarSectionEditor) reviewEditor = window.RarSectionEditor.mount(mountEl, { onChange: updatePreview });
   updatePreview();
 }
 

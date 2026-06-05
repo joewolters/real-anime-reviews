@@ -8,14 +8,15 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script>window.APP_VERSION="1.8.1"</script>
+  <script>window.APP_VERSION="1.8.2"</script>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Admin-only review editor — not indexed." />
 
-  <link rel="stylesheet" href="../style.css?v=1.8.1" />
-  <link rel="stylesheet" href="../mobile.css?v=1.8.1" media="(max-width: 900px)" />
-  <link rel="stylesheet" href="suggestions.css?v=1.8.1" />
-  <link rel="stylesheet" href="edit.css?v=1.8.1" />
+  <link rel="stylesheet" href="../style.css?v=1.8.2" />
+  <link rel="stylesheet" href="../mobile.css?v=1.8.2" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=1.8.2" />
+  <link rel="stylesheet" href="edit.css?v=1.8.2" />
+  <link rel="stylesheet" href="section-editor.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700;800&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
@@ -146,11 +147,11 @@
 
         <div class="edit-review-block">
           <div class="edit-review-head">
-            <label for="f-review">Review <span class="edit-hint-tag">markdown supported</span></label>
+            <span class="edit-review-label">Review <span class="edit-hint-tag">sections + markdown</span></span>
           </div>
           <div class="edit-review-split">
-            <textarea id="f-review" rows="10" placeholder="Write the review…"></textarea>
-            <div class="edit-review-preview" id="f-review-preview" aria-label="Review preview"></div>
+            <div id="f-review-editor"></div>
+            <div class="edit-review-preview modal-review" id="f-review-preview" aria-label="Review preview"></div>
           </div>
         </div>
 
@@ -270,10 +271,11 @@
   <script src="../franchise-fetch.js"></script>
   <script src="../markdown.js"></script>
   <script src="chat-drawer.js"></script>
+  <script src="section-editor.js"></script>
   <script src="modal-scroll-lock.js"></script>
   <script>window.animeData = (typeof animeData !== 'undefined') ? animeData : (window.animeData || []);</script>
 
-  <script type="module" src="../firebase.js?v=1.8.1"></script>
-  <script type="module" src="edit.js?v=1.8.1"></script>
+  <script type="module" src="../firebase.js?v=1.8.2"></script>
+  <script type="module" src="edit.js?v=1.8.2"></script>
 </body>
 </html>

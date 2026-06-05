@@ -1,16 +1,14 @@
 <!-- author: Cowork | date: 2026-06-04 -->
-# v1.8.1 — Production deploy (FAST-TRACK)
+# v1.8.2 — Compressed sweep (docs cascade → audits → commit → preview — FAST-TRACK, STOP before prod)
 
-Blake smoked the preview (static surfaces clean; he understands Save/Ship/Fix need his local `npm run mode1` — permanent design, not a preview limitation) and gave the explicit "ship it". Deploy `d60c437` to production.
+G3c re-smoke passed clean. Bundle G1+G2+G3b+G3c and run the sweep. **Do NOT deploy to production — that waits for Blake's explicit "ship it" in chat. He has not said it.**
 
-1. Pre-deploy invariant: HEAD == origin/main == `d60c437`. Stop if not.
-2. `firebase deploy --only hosting` from `Current Version/` (no channel flag, no `firestore:rules` — untouched).
-3. Post-deploy verify on live `realanimereviews.com`:
-   - `/` 200 + `APP_VERSION` flips to `1.8.1`
-   - `/admin/edit` 200 · `chat-drawer.js` + `modal-scroll-lock.js` 200
-   - Leak checks 404: `/.env`, `/docs/SHIP-OUTPUT.md`, `/docs/HANDOFF.md`, `/docs/CODE-HANDOFF.md`, `/docs/COWORK-STYLE.md`, `/tests/mode1-server.spec.js`
-   - Alignment: commit == main == channel == prod
-4. Refresh `docs/CODE-HANDOFF.md` to the live v1.8.1 state. Next ship: **v1.8.2 — Structured review template** (the 9 sections; the NEXT.md brainstorm — `##`-heading authoring + "Insert template" admin button + jump-pill render — is the gate-0 seed).
+1. **CHANGELOG.md** — v1.8.2 MINOR. Visitor-facing is real this time: structured scannable reviews (section pill rail + scroll-spy, gold Overall, JP labels), the restored frosted backdrops, the fixed secondary header row. Then the admin side: section-aware editor across all three surfaces (drag reorder, shortcuts, premium edit-page polish). Author marker per convention.
+2. **Widget** — visitor-first per the skill. No data-provider names. The pill-rail/scannable-sections feature is a genuine visitor bullet; frost + header row likely fold in. Your judgment.
+3. **`bump-version 1.8.2`** — expect **40**, then `--check` all agree.
+4. **NEXT.md + ROADMAP.md** — v1.8.2 ✅ shipped (scoped as actually built incl. the editor pivot + G3c fixes), next pointer → v1.8.3 Website Identity & Finalization. Carry the flagged dead `.md-toolbar` CSS cleanup as a small backlog line.
+5. **Audits** — `npm test` (14), gitignore↔firebase mirror, smart-quote sweep, `git diff` review.
+6. **Commit + push** — Blake author, zero trailers, 7 Cowork excludes out, rolling docs ride in.
+7. **Preview deploy** — verify on the channel: APP_VERSION 1.8.2, new assets 200 (`admin/section-editor.{js,css}`), leak checks 404.
 
-## Report shape
-Standard deploy report: command, files, post-deploy table, alignment, one-liner.
+Report: the usual sweep table + the preview URL + Blake's preview smoke steps. Then stop and wait.

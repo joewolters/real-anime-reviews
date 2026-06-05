@@ -5355,17 +5355,13 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 .secondary-backdrop {
   position: absolute;
   inset: 0;
-  /* v1.8.0 (gate 1b) — Option C "snapshot". The live full-viewport backdrop-filter
-     was the per-repaint Paint tax (Blake's Firefox Profiler on the hover/scroll flow:
-     Paint 41%, 98% Graphics, all self). A live backdrop-filter RE-RESOLVES the blur on
-     every composite — so it can't be made cheap on Gecko/WebKit (G1's Firefox-only
-     layer-promote only nudged 49%->41%). Replaced with a premium STATIC dim (no filter
-     at all) so NO engine pays a re-resolve on hover/scroll. The frost only ever showed
-     in a narrow dimmed sliver (the drawer covers ~94vw), so the visual delta is small;
-     the richer radial+linear dim keeps the "gone deeper" depth. */
-  background:
-    radial-gradient(130% 120% at 6% 40%, rgba(22,7,44,0.52), transparent 62%),
-    linear-gradient(90deg, rgba(8,0,18,0.66), rgba(8,0,18,0.56));
+  /* v1.8.2 — frost RESTORED (Blake's call). v1.8.0 g1b swapped the live blur for a
+     static dim to drop the per-repaint Paint cost, but round 1 "felt the same" so the
+     frost is worth more than the cost here — back to the live backdrop-filter blur
+     (the original v1.7.4 treatment) for the deeper "gone behind frosted glass" depth. */
+  background: rgba(8, 0, 18, 0.55);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
   opacity: 0;
   transition: opacity .28s ease;
 }
@@ -5425,11 +5421,23 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 }
 .secondary-header--bare { min-height: 64px; background: rgba(20,6,38,0.96); }
 
-/* Back chip (top-left) + actions (top-right) float over the banner */
-.secondary-back {
+/* v1.8.2 — one deliberate top bar over the banner: back chip (left) ↔ action
+   cluster (right), space-between, both on a single line. The cluster no longer
+   wraps/clips (the old absolute `max-width:min(70%,460px)` + flex-wrap forced 5
+   labeled pills onto a second row). */
+.secondary-header-bar {
   position: relative;
   z-index: 3;
-  margin: 16px 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.secondary-back {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;          /* shrink (with ellipsis) before the action cluster does */
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -5444,7 +5452,6 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   letter-spacing: .06em;
   text-transform: uppercase;
   cursor: pointer;
-  max-width: calc(100% - 90px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5453,16 +5460,14 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 .secondary-back:hover { background: rgba(40,18,70,0.85); border-color: rgba(187,134,252,0.6); transform: translateX(-2px); }
 
 .secondary-header-actions {
-  position: absolute;
-  top: 16px;
-  right: 16px;
+  position: relative;    /* anchors .secondary-save-tip */
   z-index: 3;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;        /* gate 2b/2b.4: Request now + v1.7.5 watchlist/favorites wrap cleanly */
-  gap: 10px;
-  max-width: min(70%, 460px);
+  flex-wrap: nowrap;     /* single neat row — labels collapse to icons <900px instead of wrapping */
+  flex: 0 0 auto;
+  gap: 8px;
 }
 .secondary-close {
   width: 38px;
@@ -6083,6 +6088,9 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   /* gate 1 (v1.7.5): same collapse for the save pills */
   .secondary-save { padding: 0; width: 38px; justify-content: center; }
   .secondary-save-label { display: none; }
+  /* v1.8.2: pills are now uniform icon circles here — let them wrap into a tidy grid
+     on very narrow widths (no orphaned label, since labels are hidden). */
+  .secondary-header-actions { flex-wrap: wrap; }
 }
 
 /* Reduced-motion: no slide, no spin, no lift — instant + static */
@@ -6110,6 +6118,93 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
    v1.7.4 (gate 3, Surface 1) — BLAKE'S REVIEW (per-season) section in the
    secondary modal. Gold accent distinguishes Blake's voice from AniList purple.
    ============================================================================ */
+/* ============================================================================
+   v1.8.2 — Structured review: "Kicker Rail" jump pills + scroll-spy (Direction A).
+   Shared by the main-modal Review (.modal-review) and the secondary BLAKE'S REVIEW
+   (.secondary-review-body). The rail is sticky at the top of whichever modal scroller
+   it lives in; .md-h gets scroll-margin so a jump clears the sticky rail.
+   ============================================================================ */
+.review-nav {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+  /* v1.8.2 gate-3c — WRAP, don't horizontal-scroll: a hidden-scrollbar overflow row
+     left the later pills (DESIGN onward, with all 9) unreachable on desktop (no
+     horizontal mouse wheel). Wrapping makes every pill reachable, no scroll needed. */
+  flex-wrap: wrap;
+  margin: 2px 0 14px;
+  padding: 10px 12px;
+  /* Softer than the abrupt solid block: a translucent gradient + blur "chip tray". */
+  background: linear-gradient(180deg, rgba(28,10,52,0.95), rgba(20,6,38,0.80));
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(187,134,252,0.16);
+  border-radius: 12px;
+}
+.review-pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(187,134,252,0.32);
+  background: rgba(40,18,70,0.42);
+  color: #cbb6ef;
+  font: 800 0.66rem/1 'Montserrat', sans-serif;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s ease, background .15s ease, border-color .15s ease, transform .12s ease, box-shadow .15s ease;
+}
+.review-pill:hover { color: #fff; border-color: rgba(187,134,252,0.6); transform: translateY(-1px); }
+.review-pill.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, #a06bf0, #6b34c0);
+  border-color: rgba(187,134,252,0.9);
+  box-shadow: 0 4px 14px rgba(140,82,222,0.4);
+}
+.review-pill-jp {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-weight: 500;
+  font-size: 0.82em;
+  letter-spacing: .02em;
+  opacity: .68;
+}
+.review-pill.is-active .review-pill-jp { opacity: .92; }
+/* Overall — gold nod to the RATING badge */
+.review-pill--overall { color: #f5c85a; border-color: rgba(245,200,90,0.5); background: rgba(245,200,90,0.10); }
+.review-pill--overall:hover { color: #ffe39a; border-color: rgba(245,200,90,0.8); }
+.review-pill--overall.is-active {
+  color: #2a1c00;
+  background: linear-gradient(180deg, #ffd877, #f5b833);
+  border-color: rgba(245,200,90,0.95);
+  box-shadow: 0 4px 14px rgba(245,184,51,0.45);
+}
+.review-pill--overall.is-active .review-pill-jp { color: #5a3d00; opacity: .85; }
+
+/* Section headers (## -> h5.md-h) get the kicker treatment in BOTH review surfaces;
+   scroll-margin clears the sticky rail on jump. (Non-review .md-h stays unstyled.) */
+.modal-review .md-h, .secondary-review-body .md-h { scroll-margin-top: 58px; }
+.modal-review h5.md-h, .secondary-review-body h5.md-h {
+  margin: 18px 0 9px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(187,134,252,0.22);
+  font: 800 0.74rem/1.2 'Montserrat', sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #d7bcff;
+}
+.modal-review h5.md-h:first-of-type, .secondary-review-body h5.md-h:first-of-type { margin-top: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .review-pill { transition: none; }
+  .review-pill:hover { transform: none; }
+}
+
 .secondary-review {
   border-left: 3px solid rgba(245, 200, 90, 0.65);
   padding-left: 14px;
@@ -6259,11 +6354,12 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 .tertiary-layer[hidden] { display: none; }
 .tertiary-backdrop {
   position: absolute; inset: 0;
-  /* v1.8.0 (gate 1b) — static dim (no backdrop-filter), same as .secondary-backdrop.
-     This layer stacked ON the secondary, so removing its live blur is doubly worth it. */
-  background:
-    radial-gradient(130% 120% at 6% 40%, rgba(22,7,44,0.5), transparent 62%),
-    linear-gradient(90deg, rgba(8,0,18,0.62), rgba(8,0,18,0.52));
+  /* v1.8.2 — frost RESTORED, same treatment as .secondary-backdrop. This layer stacks
+     ON the (now frosted) secondary, so a flat dim here would look inconsistent the
+     moment a character/staff card opens — back to the original live blur. */
+  background: rgba(8, 0, 18, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   opacity: 0; transition: opacity .26s ease;
 }
 .tertiary-layer.active .tertiary-backdrop { opacity: 1; }

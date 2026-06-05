@@ -27,6 +27,7 @@ function renderMarkdown(md) {
 let reviewIndex = new Set();          // ids with a written review
 let serverUp = false;                 // mode1 reachable?
 let editorId = null;                  // id currently in the editor
+let srEditor = null;                  // v1.8.2 — section-aware Review editor (window.RarSectionEditor)
 
 function getCatalog() {
   const list = (window.animeData && Array.isArray(window.animeData)) ? window.animeData : [];
@@ -140,7 +141,7 @@ function openEditor(id, presetTitle) {
   $('sr-editor-id').textContent = '#' + editorId;
   $('sr-editor-title').value = presetTitle || '';
   $('sr-editor-rating').value = '';
-  $('sr-editor-body').value = '';
+  if (srEditor) srEditor.load('');
   $('sr-editor-status').textContent = '';
   $('sr-editor-delete').hidden = true;
   updatePreview();
@@ -150,18 +151,23 @@ function openEditor(id, presetTitle) {
     if (!j || !j.exists) return;
     $('sr-editor-title').value = j.title || presetTitle || '';
     $('sr-editor-rating').value = j.rating || '';
-    $('sr-editor-body').value = j.body || '';
+    if (srEditor) srEditor.load(j.body || '');
     $('sr-editor-delete').hidden = false;
     updatePreview();
   }).catch(() => {});
-  $('sr-editor-body').focus();
+  if (srEditor) srEditor.focus();
 }
 function closeEditor() { $('sr-editor').hidden = true; editorId = null; }
-function updatePreview() { $('sr-editor-preview').innerHTML = renderMarkdown($('sr-editor-body').value); }
+function reviewMarkdown() { return srEditor ? srEditor.value() : ''; }
+function updatePreview() {
+  $('sr-editor-preview').innerHTML = window.RarSectionEditor
+    ? window.RarSectionEditor.previewHtml(reviewMarkdown())
+    : renderMarkdown(reviewMarkdown());
+}
 
 async function saveReview() {
   if (!editorId) return;
-  const body = $('sr-editor-body').value.trim();
+  const body = reviewMarkdown().trim();
   if (!body) { $('sr-editor-status').textContent = 'Write something first.'; return; }
   if (!serverUp) { $('sr-editor-status').textContent = 'Local server not running — start `npm run mode1`.'; return; }
   $('sr-editor-save').disabled = true;
@@ -223,7 +229,7 @@ function init() {
   });
 
   $('sr-filter').addEventListener('change', () => renderList(_catalog));
-  $('sr-editor-body').addEventListener('input', updatePreview);
+  if (window.RarSectionEditor) srEditor = window.RarSectionEditor.mount($('sr-editor-mount'), { onChange: updatePreview });
   $('sr-editor-save').addEventListener('click', saveReview);
   $('sr-editor-delete').addEventListener('click', deleteReview);
   $('sr-editor-cancel').addEventListener('click', closeEditor);

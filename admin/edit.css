@@ -102,15 +102,27 @@
 }
 .edit-row input[readonly] { opacity: .7; cursor: not-allowed; background: rgba(8,0,18,.35); }
 
-.edit-review-block { margin-top: 18px; }
-.edit-review-head label { font: 700 .82rem 'Montserrat', sans-serif; color: #e9ddff; display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
-.edit-review-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* v1.8.1 gate-3c — premium Review block: kicker label + a larger editor/preview pair. */
+.edit-review-block {
+  margin-top: 22px; padding-top: 18px;
+  border-top: 1px solid rgba(187,134,252,.18);
+}
+.edit-review-head { margin-bottom: 12px; }
+.edit-review-label {
+  display: inline-flex; align-items: center; gap: 9px;
+  font: 800 .82rem 'Montserrat', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #bb86fc;
+}
+.edit-review-label .edit-hint-tag { letter-spacing: .06em; }
+.edit-review-split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 .edit-review-preview {
-  padding: 12px 14px; border-radius: 11px; overflow-y: auto; max-height: 320px;
-  background: rgba(20,6,38,.5); border: 1px solid rgba(187,134,252,.18); color: #e9def7;
-  font: 400 .9rem/1.5 'Montserrat', sans-serif;
+  padding: 14px 16px; border-radius: 12px; overflow-y: auto;
+  min-height: 380px; max-height: 72vh; position: sticky; top: 12px;
+  background: linear-gradient(180deg, rgba(26,8,46,.55), rgba(14,3,28,.6));
+  border: 1px solid rgba(187,134,252,.2); color: #e9def7;
+  font: 400 .92rem/1.6 'Montserrat', sans-serif;
 }
 .edit-preview-empty { color: #b9aecb; font-style: italic; }
+.section-editor .se-section-body { min-height: 90px; }
 
 /* v1.8.1 gate-2b — WATCHED SET checkbox tree, ported from new-anime.css (same
    classes/markup so the new-anime JS port renders identically). */
@@ -167,7 +179,8 @@
 
 .edit-actions { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
 .edit-spacer { flex: 1; }
-.edit-status { font: 600 .82rem 'Montserrat', sans-serif; color: #cfc7d9; }
+.edit-status { font: 700 .8rem 'Montserrat', sans-serif; letter-spacing: .02em; color: #c9bfe0; display: inline-flex; align-items: center; }
+.edit-status:not(:empty) { padding: 5px 12px; border-radius: 999px; background: rgba(40,18,70,.45); border: 1px solid rgba(187,134,252,.22); }
 .edit-btn {
   height: 42px; padding: 0 20px; border-radius: 999px; cursor: pointer;
   font: 800 .82rem 'Montserrat', sans-serif; letter-spacing: .02em; border: 1px solid transparent;
@@ -178,7 +191,12 @@
 .edit-btn--save { background: linear-gradient(180deg, #a06bf0, #6b34c0); color: #fff; }
 .edit-btn--save:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(140,82,222,.4); }
 .edit-btn:disabled { opacity: .6; cursor: default; transform: none; box-shadow: none; }
-.edit-ship-note { margin: 10px 0 0; font: 500 .76rem/1.4 'Montserrat', sans-serif; color: #b9aecb; }
+.edit-ship-note {
+  margin: 12px 0 0; padding: 10px 14px; border-radius: 10px;
+  background: rgba(40,18,70,.3); border: 1px solid rgba(187,134,252,.16);
+  font: 500 .78rem/1.5 'Montserrat', sans-serif; color: #c9bfe0;
+}
+.edit-ship-note strong { color: #d9c9ff; font-weight: 700; }
 
 /* v1.8.1 gate-2 — Ship live button (visually "big deal" vs the quiet Save) + the
    confirm/progress modals. Modal backdrop is a plain dim (no backdrop-filter — the
@@ -246,6 +264,7 @@
 @media (max-width: 760px) {
   .edit-grid { grid-template-columns: 1fr; }
   .edit-review-split { grid-template-columns: 1fr; }
+  .edit-review-preview { position: static; max-height: 420px; min-height: 220px; }
 }
 
 /* ============================================================================

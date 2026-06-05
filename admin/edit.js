@@ -43,6 +43,12 @@ let fixProposed = null;     // last "fix platforms" proposal awaiting Apply
 // gate-4b adds
 let formOrigin = 'list';            // 'modal' (came from the site's ✎) | 'list'
 let initialWatchedChecked = null;   // snapshot of the loaded watched set, for Revert
+// gate-3b (v1.8.2) — the section-aware Review editor (window.RarSectionEditor)
+let reviewEditor = null;
+// The editor's canonical value of the CURRENTLY-loaded review, captured at load time.
+// The change-diff compares this against the live editor value, so any normalization the
+// editor applies on load (whitespace, known-title casing) never reads as a real change.
+let loadedReviewMd = '';
 
 function getCatalog() {
   const list = (window.animeData && Array.isArray(window.animeData)) ? window.animeData : [];
@@ -107,7 +113,8 @@ function setFieldValues(a) {
   $('f-trailer').value = a.Trailer || '';
   $('f-tags').value = tagsToInput(a.Tags);
   $('f-description').value = a.Description || '';
-  $('f-review').value = a.Review || '';
+  if (reviewEditor) reviewEditor.load(a.Review || '');
+  loadedReviewMd = reviewEditor ? reviewEditor.value().trim() : String(a.Review || '').trim();
   updateReviewPreview();
 }
 
@@ -171,9 +178,10 @@ function stepTop10(delta) {
 }
 
 function updateReviewPreview() {
-  const md = $('f-review').value;
+  const md = reviewEditor ? reviewEditor.value() : '';
   $('f-review-preview').innerHTML = (md && md.trim())
-    ? (window.renderMarkdown ? window.renderMarkdown(md) : escapeHtml(md))
+    ? (window.RarSectionEditor ? window.RarSectionEditor.previewHtml(md)
+      : (window.renderMarkdown ? window.renderMarkdown(md) : escapeHtml(md)))
     : '<p class="edit-preview-empty">Nothing to preview yet.</p>';
 }
 
@@ -301,7 +309,7 @@ function collectFields() {
     Trailer: $('f-trailer').value.trim(),
     Tags: $('f-tags').value.trim(),               // sync: split on '#'
     Description: $('f-description').value.trim(),
-    Review: $('f-review').value.trim(),
+    Review: (reviewEditor ? reviewEditor.value() : '').trim(),
     Top10Rank: $('f-top10').value.trim(),         // blank → cell cleared
     WatchedAniListIds: watchedFieldValue(),       // from the interactive tree
   };
@@ -346,7 +354,7 @@ function beforeFields() {
     Trailer: String(a.Trailer || '').trim(),
     Tags: tagsToInput(a.Tags).trim(),
     Description: String(a.Description || '').trim(),
-    Review: String(a.Review || '').trim(),
+    Review: loadedReviewMd,   // the editor's value at load — no normalization noise in the diff
     Top10Rank: (a.Top10Rank != null) ? String(a.Top10Rank) : '',
   };
 }
@@ -402,7 +410,8 @@ function syncCurrentAnimeFromForm() {
   a.Studio = $('f-studio').value.trim();
   a.Trailer = $('f-trailer').value.trim();
   a.Description = $('f-description').value.trim();
-  a.Review = $('f-review').value.trim();
+  a.Review = (reviewEditor ? reviewEditor.value() : '').trim();
+  loadedReviewMd = a.Review;   // saved state becomes the new diff baseline
   const t = $('f-top10').value.trim();
   a.Top10Rank = t === '' ? null : parseInt(t, 10);
   a.Platforms = $('f-platforms').value.split(',').map(s => s.trim()).filter(Boolean);
@@ -642,7 +651,10 @@ function init() {
   $('edit-ship-close').addEventListener('click', () => { $('edit-ship-progress').hidden = true; });
   $('edit-preview-btn').addEventListener('click', openPreview);
   $('edit-preview-close').addEventListener('click', closePreview);
-  $('f-review').addEventListener('input', updateReviewPreview);
+  // Section-aware Review editor — its onChange drives the live preview.
+  if (window.RarSectionEditor) {
+    reviewEditor = window.RarSectionEditor.mount($('f-review-editor'), { onChange: updateReviewPreview });
+  }
 
   // watched-set tree: checkbox toggles + select-all/none/spine (same as new-anime)
   const fp = $('franchise-info-panel');

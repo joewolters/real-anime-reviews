@@ -4198,6 +4198,73 @@ function wireOfficialVotes(anime) {
 }
 
 
+ // ---------- Structured-review jump nav (v1.8.2) ----------
+// Direction A "Kicker Rail": a sticky pill row built from the review's `##` sections
+// (window.extractSections, markdown.js). Pills scroll their matching heading into the
+// modal's OWN scroll container (scrollIntoView walks to the nearest scrollable
+// ancestor; sticky-nav overlap is handled by scroll-margin-top on .md-h in CSS), and
+// an IntersectionObserver highlights the active pill (scroll-spy). Heading-less /
+// single-section reviews render no nav (legacy prose is pixel-identical to before).
+const REVIEW_SECTION_JP = {
+  'intro': '序章', 'animation': '作画', 'story': '物語', 'characters': '登場人物',
+  'design': '設定', 'music': '音楽', 'feel': '雰囲気', 'extra thoughts': '余談', 'overall': '総評',
+};
+function buildReviewNav(md) {
+  const sections = (typeof window !== 'undefined' && window.extractSections) ? window.extractSections(md) : [];
+  if (sections.length < 2) return '';   // 0–1 sections need no jump nav
+  const pills = sections.map(function (s) {
+    const key = String(s.label || '').toLowerCase();
+    const jp = REVIEW_SECTION_JP[key] ? '<span class="review-pill-jp">' + REVIEW_SECTION_JP[key] + '</span>' : '';
+    const overall = (key === 'overall') ? ' review-pill--overall' : '';
+    return '<button type="button" class="review-pill' + overall + '" data-target="' + escapeHtml(s.id) + '">' +
+      '<span class="review-pill-label">' + escapeHtml(s.label) + '</span>' + jp + '</button>';
+  }).join('');
+  return '<nav class="review-nav" aria-label="Jump to review section">' + pills + '</nav>';
+}
+// Nearest scrollable ancestor (the modal's own scroller — no single hardcodable
+// container: the duo panels scroll independently, the secondary body scrolls, and
+// <900px restacks). Returns null → viewport.
+function nearestScrollable(el) {
+  let n = el && el.parentElement;
+  while (n && n !== document.body && n !== document.documentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 4) return n;
+    n = n.parentElement;
+  }
+  return null;
+}
+function wireReviewNav(scope) {
+  if (!scope) return;
+  if (scope.__reviewObs) { scope.__reviewObs.forEach(function (o) { o.disconnect(); }); }
+  scope.__reviewObs = [];
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  scope.querySelectorAll('.review-nav').forEach(function (nav) {
+    const container = nav.parentElement;   // .modal-review / .secondary-review
+    if (!container) return;
+    const pills = Array.from(nav.querySelectorAll('.review-pill'));
+    const headings = {};
+    pills.forEach(function (p) {
+      const h = container.querySelector('[id="' + p.dataset.target + '"]');   // scoped → safe vs duplicate ids across the two open modals
+      if (h) headings[p.dataset.target] = h;
+    });
+    nav.addEventListener('click', function (e) {
+      const pill = e.target.closest('.review-pill');
+      if (!pill) return;
+      const h = headings[pill.dataset.target];
+      if (h) h.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+    });
+    const obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        const id = en.target.getAttribute('id');
+        pills.forEach(function (p) { p.classList.toggle('is-active', p.dataset.target === id); });
+      });
+    }, { root: nearestScrollable(container), rootMargin: '0px 0px -70% 0px', threshold: 0 });
+    Object.keys(headings).forEach(function (id) { obs.observe(headings[id]); });
+    scope.__reviewObs.push(obs);
+  });
+}
+
  // ---------- MODAL ----------
 function openModal(anime) {
   // Prevent background spotlight motion while modal is open.
@@ -4303,6 +4370,7 @@ function openModal(anime) {
 
   const reviewBlock = anime.Review
     ? '<div class="modal-review"><p><strong>Review:</strong></p>' +
+      buildReviewNav(anime.Review) +
       window.renderMarkdown(anime.Review) + '</div>'
     : '';
 
@@ -4367,6 +4435,7 @@ function openModal(anime) {
   overlay.classList.add('active');
   modal.classList.add('active');
   updateScrollLock();
+  wireReviewNav(modalContent);   // v1.8.2 — structured-review jump pills + scroll-spy
 
   // v1.7.4 — More Info panel wiring: renders immediately on open (no tab/close);
   // card-click navigates.
@@ -4816,6 +4885,7 @@ function closeModal() {
     const meta = { sourceTitle, backTitle: secondaryBackTitle(), inFranchise: !!secondaryViewingRow, seasonReview };
     secondaryScrollEl.innerHTML = renderSecondaryModal(detail ? 'success' : 'error', detail, meta);
     secondaryScrollEl.scrollTop = 0;
+    wireReviewNav(secondaryScrollEl);   // v1.8.2 — jump pills + scroll-spy on BLAKE'S REVIEW
   }
 
   function closeSecondaryModal() {
@@ -5004,26 +5074,30 @@ function closeModal() {
   function renderSecondaryModal(state, detail, meta) {
     meta = meta || {};
     const backLabel = meta.backTitle ? ('← Back to ' + escapeHtml(meta.backTitle)) : '← Back';
-    // The action row holds (optional) Request → close ×. v1.7.5 watchlist +
-    // favorites buttons drop in BEFORE the close with no reshuffle (the row is
-    // flex + wraps). requestBtn is only built for non-catalog success below.
-    const buildHeaderActions = (requestBtn) =>
-      '<div class="secondary-header-actions">' +
-        (requestBtn || '') +
-        '<button type="button" class="secondary-close" aria-label="Close details">×</button>' +
+    // v1.8.2 — one deliberate top bar: back chip on the left, the action cluster on
+    // the right (space-between, single non-wrapping row). The cluster holds (optional)
+    // ✎ Edit + Request + Watchlist/Favorite, then the × close as its terminal member —
+    // so it reads as part of the composed header, not a floating stray. Drops to
+    // uniform icon circles <900px. Both admin (✎ present) and visitor (absent) states
+    // stay tidy — flex just closes the gap, no reserved slot.
+    const buildHeaderBar = (actionsInner) =>
+      '<div class="secondary-header-bar">' +
+        '<button type="button" class="secondary-back">' + backLabel + '</button>' +
+        '<div class="secondary-header-actions">' +
+          (actionsInner || '') +
+          '<button type="button" class="secondary-close" aria-label="Close details">×</button>' +
+        '</div>' +
       '</div>';
 
     if (state === 'loading') {
       return '<div class="secondary-header secondary-header--bare">' +
-          '<button type="button" class="secondary-back">' + backLabel + '</button>' +
-          buildHeaderActions('') +
+          buildHeaderBar('') +
         '</div>' +
         '<div class="secondary-loading"><div class="secondary-spinner" aria-hidden="true"></div><span>Loading details…</span></div>';
     }
     if (state === 'error' || !detail) {
       return '<div class="secondary-header secondary-header--bare">' +
-          '<button type="button" class="secondary-back">' + backLabel + '</button>' +
-          buildHeaderActions('') +
+          buildHeaderBar('') +
         '</div>' +
         '<div class="secondary-empty">Couldn’t load these details right now.' +
           ' <button type="button" class="secondary-retry">Try again</button></div>';
@@ -5101,8 +5175,7 @@ function closeModal() {
       '<div class="secondary-header"' + (accent ? ' style="--accent:' + escapeHtml(accent) + '"' : '') + '>' +
         '<div class="secondary-banner"' + (banner ? ' style="background-image:url(\'' + escapeHtml(banner) + '\')"' : '') + '></div>' +
         '<div class="secondary-banner-scrim"></div>' +
-        '<button type="button" class="secondary-back">' + backLabel + '</button>' +
-        buildHeaderActions(editReviewBtn + requestBtn + saveBtns) +
+        buildHeaderBar(editReviewBtn + requestBtn + saveBtns) +
         '<div class="secondary-header-body">' +
           (cover ? '<img class="secondary-cover" src="' + escapeHtml(cover) + '" alt="" loading="lazy">' : '<div class="secondary-cover secondary-cover--ph"></div>') +
           '<div class="secondary-titleblock">' +
@@ -5130,6 +5203,7 @@ function closeModal() {
         : '';
       reviewHtml = '<section class="secondary-section secondary-review">' +
           '<div class="secondary-review-head"><h3 class="secondary-section-title secondary-review-title">BLAKE’S REVIEW</h3>' + ratingBadge + '</div>' +
+          buildReviewNav(meta.seasonReview.body) +
           '<div class="secondary-review-body">' + window.renderMarkdown(meta.seasonReview.body) + '</div>' +
         '</section>';
     } else if (isWatched) {
