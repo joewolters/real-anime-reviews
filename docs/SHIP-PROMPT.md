@@ -1,14 +1,19 @@
 <!-- author: Cowork | date: 2026-06-04 -->
-# v1.8.2 — Compressed sweep (docs cascade → audits → commit → preview — FAST-TRACK, STOP before prod)
+# v1.8.2 — Prod deploy + Re:ZERO Excel cleanup (FAST-TRACK)
 
-G3c re-smoke passed clean. Bundle G1+G2+G3b+G3c and run the sweep. **Do NOT deploy to production — that waits for Blake's explicit "ship it" in chat. He has not said it.**
+**Blake gave the go-signal in chat: "everything else is good. push it"** (after preview smoke passed — frost, header row, update log all confirmed good).
 
-1. **CHANGELOG.md** — v1.8.2 MINOR. Visitor-facing is real this time: structured scannable reviews (section pill rail + scroll-spy, gold Overall, JP labels), the restored frosted backdrops, the fixed secondary header row. Then the admin side: section-aware editor across all three surfaces (drag reorder, shortcuts, premium edit-page polish). Author marker per convention.
-2. **Widget** — visitor-first per the skill. No data-provider names. The pill-rail/scannable-sections feature is a genuine visitor bullet; frost + header row likely fold in. Your judgment.
-3. **`bump-version 1.8.2`** — expect **40**, then `--check` all agree.
-4. **NEXT.md + ROADMAP.md** — v1.8.2 ✅ shipped (scoped as actually built incl. the editor pivot + G3c fixes), next pointer → v1.8.3 Website Identity & Finalization. Carry the flagged dead `.md-toolbar` CSS cleanup as a small backlog line.
-5. **Audits** — `npm test` (14), gitignore↔firebase mirror, smart-quote sweep, `git diff` review.
-6. **Commit + push** — Blake author, zero trailers, 7 Cowork excludes out, rolling docs ride in.
-7. **Preview deploy** — verify on the channel: APP_VERSION 1.8.2, new assets 200 (`admin/section-editor.{js,css}`), leak checks 404.
+## 1. Production deploy
+- `firebase deploy --only hosting` → verify on realanimereviews.com: APP_VERSION **1.8.2**, `admin/section-editor.{js,css}` 200, leak checks 404, Re:ZERO review junk-free.
+- Refresh `docs/CODE-HANDOFF.md` per your usual close.
 
-Report: the usual sweep table + the preview URL + Blake's preview smoke steps. Then stop and wait.
+## 2. Re:ZERO Excel cleanup (Blake's explicit ask: "can code check if its still there and manually delete from the excel?")
+The placeholder smoke sections (`## Intro / ## Story / ## Animation / … dgsdgsdg…`) you excluded from the commit are still in `Master List/Anime_Master_Table.xlsx` (the Re:ZERO Review cell). Localhost looks clean only because you restored `animeData.js` — Excel is the canonical copy and a future sync would re-import the junk.
+
+- **Verify first:** read the Re:ZERO Review cell, report what's actually there (don't assume).
+- **Backup the xlsx** before touching it (the Mode-1 backup convention).
+- **Remove ONLY the placeholder sections** — the real prose review stays byte-intact. Same for `season-reviews` if the smoke touched any (his G3b smoke also saved a season review — check `index.json`-adjacent data for placeholder text like "A start sometimes it happens" on the Alya/One-Punch rows; report findings before deleting anything you're less than certain is smoke junk).
+- **Run `npm run sync`** → confirm `animeData.js` comes out identical to the committed clean version (`git diff` empty = proof the cleanup matches what shipped).
+- Report before/after of every cell you touched.
+
+If anything in the Excel row looks ambiguous (real content mixed into placeholder sections), stop and list it instead of deleting.
