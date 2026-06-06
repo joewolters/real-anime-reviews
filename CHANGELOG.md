@@ -10,6 +10,29 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-06-06 -->
+## v1.8.4 — MINOR (2026-06-06)
+
+**Discovery & Blend.** The biggest visitor-facing expansion yet — the site grew from a personal catalog into a *blended* one. Blake's 44 hand-written reviews still lead, but the wider world of anime now sits alongside them, always clearly marked as the supporting cast. New **For You** and **Discover** places, a real navigation, a composed homepage, and a site-wide "constellation veil" that lifts as you move outward.
+
+**Visitor-facing:**
+
+- **Discover — the wider world.** A new place to search every anime out there. Live search-as-you-type surfaces results instantly; the ones **Blake's reviewed light up gold** and pin to the front, while everything else carries a clear **NOT REVIEWED** sticker and the community's score. Plus rails for what's **airing now**, **airing by genre**, and what's **popular right now**, all gently auto-drifting — with a fresh shuffle each time you log on.
+- **For You — his shelf, leaning your way.** Signed in, a personalized place where Blake's gold reviews lead each rail, pulled toward the genres you keep saving, with the wider world filling in behind. Signed out, an honest "what the world's watching" taster with a nudge to sign in.
+- **Open any outside anime for free.** Every not-yet-reviewed title opens a full detail view — synopsis, characters, staff, where to watch — and a one-tap **Request this anime** so you can ask Blake to cover it. Save anything to your watchlist or favorites, reviewed or not.
+- **A real navigation.** The header now has three named places — **Blake's Den · For You · Discover** — with a sliding gold marker that tracks where you are; the Den is the home you always glide back to.
+- **A composed homepage.** Below the Den masthead: an **AIRING NOW** strip (a glimpse of the wider world), a **For You** teaser, and the **Top 10** and **Latest Drop** redesigned to sit side-by-side as a matched pair.
+- **A living background.** A translucent "constellation veil" of etched line-work now sits over the city backdrop site-wide — darkest and coziest in the Den, opening up as you step out toward Discover, so the journey feels like one room breathing. The lines **gently pulse** with a slow travelling glow.
+- **A deep-dive hint.** A quiet once-per-visit pill teaches that the seasons in an anime's More-Info panel open a richer detail view.
+- **The update log, restyled.** It now lives on the welcome door, and each update is its own group set off by a colored rail and a plain-English tier label (Minor / Big Update).
+
+**Behind the scenes:**
+
+- **Admin:** a new **Quotes** page to curate the welcome-door quotes from a UI — add / edit / delete, drag or ▲▼ to reorder, live search, a duplicate-and-length check, and the ✨ ASK assistant built in. The quotes now live in a small public file the door reads at runtime.
+- All new motion is reduced-motion-aware (the veil pulse falls back to a static glow; drag + reveals are instant). **No streaming-provider names** appear anywhere in the visitor copy — the wider world is described in Blake's voice. The live anime data rides three lean queries on a shared cache, so the homepage's first paint stays fast (the Den is local).
+
+**Implementation files:** `franchise-fetch.js` (3 additive flat AniList queries), `script.js` (the Discover + For-You surfaces, the taste engine, the blended cards, the real nav + sliding marker, the composed homepage, the veil-pulse init, the quotes fetch, the deep-dive hint), `style.css` (the constellation veil + animated pulse, the surfaces, the nav, the showcase, the update-log tier rails, the hint pill), `index.html` / `account.html` / `suggest.html` (the veil layer + surface mounts), `card-render.js` (the blended card shell), new `admin/quotes.{html,css,js}` + `scripts/lib/quotes-store.js` + a `/api/quotes` Mode-1 endpoint + `quotes.json`, plus ~25 new Playwright specs. `bump-version` is **47 targets**. No new dependencies; `animeData.js` untouched.
+
 <!-- author: Code | date: 2026-06-05 -->
 ## v1.8.3 — MINOR (2026-06-05)
 

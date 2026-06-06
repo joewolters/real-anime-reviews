@@ -136,6 +136,35 @@ function updateScrollLock() {
   const filterNarrowClear = document.getElementById("filter-narrow-clear");
   const filterNoOpts     = document.getElementById("filter-noopts");
   const filterApplyCount = document.getElementById("filter-apply-count");
+  // v1.8.4 gate 2 — the 3-way review-status segment (All / Reviewed / Unreviewed).
+  const filterReviewedSeg = document.getElementById("filter-reviewed");
+  // v1.8.4 gate 3 — Discover surface refs.
+  const discoverBtn = document.getElementById("discover-btn");
+  const discoverView = document.getElementById("discover-view");
+  const discoverLens = document.getElementById("discover-reviewed");
+  const discoverSearchForm = document.getElementById("discover-search-form");
+  const discoverSearchInput = document.getElementById("discover-search");
+  const discoverSearchClear = document.getElementById("discover-search-clear");
+  const discoverSearchResults = document.getElementById("discover-search-results");
+  const discoverSectionsEl = document.getElementById("discover-sections");
+  const discoverAiringEl = document.getElementById("discover-airing");
+  const discoverGenreChipsEl = document.getElementById("discover-genre-chips");
+  const discoverGenreRailEl = document.getElementById("discover-genre-rail");
+  const discoverTrendingEl = document.getElementById("discover-trending");
+  // v1.8.4 gate 4 — For You surface refs (provisional entry; G5 makes it nav).
+  const foryouBtn = document.getElementById("foryou-btn");
+  const foryouView = document.getElementById("for-you-view");
+  const foryouLens = document.getElementById("foryou-lens");
+  const foryouSectionsEl = document.getElementById("foryou-sections");
+  // v1.8.4 gate 5 — real nav: the Den place button + the sliding "you are here" marker,
+  // plus the two home hole-fill strips.
+  const denBtn = document.getElementById("den-btn");
+  const navPlaces = document.querySelector(".nav-places");
+  const placeMarker = document.querySelector(".place-marker");
+  const homeAiringBlock = document.getElementById("home-airing-block");
+  const homeAiringRail = document.getElementById("home-airing");
+  const homeForyouBlock = document.getElementById("home-foryou-block");
+  const homeForyouRail = document.getElementById("home-foryou");
 
 
   // ---------- STATE ----------
@@ -152,7 +181,6 @@ function updateScrollLock() {
   let isSpotlightHovered = false;
   let lastSpotlightChangeAt = 0;
   let railsControllers = [];
-  let genreRotationTimerIds = [];
   let lastGenres = [];
   let genreShuffleLocked = false;
   let genreShuffleUnlockTimer = null;
@@ -257,6 +285,7 @@ function subscribeSavesForUser(user) {
 
   if (!user) {
     syncAllSavedUI();
+    onForYouSavesChanged();   // v1.8.4 gate 4 — signed-out featured + For You
     return;
   }
 
@@ -267,12 +296,14 @@ function subscribeSavesForUser(user) {
     favoritesSet.clear();
     snap.forEach((d) => favoritesSet.add(d.id));
     syncAllSavedUI();
+    onForYouSavesChanged();   // v1.8.4 gate 4 — re-personalize on save change
   });
 
   unsubWatchlist = onSnapshot(watchQ, (snap) => {
     watchlistSet.clear();
     snap.forEach((d) => watchlistSet.add(d.id));
     syncAllSavedUI();
+    onForYouSavesChanged();   // v1.8.4 gate 4 — re-personalize on save change
   });
 }
 
@@ -739,6 +770,7 @@ query ($id: Int) {
       return (TYPE_ORDER[a.relationType] ?? 99) - (TYPE_ORDER[b.relationType] ?? 99);
     });
 
+    _deepDiveHintPlaced = false;   // v1.8.4 gate 8 — reset before the legacy 1-hop rows
     const rows = entries.map(node => renderMoreInfoEntry(node)).join('');
     return `<div class="more-info-list">${rows}</div>`
       + renderEpisodeList(streamingEpisodes, sourceAnime)
@@ -811,6 +843,33 @@ query ($id: Int) {
   function franchiseGroupLabel(relationType) {
     if (FRANCHISE_GROUP_LABELS[relationType]) return FRANCHISE_GROUP_LABELS[relationType];
     return String(relationType || 'OTHER').replace(/_/g, ' ').toUpperCase();
+  }
+
+  // v1.8.4 gate 8 — the once-per-visitor "deep dive" hint. A quiet brand-voice aside placed
+  // under the FIRST clickable More-Info row, teaching that the rows open the richer secondary
+  // modal ("WAY more information"). localStorage-gated so it shows ONCE and never nags re-
+  // renders (episode-toggle / retry within an open modal) or returning visitors. Its own
+  // class never matches the delegated .more-info-entry--clickable handler, so it can't
+  // swallow a row click. _deepDiveHintPlaced is reset per panel render (one hint per panel).
+  const DEEP_DIVE_HINT_KEY = 'rar:moreinfo:deepdiveHintShown';
+  let _deepDiveHintPlaced = false;
+  function deepDiveHintTaught() {
+    try { return localStorage.getItem(DEEP_DIVE_HINT_KEY) === '1'; } catch (_) { return false; }
+  }
+  // The hint HTML for the first clickable row of a panel, else ''. Writing the flag on the
+  // first emit means any same-visit re-render reads '1' and stays silent. NOTE: this is a
+  // deliberately impure renderer — it sets the once-shown flag here (single-impression by
+  // design for a low-stakes nudge), unlike the surrounding pure HTML builders. Neutral
+  // wording ("a title") so the one shared string fits the franchise AND legacy 1-hop panels.
+  function deepDiveHintFor(entryClass) {
+    if (_deepDiveHintPlaced) return '';
+    if (!String(entryClass).includes('more-info-entry--clickable')) return '';
+    if (deepDiveHintTaught()) return '';
+    _deepDiveHintPlaced = true;
+    try { localStorage.setItem(DEEP_DIVE_HINT_KEY, '1'); } catch (_) {}
+    return '<div class="more-info-deepdive-hint" aria-hidden="true">'
+      + '<span class="mi-hint-pill"><span class="jp-mini">その先へ</span> tap a title to slip behind the door '
+      + '<span class="mi-hint-arrow">↑</span></span></div>';
   }
 
   // One franchise row (spine or group). isSource -> --current highlight; rows in
@@ -895,7 +954,7 @@ query ($id: Int) {
       ${metaHtml}
     </div>
     ${scoreHtml}
-  </div>`;
+  </div>${deepDiveHintFor(entryClass)}`;
   }
 
   // v1.7.2 gate 3d — shared season comparator. Undated entries (null/0/non-number
@@ -1042,6 +1101,7 @@ query ($id: Int) {
 
   // Assemble the full franchise panel from the tree (+ source recs/staff).
   function renderFranchisePanel(sourceAnime, tree) {
+    _deepDiveHintPlaced = false;   // v1.8.4 gate 8 — one deep-dive hint per panel render
     const spine = tree?.spine || [];
     const groups = tree?.groups || {};
     const episodesBySeason = tree?.episodesBySeason || [];
@@ -1136,7 +1196,7 @@ query ($id: Int) {
       ${metaHtml}
     </div>
     ${scoreHtml}
-  </div>`;
+  </div>${deepDiveHintFor(entryClass)}`;
   }
 
   // v1.6.9 — Render the source anime's per-episode list (AniList streamingEpisodes,
@@ -1914,7 +1974,59 @@ document.addEventListener('keydown', (e) => {
   }
 
   // Applied filters only change when Confirm is pressed
-let appliedFilters = { genres: new Set(), tags: new Set(), studios: new Set(), savedOnly: false, hasAny: false };
+let appliedFilters = { genres: new Set(), tags: new Set(), studios: new Set(), savedOnly: false, reviewed: 'all', hasAny: false };
+
+// v1.8.4 gate 2 — which review-status segment is active in the form ('all' is the
+// neutral default). Reads the pressed segment button.
+function readReviewedSeg() {
+  const active = filterReviewedSeg && filterReviewedSeg.querySelector('.fr-seg.is-active');
+  const v = active && active.getAttribute('data-reviewed');
+  return (v === 'reviewed' || v === 'notyet') ? v : 'all';
+}
+
+// Visually select a review-status segment ('all' | 'reviewed' | 'notyet'). If the
+// requested segment is disabled (e.g. 'notyet' on a catalog-only view), fall back
+// to 'all' so the form never sits on an unreachable state.
+function setReviewedSeg(which) {
+  if (!filterReviewedSeg) return;
+  let target = (which === 'reviewed' || which === 'notyet') ? which : 'all';
+  const targetBtn = filterReviewedSeg.querySelector(`.fr-seg[data-reviewed="${target}"]`);
+  if (targetBtn && targetBtn.disabled) target = 'all';
+  filterReviewedSeg.querySelectorAll('.fr-seg').forEach((btn) => {
+    const on = btn.getAttribute('data-reviewed') === target;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
+}
+
+// v1.8.4 gate 2 — "Not yet" is only meaningful where outside cards exist (G3+).
+// On catalog-only surfaces it's present but DISABLED with a hint (honest, not
+// hidden). A discovery surface calls this(true) when it renders outside cards.
+let filterHasOutsideCards = false;
+function setFilterHasOutsideCards(on) {
+  filterHasOutsideCards = !!on;
+  if (!filterReviewedSeg) return;
+  const notYet = filterReviewedSeg.querySelector('.fr-seg[data-reviewed="notyet"]');
+  if (notYet) {
+    notYet.disabled = !filterHasOutsideCards;
+    notYet.title = filterHasOutsideCards ? '' : 'Available on For You and Discover';
+  }
+  // If "Not yet" just got disabled while selected, drop back to "All".
+  if (!filterHasOutsideCards && readReviewedSeg() === 'notyet') setReviewedSeg('all');
+}
+
+// Wire the segment buttons: clicking sets the pending segment + refreshes the
+// live match-count (applied only on Confirm, same as the checkboxes).
+function wireReviewedSeg() {
+  if (!filterReviewedSeg) return;
+  filterReviewedSeg.querySelectorAll('.fr-seg').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      setReviewedSeg(btn.getAttribute('data-reviewed'));
+      updateFilterUI();
+    });
+  });
+}
 
 function readFiltersFromForm() {
   const low = (arr) => arr.map((v) => v.toLowerCase());
@@ -1924,8 +2036,9 @@ function readFiltersFromForm() {
   // anime that carries a variant spelling (e.g. picked "A-1 Pictures" matches "A1 Pictures")
   const studios = new Set(getCheckedValues("studio").map(studioKey));
   const savedOnly = !!(filterSavedBtn && filterSavedBtn.getAttribute("aria-pressed") === "true");
-  const hasAny = !!(genres.size || tags.size || studios.size || savedOnly);
-  return { genres, tags, studios, savedOnly, hasAny };
+  const reviewed = readReviewedSeg();
+  const hasAny = !!(genres.size || tags.size || studios.size || savedOnly || reviewed !== 'all');
+  return { genres, tags, studios, savedOnly, reviewed, hasAny };
 }
 
 // Anything that renders uses APPLIED filters (not the live checkbox state)
@@ -1939,12 +2052,13 @@ function setAppliedFilters(next) {
     tags: new Set(next.tags),
     studios: new Set(next.studios),
     savedOnly: !!next.savedOnly,
+    reviewed: (next.reviewed === 'reviewed' || next.reviewed === 'notyet') ? next.reviewed : 'all',
     hasAny: !!next.hasAny
   };
 }
 
 function clearAppliedFilters() {
-  setAppliedFilters({ genres: new Set(), tags: new Set(), studios: new Set(), savedOnly: false, hasAny: false });
+  setAppliedFilters({ genres: new Set(), tags: new Set(), studios: new Set(), savedOnly: false, reviewed: 'all', hasAny: false });
 }
 
 // v1.8.3 gate 4 — remember the last applied filter across reloads (localStorage).
@@ -1955,7 +2069,8 @@ function saveFilterMemory() {
       genres: [...appliedFilters.genres],
       tags: [...appliedFilters.tags],
       studios: [...appliedFilters.studios],   // stored as dedup keys
-      savedOnly: !!appliedFilters.savedOnly
+      savedOnly: !!appliedFilters.savedOnly,
+      reviewed: appliedFilters.reviewed || 'all'
     }));
   } catch (_) {}
 }
@@ -1969,8 +2084,11 @@ function loadFilterMemory() {
   const tags = new Set((obj.tags || []).map((v) => String(v).toLowerCase()));
   const studios = new Set((obj.studios || []).map((v) => String(v)));
   const savedOnly = !!obj.savedOnly;
-  const hasAny = !!(genres.size || tags.size || studios.size || savedOnly);
-  setAppliedFilters({ genres, tags, studios, savedOnly, hasAny });
+  // Coerce a persisted 'notyet' back to 'all' on load: a fresh page is catalog-
+  // only (no outside cards), so restoring 'notyet' would render an empty grid.
+  const reviewed = obj.reviewed === 'reviewed' ? 'reviewed' : 'all';
+  const hasAny = !!(genres.size || tags.size || studios.size || savedOnly || reviewed !== 'all');
+  setAppliedFilters({ genres, tags, studios, savedOnly, reviewed, hasAny });
 }
 
 // When opening the panel, show the currently applied filters in the checkboxes
@@ -1989,6 +2107,7 @@ function syncFilterFormToApplied() {
   syncGroup("studio", appliedFilters.studios, studioKey);
 
   if (filterSavedBtn) filterSavedBtn.setAttribute("aria-pressed", String(!!appliedFilters.savedOnly));
+  setReviewedSeg(appliedFilters.reviewed);
 
   updateFilterUI();
 }
@@ -1996,6 +2115,11 @@ function syncFilterFormToApplied() {
 
   function matchesFilters(anime, f) {
     if (!f.hasAny) return true;
+    // v1.8.4 gate 2 — review-status axis. Catalog entries (Blake's 44) have no
+    // `__reviewed` flag, so they are reviewed by default; discovery/outside cards
+    // (G3+) carry __reviewed:false. 'all' is a no-op on every surface.
+    if (f.reviewed === 'reviewed' && anime.__reviewed === false) return false;
+    if (f.reviewed === 'notyet'   && anime.__reviewed !== false) return false;
     if (f.savedOnly) {
       const id = slug(anime.Title);
       if (!favoritesSet.has(id) && !watchlistSet.has(id)) return false;
@@ -2023,7 +2147,10 @@ function syncFilterFormToApplied() {
   const s = (filterForm?.querySelectorAll('input[name="studio"]:checked') || []).length || 0;
   const savedOn = filterSavedBtn && filterSavedBtn.getAttribute("aria-pressed") === "true";
 
+  const seg = readReviewedSeg();
   const parts = [];
+  if (seg === 'reviewed') parts.push("Reviewed");
+  else if (seg === 'notyet') parts.push("Unreviewed");
   if (savedOn) parts.push("Saved");
   if (g) parts.push(`Genres ${g}`);
   if (t) parts.push(`Tags ${t}`);
@@ -2055,6 +2182,7 @@ function syncFilterFormToApplied() {
     if (!filterForm) return;
     filterForm.querySelectorAll('input[type="checkbox"]').forEach((cb) => (cb.checked = false));
     if (filterSavedBtn) filterSavedBtn.setAttribute("aria-pressed", "false");
+    setReviewedSeg('all');
     if (filterNarrowInput) filterNarrowInput.value = "";
     applyFilterNarrow("");
     updateFilterUI();
@@ -2066,73 +2194,1231 @@ function syncFilterFormToApplied() {
   // form can use it. See docs/SHIP-OUTPUT.md gate 5b for the why. Call via
   // window.renderAnimeCardMarkup since the function isn't in this closure.
 
-  function createCard(anime) {
+  // v1.8.4 gate 5 — shared save-button wiring for ANY card (catalog or discovery
+  // outside card). animeId is the save doc id: slug(Title) for catalog, al:<id> for
+  // an outside AniList title. Signed-out click opens the branded sign-in modal.
+  // Single source so createCard and createDiscoveryCard never drift.
+  function wireCardSaveButtons(card, animeId, title) {
+    applySavedStateToCard(card, animeId);
+    const favBtn = card.querySelector(".fav-btn");
+    const watchBtn = card.querySelector(".watch-btn");
+    async function handleToggle(kind, btn) {
+      const user = auth.currentUser;
+      if (!user) { openAuth('signin'); return; }   // site-wide: signed-out save -> sign in
+      const setRef = (kind === "favorites") ? favoritesSet : watchlistSet;
+      const turnOn = !btn.classList.contains("is-on");
+      if (turnOn) setRef.add(animeId); else setRef.delete(animeId);   // optimistic
+      syncSavedUIForAnime(animeId);
+      btn.disabled = true;
+      try {
+        await setSave(kind, user.uid, animeId, title, turnOn);
+      } catch (err) {
+        if (turnOn) setRef.delete(animeId); else setRef.add(animeId);   // rollback
+        syncSavedUIForAnime(animeId);
+        alert("Failed to save: " + (err.message || String(err)));
+      } finally {
+        btn.disabled = false;
+      }
+    }
+    favBtn?.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); handleToggle("favorites", favBtn); }, { passive: false });
+    watchBtn?.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); handleToggle("watchlist", watchBtn); }, { passive: false });
+  }
+
+  function createCard(anime, opts = {}) {
   const animeId = slug(anime.Title);
-  const card = window.renderAnimeCardMarkup(anime, { animeId });
+  // v1.8.4 gate 2 — `pinned`/`newlyReviewed` only matter when a CATALOG card is
+  // surfaced on a discovery surface (the per-card blend + the upgrade shimmer).
+  // On Blake's own surfaces opts is empty, so this is byte-identical to before.
+  const card = window.renderAnimeCardMarkup(anime, {
+    animeId, pinned: !!opts.pinned, newlyReviewed: !!opts.newlyReviewed,
+  });
 
   // Open modal when the card itself is clicked
   card.addEventListener("click", () => openModal(anime));
-
-  // Initial icon state (from Firestore snapshots if already loaded)
-  applySavedStateToCard(card, animeId);
-
-  async function handleToggle(kind, btn) {
-    const user = auth.currentUser;
-    if (!user) {
-      // v1.7.5 (gate 3b) — signed-out save → open the branded Sign in modal
-      // (site-wide decision), replacing the silent jiggle.
-      openAuth('signin');
-      return;
+  // a11y — keyboard activation (the card is role=button, tabindex=0). Enter/Space
+  // reuse the click action; only when the CARD itself is focused (not a nested
+  // fav/watch button, whose own keys fire their button + stopPropagation).
+  card.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " " || e.key === "Spacebar") && e.target === card) {
+      e.preventDefault();   // Space would otherwise scroll the page
+      card.click();
     }
+  });
 
-    const setRef = (kind === "favorites") ? favoritesSet : watchlistSet;
-
-    const turnOn = !btn.classList.contains("is-on");
-
-    // optimistic UI
-    if (turnOn) setRef.add(animeId);
-    else setRef.delete(animeId);
-    syncSavedUIForAnime(animeId);
-
-    btn.disabled = true;
-    try {
-      await setSave(kind, user.uid, animeId, anime.Title, turnOn);
-    } catch (err) {
-      // rollback
-      if (turnOn) setRef.delete(animeId);
-      else setRef.add(animeId);
-      syncSavedUIForAnime(animeId);
-      alert("Failed to save: " + (err.message || String(err)));
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  const favBtn = card.querySelector(".fav-btn");
-  const watchBtn = card.querySelector(".watch-btn");
-
-  favBtn?.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleToggle("favorites", favBtn);
-  }, { passive: false });
-
-  watchBtn?.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleToggle("watchlist", watchBtn);
-  }, { passive: false });
+  // Initial icon state + fav/watch wiring (shared with discovery outside cards).
+  wireCardSaveButtons(card, animeId, anime.Title);
 
   return card;
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// v1.8.4 (gate 2) — DISCOVERY / OUTSIDE CARDS (the per-card blend)
+// One shell (renderAnimeCardMarkup), two reads:
+//   - an AniList title that is NOT in Blake's 44  -> outside card (NOT REVIEWED
+//     sticker, community score only, click -> the FREE openSecondaryModal path).
+//   - an AniList title that IS one of his 44      -> the REAL reviewed catalog
+//     card (gold rating, main modal) + the "Reviewed by Blake" pin. That upgrade
+//     is the standout blend pitch: the wider world lights up where he's been.
+// These builders are G2 infra: WIRED to the page in G3 (Discover) / G4 (For You).
+// ════════════════════════════════════════════════════════════════════════
+
+// Pick the best display title from a normalizeListMedia node.
+function bestMediaTitle(m) {
+  const t = (m && m.title) || {};
+  return t.english || t.romaji || t.native || 'Untitled';
+}
+
+// Map a normalizeListMedia node -> the `anime`-shaped props renderAnimeCardMarkup
+// consumes. ⚠️ AniList strings are UNTRUSTED — escape every one here (the card
+// renderer interpolates raw, by design, since catalog data is trusted). The cover
+// is a full https URL, so we pass assetBase:'' at the call site (not 'assets/').
+function mediaToCardProps(m) {
+  const t = (m && m.title) || {};
+  // v1.8.4 gate 3c (item 8) — a null/0 AniList score shows an explicit, quiet "N/A"
+  // chip (score-none tier => slate) instead of a blank, so it reads "no score".
+  const score = (typeof m.averageScore === 'number' && m.averageScore > 0) ? m.averageScore + '%' : 'N/A';
+  return {
+    Title: escapeHtml(bestMediaTitle(m)),
+    TitleEnglish: escapeHtml(t.english || ''),
+    TitleRomaji: escapeHtml(t.romaji || ''),
+    TitleNative: escapeHtml(t.native || ''),
+    image: escapeHtml((m.coverImage && m.coverImage.large) || ''),
+    // v1.8.4 gate 3b (item 8c) — cap at the top-2 genres PER CARD (AniList orders
+    // genres by relevance), e.g. "Action, Adventure, Comedy" -> "Action, Adventure".
+    Genre: escapeHtml((Array.isArray(m.genres) ? m.genres : []).slice(0, 2).join(', ')),
+    Rating: score,                 // community score (digits + %), distinct from Blake's gold "N/10"
+    AniListId: m.id,
+  };
+}
+
+// v1.8.4 gate 3b (item 8b) — score tier for the community-score chip color.
+// AniList averageScore is 0-100. Breakpoints: >=78 high (green/gold), 65-77 mid
+// (neutral purple), 1-64 low (muted red), 0/none -> no tier (plain chip).
+function scoreTier(averageScore) {
+  const n = Number(averageScore);
+  if (!Number.isFinite(n) || n <= 0) return 'none';
+  if (n >= 78) return 'high';
+  if (n >= 65) return 'mid';
+  return 'low';
+}
+
+// ── Newly-reviewed shimmer seen-state (the "upgrade moment" scaffold) ──
+// The shimmer should fire ONLY when a title the user previously met as
+// NOT-REVIEWED has since joined the catalog — not on every first-ever pin. So we
+// track two localStorage sets: ids seen as outside cards, and ids we've already
+// shimmered. A pinned (reviewed) discovery card shimmers once iff it was seen
+// outside before AND hasn't shimmered yet.
+const NOT_REVIEWED_SEEN_KEY = 'rar:nrseen:v1';
+const NEWLY_REVIEWED_SHOWN_KEY = 'rar:nrshown:v1';
+function loadIdSet(key) { try { return new Set((JSON.parse(localStorage.getItem(key) || '[]') || []).map(Number)); } catch (_) { return new Set(); } }
+function saveIdSet(key, set) { try { localStorage.setItem(key, JSON.stringify([...set])); } catch (_) {} }
+let notReviewedSeen = loadIdSet(NOT_REVIEWED_SEEN_KEY);
+let newlyReviewedShown = loadIdSet(NEWLY_REVIEWED_SHOWN_KEY);
+function recordSeenOutside(id) {
+  id = Number(id); if (!id || notReviewedSeen.has(id)) return;
+  notReviewedSeen.add(id); saveIdSet(NOT_REVIEWED_SEEN_KEY, notReviewedSeen);
+}
+function isNewlyReviewed(id) {
+  id = Number(id); if (!id) return false;
+  return notReviewedSeen.has(id) && !newlyReviewedShown.has(id);
+}
+function markNewlyReviewedShown(id) {
+  id = Number(id); if (!id || newlyReviewedShown.has(id)) return;
+  newlyReviewedShown.add(id); saveIdSet(NEWLY_REVIEWED_SHOWN_KEY, newlyReviewedShown);
+}
+
+// Build a discovery card from a normalizeListMedia node. Returns the upgrade
+// (pinned catalog) card when the id is one of Blake's 44, else an outside card.
+function createDiscoveryCard(media) {
+  if (!media || !media.id) return null;
+  const catalog = findInCatalog(media);
+  if (catalog) {
+    // The per-card blend: render his real reviewed card + the pin. If this title
+    // was previously seen as NOT-REVIEWED, give it the one-time upgrade shimmer.
+    const shimmer = isNewlyReviewed(media.id);
+    const card = createCard(catalog, { pinned: true, newlyReviewed: shimmer });
+    if (shimmer) markNewlyReviewedShown(media.id);
+    return card;
+  }
+  // Outside card: not one of his 44.
+  recordSeenOutside(media.id);
+  const props = mediaToCardProps(media);
+  // v1.8.4 gate 5 carry-over #2 — the save doc id is the al:<id> discriminator (the
+  // SAME id the secondary modal saves under), so saving here and from the modal are
+  // one and the same, and applySavedStateToCard reflects favoritesSet/watchlistSet.
+  const saveId = anilistSaveId(media.id);
+  const card = window.renderAnimeCardMarkup(props, {
+    animeId: saveId, assetBase: '', reviewed: false,
+  });
+  card.dataset.anilistId = String(media.id);
+  // v1.8.4 gate 3b (item 8b) — tint the community-score chip by rating tier.
+  card.classList.add('score-' + scoreTier(media.averageScore));
+  // The FREE NOT-REVIEWED path: the v1.7.4 secondary modal renders any AniList id
+  // as "NOT REVIEWED YET" + a Request pill, with no moreInfo context needed.
+  card.addEventListener('click', () => openSecondaryModal(Number(media.id), null, null));
+  // v1.8.4 gate 5 carry-over #2 — outside cards now save too (CSS stacks the icons
+  // vertically on the right, clear of the NOT-REVIEWED badge). Same shared wiring as
+  // catalog cards; the AniList title is stored as the save's display title.
+  wireCardSaveButtons(card, saveId, bestMediaTitle(media));
+  // a11y — keyboard activation (the card is role=button, tabindex=0). Guard on
+  // e.target === card so Enter/Space on a nested fav/watch button fires only the
+  // button (not also the card's open-modal action).
+  card.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') && e.target === card) {
+      e.preventDefault();
+      card.click();
+    }
+  });
+  return card;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// v1.8.4 (gate 3) — DISCOVER SURFACE (the wider world)
+// Live AniList search (Blake's 44 pinned first) + airing Top-10 + airing-by-
+// genre + community "Popular right now". LAZY: nothing hits AniList until the
+// surface is first opened, so the home's first paint stays fully local. Rails
+// are SIMPLE horizontal scrollers (no auto-marquee, no scroll-linked paint) —
+// the Gecko-safe choice while live data + the freshness shuffle are both new
+// this ship (stage each for the Profiler, per the v1.8.0 lessons).
+// ════════════════════════════════════════════════════════════════════════
+
+// Curated genre chooser — the ~16 mainstream AniList genres (NOT the tag
+// firehose). This is Discover's only "browse" filter; everything else is search.
+const DISCOVER_GENRES = ['Action','Adventure','Comedy','Drama','Fantasy','Horror','Mecha','Music','Mystery','Psychological','Romance','Sci-Fi','Slice of Life','Sports','Supernatural','Thriller'];
+
+// Per-session freshness seed: stable within a login, new each login, so the
+// shuffled pools show a different face per visit without churning mid-session.
+function freshSeed() {
+  try {
+    let s = sessionStorage.getItem('rar:freshseed');
+    if (!s) { s = String((secureRandomInt(2147483647) >>> 0) || 1); sessionStorage.setItem('rar:freshseed', s); }
+    return (parseInt(s, 10) >>> 0) || 1;
+  } catch (_) { return 1; }
+}
+// mulberry32 — tiny deterministic PRNG. Same seed => same order (the whole point).
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seededShuffle(arr, seed) {
+  const a = arr.slice();
+  const rnd = mulberry32(seed >>> 0);
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let discoverBuilt = false;
+let discoverSearchDebounce = null;
+let discoverSearchAbort = null;
+let discoverGenreToken = 0;
+let discoverLastSearchTerm = '';
+
+// ── v1.8.4 gate 3b — branded async-state helpers ──
+// Loading SKELETON: a true card silhouette (zero layout shift), one shared
+// transform-translated sweep (CSS .disc-skel::after — no per-card JS timers).
+function railSkeleton(n) {
+  let html = '';
+  for (let i = 0; i < (n || 5); i++) {
+    html += '<div class="disc-skel" aria-hidden="true"><div class="ds-poster"></div>'
+      + '<div class="ds-info"><span class="ds-line"></span><span class="ds-line short"></span><span class="ds-chip"></span></div></div>';
+  }
+  return html;
+}
+function setRailLoading(el) { if (el) el.innerHTML = railSkeleton(5); }
+
+// Branded empty/error state — the v1.7.1 .search-empty-card vocabulary, scoped
+// .is-discover (telescope glyph, bilingual kicker, optional CTA). Returns a node
+// so the CTA handler attaches directly. The body is the one live-string surface —
+// escaped here. No provider names.
+function discoverEmptyCard(opts = {}) {
+  const mode = opts.mode === 'error' ? 'error' : 'empty';
+  const el = document.createElement('div');
+  el.className = 'search-empty-card is-discover' + (mode === 'error' ? ' is-error' : '');
+  const kicker = mode === 'error' ? 'LOST THE SIGNAL' : (opts.kicker || 'NOTHING OUT THERE');
+  const jp = mode === 'error' ? '接続エラー' : (opts.jp || '該当なし');
+  const body = opts.body || (mode === 'error' ? "Couldn't reach the wider world just now." : 'Nothing surfaced here right now.');
+  let html = '<div class="se-glyph" aria-hidden="true">&#128301;</div>'   // telescope
+    + '<div class="se-kicker">' + escapeHtml(kicker) + ' <span class="jp-mini">' + escapeHtml(jp) + '</span></div>'
+    + '<p class="se-body">' + escapeHtml(body) + '</p>';
+  if (opts.cta) html += '<button type="button" class="se-cta">' + escapeHtml(opts.cta) + ' <span class="se-arrow" aria-hidden="true">&rarr;</span></button>';
+  el.innerHTML = html;
+  if (opts.cta && typeof opts.onCta === 'function') {
+    const btn = el.querySelector('.se-cta');
+    if (btn) btn.addEventListener('click', opts.onCta);
+  }
+  return el;
+}
+
+// Pre-decode the first screenful of a rail's covers so the first auto-advance
+// doesn't hitch on a mid-scroll decode (perf vet D). Bounded + error-swallowed.
+function predecodeRail(el, count) {
+  if (!el) return;
+  [...el.querySelectorAll('img')].slice(0, count || 8).forEach((img) => {
+    try { if (img.decode) img.decode().catch(() => {}); } catch (_) {}
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// v1.8.4 gate 3b (item 6) — RAIL AUTO-ADVANCE.
+// ONE shared rAF + ONE shared IntersectionObserver drive ALL rails. A rail only
+// moves while it's on-screen AND the tab is visible; native manual scroll is
+// preserved (we only WRITE scrollLeft, never read it in a hot path); pauses on
+// any manual interaction and resumes after idle; reduced-motion => never starts
+// (plain native scroller). No will-change, no scroll listeners. dt-normalized so
+// every refresh rate moves at the same gentle visual rate. This honors the gate's
+// SPIRIT (cheap, compositor-friendly, reduced-motion-static) while keeping manual
+// scroll — which a pure transform marquee cannot. Stage for Blake's Profiler.
+// ════════════════════════════════════════════════════════════════════════
+const discoverRails = new Map();        // el -> { pos, dir, max, paused, visible, resumeTimer }
+let discoverRafId = null;
+let discoverLastTs = 0;
+let _discoverIO = null;
+const DISCOVER_SPEED = 0.018;           // px per ms (~18 px/s — genuinely gentle)
+
+function recomputeRailMax(el, st) {
+  st.max = Math.max(0, el.scrollWidth - el.clientWidth);
+  if (st.pos > st.max) st.pos = st.max; // re-clamp after a re-render/resize (fixes ping-pong overshoot)
+}
+function discoverRailTick(ts) {
+  discoverRafId = null;
+  if (document.hidden) { discoverLastTs = 0; return; }   // tab hidden -> idle, restart on visibility
+  const dt = discoverLastTs ? Math.min(64, ts - discoverLastTs) : 16;
+  discoverLastTs = ts;
+  let anyActive = false;
+  discoverRails.forEach((st, el) => {
+    if (st.paused || !st.visible || st.max <= 2) return;
+    anyActive = true;
+    st.pos += DISCOVER_SPEED * dt * st.dir;
+    if (st.pos >= st.max) { st.pos = st.max; st.dir = -1; }
+    else if (st.pos <= 0) { st.pos = 0; st.dir = 1; }
+    el.scrollLeft = st.pos;             // write-only — no per-frame layout read
+  });
+  if (anyActive) discoverRafId = requestAnimationFrame(discoverRailTick);
+  else discoverLastTs = 0;             // nothing active -> let the loop idle
+}
+function ensureDiscoverRaf() {
+  if (REDUCED_MOTION) return;
+  if (discoverRafId == null) { discoverLastTs = 0; discoverRafId = requestAnimationFrame(discoverRailTick); }
+}
+function discoverRailObserver() {
+  if (_discoverIO) return _discoverIO;
+  _discoverIO = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      const st = discoverRails.get(e.target);
+      if (!st) return;
+      st.visible = e.isIntersecting;
+      if (st.visible) { recomputeRailMax(e.target, st); ensureDiscoverRaf(); }
+    });
+  }, { threshold: 0.01 });
+  return _discoverIO;
+}
+// Mount the shared gentle auto-advance on a native-scroll element. Used by BOTH
+// the Discover rails AND (gate 3c, item 9) the Den "Anime By Genre" rails — one
+// motion language site-wide. opts.dir sets the initial drift direction (alternate
+// the Den rails for variety). Handlers are stored so destroyDiscoverCarousel can
+// remove them cleanly on teardown/rebuild.
+function mountDiscoverCarousel(el, opts = {}) {
+  if (!el || REDUCED_MOTION) return;    // reduced-motion: leave it a plain native scroller
+  if (discoverRails.has(el)) { recomputeRailMax(el, discoverRails.get(el)); return; }
+  const st = { pos: el.scrollLeft || 0, dir: opts.dir === -1 ? -1 : 1, max: 0, paused: false, visible: false, resumeTimer: null, handlers: null };
+  recomputeRailMax(el, st);
+  const pause = () => { st.paused = true; };
+  const resumeSoon = () => {
+    clearTimeout(st.resumeTimer);
+    st.resumeTimer = setTimeout(() => { st.pos = el.scrollLeft; recomputeRailMax(el, st); st.paused = false; ensureDiscoverRaf(); }, 1600);
+  };
+  const onWheel = () => { pause(); resumeSoon(); };
+  const onDown = () => { pause(); resumeSoon(); };
+  st.handlers = { pause, resumeSoon, onWheel, onDown };
+  el.addEventListener('pointerenter', pause);
+  el.addEventListener('pointerleave', resumeSoon);
+  el.addEventListener('focusin', pause);
+  el.addEventListener('focusout', resumeSoon);
+  el.addEventListener('touchstart', pause, { passive: true });
+  el.addEventListener('touchend', resumeSoon, { passive: true });
+  el.addEventListener('wheel', onWheel, { passive: true });
+  el.addEventListener('pointerdown', onDown);
+  discoverRails.set(el, st);
+  discoverRailObserver().observe(el);
+}
+// Fully tear down a rail's auto-advance (remove listeners, unobserve, clear timer,
+// drop from the Map). Used by the Den rail rebuild/shuffle.
+function destroyDiscoverCarousel(el) {
+  const st = el && discoverRails.get(el);
+  if (!st) return;
+  clearTimeout(st.resumeTimer);
+  const h = st.handlers || {};
+  el.removeEventListener('pointerenter', h.pause);
+  el.removeEventListener('pointerleave', h.resumeSoon);
+  el.removeEventListener('focusin', h.pause);
+  el.removeEventListener('focusout', h.resumeSoon);
+  el.removeEventListener('touchstart', h.pause);
+  el.removeEventListener('touchend', h.resumeSoon);
+  el.removeEventListener('wheel', h.onWheel);
+  el.removeEventListener('pointerdown', h.onDown);
+  try { if (_discoverIO) _discoverIO.unobserve(el); } catch (_) {}
+  discoverRails.delete(el);
+}
+// Call after a rail (re-)renders cards: pre-decode the screenful, mount/refresh the
+// carousel, recompute max after layout settles.
+function refreshDiscoverCarousel(el) {
+  if (!el) return;
+  predecodeRail(el, 8);
+  if (REDUCED_MOTION) return;
+  mountDiscoverCarousel(el);
+  requestAnimationFrame(() => {
+    const st = discoverRails.get(el);
+    if (st) { recomputeRailMax(el, st); }
+    ensureDiscoverRaf();
+  });
+}
+
+// A small bilingual dateline per rail (honest data already in hand). No motion.
+function seasonLabel(list) {
+  const m = (Array.isArray(list) ? list : []).find((x) => x && x.season && x.seasonYear);
+  if (!m) return '';
+  const jp = ({ WINTER: '冬', SPRING: '春', SUMMER: '夏', FALL: '秋' })[m.season] || '';
+  const en = m.season.charAt(0) + m.season.slice(1).toLowerCase();
+  return en + ' ' + m.seasonYear + (jp ? ' · ' + jp : '');
+}
+function setRailMeta(blockId, text) {
+  const block = document.getElementById(blockId);
+  if (!block) return;
+  // v1.8.4 gate 3e (item 6) — the dateline pill lives on the RIGHT of the subrow
+  // (the descriptive tagline is on the left, under the heading). Create the subrow
+  // if the block doesn't have one (so it works even without a static tagline).
+  let row = block.querySelector('.discover-subrow');
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'discover-subrow';
+    const head = block.querySelector('.discover-block-head');
+    if (head) head.insertAdjacentElement('afterend', row);
+    else block.insertBefore(row, block.firstChild);
+  }
+  let pill = row.querySelector('.drm-pill');
+  if (!text) { if (pill) pill.remove(); return; }
+  if (!pill) { pill = document.createElement('span'); pill.className = 'drm-pill'; row.appendChild(pill); }
+  pill.textContent = text;   // textContent => no XSS
+}
+
+// Render media nodes into a rail/grid as discovery cards. Honest async states:
+// null list => branded error card; empty list => branded empty card; else cards
+// (+ mount the auto-advance carousel when opts.carousel). No provider names.
+function renderDiscoverInto(el, list, opts = {}) {
+  if (!el) return;
+  el.innerHTML = '';
+  if (!Array.isArray(list)) {
+    el.appendChild(discoverEmptyCard({ mode: 'error', cta: opts.onRetry ? 'Try again' : null, onCta: opts.onRetry }));
+    return;
+  }
+  if (!list.length) {
+    el.appendChild(discoverEmptyCard({ mode: 'empty', body: opts.empty || 'Nothing to show here right now.' }));
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  list.forEach((m) => { const c = window.rarDiscovery.createDiscoveryCard(m); if (c) frag.appendChild(c); });
+  el.appendChild(frag);
+  // v1.8.4 gate 3d (item 4) — center a rail ONLY when its cards actually FIT (no
+  // overflow). The G3c bug: a count threshold (<=4) left a 5-7 card rail that fit
+  // the width left-hugging. Cards are fixed-width (CSS), so scrollWidth is accurate
+  // synchronously here. Overflowing rails stay flex-start so the carousel can scroll.
+  el.classList.toggle('is-sparse', el.scrollWidth <= el.clientWidth + 1);
+  if (opts.carousel) refreshDiscoverCarousel(el);
+}
+
+// Build the default sections (airing / by-genre / community). Lazy + L2-cached.
+async function buildDiscoverSections() {
+  const seed = freshSeed();
+
+  // 1) Airing Top 10 — the ACTUAL ranked top of currently-airing (no shuffle: a
+  //    "Top 10" that reshuffles isn't a top 10). Trending-sorted by the query.
+  setRailLoading(discoverAiringEl);
+  const airing = await window.rarDiscovery.fetchAiringCached('all');
+  renderDiscoverInto(discoverAiringEl, Array.isArray(airing) ? airing.slice(0, 10) : null,
+    { empty: 'Nothing airing surfaced right now.', carousel: true, onRetry: buildDiscoverSections });
+  setRailMeta('discover-airing-block', seasonLabel(airing));
+
+  // 2) Community picks — seeded shuffle of the DEEP trending pool (fresh per login).
+  setRailLoading(discoverTrendingEl);
+  const trending = await window.rarDiscovery.fetchTrendingCached();
+  renderDiscoverInto(discoverTrendingEl,
+    Array.isArray(trending) ? seededShuffle(trending, seed).slice(0, 18) : null,
+    { empty: "Couldn't load popular titles right now.", carousel: true, onRetry: buildDiscoverSections });
+  setRailMeta('discover-trending-block', (Array.isArray(trending) && trending.length) ? 'Refreshed this visit' : '');
+
+  // 3) Airing-by-genre chips + the first genre's rail.
+  buildDiscoverGenreChips();
+  selectDiscoverGenre(DISCOVER_GENRES[0]);
+}
+
+function buildDiscoverGenreChips() {
+  if (!discoverGenreChipsEl || discoverGenreChipsEl.childElementCount) return;
+  const frag = document.createDocumentFragment();
+  DISCOVER_GENRES.forEach((g, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'discover-genre-chip' + (i === 0 ? ' is-active' : '');
+    btn.textContent = g;                       // textContent => no XSS risk
+    btn.setAttribute('data-genre', g);
+    btn.addEventListener('click', () => selectDiscoverGenre(g));
+    frag.appendChild(btn);
+  });
+  discoverGenreChipsEl.appendChild(frag);
+}
+
+async function selectDiscoverGenre(genre) {
+  if (!discoverGenreRailEl) return;
+  if (discoverGenreChipsEl) {
+    discoverGenreChipsEl.querySelectorAll('.discover-genre-chip').forEach((c) =>
+      c.classList.toggle('is-active', c.getAttribute('data-genre') === genre));
+  }
+  const token = ++discoverGenreToken;          // ignore a stale fetch if a newer chip wins
+  setRailLoading(discoverGenreRailEl);
+  const list = await window.rarDiscovery.fetchAiringCached(genre);
+  if (token !== discoverGenreToken) return;
+  const seeded = Array.isArray(list) ? seededShuffle(list, freshSeed()).slice(0, 18) : null;
+  renderDiscoverInto(discoverGenreRailEl, seeded,
+    { empty: `Nothing airing in ${genre} right now — try another genre.`, carousel: true, onRetry: () => selectDiscoverGenre(genre) });
+}
+
+// ── Live search: pin his 44 first, then an exact-title BOOST over AniList's
+//    messy SEARCH_MATCH order (the G1 "demon slayer ranked a short #1" finding),
+//    a "From the wider world" divider, then outside cards. ──
+function discoverTitleScore(m, qWords, full) {
+  const t = (bestMediaTitle(m) || '').toLowerCase();
+  let s = 0;
+  if (t === full) s += 100;
+  else if (t.startsWith(full)) s += 50;
+  if (t.includes(full)) s += 8;
+  s += qWords.filter((w) => t.includes(w)).length * 10;   // word coverage
+  return s;
+}
+// Partition AniList search results into Blake's 44 (pinned) vs the wider world,
+// each ordered by the exact-title boost over AniList's raw SEARCH_MATCH order
+// (the G1 "demon slayer ranked a short #1" fix). Pure — single source for the
+// renderer + the spec + (later) For-You. Returns { pinned:[], outside:[] }.
+function rankDiscoverResults(results, term) {
+  const list = Array.isArray(results) ? results : [];
+  const qWords = String(term || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const full = qWords.join(' ');
+  const pinned = [], outside = [];
+  list.forEach((m, i) => { (findInCatalog(m) ? pinned : outside).push({ m, i }); });
+  const byRelevance = (arr) => arr
+    .map((x) => ({ m: x.m, i: x.i, s: discoverTitleScore(x.m, qWords, full) }))
+    .sort((a, b) => (b.s - a.s) || (a.i - b.i))
+    .map((x) => x.m);
+  return { pinned: byRelevance(pinned), outside: byRelevance(outside) };
+}
+function runDiscoverSearch(q) {
+  const term = String(q || '').trim();
+  if (discoverSearchClear) discoverSearchClear.hidden = !term;
+  if (!term) {
+    if (discoverSearchResults) { discoverSearchResults.hidden = true; discoverSearchResults.innerHTML = ''; }
+    if (discoverSectionsEl) discoverSectionsEl.hidden = false;
+    if (discoverSearchAbort) { discoverSearchAbort.abort(); discoverSearchAbort = null; }
+    return;
+  }
+  discoverLastSearchTerm = term;
+  if (discoverSectionsEl) discoverSectionsEl.hidden = true;
+  if (discoverSearchResults) {
+    discoverSearchResults.hidden = false;
+    discoverSearchResults.innerHTML = `<div class="discover-results-grid">${railSkeleton(6)}</div>`;
+  }
+  if (discoverSearchAbort) discoverSearchAbort.abort();   // abort the in-flight request
+  const ctrl = new AbortController();
+  discoverSearchAbort = ctrl;
+  window.rarDiscovery.searchDiscover(term, ctrl.signal).then((results) => {
+    if (ctrl.signal.aborted || ctrl !== discoverSearchAbort) return;
+    renderDiscoverSearchResults(results, term);
+  }).catch(() => {
+    if (ctrl === discoverSearchAbort) renderDiscoverSearchResults(null, term);
+  });
+}
+function renderDiscoverSearchResults(results, term) {
+  if (!discoverSearchResults) return;
+  discoverSearchResults.innerHTML = '';
+  if (!Array.isArray(results)) {
+    discoverSearchResults.appendChild(discoverEmptyCard({
+      mode: 'error', cta: 'Try again', onCta: () => runDiscoverSearch(term),
+    }));
+    return;
+  }
+  const { pinned: pinnedSorted, outside: outsideSorted } = rankDiscoverResults(results, term);
+  if (!pinnedSorted.length && !outsideSorted.length) {
+    discoverSearchResults.appendChild(discoverEmptyCard({
+      body: `No matches for "${term}" — try a different title.`,
+      cta: 'Clear search',
+      onCta: () => {
+        if (discoverSearchInput) { discoverSearchInput.value = ''; discoverSearchInput.focus(); }
+        runDiscoverSearch('');
+      },
+    }));
+    return;
+  }
+  const grid = (list) => {
+    const g = document.createElement('div');
+    g.className = 'discover-results-grid';
+    list.forEach((m) => { const c = window.rarDiscovery.createDiscoveryCard(m); if (c) g.appendChild(c); });
+    return g;
+  };
+  // The "Reviewed by Blake" hero shelf — the per-card blend's centerpiece. A gold
+  // VIP slab with a real header row (static labels — no XSS surface). Wraps the
+  // pinned grid; the wider-world divider below reads as a distinct second shelf.
+  if (pinnedSorted.length) {
+    const shelf = document.createElement('section');
+    shelf.className = 'discover-blake-shelf';
+    shelf.innerHTML =
+      '<div class="dbs-head"><span class="dbs-seal" aria-hidden="true">&#9733;</span>'
+      + '<span class="dbs-kicker">REVIEWED BY BLAKE <span class="jp-mini">監修</span></span></div>'
+      + '<p class="dbs-sub">Titles he’s actually sat down with</p>';
+    shelf.appendChild(grid(pinnedSorted));
+    discoverSearchResults.appendChild(shelf);
+  }
+  if (outsideSorted.length) {
+    const head = document.createElement('div');
+    head.className = 'discover-results-divider';
+    head.textContent = 'From the wider world';
+    discoverSearchResults.appendChild(head);
+    discoverSearchResults.appendChild(grid(outsideSorted));
+  }
+}
+
+// The Discover 3-way lens — CSS-only filtering of already-rendered cards (no
+// refetch, no re-render): toggles a class on #discover-view; CSS hides the
+// non-matching cards. Fast + Gecko-safe.
+function setDiscoverLens(which) {
+  const target = (which === 'reviewed' || which === 'notyet') ? which : 'all';
+  if (discoverLens) {
+    discoverLens.querySelectorAll('.fr-seg').forEach((b) => {
+      const on = b.getAttribute('data-reviewed') === target;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+  if (discoverView) {
+    discoverView.classList.remove('lens-all', 'lens-reviewed', 'lens-notyet');
+    discoverView.classList.add('lens-' + target);
+  }
+}
+function wireDiscoverLens() {
+  if (!discoverLens) return;
+  discoverLens.querySelectorAll('.fr-seg').forEach((b) => {
+    b.addEventListener('click', () => setDiscoverLens(b.getAttribute('data-reviewed')));
+  });
+}
+
+function showDiscover() {
+  if (!discoverView) return;
+  filterPanel?.classList.remove('open');
+  document.body.classList.remove('filter-open');
+  homeView.style.display = 'none';
+  allView.style.display = 'none';
+  if (foryouView) foryouView.style.display = 'none';   // v1.8.4 gate 4 — one surface at a time
+  discoverView.style.display = 'block';
+  stopSpotlightCycle();
+  hideGenreRails();
+  setFilterHasOutsideCards(true);     // the panel's 3-way "Unreviewed" enables here too
+  setDiscoverLens('all');
+  if (!discoverBuilt) { discoverBuilt = true; buildDiscoverSections(); }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  headerEl?.classList.remove('header--hidden');
+  setActivePlace(discoverBtn);        // light Discover, slide the marker
+}
+function hideDiscover() {
+  if (discoverView) discoverView.style.display = 'none';
+  discoverBtn?.classList.remove('is-active');
+  setFilterHasOutsideCards(false);
+  // Idle the auto-advance immediately (the IO also fires not-intersecting on
+  // display:none, but flip the flag now so the rAF loop stops this frame). Clear
+  // any pending resume timers too, so they don't accumulate across show/hide cycles.
+  discoverRails.forEach((st) => { clearTimeout(st.resumeTimer); st.resumeTimer = null; st.visible = false; });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// v1.8.4 (gate 4) — FOR YOU SURFACE (his shelf, pulled near you)
+// His picks NEAR the user's taste. Taste = top genres of the user's saved
+// CATALOG entries (his 44 only — al:<id> outside saves carry no vocabulary),
+// weighted favorites > watchlist > recent. Each "MORE {genre}" rail LEADS with
+// his gold pinned cards, then a slim boundary, then the wider world as the
+// supporting cast — so the heart is the entrance, never buried. Rails are minted
+// ONLY from genres he reviewed, so a gold-less ("generic feed") rail is
+// structurally impossible. Reuses the Discover native-scroll auto-drift language,
+// NOT the Den marquee. LAZY: nothing hits AniList until For You opens; the L2
+// caches (12h airing / 24h trending) back the pools. No provider names.
+// ════════════════════════════════════════════════════════════════════════
+
+// Signal weights per saved CATALOG entry, summed ADDITIVELY across buckets (a
+// favorited title you also recently opened scores 3+1=4 — a true love floats up).
+const TASTE_WEIGHTS = { favorite: 3, watchlist: 2, recent: 1 };
+const TASTE_RAIL_CAP = 3;       // fewer, richer rails => highest gold density per screen
+const TASTE_FLOOR = 4;          // a genre needs >= this summed weight to earn a rail
+const TASTE_LEAD_CAP = 6;       // max his-gold lead cards per rail
+const TASTE_WORLD_CAP = 12;     // max wider-world cards per rail
+let foryouBuildToken = 0;       // aborts a stale async build when saves/auth change
+
+// His Genre vocabulary isn't AniList's 16 (DISCOVER_GENRES), and fetchAiringCached
+// passes ONE genre String to AniList. Map his tokens -> a fetchable AniList genre.
+// Demographic tokens (Shonen/Seinen/…) DROP — they aren't AniList genres and their
+// weight already lands on co-genres. Unmapped tokens drop from rail candidacy.
+const TASTE_GENRE_MAP = {
+  'shonen': null, 'shounen': null, 'seinen': null, 'shoujo': null, 'shojo': null, 'josei': null,
+  'isekai': 'Fantasy', 'studio ghibli': 'Fantasy',
+  'idol': 'Music', 'musical': 'Music',
+  'slice of life': 'Slice of Life', 'sol': 'Slice of Life',
+};
+// Per-genre JP glyph for the rail head (matches Discover's bilingual block-heads).
+const GENRE_JP = {
+  'Action': 'アクション', 'Adventure': '冒険', 'Comedy': 'コメディ', 'Drama': 'ドラマ',
+  'Fantasy': 'ファンタジー', 'Horror': 'ホラー', 'Mecha': 'メカ', 'Music': '音楽',
+  'Mystery': 'ミステリー', 'Psychological': '心理', 'Romance': '恋愛', 'Sci-Fi': 'SF',
+  'Slice of Life': '日常', 'Sports': 'スポーツ', 'Supernatural': '超自然', 'Thriller': 'スリラー',
+};
+function mapTasteGenre(token) {
+  const k = String(token || '').trim().toLowerCase();
+  if (!k) return null;
+  if (Object.prototype.hasOwnProperty.call(TASTE_GENRE_MAP, k)) return TASTE_GENRE_MAP[k];
+  const hit = DISCOVER_GENRES.find((g) => g.toLowerCase() === k);
+  return hit || null;
+}
+let _catalogBySlug = null;
+function catalogBySlug() {
+  if (!_catalogBySlug) _catalogBySlug = new Map((animeData || []).map((a) => [slug(a.Title), a]));
+  return _catalogBySlug;
+}
+function parseRating(a) {
+  const m = String((a && a.Rating) || '').match(/([\d.]+)/);   // his catalog Rating is "N/10"
+  return m ? (parseFloat(m[1]) || 0) : 0;
+}
+// His 44 whose Genre maps into the AniList genre g (the cards a g-rail can lead with).
+function hisCatalogInGenre(g) {
+  return (animeData || []).filter((a) => getGenres(a).some((tok) => mapTasteGenre(tok) === g));
+}
+
+// PURE core (exposed for tests): given saved doc-id arrays (each most-recent-first),
+// compute the taste profile + the ranked/floored/capped rail genres. Depends only on
+// the constant animeData + the args, so it's deterministic and Firestore-free.
+function computeTasteProfile(saves) {
+  const favorites = (saves && saves.favorites) || [];
+  const watchlist = (saves && saves.watchlist) || [];
+  const recent = (saves && saves.recent) || [];
+  const bySlug = catalogBySlug();
+
+  // Per distinct catalog entry, sum the bucket weights (additive). al:<id> / unknown
+  // ids resolve to no catalog entry and are skipped — only his 44 carry his vocab.
+  const entryWeight = new Map();          // slug -> weight
+  const bump = (ids, w) => (ids || []).forEach((id) => {
+    if (!bySlug.has(id)) return;
+    entryWeight.set(id, (entryWeight.get(id) || 0) + w);
+  });
+  bump(favorites, TASTE_WEIGHTS.favorite);
+  bump(watchlist, TASTE_WEIGHTS.watchlist);
+  bump(recent.slice(0, 6), TASTE_WEIGHTS.recent);
+
+  const genreScore = new Map();           // aniListGenre -> weight
+  const genreEntries = new Map();         // aniListGenre -> [{slug, weight, anime}] (this user's saves in g)
+  const tagScore = new Map();             // tag -> weight (ranking/copy flavor only; never mints a rail)
+  entryWeight.forEach((w, s) => {
+    const a = bySlug.get(s);
+    const mappedSeen = new Set();         // count each entry once per distinct mapped genre
+    getGenres(a).forEach((tok) => {
+      const g = mapTasteGenre(tok);
+      if (!g || mappedSeen.has(g)) return;
+      mappedSeen.add(g);
+      genreScore.set(g, (genreScore.get(g) || 0) + w);
+      if (!genreEntries.has(g)) genreEntries.set(g, []);
+      genreEntries.get(g).push({ slug: s, weight: w, anime: a });
+    });
+    safeArray(a.Tags).forEach((t) => {
+      const k = String(t || '').toLowerCase();
+      if (k) tagScore.set(k, (tagScore.get(k) || 0) + w);
+    });
+  });
+
+  const ranked = [...genreScore.entries()].map(([g, score]) => {
+    const hisIn = hisCatalogInGenre(g);
+    return {
+      genre: g,
+      score,
+      distinct: (genreEntries.get(g) || []).length,
+      catalogCount: hisIn.length,
+      catalogRating: hisIn.reduce((sum, a) => sum + parseRating(a), 0),
+      savedEntries: (genreEntries.get(g) || []).slice().sort((x, y) => y.weight - x.weight),
+    };
+  })
+  .filter((r) => r.score >= TASTE_FLOOR && r.catalogCount > 0)   // hard rule: no gold lead, no rail
+  .sort((a, b) =>
+    (b.score - a.score) ||
+    (b.distinct - a.distinct) ||
+    (b.catalogCount - a.catalogCount) ||
+    (b.catalogRating - a.catalogRating) ||
+    (DISCOVER_GENRES.indexOf(a.genre) - DISCOVER_GENRES.indexOf(b.genre)));
+
+  const rails = ranked.slice(0, TASTE_RAIL_CAP);
+  const qualifies = entryWeight.size >= 2 && rails.length >= 1;
+  return { totalScored: entryWeight.size, qualifies, thin: qualifies && ranked.length === 1, rails, tagScore };
+}
+
+function currentSaves() {
+  return { favorites: [...favoritesSet], watchlist: [...watchlistSet], recent: readContinue() };
+}
+
+// The Editor's Note — a per-rail first-person byline that frames the rail as Blake
+// reasoning about your shelf (the opposite of a recommendation row). Rotated by rail
+// index so 3 rails don't read the same. textContent at the call site => XSS-safe.
+// v1.8.4 gate 5 carry-over #1 — the copy must stay HONEST: only the gold leads are
+// titles he's watched; the world band is unwatched. So "I've sat down with" attaches
+// to his picks, and the world is "from around the world" — never a claim he watched
+// the whole rail.
+const FORYOU_NOTE_VARIANTS = [
+  (t, g) => `Because you saved ${t} — my own ${g} reviews up front, then more from around the world.`,
+  (t, g) => `You saved ${t}. The ${g} ones I've actually sat down with lead; the rest is from around the world.`,
+  (t, g) => `Saw you grabbed ${t} — good taste. My ${g} picks first, then ${g} from the wider world.`,
+];
+function editorsNote(railInfo, idx) {
+  const g = railInfo.genre.toLowerCase();
+  const top = railInfo.savedEntries[0] && railInfo.savedEntries[0].anime;
+  if (!top) return `My ${g} reviews up front, then more ${g} from around the world.`;
+  return FORYOU_NOTE_VARIANTS[idx % FORYOU_NOTE_VARIANTS.length](top.Title, g);
+}
+
+// Build one "MORE {genre}" rail, hand-rolled (NOT renderDiscoverInto — that loops
+// createDiscoveryCard over the list and silently drops any non-AniList-node child,
+// so a createCard gold lead or the boundary element would vanish). Three bands:
+// his gold leads -> a slim boundary -> the wider world (outside cards only).
+async function buildForYouRail(railInfo, idx, shownIds, token) {
+  if (!foryouSectionsEl) return;
+  const g = railInfo.genre;
+  const blockId = 'foryou-block-' + idx;
+
+  const block = document.createElement('section');
+  block.className = 'discover-block foryou-block';
+  block.id = blockId;
+  const head = document.createElement('h3');
+  head.className = 'discover-block-head';
+  const jp = GENRE_JP[g];
+  head.textContent = 'MORE ' + g.toUpperCase();
+  if (jp) { const sp = document.createElement('span'); sp.className = 'jp-mini'; sp.textContent = jp; head.appendChild(document.createTextNode(' ')); head.appendChild(sp); }
+  block.appendChild(head);
+  const subrow = document.createElement('div');
+  subrow.className = 'discover-subrow';
+  const note = document.createElement('p');
+  note.className = 'discover-block-sub';
+  note.textContent = editorsNote(railInfo, idx);   // trusted catalog title, textContent => safe
+  subrow.appendChild(note);
+  block.appendChild(subrow);
+  const rail = document.createElement('div');
+  rail.className = 'discover-rail foryou-rail';
+  rail.id = 'foryou-rail-' + idx;
+  block.appendChild(rail);
+  foryouSectionsEl.appendChild(block);
+
+  await fillForYouRailBands(rail, railInfo, shownIds, () => token !== foryouBuildToken);
+  setRailMeta(blockId, 'Refreshed this visit');
+}
+
+// Fill the three blend bands (his gold leads -> gold-star seam -> the wider world) into
+// a rail element. SHARED by the For You SURFACE rails and the compact For-You-on-home
+// rail (which passes smaller caps). isStale() lets each caller use its OWN build token
+// (the surface and the home teaser have independent lifecycles). Bails before mounting
+// the drift if superseded during the async pool fetch.
+async function fillForYouRailBands(railEl, railInfo, shownIds, isStale, opts = {}) {
+  if (!railEl) return;
+  const g = railInfo.genre;
+  const leadCap = opts.leadCap || TASTE_LEAD_CAP;
+  const worldCap = opts.worldCap || TASTE_WORLD_CAP;
+  // BAND 1 — his gold leads (createCard pinned = the real gold "Reviewed by Blake"
+  // card): the user's saved entries in g first (by weight), then his remaining 44 in g
+  // by Rating.
+  const savedSlugs = new Set(railInfo.savedEntries.map((e) => e.slug));
+  const more = hisCatalogInGenre(g)
+    .filter((a) => !savedSlugs.has(slug(a.Title)))
+    .sort((x, y) => parseRating(y) - parseRating(x));
+  const leadEntries = [...railInfo.savedEntries.map((e) => e.anime), ...more].slice(0, leadCap);
+  leadEntries.forEach((a) => railEl.appendChild(createCard(a, { pinned: true })));
+
+  // BAND 3 — the wider world (outside cards only; his picks already lead). Airing pool
+  // for g, backfilled from trending filtered to g when thin. findInCatalog drops any of
+  // his 44 (they lead, never the world band). shownIds dedups across rails.
+  let pool = await window.rarDiscovery.fetchAiringCached(g);
+  pool = Array.isArray(pool) ? pool : [];
+  if (pool.length < 8) {
+    const tr = await window.rarDiscovery.fetchTrendingCached();
+    pool = pool.concat((Array.isArray(tr) ? tr : []).filter((m) => Array.isArray(m.genres) && m.genres.includes(g)));
+  }
+  if (typeof isStale === 'function' && isStale()) return;   // a newer build superseded us
+  const seen = new Set();
+  const world = seededShuffle(pool, freshSeed()).filter((m) => {
+    if (!m || !m.id) return false;
+    const key = 'al:' + String(m.id);
+    if (seen.has(key)) return false; seen.add(key);
+    if (findInCatalog(m)) return false;         // his picks lead; never in the world band
+    if (shownIds.has(key)) return false;        // already shown on an earlier rail
+    return true;
+  }).slice(0, worldCap);
+
+  if (world.length) {
+    const sep = document.createElement('div');
+    sep.className = 'foryou-rail-sep';
+    sep.setAttribute('aria-hidden', 'true');
+    railEl.appendChild(sep);
+    world.forEach((m) => {
+      const c = window.rarDiscovery.createDiscoveryCard(m);
+      if (c) { railEl.appendChild(c); shownIds.add('al:' + String(m.id)); }
+    });
+  }
+  // Same finish renderDiscoverInto does: center when it fits, mount the auto-drift.
+  railEl.classList.toggle('is-sparse', railEl.scrollWidth <= railEl.clientWidth + 1);
+  refreshDiscoverCarousel(railEl);
+}
+
+// Thin-taste fallback (qualified but only one genre cleared the floor): the one real
+// rail, then a non-personalized but still all-his "Blake's table" so the page never
+// looks half-printed. Framed as the editor's own shelf, never as "yours."
+function buildBlakesTableRail() {
+  if (!foryouSectionsEl) return;
+  const block = document.createElement('section');
+  block.className = 'discover-block foryou-block';
+  block.id = 'foryou-blakes-table';
+  const head = document.createElement('h3');
+  head.className = 'discover-block-head';
+  head.textContent = "BLAKE'S TABLE";
+  const sp = document.createElement('span'); sp.className = 'jp-mini'; sp.textContent = '十八番';
+  head.appendChild(document.createTextNode(' ')); head.appendChild(sp);
+  block.appendChild(head);
+  const subrow = document.createElement('div'); subrow.className = 'discover-subrow';
+  const note = document.createElement('p'); note.className = 'discover-block-sub';
+  note.textContent = "Save a few more and this fills in around you. Until then — the ones I'd put on the table first.";
+  subrow.appendChild(note); block.appendChild(subrow);
+  const rail = document.createElement('div'); rail.className = 'discover-rail foryou-rail'; rail.id = 'foryou-rail-table';
+  block.appendChild(rail);
+  foryouSectionsEl.appendChild(block);
+  const top = (animeData || []).slice().sort((a, b) => parseRating(b) - parseRating(a)).slice(0, 14);
+  seededShuffle(top, freshSeed()).forEach((a) => rail.appendChild(createCard(a, { pinned: true })));
+  rail.classList.toggle('is-sparse', rail.scrollWidth <= rail.clientWidth + 1);
+  refreshDiscoverCarousel(rail);
+}
+
+// The gift state — a brand-new signed-in user with no saves yet. Blake's voice; an
+// invitation, not a sad blank. Routes them to Discover to start saving.
+function buildForYouGift() {
+  if (!foryouSectionsEl) return;
+  foryouSectionsEl.appendChild(discoverEmptyCard({
+    mode: 'empty', kicker: 'NEW HERE', jp: '始めよう',
+    body: "Hey — welcome in. This is the page where I pull my picks right up next to your taste. Thing is, I can't read a shelf that's empty yet. Go heart a few in the catalog, drop the maybes on your watchlist, wander Discover and tap the gold ones. Save three or four and come back — this whole page rebuilds itself around what you're into, my reviews lined up next to the wider world they live in. Promise it's worth it. — Blake",
+    cta: 'Go find something to save',
+    onCta: () => showDiscover(),
+  }));
+}
+
+// Signed out — one honest "Trending right now" rail (no fake personalization) + a
+// branded sign-in nudge explaining what For You becomes.
+async function buildForYouSignedOut(token) {
+  if (!foryouSectionsEl) return;
+  const block = document.createElement('section');
+  block.className = 'discover-block foryou-block';
+  block.id = 'foryou-trending-block';
+  const head = document.createElement('h3'); head.className = 'discover-block-head';
+  head.textContent = 'TRENDING RIGHT NOW';
+  const sp = document.createElement('span'); sp.className = 'jp-mini'; sp.textContent = '人気';
+  head.appendChild(document.createTextNode(' ')); head.appendChild(sp);
+  block.appendChild(head);
+  const subrow = document.createElement('div'); subrow.className = 'discover-subrow';
+  const note = document.createElement('p'); note.className = 'discover-block-sub';
+  note.textContent = "What the whole world's watching — no fake guessing until you're in.";
+  subrow.appendChild(note); block.appendChild(subrow);
+  const rail = document.createElement('div'); rail.className = 'discover-rail foryou-rail'; rail.id = 'foryou-trending-rail';
+  block.appendChild(rail);
+  foryouSectionsEl.appendChild(block);
+  foryouSectionsEl.appendChild(discoverEmptyCard({
+    mode: 'empty', kicker: 'WHAT THIS BECOMES', jp: 'サインイン',
+    body: "Right now you're seeing what the whole world is watching — no fake guessing. Sign in and For You becomes mine-meets-yours: I take the titles you save and stand my own reviewed picks right beside the wider world, gold-pinned so you always know which ones I've actually sat through. Make an account and let's build your shelf. — Blake",
+    cta: 'Sign in to build your shelf',
+    onCta: () => openAuth('signin'),
+  }));
+  setRailLoading(rail);                      // branded skeleton while the pool fetches (cold cache)
+  const trending = await window.rarDiscovery.fetchTrendingCached();
+  if (token !== foryouBuildToken) return;   // buildForYou owns the token; bail if superseded
+  renderDiscoverInto(rail, Array.isArray(trending) ? seededShuffle(trending, freshSeed()).slice(0, 18) : null,
+    { empty: "Couldn't load what's trending right now.", carousel: true, onRetry: buildForYou });
+}
+
+// Build (or rebuild) the For You surface from current auth + saves. Idempotent —
+// re-runnable on open and on any auth/save change while the surface is mounted.
+async function buildForYou() {
+  if (!foryouSectionsEl) return;
+  const token = ++foryouBuildToken;
+  // Tear down the previous rails' auto-advance (listeners + IntersectionObserver +
+  // timers in the shared discoverRails Map) BEFORE detaching them — innerHTML='' alone
+  // leaks them (this surface rebuilds on every save change). Mirrors the Den's
+  // rebuildGenreSection destroy-before-clear pattern.
+  foryouSectionsEl.querySelectorAll('.discover-rail').forEach((el) => destroyDiscoverCarousel(el));
+  foryouSectionsEl.innerHTML = '';
+  if (foryouLens) foryouLens.hidden = true;   // no lens on the signed-out / gift states
+  setForYouLens('all');
+
+  if (!auth.currentUser) { await buildForYouSignedOut(token); return; }
+
+  const profile = computeTasteProfile(currentSaves());
+  if (!profile.qualifies) { buildForYouGift(); return; }
+
+  const shownIds = new Set();
+  for (let i = 0; i < profile.rails.length; i++) {
+    if (token !== foryouBuildToken) return;   // a newer build superseded this one
+    await buildForYouRail(profile.rails[i], i, shownIds, token);
+  }
+  if (token !== foryouBuildToken) return;
+  if (profile.thin) buildBlakesTableRail();
+  if (foryouLens) foryouLens.hidden = false;  // mount the lens now that >=1 rail rendered
+  setForYouLens('all');
+}
+
+// The For-You lens — same CSS-only mechanism as Discover (toggles lens-* on the view
+// root; CSS hides the non-matching cards). Relabeled to a curator's lens in the HTML.
+function setForYouLens(which) {
+  const target = (which === 'reviewed' || which === 'notyet') ? which : 'all';
+  if (foryouLens) {
+    foryouLens.querySelectorAll('.fr-seg').forEach((b) => {
+      const on = b.getAttribute('data-reviewed') === target;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+  if (foryouView) {
+    foryouView.classList.remove('lens-all', 'lens-reviewed', 'lens-notyet');
+    foryouView.classList.add('lens-' + target);
+  }
+}
+function wireForYouLens() {
+  if (!foryouLens) return;
+  foryouLens.querySelectorAll('.fr-seg').forEach((b) => {
+    b.addEventListener('click', () => setForYouLens(b.getAttribute('data-reviewed')));
+  });
+}
+
+// v1.8.4 gate 5 — the three SURFACES are a mutually-exclusive "place" radio set. One
+// helper lights exactly one (or none, for the View All tool view) + slides the gold
+// marker. Den is lit on first paint (home is default). reuses .inline-header-btn.is-active.
+function setActivePlace(activeBtn) {
+  [denBtn, foryouBtn, discoverBtn].forEach((b) => {
+    if (!b) return;
+    const on = b === activeBtn;
+    b.classList.toggle('is-active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  moveMarker(activeBtn);
+  // v1.8.4 gate 6 — the Constellation veil's "you are here": this single funnel (every
+  // surface + View All's null route through it) flips data-surface on <html>; CSS
+  // crossfades the per-surface veil density (~450ms). null (View All) = the 'tool' room.
+  document.documentElement.dataset.surface =
+    activeBtn === denBtn      ? 'den'      :
+    activeBtn === foryouBtn   ? 'foryou'   :
+    activeBtn === discoverBtn ? 'discover' : 'tool';
+}
+// Slide the gold ink-bar under the active place. Measured in a rAF (after the class +
+// any font swap settles). The static .place-btn.is-active::after underbar is the no-JS
+// floor; once we position the marker we add .has-marker so only the slider shows.
+function moveMarker(btn) {
+  if (!placeMarker || !navPlaces) return;
+  if (!btn) { placeMarker.style.opacity = '0'; navPlaces.classList.remove('has-marker'); return; }
+  requestAnimationFrame(() => {
+    if (!btn.classList.contains('is-active')) return;
+    const r = btn.getBoundingClientRect();
+    const p = navPlaces.getBoundingClientRect();
+    // Not laid out (hidden), OR the nav wrapped to 2+ rows (narrow widths) — the marker's
+    // bottom is pinned to nav-places, so on a multi-row wrap it can't track a top-row
+    // button. Fall back to the static per-button underbar (correct at any width).
+    if (!r.width || p.height > r.height * 1.6) {
+      placeMarker.style.opacity = '0';
+      navPlaces.classList.remove('has-marker');
+      return;
+    }
+    navPlaces.classList.add('has-marker');
+    placeMarker.style.opacity = '1';
+    placeMarker.style.width = (r.width - 24) + 'px';
+    placeMarker.style.transform = 'translateX(' + (r.left - p.left + 12) + 'px)';
+  });
+}
+
+function showForYou() {
+  if (!foryouView) return;
+  filterPanel?.classList.remove('open');
+  document.body.classList.remove('filter-open');
+  homeView.style.display = 'none';
+  allView.style.display = 'none';
+  if (discoverView) discoverView.style.display = 'none';
+  foryouView.style.display = 'block';
+  stopSpotlightCycle();
+  hideGenreRails();
+  setFilterHasOutsideCards(true);     // the panel's 3-way "Unreviewed" enables here too
+  buildForYou();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  headerEl?.classList.remove('header--hidden');
+  setActivePlace(foryouBtn);          // light For You, slide the marker
+}
+function hideForYou() {
+  if (foryouView) foryouView.style.display = 'none';
+  foryouBtn?.classList.remove('is-active');
+  // Fully tear down the For-You rails (listeners + IO + timers in the shared
+  // discoverRails Map) when navigating away — they rebuild on re-open. Leaves the
+  // Discover rails untouched (only For-You's live under #foryou-sections).
+  if (foryouSectionsEl) foryouSectionsEl.querySelectorAll('.discover-rail').forEach((el) => destroyDiscoverCarousel(el));
+}
+
+// Re-personalize on any auth/save change: the Den featured slot always; the For You
+// surface only when it's the active view; the compact For-You-on-home only when home
+// is the active view (lazy — no work when it's not on screen).
+function onForYouSavesChanged() {
+  try { buildFeaturedDrop(); requestAnimationFrame(positionFeaturedDrop); } catch (_) {}
+  try { if (foryouView && foryouView.style.display !== 'none') buildForYou(); } catch (_) {}
+  try { if (homeView && homeView.style.display !== 'none' && homeForyouBuilt) buildHomeForYou(); } catch (_) {}
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// v1.8.4 (gate 5) — HOME HOLE-FILL: the two strips below the masthead. Both fetch
+// LAZILY (one-shot IntersectionObserver) so the home's first paint makes ZERO AniList
+// calls (the Den/folio/Top 10 are all local). Discover native-scroll drift, NOT the
+// Den marquee. The strips live in #home-view, so leaving home (display:none) idles
+// their drift via the shared rail IO automatically.
+// ════════════════════════════════════════════════════════════════════════
+let homeForyouBuildToken = 0;
+let homeForyouBuilt = false;
+
+// Set a strip head to "EN <jp-mini>JP</jp-mini>" without raw interpolation.
+function setStripHead(headEl, en, jp) {
+  if (!headEl) return;
+  headEl.textContent = en + ' ';
+  const sp = document.createElement('span');
+  sp.className = 'jp-mini';
+  sp.textContent = jp;
+  headEl.appendChild(sp);
+}
+
+// AIRING NOW — the wider-world threshold band. renderDiscoverInto auto-blends (his 44
+// that are airing pin gold; the rest are outside cards). Lazy-called.
+async function fillHomeAiring() {
+  if (!homeAiringRail) return;
+  setRailLoading(homeAiringRail);
+  const airing = await window.rarDiscovery.fetchAiringCached('all');
+  renderDiscoverInto(homeAiringRail, Array.isArray(airing) ? airing.slice(0, 12) : null,
+    { empty: 'Nothing airing surfaced right now.', carousel: true, onRetry: fillHomeAiring });
+  setRailMeta('home-airing-block', seasonLabel(Array.isArray(airing) ? airing : []));
+}
+
+// FOR YOU on home — chrome (head/sub/more by auth) + the rail. Signed in: a teaser of
+// the top taste rail (reuses fillForYouRailBands with smaller caps). Signed in + no
+// saves: the gift card. Signed out: an honest trending taster relabelled "FROM HIS
+// SHELF". Lazy-called; rebuilds on auth/save change while home is visible.
+async function buildHomeForYou() {
+  if (!homeForyouRail || !homeForyouBlock) return;
+  homeForyouBuilt = true;
+  const token = ++homeForyouBuildToken;
+  destroyDiscoverCarousel(homeForyouRail);
+  homeForyouRail.innerHTML = '';
+  homeForyouRail.classList.remove('is-sparse');
+  const headEl = document.getElementById('home-foryou-head');
+  const subEl = document.getElementById('home-foryou-sub');
+  const moreEl = document.getElementById('home-foryou-more');
+  const setMore = (text, fn) => {
+    if (!moreEl) return;
+    moreEl.hidden = false;
+    moreEl.textContent = text + ' ';
+    const a = document.createElement('span'); a.setAttribute('aria-hidden', 'true'); a.textContent = '→';
+    moreEl.appendChild(a);
+    moreEl.onclick = (e) => { e.preventDefault(); fn(); };
+  };
+  const hideMore = () => { if (moreEl) { moreEl.hidden = true; moreEl.onclick = null; } };
+
+  if (!auth.currentUser) {
+    // Signed out — an honest trending taster (NOT a sign-in wall on the home), relabelled
+    // so impersonal trending never sits under a personalization promise.
+    setStripHead(headEl, 'FROM HIS SHELF', '十八番');
+    if (subEl) subEl.textContent = "Not signed in yet — here's what the wider world's loving, with the ones Blake's reviewed lit gold.";
+    setMore('Sign in to make this yours · For You', () => showForYou());
+    setRailMeta('home-foryou-block', 'The wider world · 世界');
+    setRailLoading(homeForyouRail);
+    const trending = await window.rarDiscovery.fetchTrendingCached();
+    if (token !== homeForyouBuildToken) return;
+    renderDiscoverInto(homeForyouRail, Array.isArray(trending) ? seededShuffle(trending, freshSeed()).slice(0, 12) : null,
+      { empty: "Couldn't load what's trending right now.", carousel: true, onRetry: buildHomeForYou });
+    return;
+  }
+
+  const profile = computeTasteProfile(currentSaves());
+  if (!profile.qualifies) {
+    // Signed in, no saves yet — the gift (never an empty rail).
+    setStripHead(headEl, 'FOR YOU', '君へ');
+    if (subEl) subEl.textContent = 'Save a few you love and this whole shelf rebuilds around your taste.';
+    hideMore();
+    setRailMeta('home-foryou-block', '');
+    homeForyouRail.classList.add('is-sparse');
+    homeForyouRail.appendChild(discoverEmptyCard({
+      mode: 'empty', kicker: 'FOR YOU', jp: '始めよう',
+      body: "Save a few you love and this whole shelf rebuilds around your taste. — Blake",
+      cta: 'Go find something to save', onCta: () => showDiscover(),
+    }));
+    return;
+  }
+
+  // Signed in, qualifies — a teaser of the user's TOP taste rail.
+  const top = profile.rails[0];
+  setStripHead(headEl, 'FOR YOU', '君へ');
+  if (subEl) subEl.textContent = 'More of the ' + top.genre + " I'd vouch for — leading with the ones I sat down with.";
+  setMore('See all · For You', () => showForYou());
+  setRailMeta('home-foryou-block', 'Tuned to your shelf · 君へ');
+  await fillForYouRailBands(homeForyouRail, top, new Set(), () => token !== homeForyouBuildToken, { leadCap: 4, worldCap: 8 });
+}
+
+// One-shot lazy fill: fetch + render a home strip only when it nears the viewport, so
+// the first paint is API-free. rootMargin pre-warms it ~300px before it's on screen.
+function lazyFillOnView(blockEl, fillFn) {
+  if (!blockEl) return;
+  // fully swallow any rejection so a flaky AniList fetch can never surface as a page
+  // error (the fills are fire-and-forget; their content isn't depended on).
+  const run = () => { try { Promise.resolve(fillFn()).catch(() => {}); } catch (_) {} };
+  if (typeof IntersectionObserver === 'undefined') { run(); return; }   // no IO -> fill now
+  const io = new IntersectionObserver((entries, obs) => {
+    if (entries.some((e) => e.isIntersecting)) { obs.disconnect(); run(); }
+  }, { rootMargin: '300px 0px' });
+  io.observe(blockEl);
+}
+
+// The dated folio line — today's date (front-page masthead convention; always honest).
+function setFolioDate() {
+  const el = document.getElementById('folio-date');
+  if (!el) return;
+  try { el.textContent = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); }
+  catch (_) {}
+}
+
 // ---------- FEATURED (Latest Review) ----------
+// v1.8.4 gate 4 — the featured pick: signed-in => most-recent favorite, else most-
+// recent watchlist, else a recent his-card from history; signed-out => latest drop.
+// Catalog entries only (al:<id> outside saves have no local card to feature).
+function pickFeaturedAnime() {
+  if (!Array.isArray(animeData) || !animeData.length) return null;
+  if (auth.currentUser) {
+    const bySlug = catalogBySlug();
+    const firstCatalog = (ids) => { for (const id of (ids || [])) { const a = bySlug.get(id); if (a) return a; } return null; };
+    return firstCatalog([...favoritesSet]) || firstCatalog([...watchlistSet]) || firstCatalog(readContinue()) || animeData[animeData.length - 1];
+  }
+  return animeData[animeData.length - 1];
+}
 function buildFeaturedDrop() {
   if (!featuredDrop || !featuredDropCard) return;
   if (!Array.isArray(animeData) || !animeData.length) return;
 
-  // “Latest” = last entry in animeData (matches your current workflow)
-  const a = animeData[animeData.length - 1];
+  // v1.8.4 gate 4 — the featured slot adapts to the signed-in user (most-recent
+  // favorite > watchlist > recent his-card); signed-out keeps the latest drop.
+  const a = pickFeaturedAnime();
+  if (!a) return;
 
   // v1.7.1 gate 1g — romaji/native subtitle, same resolver + markup as the cards.
   const fSub = pickSubtitle(a);
@@ -2348,16 +3634,11 @@ function positionFeaturedDrop() {
 
   // ---------- RECOMMENDED RAIL ----------
   const VISIBLE_CARDS = 3;
-  const SPEED_PX_S = 30;
   const RAIL_COUNT = 1;
-  const RAIL_TICK_MS = 1000 / 60;
   const GENRE_SHUFFLE_LOCK_MS = 420;
-
-  function clearGenreRotationTimers() {
-    if (!genreRotationTimerIds.length) return;
-    genreRotationTimerIds.forEach((id) => clearInterval(id));
-    genreRotationTimerIds = [];
-  }
+  // v1.8.4 gate 3c — the old transform-marquee speed/tick consts + the rotation-
+  // timer machinery were removed when the Den rails moved to the shared Discover
+  // carousel (no setInterval-driven timers anymore).
 
   function pickGenresForRails(last = [], count = RAIL_COUNT, minTitles = 4) {
     const counts = new Map();
@@ -2410,99 +3691,110 @@ function positionFeaturedDrop() {
     return { rail, viewport, track };
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  // v1.8.4 gate 3d (item 5) — Den "Anime By Genre" INFINITE one-direction
+  // transform marquee (REVERTED from G3c's native-scroll, per Blake). Transform
+  // gets the FREE GPU-compositor path (the layer just translates — NO per-frame
+  // scroll repaint of newly-exposed edges), so this is a PERF WIN over G3c's
+  // native-scroll auto-advance and resolves the G3c Den Profiler-watch. Items are
+  // rendered TWICE for a seamless wrap; the track is translated by one set-width
+  // then snapped back. ONE shared rAF + ONE IntersectionObserver (off-screen rails
+  // do zero work), pauses on hover, reduced-motion => static + the viewport falls
+  // back to a manual scroller (CSS) so the cards are still reachable. NOT manually
+  // scrollable while animating (by design — Den only; Discover rails stay native-
+  // scroll). One direction always (no ping-pong reversal).
+  // ════════════════════════════════════════════════════════════════════════
+  const denMarquees = new Map();   // viewport -> { track, pos, dir, setWidth, paused, visible, handlers }
+  let denRafId = null;
+  let denLastTs = 0;
+  let _denIO = null;
+  const DEN_SPEED = 0.03;          // px per ms (~30 px/s)
+  function measureDenSet(st) {
+    const kids = st.track.children;
+    const half = Math.floor(kids.length / 2);   // items are duplicated -> one set = half
+    if (half <= 0) { st.setWidth = 0; return; }
+    const cs = getComputedStyle(st.track);
+    const gap = parseFloat(cs.columnGap || cs.gap || '0') || 0;
+    let w = 0;
+    for (let i = 0; i < half; i++) { w += kids[i].getBoundingClientRect().width; w += gap; }
+    st.setWidth = Math.max(1, w);   // includes the gap between set 1 and set 2 (seamless)
+  }
+  function denMarqueeTick(ts) {
+    denRafId = null;
+    if (document.hidden) { denLastTs = 0; return; }
+    const dt = denLastTs ? Math.min(64, ts - denLastTs) : 16;
+    denLastTs = ts;
+    let any = false;
+    denMarquees.forEach((st) => {
+      if (st.paused || !st.visible || st.setWidth <= 1) return;
+      any = true;
+      st.pos += DEN_SPEED * dt * st.dir;
+      if (st.dir < 0 && st.pos <= -st.setWidth) st.pos += st.setWidth;
+      else if (st.dir > 0 && st.pos >= st.setWidth) st.pos -= st.setWidth;
+      st.track.style.transform = `translate3d(${st.pos}px,0,0)`;   // composited — no repaint
+    });
+    if (any) denRafId = requestAnimationFrame(denMarqueeTick); else denLastTs = 0;
+  }
+  function ensureDenRaf() { if (REDUCED_MOTION) return; if (denRafId == null) { denLastTs = 0; denRafId = requestAnimationFrame(denMarqueeTick); } }
+  function denMarqueeObserver() {
+    if (_denIO) return _denIO;
+    _denIO = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        const st = denMarquees.get(e.target);
+        if (!st) return;
+        st.visible = e.isIntersecting;
+        if (st.visible) { measureDenSet(st); ensureDenRaf(); }
+      });
+    }, { threshold: 0.01 });
+    return _denIO;
+  }
+  function mountDenMarquee(viewport, track, direction) {
+    if (!viewport || !track || REDUCED_MOTION) return;   // reduced-motion: CSS makes it a manual scroller
+    if (denMarquees.has(viewport)) { measureDenSet(denMarquees.get(viewport)); return; }
+    const st = { track, pos: 0, dir: direction < 0 ? -1 : 1, setWidth: 0, paused: false, visible: false, handlers: null };
+    measureDenSet(st);
+    const onEnter = () => { st.paused = true; };
+    const onLeave = () => { st.paused = false; ensureDenRaf(); };
+    const onResize = () => measureDenSet(st);
+    st.handlers = { onEnter, onLeave, onResize };
+    viewport.addEventListener('pointerenter', onEnter);
+    viewport.addEventListener('pointerleave', onLeave);
+    window.addEventListener('resize', onResize);
+    denMarquees.set(viewport, st);
+    denMarqueeObserver().observe(viewport);
+  }
+  function destroyDenMarquee(viewport) {
+    const st = viewport && denMarquees.get(viewport);
+    if (!st) return;
+    const h = st.handlers || {};
+    viewport.removeEventListener('pointerenter', h.onEnter);
+    viewport.removeEventListener('pointerleave', h.onLeave);
+    window.removeEventListener('resize', h.onResize);
+    try { if (_denIO) _denIO.unobserve(viewport); } catch (_) {}
+    denMarquees.delete(viewport);
+  }
+
   function mountRail(genre, direction = -1) {
     const { rail, viewport, track } = createRailDOM(genre);
     const items = itemsForGenre(genre, 12);
     items.forEach((a) => track.appendChild(createCard(a)));
-    items.forEach((a) => track.appendChild(createCard(a)));
-
-    let setWidth = 0;
-    let offsetX = 0;
-    let paused = false;
-    let rotationTimerId = null;
-
-    function isVisible() {
-      return (
-        viewport &&
-        viewport.isConnected &&
-        viewport.getBoundingClientRect().width > 0 &&
-        viewport.offsetParent !== null
-      );
-    }
-    function getGapPx() {
-      const cs = getComputedStyle(track);
-      const g = parseFloat(cs.gap || cs.columnGap || "0");
-      return Number.isFinite(g) ? g : 0;
-    }
-    let lastValidSetWidth = 0;
-
-    function measure(force = false) {
-      if (!isVisible()) {
-        if (force && lastValidSetWidth > 0) setWidth = lastValidSetWidth;
-        return;
-      }
-      const children = [...track.children].slice(0, items.length);
-      const gap = getGapPx();
-      let w = 0;
-      children.forEach((node, idx) => {
-        w += node.getBoundingClientRect().width;
-        if (idx < children.length - 1) w += gap;
-      });
-      setWidth = Math.max(1, w);
-      lastValidSetWidth = setWidth;
-    }
-
-    function tick() {
-      if (paused || REDUCED_MOTION) return;
-      const delta = SPEED_PX_S * (RAIL_TICK_MS / 1000) * direction;
-      offsetX += delta;
-      if (direction === 1 && offsetX >= setWidth) offsetX -= setWidth;
-      if (direction === -1 && offsetX <= -setWidth) offsetX += setWidth;
-      track.style.transform = `translate3d(${offsetX}px,0,0)`;
-    }
+    // Duplicate the set for the seamless infinite loop — but only when animating;
+    // under reduced-motion the viewport becomes a manual scroller, so a single set
+    // (no dupes) is what's reachable.
+    if (!REDUCED_MOTION) items.forEach((a) => track.appendChild(createCard(a)));
 
     function start() {
-      if (REDUCED_MOTION) return;
-      paused = false;
-      measure(true);
-      if (rotationTimerId !== null) return;
-      rotationTimerId = window.setInterval(tick, RAIL_TICK_MS);
-      genreRotationTimerIds.push(rotationTimerId);
+      mountDenMarquee(viewport, track, direction);
+      const st = denMarquees.get(viewport);
+      if (st) st.paused = false;     // showGenreRails after stop() re-runs start()
+      ensureDenRaf();
     }
-    function stop() {
-      if (rotationTimerId !== null) {
-        clearInterval(rotationTimerId);
-        genreRotationTimerIds = genreRotationTimerIds.filter((id) => id !== rotationTimerId);
-        rotationTimerId = null;
-      }
-      paused = false;
-    }
-    function pause() {
-      paused = true;
-    }
-    function resume() {
-      paused = false;
-    }
-    
-    const onResize = () => {
-      measure(true);
-      if (setWidth > 0) {
-        if (offsetX > setWidth) offsetX = offsetX % setWidth;
-        if (-offsetX > setWidth) offsetX = -((-offsetX) % setWidth);
-      }
-    };
-    viewport.addEventListener("mouseenter", pause);
-    viewport.addEventListener("mouseleave", resume);
-    window.addEventListener("resize", onResize);
+    function stop() { const st = denMarquees.get(viewport); if (st) st.paused = true; }
+    function pause() { stop(); }
+    function resume() { const st = denMarquees.get(viewport); if (st) { st.paused = false; ensureDenRaf(); } }
+    function destroy() { destroyDenMarquee(viewport); }
 
-    function destroy() {
-      stop();
-      viewport.removeEventListener("mouseenter", pause);
-      viewport.removeEventListener("mouseleave", resume);
-      window.removeEventListener("resize", onResize);
-    }
-
-    return { rail, start, stop, pause, resume, destroy };
+    return { rail, viewport, start, stop, pause, resume, destroy };
   }
 
   function rebuildGenreSection() {
@@ -2512,7 +3804,6 @@ function positionFeaturedDrop() {
       else r.stop();
     });
     railsControllers = [];
-    clearGenreRotationTimers();
     recommendedRow.innerHTML = "";
 
     const wrap = document.createElement("div");
@@ -2564,6 +3855,8 @@ function positionFeaturedDrop() {
     if (!items.length) { continueSection.hidden = true; return; }
     items.forEach((a) => continueRow.appendChild(createCard(a)));
     continueSection.hidden = false;
+    // v1.8.4 gate 3d (item 6) — overflowing => left-start + scroll; fits => center.
+    continueRow.classList.toggle('is-overflowing', continueRow.scrollWidth > continueRow.clientWidth + 1);
   }
 
   function showGenreRails() {
@@ -5555,6 +6848,73 @@ function closeModal() {
   const fetchCharacterCached = makeDetailCache('rar:character:', (id) => window.franchiseFetch.fetchCharacterDetail(id));
   const fetchStaffCached = makeDetailCache('rar:staff:', (id) => window.franchiseFetch.fetchStaffDetail(id));
 
+  // ── v1.8.4 (gate 1) — Discovery list caches (trending / airing) ──────────
+  // Sibling to makeDetailCache: the discovery surfaces fetch FLAT card lists,
+  // not a single record by numeric id. So the slot key is a STRING ('all' or a
+  // genre name), the TTL is per-cache (trending 24h, airing 12h — airing churns
+  // faster), and an EMPTY/failed fetch is NOT written (one bad call can't blank a
+  // surface for hours). Otherwise identical discipline to every other rar: cache:
+  // L1 Map -> L2 localStorage, APP_VERSION-keyed `rar:<kind>:vX.Y.Z:<slot>`,
+  // once-per-session stale-prefix sweep, every storage access try/caught. The
+  // network calls live in franchise-fetch.js; caching stays here (the module's
+  // stated design). Search is deliberately NOT cached — queries vary and the G3
+  // debounce+AbortController owns in-flight; it stays a pass-through.
+  // ⚠️ These three are G1 infra: defined now, WIRED to UI in G3 (Discover) / G4
+  // (For You). Unused until then by design — don't prune.
+  function makeListCache(prefix, ttlMs, fetchFn) {
+    const mem = new Map();
+    let swept = false;
+    const verKey = () => prefix + 'v' + (window.APP_VERSION || '0') + ':';
+    const keyFor = (slot) => verKey() + slot;
+    const sweep = () => {
+      if (swept) return; swept = true;
+      try {
+        const keep = verKey(); const stale = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.indexOf(prefix) === 0 && k.indexOf(keep) !== 0) stale.push(k);
+        }
+        stale.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+      } catch (_) {}
+    };
+    const read = (slot) => {
+      try {
+        const raw = localStorage.getItem(keyFor(slot));
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        if (!p || typeof p.ts !== 'number' || !Array.isArray(p.list)) return null;
+        if (Date.now() - p.ts > ttlMs) return null;
+        return p.list;
+      } catch (_) { return null; }
+    };
+    const write = (slot, list) => { sweep(); try { localStorage.setItem(keyFor(slot), JSON.stringify({ ts: Date.now(), list })); } catch (_) {} };
+    return async (slot, force) => {
+      const key = String(slot || 'all');
+      if (!force) { if (mem.has(key)) return mem.get(key); const c = read(key); if (c) { mem.set(key, c); return c; } }
+      const list = await fetchFn(key === 'all' ? null : key);
+      if (Array.isArray(list) && list.length) { mem.set(key, list); write(key, list); }
+      return Array.isArray(list) ? list : [];
+    };
+  }
+  const fetchTrendingCached = makeListCache('rar:trending:', 24 * 60 * 60 * 1000, () => window.franchiseFetch.fetchTrendingList(50));
+  const fetchAiringCached = makeListCache('rar:airing:', 12 * 60 * 60 * 1000, (genre) => window.franchiseFetch.fetchAiringList(50, genre));
+  // Pass-through (no cache by design): the G3 search box owns debounce + abort.
+  function searchDiscover(q, signal) { return window.franchiseFetch.searchMediaList(q, 20, signal); }
+  // Expose the G1 discovery data layer for the G3/G4 UI + the Playwright canary
+  // spec (the surfaces themselves wire in next gate). Kept off the hot path.
+  window.rarDiscovery = {
+    fetchTrendingCached, fetchAiringCached, searchDiscover,
+    // gate 2 — card builders + the AniList->card mapper (G3/G4 render with these).
+    createDiscoveryCard, mediaToCardProps, isNewlyReviewed,
+    // gate 2 — let a discovery surface enable the "Unreviewed" filter segment.
+    setFilterHasOutsideCards,
+    // gate 3 — Discover surface: search ranking (pin his 44 + boost) + the
+    // freshness-seeded shuffle + the view switcher (handy for tests/G5 nav).
+    rankDiscoverResults, seededShuffle, freshSeed, showDiscover,
+    // gate 4 — For You: the pure taste engine + the surface switcher (test surface).
+    computeTasteProfile, pickFeaturedAnime, showForYou,
+  };
+
   let tertiaryEl = null;
   let tertiaryScrollEl = null;
 
@@ -5906,6 +7266,9 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
   }
 
   function showHome() {
+    hideDiscover();                          // v1.8.4 gate 3 — leave Discover if active
+    hideForYou();                            // v1.8.4 gate 4 — leave For You if active
+    setActivePlace(denBtn);                  // v1.8.4 gate 5 — Den is the active place at home
     homeView.style.display = "block";
     allView.style.display = "none";
     if (SHOULD_CYCLE && top10Count > 1 && !spotlightTimer && !isSpotlightHovered) {
@@ -5917,9 +7280,12 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
   function showAll() {
     filterPanel?.classList.remove('open');
     document.body.classList.remove('filter-open');
+    hideDiscover();                          // v1.8.4 gate 3 — leave Discover if active
+    hideForYou();                            // v1.8.4 gate 4 — leave For You if active
 
     homeView.style.display = "none";
     allView.style.display = "block";
+    setActivePlace(null);                     // v1.8.4 gate 5 — View All is a tool view; no place lit
 
     stopSpotlightCycle();
     hideGenreRails();
@@ -6052,6 +7418,7 @@ randomBtn?.addEventListener("click", (e) => {
     const setFilterOpen = (open) => {
   filterPanel.classList.toggle("open", open);
   filterBtn.setAttribute("aria-expanded", String(open));
+  filterBtn.classList.toggle("is-active", open);   // v1.8.4 gate 3b — consistent active state
   document.body.classList.toggle("filter-open", open);
 
   if (open) {
@@ -6106,6 +7473,41 @@ randomBtn?.addEventListener("click", (e) => {
       applyFilterNarrow("");
     });
   }
+  // v1.8.4 gate 2 — review-status segment. Default-disable "Unreviewed" (catalog-
+  // only until a discovery surface enables it via setFilterHasOutsideCards).
+  wireReviewedSeg();
+  setFilterHasOutsideCards(false);
+
+  // v1.8.4 gate 3 — Discover surface wiring (provisional entry; G5 makes it nav).
+  discoverBtn?.addEventListener("click", (e) => { e.preventDefault(); showDiscover(); });
+  wireDiscoverLens();
+  // v1.8.4 gate 4 — For You surface wiring (provisional entry; G5 makes it nav).
+  foryouBtn?.addEventListener("click", (e) => { e.preventDefault(); showForYou(); });
+  wireForYouLens();
+  // v1.8.4 gate 5 — the Den place button is the SOFT in-page glide home (the logo
+  // #home-button keeps its HARD reload as the clean-reset escape hatch). Re-measure the
+  // sliding marker on resize since the active place can reflow.
+  denBtn?.addEventListener("click", (e) => { e.preventDefault(); showHome(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  window.addEventListener('resize', () => {
+    const active = [denBtn, foryouBtn, discoverBtn].find((b) => b && b.classList.contains('is-active'));
+    moveMarker(active || null);
+  });
+  if (discoverSearchInput) {
+    discoverSearchInput.addEventListener("input", () => {
+      const v = discoverSearchInput.value;
+      if (discoverSearchDebounce) clearTimeout(discoverSearchDebounce);
+      discoverSearchDebounce = setTimeout(() => runDiscoverSearch(v), 350);
+    });
+  }
+  discoverSearchForm?.addEventListener("submit", (e) => e.preventDefault());
+  discoverSearchClear?.addEventListener("click", () => {
+    if (discoverSearchInput) { discoverSearchInput.value = ""; discoverSearchInput.focus(); }
+    if (discoverSearchDebounce) { clearTimeout(discoverSearchDebounce); discoverSearchDebounce = null; }
+    runDiscoverSearch("");
+  });
+  // Restart the rail auto-advance loop when the tab becomes visible again (the
+  // tick early-returns + idles while document.hidden).
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) ensureDiscoverRaf(); });
 
   if (filterApplyBtn) {
   filterApplyBtn.addEventListener("click", () => {
@@ -6223,22 +7625,21 @@ function onScrollHeader() {
     });
   }
 
-  // ===== Welcome door — ambient anime quotes (v1.8.3 gate 4b) =====
-  // EDIT THIS LIST ANYTIME: quotes that slowly scroll up the welcome door. Pulled from
-  // titles in the catalog. Keep `quote` and `source` (shown dim under the quote). This
-  // is a STARTER SET — tweak wording / swap in your favourites freely.
-  const WELCOME_QUOTES = [
-    { quote: "Let the true meaning of almighty be carved into your soul.", source: "Shadow — The Eminence in Shadow" },
+  // ===== Welcome door — ambient anime quotes (v1.8.3 gate 4b; v1.8.4 gate 8) =====
+  // The LIVE quote list now lives in the public /quotes.json, managed from the admin Quotes
+  // page (admin/quotes.html). The array below is only the OFFLINE FALLBACK — if quotes.json
+  // can't be fetched, the door still shows these so it never goes quoteless. WELCOME_QUOTES is
+  // pre-seeded with the fallback and swapped to the live list when the fetch resolves (see the
+  // fetch in initWelcome). The door renders quote text via .textContent, so the JSON is escaped.
+  const WELCOME_QUOTES_FALLBACK = [
     { quote: "Throughout heaven and earth, I alone am the honored one.", source: "Gojo — Jujutsu Kaisen" },
     { quote: "I'm just a hero for fun.", source: "Saitama — One Punch Man" },
     { quote: "Set your heart ablaze.", source: "Rengoku — Demon Slayer" },
     { quote: "If you don't fight, you can't win.", source: "Eren — Attack on Titan" },
-    { quote: "I'll take a potato chip… and eat it!", source: "Light — Death Note" },
     { quote: "The journey is what gives the destination its meaning.", source: "Frieren — Frieren: Beyond Journey's End" },
-    { quote: "No matter how many times it takes, I'll save you.", source: "Subaru — Re:Zero" },
-    { quote: "All I ever wanted was an ordinary life.", source: "Denji — Chainsaw Man" },
-    { quote: "Hard work betrays none, but dreams betray many.", source: "Hachiman — My Teen Romantic Comedy" }
+    { quote: "No matter how many times it takes, I'll save you.", source: "Subaru — Re:Zero" }
   ];
+  let WELCOME_QUOTES = WELCOME_QUOTES_FALLBACK.slice();
 
   // ===== Den-door welcome splash (v1.8.3 gate 3) =====
   // Shown once per BROWSER SESSION (v1.8.3 gate 5b — sessionStorage, not localStorage):
@@ -6253,10 +7654,45 @@ function onScrollHeader() {
     const enterBtn  = document.getElementById('welcome-enter');
     const bannerImg = document.getElementById('welcome-banner-img');
     const quotesLayer = document.getElementById('welcome-quotes');
+
+    // v1.8.4 gate 6 — re-home the Update Log INTO the door (Blake: it "looked out of place"
+    // on the homepage + collided with the strips). Move the LIVE node (data path + version
+    // chip intact — it's a re-home, not a rebuild) under the Enter button; swap the gutter-
+    // float classes (.side-widget/.changelog-drop) for the door-integrated .welcome-changelog.
+    // Runs whether or not the door shows this session, so it's never on the home flow.
+    const logEl = document.getElementById('changelog-drop');
+    const cardEl = splash.querySelector('.welcome-card');
+    if (logEl && cardEl) {
+      logEl.classList.remove('side-widget', 'changelog-drop');
+      logEl.classList.add('welcome-changelog');
+      cardEl.appendChild(logEl);
+      logEl.hidden = false;   // it started hidden in the home DOM to avoid a pre-JS flash
+    }
     let lastFocus = null;
     let quoteIdx = 0;
     let quoteTimer = null;
     const quotePool = [];
+
+    // v1.8.4 gate 8 — pull the live quote list from the public /quotes.json (managed from the
+    // admin Quotes page). Fire-and-forget + NON-blocking: the door already runs on the pre-
+    // seeded fallback, so it never waits on the network and never goes quoteless. If/when this
+    // resolves, later bubbles pick up the live list (launchQuote re-reads WELCOME_QUOTES). The
+    // door renders via .textContent, so quotes.json content is escaped (XSS-safe).
+    fetch('/quotes.json', { cache: 'no-cache' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(list => {
+        const arr = Array.isArray(list) ? list : (list && Array.isArray(list.quotes) ? list.quotes : null);
+        const clean = (arr || [])
+          .filter(q => q && typeof q.quote === 'string' && q.quote.trim())
+          .map(q => ({ quote: q.quote, source: typeof q.source === 'string' ? q.source : '' }));
+        if (clean.length) {
+          WELCOME_QUOTES = clean;
+          // The reduced-motion path shows ONE static bubble, seeded from the fallback at open
+          // (the animated path re-reads on its interval) — refresh it to the live list now.
+          if (REDUCED_MOTION && quotePool[0]) fillBubble(quotePool[0], WELCOME_QUOTES[0]);
+        }
+      })
+      .catch(() => {});
 
     // Quote bubbles (v1.8.3 gate 5c): outline-only comic speech bubbles (transparent, the
     // door art shows through; purple text) that fade in at a random OUTER spot, drift up
@@ -6266,10 +7702,12 @@ function onScrollHeader() {
     // per-frame JS). Each bubble gets a random LIFETIME → constant slow speed → random rise
     // distance (set as CSS vars). Reduced-motion → one static bubble.
     const QUOTE_MAX = 4;            // max bubbles alive at once
+    const QUOTE_FLOOR = 2;         // v1.8.4 gate 3e — keep >= this many on screen always
     const QUOTE_INTERVAL = 6500;   // ms between launches
     const QUOTE_SPEED = 2.0;       // vh per second — slow drift
     const QUOTE_LIFE_MIN = 16;     // s
     const QUOTE_LIFE_VAR = 18;     // + up to this many s (random lifetime)
+    const QUOTE_GAP_PX = 22;       // gate 3e — min vertical gap between same-side bubbles
 
     function makeQuoteBubble() {
       const fig = document.createElement('figure');
@@ -6283,25 +7721,51 @@ function onScrollHeader() {
       fig.querySelector('.wq-text').textContent = '“' + q.quote + '”';
       fig.querySelector('.wq-src').textContent = q.source || '';
     }
-    function launchQuote() {
-      if (!quotesLayer || !WELCOME_QUOTES.length) return;
-      let fig = quotePool.find((b) => b.dataset.busy === '0');
-      if (!fig) {
-        if (quotePool.length >= QUOTE_MAX) return;   // at the cap → skip this tick
-        fig = makeQuoteBubble();
-        quotePool.push(fig);
+    function liveQuoteCount() {
+      return quotePool.reduce((n, b) => n + (b.dataset.busy === '1' ? 1 : 0), 0);
+    }
+    // v1.8.4 gate 3e (item 1b) — collision avoidance. Bubbles on the same outer side
+    // share a column; since they all rise at the SAME speed the vertical gap between
+    // any two is CONSTANT, so a non-overlap at spawn (checked against the LIVE bubbles'
+    // current rects) holds for their whole life. Returns a free bottom-vh, or null if
+    // the side is too crowded to fit another without overlap.
+    function pickQuoteSlot(side) {
+      const vh = window.innerHeight / 100;
+      const estH = 0.13 * window.innerHeight;        // generous bubble-height estimate
+      const live = quotePool.filter((b) => b.dataset.busy === '1' && b.dataset.side === side);
+      for (let tries = 0; tries < 12; tries++) {
+        const bottomVh = secureRandomInt(88) - 4;    // -4..83
+        const botPx = window.innerHeight - bottomVh * vh;   // candidate bottom edge (px from top)
+        const topPx = botPx - estH;
+        let clear = true;
+        for (const b of live) {
+          const r = b.getBoundingClientRect();
+          if (botPx + QUOTE_GAP_PX > r.top && topPx - QUOTE_GAP_PX < r.bottom) { clear = false; break; }
+        }
+        if (clear) return bottomVh;
       }
+      return null;
+    }
+    function launchQuote() {
+      if (!quotesLayer || !WELCOME_QUOTES.length) return false;
+      if (liveQuoteCount() >= QUOTE_MAX) return false;   // at the cap → skip
+      // Spawn on the LESS-crowded side, then find a non-overlapping slot.
+      const lLive = quotePool.filter((b) => b.dataset.busy === '1' && b.dataset.side === 'L').length;
+      const rLive = quotePool.filter((b) => b.dataset.busy === '1' && b.dataset.side === 'R').length;
+      let side = lLive < rLive ? 'L' : (rLive < lLive ? 'R' : (secureRandomInt(2) === 0 ? 'L' : 'R'));
+      let bottomVh = pickQuoteSlot(side);
+      if (bottomVh == null) { side = side === 'L' ? 'R' : 'L'; bottomVh = pickQuoteSlot(side); }
+      if (bottomVh == null) return false;            // both sides crowded → skip (retried later)
+
+      let fig = quotePool.find((b) => b.dataset.busy === '0');
+      if (!fig) { fig = makeQuoteBubble(); quotePool.push(fig); }
       fillBubble(fig, WELCOME_QUOTES[quoteIdx % WELCOME_QUOTES.length]);
       quoteIdx++;
-      // CENTER EXCLUSION — spawn only in the outer regions (the card/banner/copy live in
-      // the middle). x is fixed for the bubble's life, so it never drifts into the center.
-      const leftSide = secureRandomInt(2) === 0;
-      const pct = leftSide ? (3 + secureRandomInt(20)) : (77 + secureRandomInt(20));
+      // CENTER EXCLUSION — outer band only (the card/banner/copy live in the middle).
+      const pct = side === 'L' ? (3 + secureRandomInt(20)) : (77 + secureRandomInt(20));
       fig.style.left = pct + '%';
-      // v1.8.3 gate 5d — random VERTICAL spawn too (top / middle / bottom), then it still
-      // drifts slowly up from wherever it appears (a high spawn just rises less before its
-      // fade — fine). Range: just below the bottom edge up to near the top.
-      fig.style.bottom = (secureRandomInt(88) - 4) + 'vh';
+      fig.dataset.side = side;
+      fig.style.bottom = bottomVh + 'vh';
       // random lifetime → constant slow speed → random rise distance (may not reach top)
       const life = QUOTE_LIFE_MIN + secureRandomInt(QUOTE_LIFE_VAR + 1);
       fig.style.setProperty('--q-dur', life + 's');
@@ -6310,13 +7774,18 @@ function onScrollHeader() {
       fig.classList.remove('is-rising');
       void fig.offsetWidth;                          // reflow so the rise restarts
       fig.classList.add('is-rising');
+      let finished = false;
       const done = () => {
+        if (finished) return; finished = true;
         fig.dataset.busy = '0';
         fig.classList.remove('is-rising');
         fig.removeEventListener('animationend', done);
+        // item 1a — keep the concurrency FLOOR: refill if we dropped below it.
+        while (liveQuoteCount() < QUOTE_FLOOR) { if (!launchQuote()) break; }
       };
       fig.addEventListener('animationend', done);
       setTimeout(done, (life * 1000) + 800);         // fallback if animationend misses
+      return true;
     }
     function startQuotes() {
       if (!quotesLayer || !WELCOME_QUOTES.length) return;
@@ -6325,15 +7794,14 @@ function onScrollHeader() {
         const fig = quotePool[0] || makeQuoteBubble();
         if (!quotePool.length) quotePool.push(fig);
         fillBubble(fig, WELCOME_QUOTES[0]);
+        fig.dataset.side = 'L';
         fig.classList.add('is-static');
         return;
       }
-      // v1.8.3 sweep — let the door sit quiet ~4s before the first bubble, then steady cadence
       if (quoteTimer) { clearTimeout(quoteTimer); clearInterval(quoteTimer); }
-      quoteTimer = setTimeout(function () {
-        launchQuote();
-        quoteTimer = setInterval(launchQuote, QUOTE_INTERVAL);
-      }, 4000);
+      // item 2 — first bubbles appear IMMEDIATELY (no 4s delay); item 1a — seed the floor.
+      for (let i = 0; i < QUOTE_FLOOR; i++) launchQuote();
+      quoteTimer = setInterval(launchQuote, QUOTE_INTERVAL);
     }
     function stopQuotes() {
       if (quoteTimer) { clearTimeout(quoteTimer); clearInterval(quoteTimer); quoteTimer = null; }
@@ -6355,7 +7823,15 @@ function onScrollHeader() {
         requestAnimationFrame(() => splash.classList.add('is-in'));
       }
       document.addEventListener('keydown', onWelcomeKey, true);
-      if (enterBtn) requestAnimationFrame(() => { try { enterBtn.focus({ preventScroll: true }); } catch (_) {} });
+      // v1.8.4 gate 3e (item 4) — focus the DIALOG CONTAINER, not the Enter button.
+      // VERIFIED root cause (Firefox): a programmatic enterBtn.focus() makes the
+      // button match :focus-visible in Firefox (its heuristic treats script-focus as
+      // keyboard-focus), so the :focus-visible ring painted on auto-open — G3b's
+      // outline removal didn't help because the ring is the :focus-visible one.
+      // Focusing the splash (tabindex=-1, no ring) keeps the modal trapped + screen-
+      // reader-announced; Esc/Enter still work via the document keydown listener, and
+      // a keyboard Tab still lands on Enter with a proper :focus-visible ring.
+      requestAnimationFrame(() => { try { splash.focus({ preventScroll: true }); } catch (_) {} });
     }
 
     function closeWelcome() {
@@ -6383,7 +7859,9 @@ function onScrollHeader() {
     }
 
     if (enterBtn) enterBtn.addEventListener('click', closeWelcome);
-    splash.addEventListener('click', (e) => { if (e.target === splash) closeWelcome(); });
+    // v1.8.4 gate 3b — entry is ONLY via the Enter button (+ Esc/Enter keys). A
+    // stray backdrop click no longer dismisses the door (removed the
+    // click-on-backdrop -> closeWelcome handler per Blake).
 
     let welcomed = '0';
     try { welcomed = sessionStorage.getItem(WELCOME_KEY) || '0'; } catch (_) {}
@@ -6427,12 +7905,34 @@ function onScrollHeader() {
     buildGenreRails();
     buildContinueRail();   // v1.8.3 gate 5 — recent-history rail (hidden if empty)
     bindGenreShuffleButton();
+    // v1.8.4 gate 5 — home hole-fill: dated folio + the two lazy strips (IO-gated so the
+    // first paint stays API-free) + the airing strip's "See more in Discover" hand-off.
+    setFolioDate();
+    lazyFillOnView(homeAiringBlock, fillHomeAiring);
+    lazyFillOnView(homeForyouBlock, buildHomeForYou);
+    document.getElementById('home-airing-more')?.addEventListener('click', (e) => { e.preventDefault(); showDiscover(); });
     showHome();
     initScrollReveal();   // v1.8.3 gate 3 — reveal-once home sections
     initWelcome();        // v1.8.3 gate 3 — first-visit "den door" splash
-    if ((location.hash || '') === '#all') {
-    showAll();
-    }
+    // v1.8.4 gate 8 — the animated veil pulse: gate the faint baseline + the sweep behind
+    // html.veil-pulse-active ONLY when the pulse element exists AND motion is allowed, so
+    // no-JS / reduced-motion keeps the static LIT veil. Pause the ring when the tab hides.
+    (function initVeilPulse() {
+      const vp = document.getElementById('veil-pulse');
+      if (!vp) return;
+      const glow = vp.querySelector('.vp-glow');
+      const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const apply = () => document.documentElement.classList.toggle('veil-pulse-active', !mq.matches);
+      apply();
+      if (mq.addEventListener) mq.addEventListener('change', apply);
+      else if (mq.addListener) mq.addListener(apply);   // legacy (Safari < 14)
+      const syncPlay = () => { if (glow) glow.style.animationPlayState = document.hidden ? 'paused' : 'running'; };
+      syncPlay();   // prime once (a tab opened in the background starts paused)
+      document.addEventListener('visibilitychange', syncPlay);
+    })();
+    // v1.8.4 gate 7 — the #all hash route is handled once, below, by the comprehensive
+    // hash-routing block (after filters load). The early duplicate check here was firing
+    // showAll() a second time on index.html#all — removed.
 
     validateData(animeData);
     buildFilterUI();

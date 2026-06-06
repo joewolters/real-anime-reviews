@@ -20,7 +20,12 @@ test.describe('Modal listener leak (regression for §1.2)', () => {
     page.on('console', (msg) => {
       if (msg.type() !== 'error') return;
       const text = msg.text();
+      const url = (msg.location() && msg.location().url) || '';
       if (/firebase|firestore|FIRESTORE/i.test(text)) return;
+      // v1.8.4 gate 5 — ignore live-AniList wider-world noise (the home AIRING strip
+      // loads live data; parallel-suite 429s log as AniList-origin resource errors).
+      // Unrelated to the modal listener leak this test guards; local errors still caught.
+      if (/anilist\.co/i.test(url) || /anilist/i.test(text)) return;
       errors.push(`console.error: ${text}`);
     });
 

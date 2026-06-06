@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quotes — Real Anime Reviews</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <script>window.APP_VERSION="1.8.4"</script>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Admin-only welcome-door quotes editor — not indexed." />
+
+  <link rel="stylesheet" href="../style.css?v=1.8.4" />
+  <link rel="stylesheet" href="../mobile.css?v=1.8.4" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=1.8.4" />
+  <link rel="stylesheet" href="quotes.css?v=1.8.4" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700;800&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="admin-page">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="../index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" id="back-btn" class="inline-header-btn" onclick="location.href='../index.html'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-gate-message">
+      <div class="admin-gate-spinner"></div>
+      <p>Verifying admin access…</p>
+    </div>
+  </div>
+
+  <main class="admin-main" id="admin-main" hidden>
+    <div class="admin-shell">
+
+      <div class="admin-header">
+        <h2 class="admin-title-line">
+          <span class="admin-kicker-inline">QUOTES <span class="jp-mini">名言</span></span>
+          <span class="admin-divider">·</span>
+          <span class="admin-title-text">Welcome Door</span>
+        </h2>
+        <div class="q-stats" id="q-stats"></div>
+      </div>
+
+      <div id="q-server-banner" class="sr-server-banner" hidden>
+        ⚠️ Local server not running — start <code>npm run mode1</code> to save quotes. (Browsing + editing the list works without it.)
+      </div>
+
+      <p class="q-intro">The quotes that drift up the welcome door. Edit, reorder, and Save.</p>
+
+      <div class="q-toolbar">
+        <input type="search" id="q-search" class="q-search" placeholder="Search quotes…" aria-label="Search quotes" autocomplete="off">
+        <button type="button" class="q-btn q-btn--ghost" id="q-add">+ Add quote</button>
+        <button type="button" id="chat-summon-btn" class="chat-summon-btn" aria-controls="chat-drawer" aria-expanded="false">✨ ASK</button>
+        <span class="q-toolbar-spacer"></span>
+        <span class="q-status" id="q-status" aria-live="polite"></span>
+        <button type="button" class="q-btn q-btn--save" id="q-save">Save quotes</button>
+      </div>
+
+      <div id="q-list" class="q-list"></div>
+
+    </div>
+  </main>
+
+  <!-- ✨ ASK drawer (shared admin assistant — same markup/classes/backend as edit/new-anime) -->
+  <aside id="chat-drawer" class="chat-drawer" hidden aria-label="AI assistant">
+    <div class="chat-drawer-header">
+      <span class="chat-drawer-title">✨ ASK</span>
+      <div class="chat-drawer-actions">
+        <button type="button" id="chat-clear-btn" class="chat-header-btn">Clear chat</button>
+        <button type="button" id="chat-close-btn" class="chat-header-btn chat-close" aria-label="Close drawer">✕</button>
+      </div>
+    </div>
+    <div id="chat-thread" class="chat-thread" aria-live="polite"></div>
+    <div id="chat-empty" class="chat-empty">
+      <p class="chat-empty-hint">Brainstorm welcome-door quotes — short, iconic, spoiler-light, with a "Character — Show" source.</p>
+      <div class="chat-quickstarts">
+        <button type="button" class="chat-quickstart" data-quickstart="Suggest 5 short, iconic anime quotes with their character and show as the source.">Suggest 5 quotes</button>
+        <button type="button" class="chat-quickstart" data-quickstart="Give me a punchy one-line quote from a shonen protagonist.">A shonen one-liner</button>
+        <button type="button" class="chat-quickstart" data-quickstart="Suggest a quiet, reflective quote (slice-of-life or fantasy) with its source.">A reflective quote</button>
+        <button type="button" class="chat-quickstart" data-quickstart="Tighten this quote without losing its punch:">Tighten a quote</button>
+      </div>
+    </div>
+    <form id="chat-input-row" class="chat-input-row">
+      <textarea id="chat-input" class="chat-input" rows="1" placeholder="Ask anything…" autocomplete="off"></textarea>
+      <button type="submit" id="chat-send-btn" class="chat-send-btn" aria-label="Send message">➤</button>
+    </form>
+  </aside>
+
+  <script src="chat-drawer.js"></script>
+  <script type="module" src="../firebase.js?v=1.8.4"></script>
+  <script type="module" src="quotes.js?v=1.8.4"></script>
+</body>
+</html>

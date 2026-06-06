@@ -1,0 +1,263 @@
+/* admin/quotes.css — v1.8.4 (gate 8) — the welcome-door Quotes editor.
+   Loads alongside suggestions.css (which supplies .admin-main / .admin-shell / .admin-header).
+   This file is SELF-CONTAINED for everything else: the auth-gate overlay + the inline-title
+   line (both live ONLY in new-anime.css otherwise), the flat quote-list editor, and a local
+   copy of the ✨ ASK chat-drawer styles. Purple-cosmos admin floor. */
+
+/* ---- Gate overlay (copied from new-anime.css so this page styles its own gate) ---- */
+.admin-gate {
+  position: fixed; inset: 0;
+  background: rgba(15, 5, 30, 0.96);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10000;
+  font-family: 'Montserrat', sans-serif;
+}
+.admin-gate[hidden] { display: none; }
+.admin-gate-message { text-align: center; color: #efe7ff; }
+.admin-gate-message p { margin-top: 14px; font-size: 0.95rem; letter-spacing: 0.04em; color: #cfc7d9; }
+.admin-gate-spinner {
+  width: 48px; height: 48px; margin: 0 auto;
+  border: 3px solid rgba(187, 134, 252, 0.25);
+  border-top-color: #bb86fc;
+  border-radius: 50%;
+  animation: admin-gate-spin 0.9s linear infinite;
+}
+@keyframes admin-gate-spin { to { transform: rotate(360deg); } }
+
+/* ---- Inline title line (copied from new-anime.css) ---- */
+.admin-title-line {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  margin: 0;
+  font-family: 'Bebas Neue', sans-serif; font-weight: 400; letter-spacing: 0.04em; color: #ffffff;
+}
+.admin-kicker-inline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px; letter-spacing: 0.22em; color: #bb86fc; font-weight: 700; text-transform: uppercase;
+}
+.admin-kicker-inline .jp-mini {
+  margin-left: 6px;
+  font-family: 'Noto Sans JP', sans-serif; font-size: 10px; color: #cfc7d9; font-weight: 500; letter-spacing: 0.05em;
+}
+.admin-divider { color: rgba(187, 134, 252, 0.55); font-size: 1.2rem; }
+.admin-title-text { font-family: 'Bebas Neue', sans-serif; font-size: 2.0rem; letter-spacing: 0.04em; }
+
+/* ---- Header bits ---- */
+.q-stats { font: 700 0.85rem/1 'Montserrat', sans-serif; color: #bb86fc; letter-spacing: .02em; margin-top: 6px; }
+
+.sr-server-banner {
+  margin: 0 0 16px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #ffcf7a;
+  font: 600 0.85rem/1.4 'Montserrat', sans-serif;
+}
+.sr-server-banner[hidden] { display: none; }
+.sr-server-banner code { background: rgba(0,0,0,.3); padding: 1px 6px; border-radius: 4px; }
+
+.q-intro {
+  margin: 0 0 18px;
+  font: 500 0.88rem/1.55 'Outfit', 'Montserrat', sans-serif;
+  color: rgba(236, 226, 255, 0.72);
+}
+.q-intro code { background: rgba(0,0,0,.28); padding: 1px 6px; border-radius: 4px; color: #efd9ff; }
+.q-intro strong { color: #efd9ff; font-weight: 700; }
+
+/* ---- Toolbar ---- */
+.q-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.q-toolbar-spacer { flex: 1; }
+.q-status { font: 600 0.82rem/1.3 'Montserrat', sans-serif; color: #d9c4f5; min-height: 1em; }
+.q-btn { border-radius: 9px; padding: 9px 16px; font: 800 0.82rem/1 'Montserrat', sans-serif; cursor: pointer; border: 1px solid transparent; transition: background .15s ease, border-color .15s ease; }
+.q-btn--save { background: rgba(187,134,252,.9); color: #1a0730; border-color: rgba(187,134,252,1); }
+.q-btn--save:hover { background: #cbb0ff; }
+.q-btn--save:disabled { opacity: .55; cursor: not-allowed; }
+.q-btn--ghost { background: rgba(255,255,255,.06); color: #efd9ff; border-color: rgba(187,134,252,.3); }
+.q-btn--ghost:hover { background: rgba(255,255,255,.12); border-color: rgba(187,134,252,.55); }
+.q-search {
+  flex: 0 1 220px; min-width: 150px;
+  background: rgba(0,0,0,.24); border: 1px solid rgba(187,134,252,.28);
+  color: #f2eaff; border-radius: 9px; padding: 8px 12px;
+  font-family: 'Outfit', 'Montserrat', sans-serif; font-size: 0.86rem;
+}
+.q-search:focus { outline: none; border-color: rgba(187,134,252,.7); }
+
+/* ---- The quote list ---- */
+.q-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.q-row {
+  display: flex; align-items: stretch; gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(187,134,252,.2);
+  border-radius: 12px;
+  background: rgba(20,6,38,.5);
+}
+.q-row-handle { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.q-move {
+  width: 26px; height: 24px;
+  background: rgba(187,134,252,.12);
+  border: 1px solid rgba(187,134,252,.3);
+  color: #cbb0ff; border-radius: 6px; cursor: pointer;
+  font-size: 0.7rem; line-height: 1;
+  transition: background .15s ease, border-color .15s ease;
+}
+.q-move:hover { background: rgba(187,134,252,.28); border-color: rgba(187,134,252,.6); }
+.q-row-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.q-quote, .q-source {
+  background: rgba(0,0,0,.24);
+  border: 1px solid rgba(187,134,252,.28);
+  color: #f2eaff; border-radius: 9px; padding: 9px 12px;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  width: 100%;
+}
+.q-quote { resize: vertical; min-height: 44px; font-size: 0.92rem; line-height: 1.45; }
+.q-source { font-size: 0.82rem; color: #d9c4f5; }
+.q-quote:focus, .q-source:focus { outline: none; border-color: rgba(187,134,252,.7); }
+.q-del {
+  align-self: flex-start;
+  width: 30px; height: 30px; flex-shrink: 0;
+  background: rgba(239,68,68,.14); border: 1px solid rgba(239,68,68,.4);
+  color: #fca5a5; border-radius: 8px; cursor: pointer;
+  font-size: 1.1rem; line-height: 1;
+  transition: background .15s ease;
+}
+.q-del:hover { background: rgba(239,68,68,.28); }
+.q-empty { color: rgba(255,255,255,.55); text-align: center; padding: 36px 0; font: 600 0.9rem/1.4 'Montserrat', sans-serif; }
+.q-empty[hidden] { display: none; }
+
+/* v1.8.4 gate 8b — drag grip + reorder, search visibility, duplicate flag, door-length hint,
+   unsaved-row trace. All DOM-only: readRows() ignores these classes, so none affect Save. */
+.q-grip {
+  cursor: grab; user-select: none; letter-spacing: -2px;
+  color: rgba(187,134,252,.6); font-size: .9rem; line-height: 1; text-align: center;
+}
+.q-grip:active { cursor: grabbing; }
+.q-row.q-dragging { opacity: .5; box-shadow: 0 8px 22px rgba(0,0,0,.4); }
+.q-row.q-hidden { display: none; }
+/* reorder is meaningless while a search filter hides rows — disable the grip + ▲▼ then. */
+.q-list.is-filtered .q-grip,
+.q-list.is-filtered .q-move { opacity: .4; pointer-events: none; cursor: default; }
+
+.q-row-foot { display: flex; align-items: center; gap: 8px; }
+.q-row-foot .q-source { flex: 1; width: auto; }
+.q-len { font: 600 .68rem/1 'Montserrat', sans-serif; color: rgba(217,196,245,.45); white-space: nowrap; flex-shrink: 0; }
+.q-len--over { color: #ffcf7a; }
+
+.q-row.q-dupe { border-color: rgba(245,158,11,.55); }                 /* same quote text appears twice */
+.q-row--touched { box-shadow: inset 3px 0 0 rgba(187,134,252,.7); }   /* changed since last save (inset = no reflow) */
+
+.q-no-matches { color: rgba(255,255,255,.55); text-align: center; padding: 26px 0; font: 600 0.9rem/1.4 'Montserrat', sans-serif; }
+.q-no-matches[hidden] { display: none; }
+
+@media (max-width: 600px) {
+  .q-row { flex-wrap: wrap; }
+  .q-row-handle { flex-direction: row; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .q-btn, .q-move, .q-del { transition: none !important; }
+  .admin-gate-spinner { animation-duration: 1.6s; }
+}
+
+/* ============================================================================
+   ✨ ASK drawer (copied from edit.css so this page styles its own drawer; same
+   classes/markup as the shared admin/chat-drawer.js controller).
+   ============================================================================ */
+.chat-summon-btn {
+  appearance: none;
+  border: 1px solid rgba(187, 134, 252, 0.5);
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.5), rgba(70, 0, 110, 0.85));
+  color: #fff;
+  font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.08em; font-size: 1rem;
+  padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(120, 60, 200, 0.28);
+  transition: filter 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+.chat-summon-btn:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+.chat-summon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.chat-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(420px, 90vw); z-index: 9500;
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(28, 12, 52, 0.98), rgba(14, 4, 28, 0.99));
+  border-left: 1px solid rgba(187, 134, 252, 0.32);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.45);
+  transform: translateX(100%);
+  transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chat-drawer.open { transform: translateX(0); }
+.chat-drawer[hidden] { display: none; }
+.chat-drawer-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.55), rgba(70, 0, 110, 0.5));
+  border-bottom: 1px solid rgba(187, 134, 252, 0.3);
+}
+.chat-drawer-title { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.12em; font-size: 1.3rem; color: #fff; }
+.chat-drawer-actions { display: flex; gap: 8px; align-items: center; }
+.chat-header-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.08); color: #efe7ff;
+  font-family: 'Montserrat', sans-serif; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 999px; cursor: pointer; transition: background 0.15s ease;
+}
+.chat-header-btn:hover { background: rgba(255, 255, 255, 0.18); }
+.chat-close { padding: 5px 9px; font-size: 0.85rem; }
+.chat-thread { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.chat-msg { display: flex; }
+.chat-msg--user { justify-content: flex-end; }
+.chat-msg--assistant { justify-content: flex-start; }
+.chat-bubble {
+  max-width: 85%; padding: 9px 13px; border-radius: 14px;
+  font-family: 'Outfit', sans-serif; font-size: 0.88rem; line-height: 1.45; color: #fff; word-break: break-word;
+}
+.chat-msg--user .chat-bubble { background: linear-gradient(180deg, #a45bff, #7c3bdc); border-bottom-right-radius: 4px; }
+.chat-msg--assistant .chat-bubble { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(187, 134, 252, 0.2); border-bottom-left-radius: 4px; }
+.chat-bubble--error { background: rgba(255, 90, 90, 0.12); border: 1px solid rgba(255, 120, 120, 0.4); color: #ffd2d2; }
+.chat-retry {
+  margin-left: 8px; appearance: none; border: 1px solid rgba(255, 150, 150, 0.5);
+  background: transparent; color: #ffd2d2;
+  font-family: 'Montserrat', sans-serif; font-size: 0.66rem; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; cursor: pointer;
+}
+.chat-empty { padding: 0 16px 16px; }
+.chat-empty[hidden] { display: none; }
+.chat-empty-hint { font-family: 'Outfit', sans-serif; font-size: 0.82rem; color: #c9bfe0; margin: 0 0 12px; }
+.chat-quickstarts { display: flex; flex-direction: column; gap: 8px; }
+.chat-quickstart {
+  text-align: left; appearance: none;
+  border: 1px solid rgba(187, 134, 252, 0.32); background: rgba(15, 5, 28, 0.5); color: #efe7ff;
+  font-family: 'Outfit', sans-serif; font-size: 0.84rem;
+  padding: 9px 12px; border-radius: 10px; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.chat-quickstart:hover { background: rgba(40, 18, 70, 0.6); border-color: rgba(187, 134, 252, 0.6); }
+.chat-input-row {
+  display: flex; gap: 8px; align-items: flex-end;
+  padding: 12px 14px; border-top: 1px solid rgba(187, 134, 252, 0.22); background: rgba(10, 3, 20, 0.6);
+}
+.chat-input {
+  flex: 1; resize: none; max-height: 120px;
+  padding: 9px 12px; border-radius: 10px;
+  border: 1px solid rgba(187, 134, 252, 0.32); background: rgba(15, 5, 28, 0.6); color: #fff;
+  font-family: 'Outfit', sans-serif; font-size: 0.9rem; line-height: 1.4;
+}
+.chat-input:focus { outline: none; border-color: rgba(187, 134, 252, 0.7); box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.18); }
+.chat-send-btn {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px;
+  border: 1px solid rgba(187, 134, 252, 0.5); background: linear-gradient(180deg, #a45bff, #7c3bdc);
+  color: #fff; font-size: 1rem; cursor: pointer; transition: filter 0.15s ease;
+}
+.chat-send-btn:hover { filter: brightness(1.15); }
+.chat-dots { display: inline-flex; gap: 4px; align-items: center; }
+.chat-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(187, 134, 252, 0.85); animation: chat-dot 1s infinite ease-in-out; }
+.chat-dots i:nth-child(2) { animation-delay: 0.15s; }
+.chat-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes chat-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-drawer { transition: none; }
+  .chat-summon-btn, .chat-quickstart, .chat-send-btn, .chat-header-btn { transition: none; }
+  .chat-dots i { animation: none; opacity: 0.7; }
+}

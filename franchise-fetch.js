@@ -455,6 +455,129 @@ query ($id: Int) {
     } catch (_) { return null; }
   }
 
+  // ──────────────────────────────────────────────────────────────────────
+  // v1.8.4 (gate 1) — DISCOVERY list queries for the For You / Discover
+  // surfaces. ADDITIVE — independent of every query above (those drive the
+  // load-bearing catalog modal). These are FLAT Page(media:) lists with NO
+  // nested relations, so they are inherently safe vs the query-complexity trap
+  // (gotcha #8 — the canary still gates them). They feed cards, so they return
+  // the lean card-shaped fields only (id/title/cover/score/genres/year/format/
+  // status) — the rich per-anime detail still comes from fetchMediaDetail when a
+  // card is opened. Caching is the CALLER's job (script.js makeListCache),
+  // consistent with this module staying pure-network + Node-CLI-safe.
+  //
+  // Shared field set across all three (kept identical so one normalizer + one
+  // card mapper serve every discovery surface):
+  const DISCOVERY_MEDIA_FIELDS = `
+    id
+    title { romaji english native }
+    coverImage { large color }
+    bannerImage
+    averageScore
+    genres
+    season
+    seasonYear
+    format
+    status
+    episodes`;
+
+  // Live search (Discover). sort SEARCH_MATCH so the best title match leads.
+  const SEARCH_QUERY = `
+query ($search: String, $perPage: Int) {
+  Page(page: 1, perPage: $perPage) {
+    media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false) {${DISCOVERY_MEDIA_FIELDS}
+    }
+  }
+}`;
+
+  // Trending now (For-You signed-out fallback + community "Popular right now").
+  const TRENDING_QUERY = `
+query ($perPage: Int) {
+  Page(page: 1, perPage: $perPage) {
+    media(type: ANIME, sort: TRENDING_DESC, isAdult: false) {${DISCOVERY_MEDIA_FIELDS}
+    }
+  }
+}`;
+
+  // Currently airing (the Top-10 airing hero + airing-by-genre). genre is
+  // OPTIONAL — a null $genre is ignored by AniList (no filter), so the same
+  // query serves both "all airing" and "airing in {genre}".
+  const AIRING_QUERY = `
+query ($perPage: Int, $genre: String) {
+  Page(page: 1, perPage: $perPage) {
+    media(type: ANIME, status: RELEASING, sort: TRENDING_DESC, genre: $genre, isAdult: false) {${DISCOVERY_MEDIA_FIELDS}
+    }
+  }
+}`;
+
+  // Normalize one Page.media node into the lean card shape (same defensive
+  // defaulting as fetchMediaDetail). Returns null for a junk node.
+  function normalizeListMedia(m) {
+    if (!m || !m.id) return null;
+    return {
+      id: m.id,
+      title: m.title || { romaji: null, english: null, native: null },
+      coverImage: m.coverImage || { large: '', color: null },
+      bannerImage: m.bannerImage || null,
+      averageScore: m.averageScore || null,
+      genres: Array.isArray(m.genres) ? m.genres : [],
+      season: m.season || null,
+      seasonYear: m.seasonYear || null,
+      format: m.format || null,
+      status: m.status || null,
+      episodes: m.episodes || null,
+    };
+  }
+
+  // Generic Page(media:) fetch shared by all three discovery queries. Same
+  // 429/Retry-After single-retry as the detail fetchers. Returns an ARRAY (not
+  // null) — [] on ANY failure (network, !ok, GraphQL errors, abort) so callers
+  // render an empty state, never crash. An optional AbortSignal lets the search
+  // call site abort an in-flight request (the /suggest debounce pattern) — an
+  // abort lands in the catch and resolves to [].
+  async function fetchMediaPage(query, variables, signal, _retried) {
+    try {
+      const res = await fetch(ANILIST_ENDPOINT_PUBLIC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ query, variables }),
+        signal: signal || undefined,
+      });
+      if (res.status === 429 && !_retried) {
+        const ra = parseInt(res.headers.get('Retry-After') || '', 10);
+        await sleep(Number.isFinite(ra) ? ra * 1000 : 1000);
+        return fetchMediaPage(query, variables, signal, true);
+      }
+      if (!res.ok) return [];
+      const body = await res.json();
+      if (body.errors?.length) return [];
+      const media = body.data?.Page?.media;
+      if (!Array.isArray(media)) return [];
+      return media.map(normalizeListMedia).filter(Boolean);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // Discover live search. Empty/whitespace query short-circuits to [] (no call).
+  function searchMediaList(q, perPage, signal) {
+    const term = String(q || '').trim();
+    if (!term) return Promise.resolve([]);
+    return fetchMediaPage(SEARCH_QUERY, { search: term, perPage: perPage || 20 }, signal);
+  }
+
+  // Trending now. perPage defaults to a DEEP pool (50) so the freshness seed
+  // (script.js, sessionStorage) has room to surface a different window per login.
+  function fetchTrendingList(perPage) {
+    return fetchMediaPage(TRENDING_QUERY, { perPage: perPage || 50 }, null);
+  }
+
+  // Currently airing, optionally filtered to one genre (null/'' => all airing).
+  function fetchAiringList(perPage, genre) {
+    const g = (genre && String(genre).trim()) ? String(genre).trim() : null;
+    return fetchMediaPage(AIRING_QUERY, { perPage: perPage || 50, genre: g }, null);
+  }
+
   const api = {
     traverseFranchise,
     fetchMediaById,
@@ -463,10 +586,18 @@ query ($id: Int) {
     fetchStaffDetail,
     fetchBatch,
     sleep,
+    // v1.8.4 discovery layer
+    searchMediaList,
+    fetchTrendingList,
+    fetchAiringList,
+    normalizeListMedia,
     MORE_INFO_QUERY_NODE,
     MEDIA_DETAIL_QUERY,
     CHARACTER_DETAIL_QUERY,
     STAFF_DETAIL_QUERY,
+    SEARCH_QUERY,
+    TRENDING_QUERY,
+    AIRING_QUERY,
     SPINE_RELATIONS,
     TRAVERSE_NODE_CAP,
     TRAVERSE_DEPTH_CAP,

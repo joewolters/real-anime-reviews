@@ -786,6 +786,38 @@ app.delete('/api/season-review/:id', async (req, res) => {
   res.json({ ok: true, id, count: idx.count });
 });
 
+// v1.8.4 (gate 8) — welcome-door quotes write path (local admin only; 127.0.0.1). Writes
+// Current Version/quotes.json (a flat {quote,source}[] array) which the homepage door fetches
+// at runtime. PUT replaces the WHOLE list (matches the list-editor admin UI); each item is
+// allowlisted to {quote, source} and newline-stripped (single-line fields) — the same
+// defensive shape as the season-review frontmatter whitelist. No commit/bump/deploy fires
+// here; it's a quiet local write (Blake owns the ship when he commits quotes.json).
+const { readQuotes, writeQuotes } = require('./lib/quotes-store');
+function sanitizeQuote(q) {
+  if (!q || typeof q !== 'object') return null;
+  const quote = String(q.quote || '').replace(/[\r\n]+/g, ' ').trim();
+  const source = String(q.source || '').replace(/[\r\n]+/g, ' ').trim();
+  if (!quote) return null;
+  return { quote, source };
+}
+app.get('/api/quotes', (req, res) => {
+  try { res.json({ ok: true, quotes: readQuotes() }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.put('/api/quotes', (req, res) => {
+  const incoming = req.body && req.body.quotes;
+  if (!Array.isArray(incoming)) return res.status(400).json({ error: 'quotes[] required' });
+  const clean = incoming.map(sanitizeQuote).filter(Boolean);
+  try {
+    writeQuotes(clean);
+    console.log(`${C.gray}[mode1] /api/quotes${C.reset} PUT · ${clean.length} quote(s)`);
+    res.json({ ok: true, count: clean.length, quotes: clean });
+  } catch (err) {
+    console.error(`${C.red}[mode1] /api/quotes${C.reset} ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 smokeCheckSpawn().then(() => {
   app.listen(PORT, '127.0.0.1', () => {
     console.log('');

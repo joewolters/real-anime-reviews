@@ -29,16 +29,147 @@ body {
   position: relative;             /* to allow the ::before layer */
 }
 
-/* GPU-friendly fixed background layer */
+/* GPU-friendly fixed background layer — the Call of the Night city (v1.8.4 gate 6:
+   pushed behind the veil; v1.8.4 gate 8: pushed one deeper to z-3 so the animated veil
+   pulse can sit between the veil and the content). */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -1;                    /* behind everything */
+  z-index: -3;                    /* behind the veil (z-2) + the pulse (z-1) */
   background: url('assets/call-of-the-night-bg.jpg') center / cover no-repeat;
   transform: translateZ(0);       /* composite on GPU */
   will-change: transform;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   v1.8.4 gate 6 — THE CONSTELLATION VEIL (the ship's sole visual identity, the
+   killed character art's replacement). ONE static fixed layer OVER the city and
+   BEHIND content: the welcome door's EXACT 5 line-paths + anchor stars + faint
+   purple pinpricks, riding on a deep-purple DARK WASH whose alpha steps PER SURFACE
+   (Den darkest/coziest, the city a whisper → Discover most open, the skyline visibly
+   behind). The density IS the "you are here" cue (paired with the gold nav marker).
+   The door's lines reused at lower alpha = door→site reads as the inside of the same
+   night. Crossfade ~450ms on the in-page glide via @property-animated wash alphas:
+   NO backdrop-filter, NO scroll-linked paint, NO per-frame JS — static during scroll,
+   so the homepage Profiler story stays flat. reduced-motion → instant swap.
+   ════════════════════════════════════════════════════════════════════════ */
+@property --veil-w0 { syntax: "<number>"; inherits: true; initial-value: 0.80; }
+@property --veil-w1 { syntax: "<number>"; inherits: true; initial-value: 0.90; }
+@property --veil-w2 { syntax: "<number>"; inherits: true; initial-value: 0.96; }
+:root {
+  /* Den default (also first paint + the fail-safe for any page that forgets the attr) */
+  --veil-w0: 0.80; --veil-w1: 0.90; --veil-w2: 0.96;
+  transition: --veil-w0 .45s ease, --veil-w1 .45s ease, --veil-w2 .45s ease;
+}
+:root[data-surface="den"]      { --veil-w0: 0.80; --veil-w1: 0.90; --veil-w2: 0.96; }  /* coziest — explicit (not just the fallback) */
+:root[data-surface="foryou"]   { --veil-w0: 0.54; --veil-w1: 0.68; --veil-w2: 0.80; }  /* mid, half-lit */
+:root[data-surface="discover"] { --veil-w0: 0.28; --veil-w1: 0.42; --veil-w2: 0.58; }  /* open — city breathes through */
+:root[data-surface="tool"]     { --veil-w0: 0.70; --veil-w1: 0.82; --veil-w2: 0.92; }  /* View All — a touch lighter than Den */
+/* Intentionally on :root (not a specific selector) — it kills ONLY the veil-wash var
+   transition above so the density snaps instantly under reduced-motion; don't add an
+   unrelated :root transition expecting it to survive here. */
+@media (prefers-reduced-motion: reduce) { :root { transition: none !important; } }
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;                    /* over the city (z-3); the veil pulse (z-1) rides above this, all behind content (z 0+) */
+  pointer-events: none;
+  transform: translateZ(0);       /* own compositor layer, like body::before */
+  /* shorthand paints LAST-listed first: the wash is the bottom, the stars/lines ride on top */
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900' viewBox='0 0 1400 900'%3E%3Cg fill='none' stroke='%23c9a4ff' stroke-width='4' stroke-linecap='round' opacity='0.14'%3E%3Cpath d='M0 150 L185 205 L245 172 L430 252'/%3E%3Cpath d='M1400 770 L1225 705 L1165 735 L975 662'/%3E%3Cpath d='M130 885 L270 762 L312 802 L480 690'/%3E%3Cpath d='M1285 55 L1142 182 L1100 150 L940 252'/%3E%3Cpath d='M55 470 L150 452 L188 472 L300 450'/%3E%3C/g%3E%3Cg fill='none' stroke='%23b388ff' stroke-width='1.1' stroke-linecap='round' opacity='0.36'%3E%3Cpath d='M0 150 L185 205 L245 172 L430 252'/%3E%3Cpath d='M1400 770 L1225 705 L1165 735 L975 662'/%3E%3Cpath d='M130 885 L270 762 L312 802 L480 690'/%3E%3Cpath d='M1285 55 L1142 182 L1100 150 L940 252'/%3E%3Cpath d='M55 470 L150 452 L188 472 L300 450'/%3E%3C/g%3E%3Cg fill='%23e3c9ff' stroke='none' opacity='0.8'%3E%3Ccircle cx='245' cy='172' r='1.7'/%3E%3Ccircle cx='430' cy='252' r='1.7'/%3E%3Ccircle cx='1100' cy='150' r='1.6'/%3E%3Ccircle cx='940' cy='252' r='1.5'/%3E%3Ccircle cx='188' cy='472' r='1.5'/%3E%3Ccircle cx='312' cy='802' r='1.4'/%3E%3Ccircle cx='1165' cy='735' r='1.4'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(rgba(216,180,254,0.18) 0.7px, transparent 1.1px),
+    radial-gradient(rgba(187,134,252,0.11) 0.7px, transparent 1.1px),
+    radial-gradient(135% 120% at 50% 28%,
+      rgba(20,8,40, var(--veil-w0)) 0%,
+      rgba(10,3,22, var(--veil-w1)) 60%,
+      rgba(6,1,14,  var(--veil-w2)) 100%);
+  background-size: 100% 100%, 58px 58px, 86px 86px, 100% 100%;
+  background-position: center, 0 0, 29px 17px, center;
+  background-repeat: no-repeat, repeat, repeat, no-repeat;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   v1.8.4 gate 8 — THE ANIMATED VEIL PULSE (Blake's G7 carry-over: he wanted the door's
+   traveling glow extended site-wide after the static G7 halo). At rest the veil lines
+   revert to a FAINT pre-G7 baseline; a slow ring sweeps the constellation every ~16s,
+   lighting each line segment UP to ~the G7 glow intensity as it passes, then back to
+   faint — "resonating across the lines." Same compositor-only seed as the welcome door's
+   .wlp-glow: ONE masked radial ring animating TRANSFORM scale + opacity only — no per-
+   frame paint, no backdrop-filter, no scroll-linkage. The pulse sits at z-1 (ABOVE the
+   veil wash at z-2) so the masked glow reads on EVERY surface, including the Den's dark
+   wash, instead of being occluded beneath it.
+   NO-REGRESSION GUARD: the faint baseline AND the animation are BOTH gated behind
+   html.veil-pulse-active, which the JS adds ONLY when #veil-pulse is present AND motion
+   is allowed. With no JS / JS failed / reduced-motion the veil stays at its LIT G7
+   baseline (today's exact look) — the ship's sole visual identity never goes dark.
+   ════════════════════════════════════════════════════════════════════════ */
+#veil-pulse {
+  position: fixed;
+  inset: 0;
+  z-index: -1;                    /* over the veil (z-2), behind content (z 0+) */
+  pointer-events: none;
+  transform: translateZ(0);       /* own compositor layer, like the city + veil */
+  /* masked to the SAME 5 veil line-paths (wider stroke 6 so the glow fills the full line,
+     not just the 1.1px core). Identical seed technique to .welcome-line-pulse. */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900' viewBox='0 0 1400 900'%3E%3Cg fill='none' stroke='%23fff' stroke-width='6' stroke-linecap='round'%3E%3Cpath d='M0 150 L185 205 L245 172 L430 252'/%3E%3Cpath d='M1400 770 L1225 705 L1165 735 L975 662'/%3E%3Cpath d='M130 885 L270 762 L312 802 L480 690'/%3E%3Cpath d='M1285 55 L1142 182 L1100 150 L940 252'/%3E%3Cpath d='M55 470 L150 452 L188 472 L300 450'/%3E%3C/g%3E%3C/svg%3E");
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900' viewBox='0 0 1400 900'%3E%3Cg fill='none' stroke='%23fff' stroke-width='6' stroke-linecap='round'%3E%3Cpath d='M0 150 L185 205 L245 172 L430 252'/%3E%3Cpath d='M1400 770 L1225 705 L1165 735 L975 662'/%3E%3Cpath d='M130 885 L270 762 L312 802 L480 690'/%3E%3Cpath d='M1285 55 L1142 182 L1100 150 L940 252'/%3E%3Cpath d='M55 470 L150 452 L188 472 L300 450'/%3E%3C/g%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+}
+.vp-glow {
+  position: absolute; left: 50%; top: 40%;        /* near the constellation's spread; tunable */
+  width: 150vmax; height: 150vmax; margin: -75vmax 0 0 -75vmax;
+  border-radius: 50%;
+  /* G7-intensity tint: a bright core band wrapped in a soft halo, so where the ring front
+     crosses a line it lifts to ~the lit 0.14/0.36 look as the light reads through. */
+  background: radial-gradient(circle,
+    transparent 34%,
+    rgba(216,180,254,0.85) 44%,
+    rgba(187,134,252,0.34) 52%,
+    transparent 62%);
+  opacity: 0;
+  transform: scale(0.04);
+}
+html.veil-pulse-active #veil-pulse .vp-glow { animation: veilLinePulse 16s ease-in-out infinite; }
+@keyframes veilLinePulse {
+  0%   { transform: scale(0.04); opacity: 0; }
+  10%  { opacity: 0.82; }                          /* lines light UP toward the G7 glow */
+  60%  { opacity: 0.30; }
+  88%  { transform: scale(1); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }        /* faint hold before the loop restarts */
+}
+/* When the pulse is live, drop the resting LINE strokes to the pre-G7 faint baseline
+   (halo 0.14->0.05, core 0.36->0.16) so the sweep provides the light. Only background-IMAGE
+   is overridden (the body::after size/position/repeat longhands stay intact); the wash
+   still references the per-surface @property vars, so density stepping is unchanged. */
+html.veil-pulse-active body::after {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900' viewBox='0 0 1400 900'%3E%3Cg fill='none' stroke='%23c9a4ff' stroke-width='4' stroke-linecap='round' opacity='0.05'%3E%3Cpath d='M0 150 L185 205 L245 172 L430 252'/%3E%3Cpath d='M1400 770 L1225 705 L1165 735 L975 662'/%3E%3Cpath d='M130 885 L270 762 L312 802 L480 690'/%3E%3Cpath d='M1285 55 L1142 182 L1100 150 L940 252'/%3E%3Cpath d='M55 470 L150 452 L188 472 L300 450'/%3E%3C/g%3E%3Cg fill='none' stroke='%23b388ff' stroke-width='1.1' stroke-linecap='round' opacity='0.16'%3E%3Cpath d='M0 150 L185 205 L245 172 L430 252'/%3E%3Cpath d='M1400 770 L1225 705 L1165 735 L975 662'/%3E%3Cpath d='M130 885 L270 762 L312 802 L480 690'/%3E%3Cpath d='M1285 55 L1142 182 L1100 150 L940 252'/%3E%3Cpath d='M55 470 L150 452 L188 472 L300 450'/%3E%3C/g%3E%3Cg fill='%23e3c9ff' stroke='none' opacity='0.8'%3E%3Ccircle cx='245' cy='172' r='1.7'/%3E%3Ccircle cx='430' cy='252' r='1.7'/%3E%3Ccircle cx='1100' cy='150' r='1.6'/%3E%3Ccircle cx='940' cy='252' r='1.5'/%3E%3Ccircle cx='188' cy='472' r='1.5'/%3E%3Ccircle cx='312' cy='802' r='1.4'/%3E%3Ccircle cx='1165' cy='735' r='1.4'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(rgba(216,180,254,0.18) 0.7px, transparent 1.1px),
+    radial-gradient(rgba(187,134,252,0.11) 0.7px, transparent 1.1px),
+    radial-gradient(135% 120% at 50% 28%,
+      rgba(20,8,40, var(--veil-w0)) 0%,
+      rgba(10,3,22, var(--veil-w1)) 60%,
+      rgba(6,1,14,  var(--veil-w2)) 100%);
+}
+/* reduced-motion backstop: never animate the ring. (The JS already withholds
+   .veil-pulse-active under reduced-motion, so the veil stays at its LIT baseline; this
+   only guarantees the ring is silent regardless of how the class got there.) */
+@media (prefers-reduced-motion: reduce) {
+  #veil-pulse .vp-glow { animation: none !important; opacity: 0 !important; }
+}
+/* legibility guard — the loose, panel-less head/sub texts on the OPEN Discover surface
+   (the city shows through there); cheap text-shadow, no layout. Scoped to #discover-view
+   so the header's own JP glyphs are untouched. */
+#discover-view .discover-kicker,
+#discover-view .discover-sub,
+#discover-view .discover-block-head,
+#discover-view .discover-block-sub { text-shadow: 0 1px 6px rgba(6,1,14,0.72); }
 
 
 /* Header container */
@@ -300,12 +431,625 @@ header h1:hover {
 }
 .card .info .card-rating:empty { display: none; }   /* no rating → no empty pill */
 
-/* `reviewed` scaffold (v1.8.4 seam). Reviewed cards are the default look. The
-   not-reviewed branch is intentionally minimal here — just a quieter footer — so
-   v1.8.4 can build the full "NOT REVIEWED YET" treatment on top without a reflow. */
+/* v1.8.4 gate 3b (item 8a) — match the catalog cards' PURPLE gradient shelf so
+   discovery cards feel premium + consistent with Blake's grid. The reviewed/not-
+   reviewed distinction is carried by the NOT-REVIEWED sticker + the score-tier chip
+   (not a duller footer). Reverts the G2 desaturated footer to the brand shelf. */
 .card.is-not-reviewed .info {
-    background: linear-gradient(180deg, rgba(18,18,30,0) 0%, rgba(16,16,28,0.5) 42%, rgba(12,12,22,0.8) 100%);
-    border-top-color: rgba(255,255,255,0.10);
+    background: linear-gradient(180deg, rgba(30,8,52,0) 0%, rgba(28,6,50,0.55) 42%, rgba(20,4,40,0.82) 100%);
+    border-top-color: rgba(187,134,252,0.16);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   v1.8.4 gate 2 — DISCOVERY CARD TREATMENTS (the per-card blend)
+   The same .card shell reads three ways on a discovery surface:
+     .is-not-reviewed  — outside title: muted footer (above) + "NOT REVIEWED"
+                         corner + quiet community-score pill + no save buttons.
+     .is-blake-pick    — one of Blake's 44 surfaced in the wider world: keeps the
+                         gold look + a "Reviewed by Blake" pin + a soft gold glow.
+     .is-newly-reviewed— a title that just upgraded NOT-REVIEWED -> reviewed gets a
+                         brief one-time shimmer (reduced-motion: none).
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Corner badges (top-left; the card is position:relative + overflow:hidden). */
+.card-corner {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 7px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    pointer-events: none;
+    white-space: nowrap;
+}
+.not-reviewed-badge {
+    background: rgba(16,16,26,0.86);
+    color: #cbd2e0;
+    border: 1px solid rgba(255,255,255,0.16);
+}
+.not-reviewed-badge .nr-eye { font-size: 0.66rem; opacity: 0.8; }
+.blake-pin {
+    background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, #ffd54a 45%, #ffb300 100%);
+    color: #2b1a00;
+    border: 1px solid rgba(255,255,255,0.40);
+    box-shadow: 0 2px 8px rgba(255,179,0,0.35), 0 0 10px rgba(255,179,0,0.20);
+}
+.blake-pin .bp-star { font-size: 0.66rem; }
+
+/* v1.8.4 gate 5 carry-over #2 — badged cards (the "Reviewed by Blake" pin or the
+   "NOT REVIEWED" sticker, both top-LEFT) now STACK the save icons VERTICALLY on the
+   right edge so the corner badge never crowds the heart: bookmark on top, heart below
+   it. The card markup is heart-then-bookmark, so column-reverse stacks bookmark-top.
+   Outside cards (is-not-reviewed) wire real saves now (G2 had hidden them) via the
+   al:<id> mechanism — see wireCardSaveButtons. */
+.card.is-blake-pick .icon-row,
+.card.is-not-reviewed .icon-row {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 6px;
+    top: 8px;
+    right: 8px;
+}
+
+/* Quiet community-score pill (overrides the 3-class gold rule via 4 classes). */
+.card.is-not-reviewed .info .card-rating {
+    background: rgba(255,255,255,0.08);
+    color: #c9d2e3;
+    font-weight: 700;
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: none;
+}
+
+/* v1.8.4 gate 3b (item 8b) — score-tier chip color. The card carries score-high/
+   mid/low (added in createDiscoveryCard); these 5-class selectors beat the 4-class
+   quiet rule above, inheriting its pill geometry and overriding only the fill/ink.
+   Flat 180deg gradients only — no animation, no glow (perf-free, reduced-motion-safe
+   by construction). score-none falls through to the quiet slate (no rule needed) so
+   "no score" never reads as "bad score". Restraint: a tint, not a neon. */
+.card.is-not-reviewed.score-high .info .card-rating {
+    background: linear-gradient(180deg, rgba(52,211,153,0.30), rgba(255,179,0,0.26));
+    color: #eafff4;
+    border-color: rgba(120,230,170,0.45);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+}
+.card.is-not-reviewed.score-mid .info .card-rating {
+    background: linear-gradient(180deg, rgba(176,108,255,0.26), rgba(138,63,252,0.18));
+    color: #efe6ff;
+    border-color: rgba(187,134,252,0.40);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.50);
+}
+.card.is-not-reviewed.score-low .info .card-rating {
+    background: linear-gradient(180deg, rgba(194,85,78,0.30), rgba(122,47,44,0.22));
+    color: #ffe2de;
+    border-color: rgba(200,120,115,0.40);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+}
+
+/* Pinned catalog card — soft gold "he's been here" glow (keeps the gold pill). */
+.card.is-blake-pick {
+    box-shadow: 0 0 14px rgba(255,179,0,0.40), 0 0 10px rgba(185,0,255,0.30);
+}
+
+/* Upgrade shimmer — brief, twice, then settles. Reduced-motion: nothing. */
+@keyframes rarNewlyReviewed {
+    0%   { box-shadow: 0 0 10px rgba(185,0,255,0.45); }
+    50%  { box-shadow: 0 0 24px 5px rgba(255,179,0,0.60); }
+    100% { box-shadow: 0 0 10px rgba(185,0,255,0.45); }
+}
+.card.is-newly-reviewed { animation: rarNewlyReviewed 1.8s ease-in-out 2; }
+@media (prefers-reduced-motion: reduce) {
+    .card.is-newly-reviewed { animation: none; }
+}
+
+/* The 3-way review-status segment (filter panel + the Discover inline lens). */
+.filter-reviewed,
+.discover-lens {
+    display: inline-flex;
+    margin: 0 0 12px;
+    border: 1px solid rgba(187,134,252,0.28);
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(20,10,38,0.5);
+}
+.fr-seg {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    background: transparent;
+    color: #cbb9e8;
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 7px 16px;
+    cursor: pointer;
+    transition: background .18s, color .18s;
+}
+.fr-seg + .fr-seg { border-left: 1px solid rgba(187,134,252,0.18); }
+.fr-seg.is-active {
+    background: linear-gradient(180deg, #b06cff 0%, #8a3ffc 100%);
+    color: #fff;
+}
+.fr-seg:not(.is-active):not(:disabled):hover { background: rgba(187,134,252,0.14); color: #fff; }
+.fr-seg:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   v1.8.4 gate 3 — DISCOVER SURFACE (the wider world)
+   ════════════════════════════════════════════════════════════════════════ */
+#discover-view {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 18px 18px 60px;
+}
+.discover-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+/* v1.8.4 gate 3b — premium type ladder. Eyebrow kicker (EN+JP locked as one unit
+   under a hairline) -> Bebas display title -> calm sub. */
+.discover-kicker {
+    display: inline-block;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: #bb86fc;
+    font-size: 0.8rem;
+    padding-bottom: 8px;
+    border-bottom: 1px solid transparent;
+    border-image: linear-gradient(90deg, transparent, rgba(187,134,252,0.35), transparent) 1;
+}
+.discover-kicker .jp-mini {
+    margin-left: 6px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 400;
+    font-size: 0.78em;
+    letter-spacing: 0.04em;
+    color: #cfc7d9;
+    opacity: 0.85;
+}
+.discover-title {
+    margin: 10px 0 6px;
+    font-family: 'Bebas Neue', 'Noto Sans JP', sans-serif;
+    font-size: clamp(2rem, 4vw, 2.8rem);
+    letter-spacing: 1px;
+    line-height: 0.96;
+    color: #fff;
+    text-shadow: 0 0 18px rgba(187,134,252,0.16);
+}
+/* v1.8.4 gate 3e (item 5) — hero sub REDESIGN: a clean confident line (no chip)
+   that makes the gold concept TANGIBLE — the actual gold pin chip ("★ Blake's
+   reviewed") + the word "gold" rendered gold, tying the sentence to the on-card
+   pins. Reads premium + demonstrates the blend in one line. */
+.discover-sub {
+    margin: 10px 0 0;
+    color: #cdc1e3;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.5;
+    max-width: 62ch;
+}
+.discover-sub .ds-pin {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 9px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, #ffd54a 45%, #ffb300 100%);
+    color: #2b1a00;
+    font-weight: 800;
+    font-size: 0.86em;
+    border: 1px solid rgba(255,214,90,0.6);
+    box-shadow: 0 1px 6px rgba(255,179,0,0.30);
+    white-space: nowrap;
+}
+.discover-sub .ds-pin .ds-star { font-size: 0.82em; }
+.discover-sub .ds-gold { color: #ffce5a; font-weight: 700; }
+
+/* All Discover cards are a touch smaller than catalog cards so rails fit more. */
+#discover-view .card { width: 200px; flex: 0 0 auto; }
+
+/* Horizontal rails — native scroll (manual scroll preserved) + gentle JS auto-
+   advance (mountDiscoverCarousel). `contain` bounds invalidation; the edge-fade
+   mask dissolves cards at the scroll edges like a film strip (pure CSS, GPU-cheap,
+   doubles as the gate's "shadow/polish" without per-card animated shadows). No
+   will-change (Gecko footgun). No scroll-linked listeners. */
+.discover-rail {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* v1.8.4 gate 3c (item 5) — vertical padding gives a hover-scaled card room so
+       its top isn't guillotined by the scroll box. The mask now fades all FOUR
+       edges (horizontal film-strip + a soft top/bottom) so a card growing past the
+       edge dissolves instead of hard-clipping; the vertical fade sits in the
+       padding zone, so normal cards aren't touched. mask-composite intersects the
+       two gradients (Gecko + WebKit keywords). */
+    padding: 20px 2px 20px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    contain: layout paint;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 40px), transparent),
+                        linear-gradient(180deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+    -webkit-mask-composite: source-in;
+            mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 40px), transparent),
+                        linear-gradient(180deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+            mask-composite: intersect;
+}
+.discover-rail .card { scroll-snap-align: start; }
+/* item 7 — center a sparse rail (few titles) instead of left-hugging. */
+.discover-rail.is-sparse { justify-content: center; }
+/* item 5 — the search RESULTS grid is a wrap grid (no rail mask), but still give
+   hover-scaled cards a little vertical room so they don't clip at the row edges. */
+.discover-results-grid { padding-top: 12px; padding-bottom: 12px; }
+
+/* Search */
+.discover-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin: 0 0 22px;
+    border-radius: 14px;
+    transition: transform .18s ease;
+}
+/* v1.8.4 gate 3c (item 6) — hover lift + shimmer sweep, matching the top-left site
+   search bar's premium feel. The sweep rides behind the (semi-transparent) input. */
+.discover-search-wrap::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    pointer-events: none;
+    z-index: 0;
+    /* v1.8.4 gate 3d (item 3) — softer/wider band + a mask that fades the shimmer
+       at the bar's left/right ends, so the white sweep DISSOLVES instead of ending
+       in a hard edge. */
+    background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.14) 50%, transparent 70%);
+    opacity: 0;
+    transform: translateX(-60%);
+    transition: opacity .2s ease, transform .6s ease;
+    filter: blur(1.5px);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+.discover-search-wrap:hover { transform: translateY(-1px); }
+.discover-search-wrap:hover::before { opacity: 0.6; transform: translateX(60%); }
+.discover-search-wrap:hover #discover-search {
+    border-color: rgba(187,134,252,0.55);
+    box-shadow: 0 12px 26px rgba(0,0,0,0.30), 0 0 16px rgba(187,134,252,0.40);
+}
+.discover-search-wrap > * { position: relative; z-index: 1; }   /* input/icon/clear above the sweep */
+.discover-search-icon {
+    position: absolute;
+    left: 16px;
+    display: inline-flex;
+    pointer-events: none;
+}
+.discover-search-icon svg { display: block; transition: stroke .18s ease; }
+#discover-search {
+    width: 100%;
+    padding: 15px 46px 15px 46px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.04rem;
+    letter-spacing: 0.01em;
+    border-radius: 14px;                       /* square the pill — more Linear, less bubble */
+    border: 1px solid rgba(187,134,252,0.22);
+    background: rgba(20,10,38,0.62);
+    color: #fff;
+    transition: border-color .18s ease, box-shadow .18s ease;
+}
+#discover-search::placeholder { color: #8d80a8; letter-spacing: 0.02em; }
+#discover-search:focus { outline: none; }
+/* Premium focus glow driven off :focus-within so the icon brightens too. Note: a
+   search field intentionally glows on ANY focus (mouse or keyboard) — you've
+   entered it on purpose and want to see it's active — so :focus-within is correct
+   here, unlike the keyboard-only :focus-visible ring used on buttons. */
+.discover-search-wrap:focus-within #discover-search {
+    border-color: #bb86fc;
+    box-shadow: 0 0 0 3px rgba(187,134,252,0.20), 0 8px 28px rgba(120,40,200,0.18);
+}
+.discover-search-wrap:focus-within .discover-search-icon svg { stroke: #bb86fc; }
+.discover-search-clear {
+    position: absolute;
+    right: 14px;
+    background: none;
+    border: 0;
+    color: #cbb9e8;
+    font-size: 1.3rem;
+    cursor: pointer;
+    line-height: 1;
+}
+/* a11y (3b review) — the clear ✕ is a separate focusable button; give keyboard
+   users a visible focus ring (the wrap's focus-within glow only covers the input). */
+.discover-search-clear:focus-visible { outline: 2px solid rgba(187,134,252,0.75); outline-offset: 2px; border-radius: 6px; }
+
+/* Results: pinned (Blake) section, then wider-world section. */
+.discover-results-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 12px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: 0.74rem;
+    color: #9b8fb5;
+}
+.discover-results-divider::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(187,134,252,0.28), rgba(187,134,252,0));
+}
+.discover-results-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    padding: 2px 0 10px;
+}
+
+/* Blocks — generous rhythm; editorial title-left / tagline-right masthead. */
+.discover-block { margin: 40px 0 10px; }
+.discover-block-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+    font-family: 'Bebas Neue', 'Noto Sans JP', sans-serif;
+    font-size: 1.55rem;
+    color: #fff;
+    letter-spacing: 0.03em;
+}
+.discover-block-head .jp-mini {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.62em;
+    color: #cbb9e8;
+}
+/* v1.8.4 gate 3e (item 6) — the descriptive sub-tagline now sits LEFT, directly
+   under the heading (a left subtitle), with a small purple accent bar so it reads
+   intentional. The .discover-subrow puts it on one row with the dateline pill,
+   which stays on the RIGHT (Blake: pills stay put). */
+.discover-subrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: -4px 0 14px;
+}
+.discover-block-sub {
+    margin: 0;
+    padding-left: 11px;
+    border-left: 2px solid rgba(138,63,252,0.7);
+    color: #c2b6da;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+.drm-pill {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(187,134,252,0.14);
+    border: 1px solid rgba(187,134,252,0.34);
+    color: #e3d7fb;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+/* Curated genre chips */
+.discover-genre-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 14px;
+}
+.discover-genre-chip {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid rgba(187,134,252,0.3);
+    background: rgba(28,14,52,0.55);
+    color: #cbb9e8;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .16s, color .16s, border-color .16s;
+}
+.discover-genre-chip:hover { background: rgba(187,134,252,0.16); color: #fff; }
+.discover-genre-chip.is-active {
+    background: linear-gradient(180deg, #b06cff 0%, #8a3ffc 100%);
+    border-color: transparent;
+    color: #fff;
+}
+
+/* Async-state messages (loading / empty / error) */
+.discover-msg {
+    color: #9b8fb5;
+    font-size: 0.92rem;
+    padding: 14px 4px;
+    margin: 0;
+}
+.discover-msg.is-loading { opacity: 0.8; }
+
+/* v1.8.4 gate 3b (item a) — "Reviewed by Blake" VIP shelf: the hero of the blend.
+   Gold reads special because it's the ONLY warm surface on a violet page — a real
+   header row + a curated-rack gold rail accent, not a glow flood. */
+.discover-blake-shelf {
+    position: relative;
+    margin: 14px 0 8px;
+    padding: 16px 18px 12px 22px;
+    background: linear-gradient(180deg, rgba(46,30,8,0.40) 0%, rgba(22,10,38,0.66) 60%, rgba(20,6,38,0.74) 100%);
+    border: 1px solid transparent;
+    border-image: linear-gradient(100deg, rgba(255,206,90,0.55), rgba(187,134,252,0.28) 60%, rgba(255,206,90,0.08)) 1;
+    border-radius: 16px;
+    box-shadow: 0 16px 44px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,214,90,0.18), 0 0 24px rgba(255,179,0,0.10);
+}
+.discover-blake-shelf::before {                 /* static gold rail accent — the "curated rack" */
+    content: "";
+    position: absolute;
+    left: 0; top: 14px; bottom: 14px;
+    width: 3px; border-radius: 3px;
+    background: linear-gradient(180deg, #ffd54a, #ffb300);
+}
+.discover-blake-shelf::after {                  /* one-shot entrance shimmer (composited transform) */
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    pointer-events: none;
+    background: linear-gradient(115deg, transparent 42%, rgba(255,214,120,0.22) 50%, transparent 58%);
+    transform: translateX(-120%);
+    animation: se-kicker-shimmer 1.6s ease 0.2s 1;
+}
+.dbs-head { display: flex; align-items: center; gap: 10px; }
+.dbs-seal {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, #ffd54a 45%, #ffb300 100%);
+    color: #2b1a00; font-size: 0.7rem;
+    border: 1px solid rgba(255,214,90,0.6);
+    box-shadow: 0 2px 8px rgba(255,179,0,0.35);
+}
+.dbs-kicker {
+    font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 13px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: #ffd76a;
+}
+.dbs-kicker .jp-mini {
+    margin-left: 6px; font-family: 'Noto Sans JP', sans-serif; font-weight: 400;
+    font-size: 0.78em; letter-spacing: 0.04em; color: #e8cf93; opacity: 0.9;
+}
+.dbs-sub { margin: 6px 0 2px; font-family: 'Montserrat', sans-serif; font-size: 12px; letter-spacing: 0.02em; color: #caa15a; }
+/* The wider-world divider after the gold shelf reads as a distinct second shelf. */
+.discover-blake-shelf + .discover-results-divider { margin-top: 22px; border-top: 1px solid rgba(187,134,252,0.14); padding-top: 16px; }
+
+/* v1.8.4 gate 3b (item b) — branded loading SKELETON (true card silhouette, zero
+   layout shift; one shared transform-translated sweep — no per-card timers, no
+   background-position repaint). */
+.disc-skel {
+    width: 200px; flex: 0 0 auto; border-radius: 12px; overflow: hidden;
+    background: linear-gradient(180deg, rgba(40,18,70,0.50), rgba(20,6,38,0.70));
+    border: 1px solid rgba(187,134,252,0.14);
+    position: relative;
+}
+.disc-skel .ds-poster { aspect-ratio: 2 / 3; background: rgba(255,255,255,0.04); }
+.disc-skel .ds-info { display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 14px; }
+.disc-skel .ds-line { height: 11px; width: 80%; border-radius: 6px; background: rgba(255,255,255,0.07); }
+.disc-skel .ds-line.short { width: 52%; }
+.disc-skel .ds-chip { height: 18px; width: 46px; border-radius: 999px; background: rgba(255,255,255,0.06); margin-top: 2px; }
+.disc-skel::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(110deg, transparent 38%, rgba(187,134,252,0.16) 50%, transparent 62%);
+    transform: translateX(-120%);
+    animation: disc-skel-sweep 1.4s linear infinite;
+}
+@keyframes disc-skel-sweep { to { transform: translateX(120%); } }
+
+/* Discover variant of the v1.7.1 .search-empty-card (one empty-state grammar site-
+   wide). Sits in the rail/results column instead of spanning the 4-col grid. */
+.search-empty-card.is-discover { grid-column: auto; max-width: 560px; margin: 24px auto; }
+.search-empty-card.is-error {
+    border-image: linear-gradient(90deg, transparent, rgba(255,120,120,0.34), transparent) 1;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.45), 0 0 26px rgba(255,120,120,0.12);
+}
+.search-empty-card.is-error .se-glyph { filter: drop-shadow(0 0 14px rgba(255,120,120,0.30)); }
+.search-empty-card.is-error .se-kicker { color: #ff9d9d; }
+
+/* v1.8.4 gate 3b (item 3) — shared toolbar active-tab state (Discover / View All /
+   Filter use ONE selected treatment). Distinct from hover: brighter fill + ring +
+   steady glow, shimmer frozen. */
+.inline-header-btn.is-active {
+    background: linear-gradient(180deg, rgba(176,108,255,0.55), rgba(120,40,210,0.92));
+    border-color: rgba(216,180,254,0.85);
+    box-shadow: 0 10px 22px rgba(0,0,0,0.30), 0 0 16px rgba(187,134,252,0.55), inset 0 0 0 1px rgba(255,255,255,0.10);
+    color: #fff;
+}
+.inline-header-btn.is-active::before { opacity: 0; }
+
+/* The 3-way lens — CSS-only filtering of the already-rendered cards. */
+#discover-view.lens-reviewed .card.is-not-reviewed { display: none; }
+#discover-view.lens-notyet .card.is-reviewed { display: none; }
+/* item 9 — under "Unreviewed", the gold "Reviewed by Blake" shelf/divider is empty
+   and meaningless: hide it entirely. Symmetrically, hide the wider-world divider
+   under "Reviewed" so a lone header never floats over an empty grid. */
+#discover-view.lens-notyet .discover-blake-shelf { display: none; }
+#discover-view.lens-reviewed .discover-results-divider { display: none; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   v1.8.4 gate 4 — FOR YOU SURFACE (his shelf, pulled near you)
+   Reuses the Discover head/block/rail vocabulary; only the surface frame, the
+   smaller card, the lens scope, and the in-rail band separator are new here.
+   ════════════════════════════════════════════════════════════════════════ */
+#for-you-view {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 18px 18px 60px;
+}
+/* Match Discover's slightly-smaller rail cards so more fit per rail. */
+#for-you-view .card { width: 200px; flex: 0 0 auto; }
+
+/* The curator's lens — same CSS-only mechanism as Discover, scoped to For You.
+   [hidden] must beat the author display:inline-flex (the .discover-lens display
+   wins over the [hidden] UA rule otherwise — see the project gotcha). */
+#foryou-lens[hidden] { display: none; }
+#for-you-view.lens-reviewed .card.is-not-reviewed { display: none; }
+#for-you-view.lens-notyet  .card.is-reviewed      { display: none; }
+/* The band separator only means anything in "The Blend" (both bands present). */
+#for-you-view:not(.lens-all) .foryou-rail-sep { display: none; }
+
+/* The in-rail boundary where his gold picks hand off to the wider world — a slim
+   gold->purple gradient line with a gold star at the seam. Static (compositor-cheap,
+   reduced-motion-irrelevant); a flex item so the native-scroll rail flows past it. */
+.foryou-rail-sep {
+    flex: 0 0 auto;
+    align-self: stretch;
+    position: relative;
+    width: 26px;
+    margin: 8px 0;
+}
+.foryou-rail-sep::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 8%;
+    bottom: 8%;
+    width: 2px;
+    transform: translateX(-50%);
+    border-radius: 2px;
+    background: linear-gradient(180deg, rgba(255,179,0,0) 0%, rgba(255,179,0,0.55) 20%, rgba(187,134,252,0.55) 80%, rgba(187,134,252,0) 100%);
+}
+.foryou-rail-sep::after {
+    content: "\2605";   /* ★ — the seam mark */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    color: #ffce5a;
+    font-size: 0.72rem;
+    text-shadow: 0 0 8px rgba(255,179,0,0.5);
+}
+
+/* v1.8.4 gate 3b — reduced-motion: the gold-shelf entrance shimmer + skeleton
+   sweep collapse to static (flat slab / dim pending card). The rail edge-fade mask
+   is NOT motion, so it stays. Auto-advance is gated off in JS (REDUCED_MOTION). */
+@media (prefers-reduced-motion: reduce) {
+    .discover-blake-shelf::after { animation: none !important; opacity: 0; }
+    .disc-skel::after { animation: none !important; opacity: 0; }
 }
 
 /* MODAL + OVERLAY BASE */
@@ -907,17 +1651,124 @@ body.modal-open {
    REMOVED — it kept showing a slight side cutoff and the homepage look is being redone
    in v1.8.4 anyway (the grounding idea lives on in the banked v1.8.4 background concept).
    The card now sits plain with just its own purple glass panel. */
+/* v1.8.4 gate 5 — Latest Drop demoted from a boxed gutter PANEL to a clean Den sub-item:
+   the featured card IS the gold frame, so shed the panel border/backdrop/heavy shadow
+   (also drops the live backdrop-filter blur — a perf win per the v1.8.0 lesson). It now
+   reads as the lone single-card beat between the two horizontal drift bands. */
+/* v1.8.4 gate 7 — Latest Drop gets a PURPLISH framed panel so it reads as a SIBLING of
+   the Top 10's framed glass plate (Blake: side-by-side "all looks off" — mismatched
+   framing/size). Echoes the spotlight plate's border + glow + radius family, but with a
+   purplish fill (his seed) instead of a backdrop-filter — perf-safe, no live blur. The
+   blinking purple dot (its head) + the Top 10 arrows stay. */
 .featured-drop.in-den {
   position: static;
   right: auto; left: auto;
-  width: min(460px, 100%); margin: 40px auto 0; padding: 14px;
-  background: rgba(25, 3, 45, 0.72);
-  border: 2px solid rgba(187, 134, 252, 0.28);
-  border-radius: 18px;
-  box-shadow: 0 14px 40px rgba(0,0,0,0.35), 0 0 18px rgba(185,0,255,0.12);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  width: min(360px, 100%); margin: 0; padding: 16px 16px 18px;
+  background: linear-gradient(180deg, rgba(48,22,86,0.50) 0%, rgba(18,7,38,0.42) 100%);
+  border: 1px solid rgba(187,134,252,0.22);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.34), 0 0 22px rgba(187,134,252,0.16);
+}
+/* match the spine grammar — a slim hairline-underlined kicker (Den-scoped so the Update
+   Log's identical .side-widget-kicker is untouched). */
+.featured-drop.in-den .side-widget-kicker {
+  display: inline-block;
+  border-bottom: 1px solid rgba(187,134,252,0.28);
+  padding-bottom: 5px;
 }
 .den-top10 { margin-bottom: 0; }
+
+/* v1.8.4 gate 6/7 — Top 10 + Latest Drop SIDE-BY-SIDE, redesigned as a composed pair.
+   The .spotlight-stack cards center in their OWN container, so narrowing the Top-10
+   column re-centers the carousel (zero carousel JS change). Parity widths (~the spotlight
+   plate's 372px) + center alignment make the two framed panels read as siblings. Below
+   1100px it stacks back to the original centered-below layout. */
+.den-showcase {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(40px, 4vw, 56px);
+  width: 100%;
+}
+.den-showcase .den-top10 { flex: 0 1 400px; margin-bottom: 0; }
+.den-showcase #featured-drop.in-den { flex: 0 0 360px; margin: 0; }
+@media (max-width: 1100px) {
+  .den-showcase { flex-direction: column; align-items: center; gap: 0; }
+  .den-showcase .den-top10 { flex-basis: auto; width: 100%; }
+  .den-showcase #featured-drop.in-den { width: min(360px, 100%); margin: 34px auto 0; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   v1.8.4 gate 5 — HOME HOLE-FILL: the dated folio line + the two "wider world" strips.
+   The strips REUSE the Discover .discover-block / -head / -subrow / -rail vocabulary;
+   only the spine refinements (folio, kicker underline, cool airing tint, more-link) are
+   new. All static / compositor-cheap; no background/veil work (that's G6).
+   ════════════════════════════════════════════════════════════════════════ */
+.den-folio {
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px; width: 100%; max-width: 720px;
+  margin: 6px auto 2px;
+}
+.folio-rule {
+  flex: 1 1 auto; max-width: 200px; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(187,134,252,0.45));
+}
+.den-folio .folio-rule:last-child { background: linear-gradient(90deg, rgba(187,134,252,0.45), transparent); }
+.folio-stamp {
+  flex: 0 0 auto;
+  font-family: 'Montserrat', sans-serif; font-weight: 700;
+  font-size: 0.66rem; letter-spacing: 0.3em; text-transform: uppercase;
+  color: #b9a9d8; white-space: nowrap;
+}
+.folio-stamp .folio-jp { font-family: 'Noto Sans JP', sans-serif; letter-spacing: 0.06em; color: #cbb9e8; }
+
+.home-strip { margin: 44px 0 8px; }
+.home-strip .discover-block-head {
+  display: inline-block;
+  border-bottom: 1px solid rgba(187,134,252,0.28);
+  padding-bottom: 6px;
+}
+/* AIRING NOW = the "wider world" guest band: a cool kicker temperature vs the Den's warm
+   gold — a quiet "outside zone" signal that never out-shouts his gold cards. */
+.airing-strip .discover-block-head { color: #cbb9e8; }
+/* v1.8.4 gate 5/6 — the trailing hand-off link is a branded CHIP, not a bare underlined
+   string floating in space (Blake's G6 call on the "Sign in to make this yours" link).
+   Used by all three strip hand-offs (See more in Discover / See all For You / Sign in). */
+.home-strip-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 2px 0;
+  padding: 7px 15px;
+  border-radius: 999px;
+  font-family: 'Montserrat', sans-serif; font-weight: 700;
+  font-size: 0.8rem; letter-spacing: 0.02em;
+  color: #d9c9f5; text-decoration: none;
+  background: rgba(138,63,252,0.14);
+  border: 1px solid rgba(187,134,252,0.34);
+  transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+}
+.home-strip-more:hover, .home-strip-more:focus-visible {
+  color: #fff;
+  background: rgba(138,63,252,0.26);
+  border-color: rgba(216,180,254,0.7);
+  transform: translateY(-1px);
+}
+.home-strip-more[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .home-strip-more { transition: none; } }
+/* v1.8.4 gate 7 — center the AIRING band's hand-off chip above the next section (Blake:
+   it read off-balance after the Top10+Latest-Drop side-by-side change). */
+#home-airing-more { display: flex; width: fit-content; margin: 16px auto 6px; }
+#home-airing-more[hidden] { display: none; }
+/* v1.8.4 gate 8 — center the For-You strip's "See all · For You" hand-off chip to match
+   the airing chip above (Blake: it sat left-hugging). The display:flex override would beat
+   the base .home-strip-more[hidden] rule, so it carries its own paired [hidden] guard
+   (the chip starts hidden and JS un-hides it via .hidden=false). */
+#home-foryou-more { display: flex; width: fit-content; margin: 16px auto 6px; }
+#home-foryou-more[hidden] { display: none; }
+/* the home strips are left-flowing editorial blocks; match Discover's slightly-smaller
+   rail cards so more fit per row. */
+#home-airing .card, #home-foryou .card { width: 200px; flex: 0 0 auto; }
 
 /* Continue where you left off (v1.8.3 gate 5) — a horizontal strip of the visitor's
    recently opened cards. Hidden until there's history. */
@@ -928,15 +1779,33 @@ body.modal-open {
   gap: 26px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 16px 60px 20px;            /* match grid side padding; vertical room for glow */
+  /* v1.8.4 gate 4 carry-over — Blake's screenshot: a hover-scaled card's TOP (its
+     scale(1.05) + purple glow) was guillotined by the scroll box. Same class as the
+     G3c Discover rail clip; same fix: more vertical room (24px so the bigger 275px
+     catalog cards clear) + the FOUR-edge soft mask (the 180deg vertical fade sits in
+     the padding zone, so a card growing past the edge dissolves instead of hard-
+     clipping; normal cards aren't touched). */
+  padding: 24px 60px 24px;
   scroll-snap-type: x proximity;
   scrollbar-width: thin;
   scrollbar-color: rgba(187,134,252,0.5) transparent;
+  /* v1.8.4 gate 3d (item 6) — the rail already scrolls to all (capped 6) cards; the
+     film-strip edge-fade makes the overflow READ as a reachable carousel instead of
+     looking hard-cut at the edge. v1.8.4 G4 — vertical fade added (mask-composite
+     intersects the two gradients; Gecko `intersect` + WebKit `source-in` keywords). */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 50px, #000 calc(100% - 50px), transparent),
+                      linear-gradient(180deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  -webkit-mask-composite: source-in;
+          mask-image: linear-gradient(90deg, transparent, #000 50px, #000 calc(100% - 50px), transparent),
+                      linear-gradient(180deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+          mask-composite: intersect;
 }
 .continue-row .card {
   flex: 0 0 auto;
   scroll-snap-align: start;
 }
+/* a single-screen-worth of cards centers (matches the grid's sparse behavior). */
+.continue-row:not(.is-overflowing) { justify-content: center; }
 @media (max-width: 900px) {
   .continue-row { padding-left: 16px; padding-right: 16px; gap: 16px; }
 }
@@ -1712,6 +2581,56 @@ body.modal-open {
     display: inline-flex;
     align-items: center;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   v1.8.4 gate 5 — DIRECTION C NAV: the 3 surfaces are PLACES, the rest are TOOLS.
+   One button skin (.inline-header-btn) for all six — the separation is made by a
+   hairline seam + a quiet recess on the tools, NOT a second skin. A sliding gold
+   "you are here" marker rides under the active place (a static underbar is the
+   no-JS floor). All static/compositor-cheap; reduced-motion drops the slide.
+   ════════════════════════════════════════════════════════════════════════ */
+.toolbar { flex-wrap: wrap; }
+.nav-places { position: relative; display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.nav-tools  { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* the section seam — same hairline vocabulary as the Den's flanking rules */
+.toolbar-seam {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 22px;
+    margin: 0 4px;
+    background: linear-gradient(180deg, transparent, rgba(187,134,252,0.42), transparent);
+}
+/* tools sit in a quieter register at REST (a recess, not a different button); hover
+   restores them to full so they read obviously live. */
+.tool-btn { filter: saturate(0.82); opacity: 0.92; font-weight: 600; }
+.tool-btn:hover, .tool-btn:focus-visible { filter: none; opacity: 1; }
+/* static "you are here" underbar — the floor (works with no JS / before measurement) */
+.place-btn { position: relative; }
+.place-btn.is-active::after {
+    content: "";
+    position: absolute;
+    left: 12px; right: 12px; bottom: 4px;
+    height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, #ffd76a, #ffb347);
+    opacity: 0.95;
+}
+/* the sliding gold marker — once JS positions it, .has-marker hides the static bars
+   so only the single sliding one shows. */
+.nav-places.has-marker .place-btn.is-active::after { opacity: 0; }
+.place-marker {
+    position: absolute;
+    bottom: 4px; left: 0;
+    height: 2px; width: 0;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #ffd76a, #ffb347);
+    box-shadow: 0 0 8px rgba(255,179,0,0.45);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+    transition: transform .2s ease, width .2s ease, opacity .2s ease;
+}
+@media (prefers-reduced-motion: reduce) { .place-marker { transition: none; } }
+@media (max-width: 1024px) { .toolbar-seam { display: none; } }
 
 
 .inline-header-btn{
@@ -2650,7 +3569,9 @@ body.filter-open { overflow: hidden; }
   align-items: baseline;
   justify-content: flex-start;
   gap: 10px;
-  padding-left: 6px;
+  /* gate 3e (item 7) — align the genre label with the first card (viewport's 16px
+     inner padding) instead of floating 6px in. */
+  padding-left: 16px;
 }
 
 .rail-title {
@@ -2681,26 +3602,38 @@ body.filter-open { overflow: hidden; }
 /* The framed viewport (prevents clipping) */
 .rail-viewport {
   position: relative;
-  overflow: hidden;                 /* cards slide behind edges */
+  /* v1.8.4 gate 3d (item 5) — REVERTED to the infinite transform marquee: the
+     viewport clips (overflow:hidden) and the .rail-track is translated. `contain`
+     bounds invalidation. The purple framed background stays. */
+  overflow: hidden;
+  contain: layout paint;
   border-radius: 14px;
   background: rgba(20, 0, 40, 0.85);
   box-shadow: 0 0 0 1px rgba(187,134,252,0.25) inset, 0 20px 40px rgba(0,0,0,0.35);
   padding: 12px 16px;               /* inner buffer so hover never clips */
 }
+/* reduced-motion: the marquee doesn't run, so make the viewport a manual scroller
+   (single card set, no dupes) — the cards stay reachable without motion. */
+@media (prefers-reduced-motion: reduce) {
+  .rail-viewport { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+}
 
-/* Optional soft edge fade (comment out if you don't want) */
+/* v1.8.4 gate 3e (item 7) — "bleeding partial cards" fix. The edge gradients are
+   now WIDER (96px) and FULLY OPAQUE for the first third, so a half-card sliding past
+   the edge is completely hidden behind the purple frame before it fades in — no more
+   hard-cut partial card peeking at the rail edge. The 0.85 mid-stop matches the
+   viewport bg so the frame reads as one continuous purple plate. */
 .rail-viewport::before,
 .rail-viewport::after {
   content: "";
-  position: absolute; top: 0; bottom: 0; width: 40px; pointer-events: none;
+  position: absolute; top: 0; bottom: 0; width: 96px; pointer-events: none; z-index: 2;
 }
-.rail-viewport::before { left: 0; background: linear-gradient(90deg, rgba(20,0,40,0.85), transparent); }
-.rail-viewport::after  { right: 0; background: linear-gradient(-90deg, rgba(20,0,40,0.85), transparent); }
+.rail-viewport::before { left: 0; background: linear-gradient(90deg, rgba(20,0,40,1) 0%, rgba(20,0,40,0.97) 30%, rgba(20,0,40,0.85) 55%, transparent 100%); }
+.rail-viewport::after  { right: 0; background: linear-gradient(-90deg, rgba(20,0,40,1) 0%, rgba(20,0,40,0.97) 30%, rgba(20,0,40,0.85) 55%, transparent 100%); }
 
 .rail-track {
   display: flex;
   gap: 16px;
-  will-change: transform;
 }
 
 /* Use the same card component but make a smaller rail-sized variant */
@@ -3243,6 +4176,40 @@ body.filter-open { overflow: hidden; }
 }
 .more-info-entry--clickable:hover {
   background: rgba(40,18,70,.6);
+}
+
+/* v1.8.4 gate 8 — the once-per-visitor "deep dive" hint: a quiet brand-voice aside under
+   the FIRST clickable row, teaching that the rows open the richer secondary modal. Not a
+   button (its own class never matches the delegated .more-info-entry--clickable handler).
+   The 68px indent clears the 8px row padding + 50px cover + 10px gap so it reads as the
+   row's own aside. It lives inside .more-info-list/.more-info-spine, which the <900px stack
+   reflows to full width via .more-info-container — so it needs no breakpoint of its own. */
+.more-info-deepdive-hint {
+  padding: 4px 8px 9px;          /* gate 8b: small left indent so the one-line pill has room */
+  opacity: 1;
+  transition: opacity 420ms ease;
+}
+/* v1.8.4 gate 8b — the hint reads too quiet as bare text (Blake), so wrap it in the site's
+   chip vocabulary: a purple-tinted pill with a soft glow so it catches the eye on its one
+   showing. Still non-clickable, still fades on first row-hover, still once-per-visitor. */
+.mi-hint-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 999px;
+  background: rgba(138,63,252,0.16);
+  border: 1px solid rgba(187,134,252,0.42);
+  box-shadow: 0 0 14px rgba(187,134,252,0.14);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px; line-height: 1.3; letter-spacing: 0.02em;
+  color: #e2d4ff;
+  white-space: nowrap;           /* gate 8b: keep その先へ + the line on ONE line (Blake's screenshot) */
+}
+.mi-hint-pill .jp-mini { color: #cbb0ff; font-weight: 700; white-space: nowrap; }
+.mi-hint-pill .mi-hint-arrow { color: #cbb0ff; }
+/* once the visitor hovers any row, the lesson's been learned — let the hint fade away. */
+.more-info-list:hover .more-info-deepdive-hint { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .more-info-deepdive-hint { transition: none; }
+  .more-info-list:hover .more-info-deepdive-hint { opacity: 1; }
 }
 
 .more-info-cover {
@@ -4294,6 +5261,18 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 
 /* NEW: keep icon-row visible if this card has saved state */
 .card.has-saved .icon-row {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+/* a11y (site-wide keyboard nav) — the card is a real keyboard control now. A clear
+   brand-purple focus ring (matches .inline-header-btn:focus-visible), and keyboard
+   focus reveals the fav/watch row so it isn't focusable-but-invisible. */
+.card:focus-visible {
+  outline: 2px solid rgba(187,134,252,0.95);
+  outline-offset: 3px;
+}
+.card:focus-within .icon-row {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -5520,6 +6499,45 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 .version-chips .version-chip:nth-child(2) { animation-delay: 40ms; }
 .version-chips .version-chip:nth-child(3) { animation-delay: 80ms; }
 @keyframes version-chip-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+
+/* v1.8.4 gate 8b — UPDATE LOG redesign: each dated update is its own bullet-group, set off by a
+   tier-colored left RAIL (the next group's rail/marker is the divider), and each marker carries an
+   honest TIER label (hotfix / minor / big / major) derived from the CHANGELOG semver token. The
+   existing .version-chip / .version-chip-range / .vc-arrow vocabulary is untouched — only a head
+   grid + a tier label + the rail are added. Door-aware (the 22vh cap) + reduced-motion-safe. */
+.vs-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'chips tier' 'date date';
+  align-items: center;
+  column-gap: 8px; row-gap: 2px;
+  margin-bottom: 4px;
+}
+.vs-head .version-chips { grid-area: chips; margin-bottom: 0; }
+.vs-head .version-header { grid-area: date; margin: 0; }
+.vs-tier {
+  grid-area: tier; justify-self: start;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: #cda9ff; white-space: nowrap;
+}
+/* the rail = the per-group divider; its color encodes the tier at a glance */
+.version-section { position: relative; padding-left: 12px; border-left: 2px solid rgba(187,134,252,0.22); }
+.version-section[data-tier="hotfix"] { border-left-color: rgba(255,140,140,0.55); }
+.version-section[data-tier="minor"]  { border-left-color: rgba(187,134,252,0.45); }
+.version-section[data-tier="big"]    { border-left-color: rgba(216,180,254,0.85); }
+.version-section[data-tier="major"]  { border-left-color: #ffd54a; }   /* wired; dead until v1.9/v2.0 */
+.version-section[data-tier="hotfix"] .vs-tier { color: #ff9b9b; }
+.version-section[data-tier="big"] .vs-tier    { color: #e6ccff; }
+.version-section[data-tier="major"] .vs-tier  { color: #ffd54a; }
+/* door (22vh) legibility: tighten the rail + tier so more groups fit the shorter box */
+.welcome-changelog .version-section { padding-left: 10px; }
+.welcome-changelog .vs-tier { font-size: 8.5px; letter-spacing: 0.12em; }
+/* reduced-motion: the widget's ONLY animation is the inherited version-chip-in keyframe; kill it.
+   This block sits AFTER .version-chip above, so equal-specificity source order lets it win. */
+@media (prefers-reduced-motion: reduce) {
+  .version-chip { animation: none; }
+}
 
 /* ---- Item 5: romaji subtitle — Japanese 「」brackets, Outfit Light Italic -- */
 /* v1.7.1 gate 1d — brackets are LITERAL inline <i class="rb"> chars (not
@@ -6789,8 +7807,12 @@ html.rar-welcome-pending::before {
   inset: 0;
   z-index: 7900;
   display: flex;
-  align-items: center;
+  /* v1.8.4 gate 6 — `safe center` + scroll so the now-taller card (banner + copy + the
+     re-homed Update Log) centers when it fits and scrolls (never clips the top) when a
+     short viewport can't hold it. */
+  align-items: safe center;
   justify-content: center;
+  overflow-y: auto;
   padding: 24px;
   box-sizing: border-box;
   /* late-night den gradient — near-opaque so no backdrop-filter is needed. A soft
@@ -6801,6 +7823,23 @@ html.rar-welcome-pending::before {
     rgba(8,2,18,0.97);
 }
 .welcome-splash[hidden] { display: none; }   /* [hidden] beats display:flex */
+
+/* v1.8.4 gate 6 — the re-homed Update Log, integrated into the door under the Enter
+   button: WIDER than its old 320px gutter, a touch SMALLER (type-scale), un-floated
+   (the JS dropped .side-widget/.changelog-drop), left-aligned, sitting above the door's
+   line-work (z 1, like the card). The inner .changelog-box keeps its own bordered panel
+   + the .changelog-content 22vh scroll so it never blows out the door height. */
+.welcome-changelog {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 92vw);
+  margin: 22px auto 0;
+  text-align: left;
+}
+.welcome-changelog .side-widget-head { margin-bottom: 8px; }
+.welcome-changelog .changelog-title { font-size: 0.86rem; }
+.welcome-changelog .changelog-list { font-size: 0.8rem; }
+.welcome-changelog .changelog-content { max-height: 22vh; }
 
 /* Static texture on the door's purple field (Blake: "lines, cracks etc."): a faint
    star/dust grain, fine diagonal hairlines, and a few thin energy cracks near the
@@ -6818,6 +7857,41 @@ html.rar-welcome-pending::before {
   background-repeat: no-repeat, repeat, repeat, repeat;
   -webkit-mask-image: radial-gradient(120% 120% at 50% 46%, transparent 18%, #000 62%);
           mask-image: radial-gradient(120% 120% at 50% 46%, transparent 18%, #000 62%);
+}
+
+/* v1.8.4 gate 3e (item 3) — a VERY subtle purple glow PULSE that travels from the
+   door's center outward ALONG the etched line-work, every ~7s. Compositor-cheap:
+   a fixed radial RING (.wlp-glow) animates TRANSFORM scale + opacity only (no per-
+   frame paint, no will-change layer-storm), and its parent is masked to the SAME
+   line paths so the glow appears only ON the lines. z-index:0 keeps it behind the
+   card (z1). Reduced-motion -> no pulse (static lines). Feasibility note: the same
+   technique (transform-scaled ring masked to a line layer) extends to the future
+   site-wide constellation/line background — a follow-up gate, not scoped here. */
+.welcome-line-pulse {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900' viewBox='0 0 1400 900'%3E%3Cg fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round'%3E%3Cpath d='M0 150 L185 205 L245 172 L430 252'/%3E%3Cpath d='M1400 770 L1225 705 L1165 735 L975 662'/%3E%3Cpath d='M130 885 L270 762 L312 802 L480 690'/%3E%3Cpath d='M1285 55 L1142 182 L1100 150 L940 252'/%3E%3Cpath d='M55 470 L150 452 L188 472 L300 450'/%3E%3C/g%3E%3C/svg%3E");
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900' viewBox='0 0 1400 900'%3E%3Cg fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round'%3E%3Cpath d='M0 150 L185 205 L245 172 L430 252'/%3E%3Cpath d='M1400 770 L1225 705 L1165 735 L975 662'/%3E%3Cpath d='M130 885 L270 762 L312 802 L480 690'/%3E%3Cpath d='M1285 55 L1142 182 L1100 150 L940 252'/%3E%3Cpath d='M55 470 L150 452 L188 472 L300 450'/%3E%3C/g%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+}
+.wlp-glow {
+  position: absolute; left: 50%; top: 46%;
+  width: 120vmax; height: 120vmax; margin: -60vmax 0 0 -60vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 30%, rgba(216,180,254,0.80) 42%, rgba(187,134,252,0.28) 50%, transparent 62%);
+  opacity: 0;
+  transform: scale(0.03);
+}
+.welcome-splash.is-in .wlp-glow { animation: welcomeLinePulse 7s ease-in-out 1.4s infinite; }
+@keyframes welcomeLinePulse {
+  0%   { transform: scale(0.03); opacity: 0; }
+  12%  { opacity: 0.85; }
+  80%  { opacity: 0.12; }
+  100% { transform: scale(1);   opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-splash.is-in .wlp-glow { animation: none; opacity: 0; }
 }
 
 /* Anime quote bubbles (v1.8.3 gate 5b): comic-style speech bubbles that drift UP the
@@ -6964,6 +8038,14 @@ html.rar-welcome-pending::before {
   transition: transform .18s ease, filter .18s ease;
 }
 .welcome-enter:hover { transform: translateY(-2px); filter: brightness(1.08); }
+/* v1.8.4 gate 3e (item 4) — the door now focuses the DIALOG CONTAINER on open (not
+   the Enter button), because Firefox matches :focus-visible on a programmatic button
+   focus and painted the ring on auto-open. The container is focusable (tabindex=-1)
+   only to trap the modal + announce it — it must never show a ring. */
+.welcome-splash:focus,
+.welcome-splash:focus-visible { outline: none; }
+/* The Enter button keeps a proper keyboard ring (a real Tab now triggers it). */
+.welcome-enter:focus { outline: none; }
 .welcome-enter:focus-visible { outline: 2px solid #d7bcff; outline-offset: 3px; }
 .welcome-enter-arrow { font-size: 1.05em; transition: transform .18s ease; }
 .welcome-enter:hover .welcome-enter-arrow { transform: translateX(3px); }

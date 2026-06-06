@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="1.8.3"</script>
+  <script>window.APP_VERSION="1.8.4"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -56,15 +56,22 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=1.8.3">
-  <link rel="stylesheet" href="mobile.css?v=1.8.3" media="(max-width: 900px)">
-  <link rel="stylesheet" href="admin-fab.css?v=1.8.3">
+  <link rel="stylesheet" href="style.css?v=1.8.4">
+  <link rel="stylesheet" href="mobile.css?v=1.8.4" media="(max-width: 900px)">
+  <link rel="stylesheet" href="admin-fab.css?v=1.8.4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Outfit:ital,wght@0,400;0,500;0,600;1,300;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
+
+  <!-- v1.8.4 gate 8 — the animated veil pulse layer (the welcome door's traveling glow
+       extended site-wide). A single masked radial ring (.vp-glow) sweeps the constellation
+       line-work. Sits at z-1, above the veil (z-2), behind all content. The JS adds
+       html.veil-pulse-active to switch on the faint baseline + the sweep; with no JS or
+       reduced-motion the veil stays at its static LIT baseline. -->
+  <div id="veil-pulse" aria-hidden="true"><div class="vp-glow"></div></div>
 
   <!-- Header -->
   <header>
@@ -74,8 +81,20 @@
 
         <!-- Toolbar holds the buttons and anchors the dropdown -->
         <div class="toolbar">
-          <button type="button" id="view-all-btn" class="inline-header-btn">View All Animes</button>
-          <button type="button" id="random-btn" class="inline-header-btn random-btn" aria-label="Random anime">
+          <!-- v1.8.4 gate 5 — real nav (Direction C): the three SURFACES are primary
+               "places" (Den is the in-page glide home; the logo stays the hard reset),
+               then a hairline seam, then the View All / Random / Filter TOOLS. One
+               button skin; the seam + a quiet recess on the tools do the separating. -->
+          <nav class="nav-places" aria-label="Sections">
+            <button type="button" id="den-btn" class="inline-header-btn place-btn">Blake&rsquo;s Den <span class="jp-mini">隠れ家</span></button>
+            <button type="button" id="foryou-btn" class="inline-header-btn place-btn">For You <span class="jp-mini">君へ</span></button>
+            <button type="button" id="discover-btn" class="inline-header-btn place-btn">Discover <span class="jp-mini">発見</span></button>
+            <span class="place-marker" aria-hidden="true"></span>
+          </nav>
+          <span class="toolbar-seam" aria-hidden="true"></span>
+          <div class="nav-tools" role="group" aria-label="Tools">
+            <button type="button" id="view-all-btn" class="inline-header-btn tool-btn">View All <span class="jp-mini">全作品</span></button>
+            <button type="button" id="random-btn" class="inline-header-btn tool-btn random-btn" aria-label="Random anime">
             <svg class="dice-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <rect x="3" y="3" width="18" height="18" rx="4" ry="4" fill="none" stroke="currentColor" stroke-width="2"></rect>
             <circle cx="8" cy="8" r="1.6" fill="currentColor"></circle>
@@ -84,10 +103,10 @@
             <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
             <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
             </svg>
-            <span>Random</span>
+            <span>Random <span class="jp-mini">ランダム</span></span>
             </button>
-
-          <button id="filter-btn" class="inline-header-btn" aria-expanded="false" aria-controls="filter-panel">Filter</button>
+          <button id="filter-btn" class="inline-header-btn tool-btn" aria-expanded="false" aria-controls="filter-panel">Filter <span class="jp-mini">絞り込み</span></button>
+          </div>
 
         
           <!-- Filter dropdown panel (anchored to .toolbar) -->
@@ -104,6 +123,14 @@
               </div>
 
               <div class="filter-body">
+                <!-- v1.8.4 gate 2 — review-status segment (All / Reviewed / Not yet).
+                     "Not yet" is disabled here (catalog-only) until a Discover/For You
+                     surface enables it. No provider names anywhere. -->
+                <div class="filter-reviewed" id="filter-reviewed" role="group" aria-label="Review status">
+                  <button type="button" class="fr-seg is-active" data-reviewed="all" aria-pressed="true">All</button>
+                  <button type="button" class="fr-seg" data-reviewed="reviewed" aria-pressed="false">Reviewed</button>
+                  <button type="button" class="fr-seg" data-reviewed="notyet" aria-pressed="false" disabled title="Available on For You and Discover">Unreviewed</button>
+                </div>
                 <!-- v1.8.3 gate 4 — live-narrow the options as you type -->
                 <div class="filter-narrow-wrap">
                   <span class="filter-narrow-icon" aria-hidden="true">&#128269;</span>
@@ -186,8 +213,12 @@
     <!-- v1.8.4: Currently-Airing "Top 10" hero strip mounts here. -->
     <!-- v1.8.4: "For You" personalized rail mounts here. -->
 
-<!-- Changelog / Updates (Update Log — stays in its current position, v1.8.3) -->
-<aside id="changelog-drop" class="side-widget changelog-drop" aria-label="Changelog / updates">
+<!-- v1.8.4 gate 6 — Update Log re-homed to the welcome door (Blake's call; it looked out
+     of place on the homepage). Starts hidden here; JS (initWelcome) relocates this LIVE
+     node into the door card under the Enter button (swapping the gutter classes for
+     .welcome-changelog) and reveals it — so the data path / version chip stay intact and
+     it never flashes on the home flow. -->
+<aside id="changelog-drop" class="side-widget changelog-drop" aria-label="Changelog / updates" hidden>
   <div class="side-widget-head">
     <span class="blink-dot" aria-hidden="true"></span>
 
@@ -202,14 +233,34 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v1.8.3</span>
-     Minor Update
+      <span class="changelog-tag" id="changelog-version">v1.8.4</span>
+     Big Update
     </div>
 
     <div class="changelog-content">
-      <div class="version-section">
-        <div class="version-chips"><span class="version-chip">v1.8.3</span></div>
-        <div class="version-header">06/05/2026</div>
+      <div class="version-section" data-tier="big">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v1.8.4</span></div>
+          <span class="vs-tier">Big Update</span>
+          <div class="version-header">06/06/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li>New <strong>Discover</strong> place — search every anime out there. The ones Blake's reviewed light up gold and pin first; everything else is clearly marked NOT REVIEWED with the community score. Plus rails for what's airing now, airing by genre, and popular right now — freshly shuffled each time you log on.</li>
+          <li>New <strong>For You</strong> place — signed in, Blake's gold reviews lead each rail, pulled toward the genres you keep saving; signed out, an honest "what the world's watching" taster.</li>
+          <li>Open any not-yet-reviewed anime for the full detail view — synopsis, characters, staff, where to watch — plus a one-tap "Request this anime". Save anything to your watchlist or favorites, reviewed or not.</li>
+          <li>A real navigation — Blake's Den · For You · Discover — with a sliding gold marker that tracks where you are. The Den is the home you always glide back to.</li>
+          <li>A composed homepage: an AIRING NOW strip, a For You teaser, and the Top 10 + Latest Drop redesigned to sit side-by-side.</li>
+          <li>A site-wide "constellation veil" now drapes the city backdrop — darkest in the Den, opening up toward Discover — and its line-work gently pulses.</li>
+          <li>A quiet once-per-visit hint shows that the seasons in an anime's More Info open a richer detail view.</li>
+          <li>This update log moved onto the welcome door and now labels each update by tier; the welcome-door quotes are editable from a new admin page.</li>
+        </ul>
+      </div>
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v1.8.3</span></div>
+          <span class="vs-tier">Minor Update</span>
+          <div class="version-header">06/05/2026</div>
+        </div>
         <ul class="changelog-list">
           <li>The site now opens with a welcome "door" on your first visit each session — an atmospheric splash with a custom banner, anime quotes drifting up the sides, and an Enter button to step inside. It won't bug you again while you're browsing.</li>
           <li>The homepage is reorganized around "Blake's Den" — a proper section header gathering the Top 10 and the latest drop — and sections gently fade in as you scroll.</li>
@@ -221,9 +272,12 @@
           <li>Duplicate studio names in the filter are merged into one, and "View All Animes" / the site title now clear any active filters.</li>
         </ul>
       </div>
-      <div class="version-section">
-        <div class="version-chips"><span class="version-chip version-chip-range">v1.7.4<span class="vc-arrow" aria-hidden="true">→</span>v1.8.2</span></div>
-        <div class="version-header">06/04/2026</div>
+      <div class="version-section" data-tier="big">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip version-chip-range">v1.7.4<span class="vc-arrow" aria-hidden="true">→</span>v1.8.2</span></div>
+          <span class="vs-tier">Big Update</span>
+          <div class="version-header">06/04/2026</div>
+        </div>
         <ul class="changelog-list">
           <li>Reviews can now be written in labelled sections — when they are, jump-to-section pills appear above the review so you can skip straight to Animation, Story, Music, and whatever else you're after.</li>
           <li>Opening a review's deep-dive (and the character/staff details) blurs the page behind it again — a cleaner, more focused frosted look.</li>
@@ -247,9 +301,12 @@
           <li>Characters and staff are now clickable for full profiles — bios, credits, and where you've seen them before.</li>
         </ul>
       </div>
-      <div class="version-section">
-        <div class="version-chips"><span class="version-chip version-chip-range">v1.7.0<span class="vc-arrow" aria-hidden="true">→</span>v1.7.3</span></div>
-        <div class="version-header">06/03/2026</div>
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip version-chip-range">v1.7.0<span class="vc-arrow" aria-hidden="true">→</span>v1.7.3</span></div>
+          <span class="vs-tier">Minor Update</span>
+          <div class="version-header">06/03/2026</div>
+        </div>
         <ul class="changelog-list">
           <li>The Reviewed badge now lights up on every season, movie, and special I actually watched — not just season 1.</li>
           <li>Cleaned up where-to-watch — the site now lists only official streaming services.</li>
@@ -261,42 +318,57 @@
           <li>When you open an anime, you'll now see the community score right next to my rating — so you can see where my take lines up with the wider community.</li>
         </ul>
       </div>
-      <div class="version-section">
-        <div class="version-chips"><span class="version-chip version-chip-range">v1.6.10<span class="vc-arrow" aria-hidden="true">→</span>v1.6.12</span></div>
-        <div class="version-header">06/02/2026</div>
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip version-chip-range">v1.6.10<span class="vc-arrow" aria-hidden="true">→</span>v1.6.12</span></div>
+          <span class="vs-tier">Minor Update</span>
+          <div class="version-header">06/02/2026</div>
+        </div>
         <ul class="changelog-list">
           <li>New Suggestion Box at the bottom of the homepage — recommend an anime you want reviewed, with live search so you can pick the exact one you mean.</li>
           <li>Cleaned up the More Info panel: no more duplicate studio names on franchise rows, each row now shows a small format tag (TV / MOVIE / etc.), and the STAFF section can show a few more roles.</li>
         </ul>
       </div>
-      <div class="version-section">
-        <div class="version-chips"><span class="version-chip">v1.6.9</span><span class="version-chip">v1.6.8</span></div>
-        <div class="version-header">05/13/2026</div>
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v1.6.9</span><span class="version-chip">v1.6.8</span></div>
+          <span class="vs-tier">Minor Update</span>
+          <div class="version-header">05/13/2026</div>
+        </div>
         <ul class="changelog-list">
           <li>The 'Click for More Info' panel now also shows the show's episode list, recommended anime you might enjoy, and its key production staff (director, music, character design).</li>
           <li>New 'More Info' tab when you open an anime — see all its seasons, prequels, and sequels, each linking to its full info page.</li>
         </ul>
       </div>
-      <div class="version-section">
-        <div class="version-chips"><span class="version-chip">v1.6.7</span></div>
-        <div class="version-header">05/12/2026</div>
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v1.6.7</span></div>
+          <span class="vs-tier">Minor Update</span>
+          <div class="version-header">05/12/2026</div>
+        </div>
         <ul class="changelog-list">
           <li>Made the tools that add new anime smarter about multi-season franchises.</li>
         </ul>
       </div>
       <!-- author: Code | date: 2026-06-03 — v1.7.3: restored 05/11 + 05/10 sections (infinite-scroll back to the v1.6.1 floor; no more 10-cap drop) -->
-      <div class="version-section">
-        <div class="version-chips"><span class="version-chip version-chip-range">v1.6.2<span class="vc-arrow" aria-hidden="true">→</span>v1.6.6</span></div>
-        <div class="version-header">05/11/2026</div>
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip version-chip-range">v1.6.2<span class="vc-arrow" aria-hidden="true">→</span>v1.6.6</span></div>
+          <span class="vs-tier">Minor Update</span>
+          <div class="version-header">05/11/2026</div>
+        </div>
         <ul class="changelog-list">
           <li>Fixed a bug where some anime cover images didn't fill the card cleanly.</li>
           <li>Added shipped-on dates to the update log.</li>
           <li>Grouped the update log so changes appear by date.</li>
         </ul>
       </div>
-      <div class="version-section">
-        <div class="version-chips"><span class="version-chip">v1.6.1</span><span class="version-chip">v1.6.0</span></div>
-        <div class="version-header">05/10/2026</div>
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v1.6.1</span><span class="version-chip">v1.6.0</span></div>
+          <span class="vs-tier">Minor Update</span>
+          <div class="version-header">05/10/2026</div>
+        </div>
         <ul class="changelog-list">
           <li>Behind-the-scenes improvements to the tools used to add new reviews.</li>
         </ul>
@@ -319,6 +391,35 @@
         <p class="den-sub">One person&rsquo;s takes &mdash; ranked, reviewed, and watched in full.</p>
       </div>
 
+      <!-- v1.8.4 gate 5 swing — the dated FOLIO line: a hairline dateline (front-page
+           masthead convention; #folio-date is set to today's date in JS) that bridges
+           the centered nameplate to the full-width band below. Static, no fetch. -->
+      <div class="den-folio">
+        <span class="folio-rule" aria-hidden="true"></span>
+        <span class="folio-stamp"><time id="folio-date"></time> <span class="folio-jp">隠れ家</span></span>
+        <span class="folio-rule" aria-hidden="true"></span>
+      </div>
+
+      <!-- v1.8.4 gate 5 — AIRING NOW (home mount point #1): the slim "wider world"
+           threshold band below the masthead. Outside-card-dominant (his 44 that happen
+           to be airing auto-pin gold), clickable into the secondary modal; lazy IO-gated
+           fetch from the 12h airing cache; the Discover native-scroll drift, NOT the Den
+           marquee. Reuses the Discover block vocabulary. -->
+      <section class="home-strip airing-strip" id="home-airing-block" aria-label="Airing now">
+        <h3 class="discover-block-head">AIRING NOW <span class="jp-mini">放送中</span></h3>
+        <div class="discover-subrow">
+          <p class="discover-block-sub">Beyond the Den &mdash; what the wider world is watching this season.</p>
+        </div>
+        <div class="discover-rail" id="home-airing"></div>
+        <a class="home-strip-more" id="home-airing-more" href="#">See more in Discover <span aria-hidden="true">&rarr;</span></a>
+      </section>
+
+      <!-- v1.8.4 gate 6 — Top 10 + Latest Drop SIDE-BY-SIDE (Blake: "since there's so much
+           empty room" — the centered carousel left big flanks). The spotlight cards center
+           in their own container, so narrowing the Top-10 column re-centers the carousel for
+           free; Latest Drop fills the right flank. Stacks back to today's exact layout below
+           1100px. No carousel JS change. -->
+      <div class="den-showcase">
       <section class="preview-section den-top10">
         <h2 id="top10-heading" class="section-heading" data-kicker="トップ10">
           <button id="top10-prev" type="button" aria-label="Previous Top 10 anime">&#8249;</button>
@@ -336,7 +437,7 @@
         <div class="side-widget-head">
           <span class="blink-dot blink-dot-purple" aria-hidden="true"></span>
           <div class="side-widget-title">
-            <div class="side-widget-kicker">LATEST ANIME DROP! <span class="jp-mini">最新</span></div>
+            <div class="side-widget-kicker">LATEST DROP <span class="jp-mini">最新</span></div>
             <div class="side-widget-sub">Now Featuring:</div>
           </div>
         </div>
@@ -344,8 +445,23 @@
           <!-- JS fills this -->
         </button>
       </aside>
+      </div>
+      <!-- /.den-showcase -->
     </section>
     <!-- /.blakes-den -->
+
+    <!-- v1.8.4 gate 5 — FOR YOU on home (mount point #2): a compact teaser. Signed in =
+         the user's top taste rail (gold leads -> seam -> wider world) + "See all";
+         signed in + no saves = a warm gift card; signed out = an honest trending taster
+         relabelled "FROM HIS SHELF". Chrome set synchronously; rail filled lazily. -->
+    <section class="home-strip foryou-strip reveal" id="home-foryou-block" aria-label="For you">
+      <h3 class="discover-block-head" id="home-foryou-head">FOR YOU <span class="jp-mini">君へ</span></h3>
+      <div class="discover-subrow">
+        <p class="discover-block-sub" id="home-foryou-sub"></p>
+      </div>
+      <div class="discover-rail foryou-rail" id="home-foryou"></div>
+      <a class="home-strip-more" id="home-foryou-more" href="#" hidden></a>
+    </section>
 
     <!-- ===== Continue where you left off (v1.8.3 gate 5) — the visitor's recently
          opened anime, pure-local from localStorage. Hidden until there's history. ===== -->
@@ -372,6 +488,79 @@
   <!-- All Anime View (hidden by default) -->
 <section id="all-anime-view" style="display: none;">
   <div class="card-container"></div>
+</section>
+
+  <!-- v1.8.4 gate 3 — Discover View (hidden by default; lazy-built on first open).
+       The wider world: live search pinning Blake's 44, the airing Top 10, airing by
+       genre, and community picks. No provider names anywhere. -->
+<section id="discover-view" style="display: none;" aria-label="Discover the wider world">
+  <div class="discover-head">
+    <div class="discover-head-titles">
+      <span class="discover-kicker">DISCOVER <span class="jp-mini">発見</span></span>
+      <h2 class="discover-title">The wider world of anime</h2>
+      <p class="discover-sub">Search every anime out there. The ones <strong class="ds-pin"><i class="ds-star" aria-hidden="true">&#9733;</i> Blake's&nbsp;reviewed</strong> light up <span class="ds-gold">gold</span>.</p>
+    </div>
+    <!-- The 3-way lens: the bridge between Blake's reviews and the wider world.
+         CSS-only (hides non-matching already-rendered cards) — no refetch. -->
+    <div class="discover-lens" id="discover-reviewed" role="group" aria-label="Show">
+      <button type="button" class="fr-seg is-active" data-reviewed="all" aria-pressed="true">All</button>
+      <button type="button" class="fr-seg" data-reviewed="reviewed" aria-pressed="false">Reviewed</button>
+      <button type="button" class="fr-seg" data-reviewed="notyet" aria-pressed="false">Unreviewed</button>
+    </div>
+  </div>
+
+  <!-- Live AniList search -->
+  <form class="discover-search-wrap" id="discover-search-form" role="search" autocomplete="off" novalidate>
+    <span class="discover-search-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(203,185,232,0.7)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg></span>
+    <input id="discover-search" type="search" placeholder="Search all anime&hellip;" aria-label="Search the wider world of anime" />
+    <button type="button" id="discover-search-clear" class="discover-search-clear" aria-label="Clear search" hidden>&times;</button>
+  </form>
+  <div id="discover-search-results" class="discover-results" hidden></div>
+
+  <!-- Default discovery sections (hidden while a search is active) -->
+  <div id="discover-sections">
+    <section class="discover-block" id="discover-airing-block">
+      <h3 class="discover-block-head">AIRING NOW <span class="jp-mini">放送中</span></h3>
+      <div class="discover-subrow"><p class="discover-block-sub">The top of what&rsquo;s airing this season.</p></div>
+      <div class="discover-rail" id="discover-airing" aria-live="polite"></div>
+    </section>
+
+    <section class="discover-block" id="discover-genre-block">
+      <h3 class="discover-block-head">AIRING BY GENRE <span class="jp-mini">ジャンル別</span></h3>
+      <div class="discover-genre-chips" id="discover-genre-chips" role="group" aria-label="Pick a genre"></div>
+      <div class="discover-rail" id="discover-genre-rail" aria-live="polite"></div>
+    </section>
+
+    <section class="discover-block" id="discover-trending-block">
+      <h3 class="discover-block-head">POPULAR RIGHT NOW <span class="jp-mini">人気</span></h3>
+      <div class="discover-subrow"><p class="discover-block-sub">What the world&rsquo;s watching right now.</p></div>
+      <div class="discover-rail" id="discover-trending" aria-live="polite"></div>
+    </section>
+  </div>
+</section>
+
+  <!-- v1.8.4 gate 4 — For You View (hidden by default; lazy-built on first open and
+       rebuilt on auth/save changes). His picks pulled near the user's taste: each
+       "MORE {genre}" rail LEADS with his gold reviewed cards, then the wider world.
+       Signed-out shows an honest Trending rail + a sign-in nudge. No provider names. -->
+<section id="for-you-view" style="display: none;" aria-label="For You — his shelf, leaning your way">
+  <div class="discover-head">
+    <div class="discover-head-titles">
+      <span class="discover-kicker">FOR YOU <span class="jp-mini">君へ</span></span>
+      <h2 class="discover-title">His shelf, leaning your way</h2>
+      <p class="discover-sub">Not an algorithm &mdash; <strong class="ds-pin"><i class="ds-star" aria-hidden="true">&#9733;</i> Blake&rsquo;s&nbsp;reviews</strong>, sorted by what you keep saving. The <span class="ds-gold">gold</span> ones are the ones he actually sat down with.</p>
+    </div>
+    <!-- The curator's lens (relabeled Discover lens; CSS-only filter of rendered
+         cards). Hidden until at least one personalized rail renders (JS toggles it). -->
+    <div class="discover-lens" id="foryou-lens" role="group" aria-label="Show" hidden>
+      <button type="button" class="fr-seg is-active" data-reviewed="all" aria-pressed="true">The Blend</button>
+      <button type="button" class="fr-seg" data-reviewed="reviewed" aria-pressed="false">Blake&rsquo;s picks</button>
+      <button type="button" class="fr-seg" data-reviewed="notyet" aria-pressed="false">The world</button>
+    </div>
+  </div>
+
+  <!-- Rails / states injected by JS (buildForYou). -->
+  <div id="foryou-sections" aria-live="polite"></div>
 </section>
 
   <!-- Suggest CTA banner (v1.6.11 gate 3c) — bottom-of-grid call-to-action -->
@@ -510,7 +699,7 @@
        The banner art is lazy: its src is set by JS only when the splash actually shows,
        so repeat visitors never download it and first paint never waits on it. Own
        z-tier (7900) — above content, below auth (7950). [hidden] symmetry. -->
-  <div id="welcome-splash" class="welcome-splash" hidden aria-hidden="true"
+  <div id="welcome-splash" class="welcome-splash" hidden aria-hidden="true" tabindex="-1"
        role="dialog" aria-modal="true" aria-label="Welcome to Real Anime Reviews">
     <!-- Anime quote bubbles (v1.8.3 gate 5b): comic-style speech bubbles that fade in at
          random spots across the door, drift slowly all the way up, and fade out near the
@@ -518,6 +707,10 @@
          CSS animation does the rise (no per-frame JS). Reduced-motion → one static bubble.
          The bubble pool is built into this layer by JS. -->
     <div class="welcome-quotes" id="welcome-quotes" aria-hidden="true"></div>
+    <!-- v1.8.4 gate 3e (item 3): a subtle purple glow pulse travels from the door's
+         center outward ALONG the etched line-work (the ring is scaled via transform,
+         masked to the same line paths). Reduced-motion -> no pulse. -->
+    <div class="welcome-line-pulse" aria-hidden="true"><i class="wlp-glow"></i></div>
     <div class="welcome-card" role="document">
       <figure class="welcome-banner">
         <img id="welcome-banner-img" class="welcome-banner-img" alt="" aria-hidden="true"

@@ -43,6 +43,18 @@
   // bar punctuation/case (e.g. "One Punch Man" vs "One-Punch Man") is treated as
   // identical and we fall through to the native Japanese title instead.
   function norm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+  // a11y: outside-card titles arrive HTML-escaped (the discovery mapper escapes
+  // AniList strings before they hit innerHTML). For the card's aria-label we want
+  // the human title, so reverse EXACTLY the 5 escapes escapeHtml produces (decode
+  // &amp; LAST). No HTML parsing => no XSS surface. Catalog titles (unescaped) pass
+  // through unchanged.
+  function decodeTitle(s) {
+    return String(s == null ? '' : s)
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&');
+  }
   function pickSubtitle(anime) {
     const eng = String(anime.TitleEnglish || anime.Title || '').trim();
     const rom = String(anime.TitleRomaji || '').trim();
@@ -52,15 +64,41 @@
     return null;
   }
 
-  function renderAnimeCardMarkup(anime, { animeId, assetBase = 'assets/', reviewed = true } = {}) {
+  function renderAnimeCardMarkup(anime, { animeId, assetBase = 'assets/', reviewed = true, pinned = false, newlyReviewed = false } = {}) {
     animeId = animeId || slug(anime.Title);
     const card = document.createElement("div");
     // v1.8.3 gate 4 — `reviewed` modifier scaffold. Every catalog card is one of
     // Blake's reviews (reviewed=true, the default). v1.8.4's discovery/For-You cards
     // pass reviewed:false to render the "NOT REVIEWED YET" affordance off the same
-    // shell. The class is the seam; v1.8.3 only styles the reviewed state.
-    card.className = "card " + (reviewed ? "is-reviewed" : "is-not-reviewed");
+    // shell. The class is the seam.
+    // v1.8.4 gate 2 — two more discovery modifiers off the SAME shell:
+    //   pinned        → a catalog title surfaced on a discovery surface (the
+    //                   "Reviewed by Blake" per-card blend) — keeps the gold look,
+    //                   adds the pin corner.
+    //   newlyReviewed → a title that just moved from NOT-REVIEWED to reviewed gets
+    //                   a one-time shimmer (the "upgrade moment"). Caller owns the
+    //                   localStorage seen-state; this only renders the class.
+    // Catalog cards (reviewed=true, not pinned, not newly) are BYTE-UNCHANGED.
+    card.className = "card " + (reviewed ? "is-reviewed" : "is-not-reviewed")
+      + (pinned ? " is-blake-pick" : "")
+      + (newlyReviewed ? " is-newly-reviewed" : "");
     card.dataset.animeid = animeId;
+    // a11y (site-wide keyboard nav) — the card's primary action is opening the
+    // modal on click, but a <div> isn't keyboard-reachable. Make it a real control:
+    // focusable, announced as a button, named by its title. The Enter/Space keydown
+    // is wired by the caller (createCard / createDiscoveryCard) so it reuses each
+    // surface's click action. The nested fav/watch <button>s stay separately
+    // focusable (and their clicks stopPropagation, so they don't open the modal).
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', decodeTitle(anime.Title) || 'Open anime details');
+    // v1.8.4 gate 2 — corner badge. NOT-REVIEWED outside cards get the no-provider-
+    // name "NOT REVIEWED" sticker; pinned catalog cards get the "Reviewed by Blake"
+    // gold pin. Both are static strings (no untrusted input) — the card's title/
+    // genre come pre-escaped from the discovery mapper (mediaToCardProps).
+    const cornerBadge = !reviewed
+      ? `<span class="card-corner not-reviewed-badge"><i class="nr-eye" aria-hidden="true">&#128065;</i> NOT REVIEWED</span>`
+      : (pinned ? `<span class="card-corner blake-pin"><i class="bp-star" aria-hidden="true">&#9733;</i> Reviewed by Blake</span>` : '');
     // v1.7.1 — romaji subtitle under the title, only when it differs from the
     // displayed title (skips identical-romaji titles like "Chainsaw Man").
     // gate 1d — Japanese 「」brackets are LITERAL inline <i class="rb"> chars so
@@ -71,6 +109,7 @@
     const romaji = sub
       ? `<p class="title-romaji${sub.kind === 'native' ? ' is-native' : ''}"><i class="rb">「</i>${sub.text}<i class="rb">」</i></p>` : '';
     card.innerHTML = `
+  ${cornerBadge}
   <div class="icon-row">
     <button class="icon-btn fav-btn" type="button" data-action="fav" aria-label="Favorite" aria-pressed="false">
       <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -6,7 +6,7 @@ const { test, expect } = require('./welcomed');
  * welcome-splash.spec.js.
  */
 test.describe('Gate 4b fixes', () => {
-  test('search ✕ is gone, and "View All Animes" clears active filters', async ({ page }) => {
+  test('search ✕ is gone, and "View All" clears active filters', async ({ page }) => {
     await page.goto('/');
 
     // The clear-search ✕ button was removed.

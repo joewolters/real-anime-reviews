@@ -330,6 +330,51 @@ const TARGETS = [
     pattern: /(src="edit\.js\?v=)([^"]+)(")/,
     replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
   },
+  // v1.8.4 gate 8 — admin/quotes.html (welcome-door Quotes editor). Same static-?v= pattern
+  // as season-reviews.html / edit.html (7 targets). Shared classic scripts (chat-drawer.js)
+  // load version-less there, like the other admin pages.
+  {
+    file: 'admin/quotes.html',
+    label: 'window.APP_VERSION (quotes)',
+    pattern: /(<script>window\.APP_VERSION=")([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/quotes.html',
+    label: 'style.css?v= (quotes)',
+    pattern: /(href="\.\.\/style\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/quotes.html',
+    label: 'mobile.css?v= (quotes)',
+    pattern: /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/quotes.html',
+    label: 'suggestions.css?v= (quotes)',
+    pattern: /(href="suggestions\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/quotes.html',
+    label: 'quotes.css?v= (quotes)',
+    pattern: /(href="quotes\.css\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/quotes.html',
+    label: 'firebase.js?v= (quotes)',
+    pattern: /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
+  {
+    file: 'admin/quotes.html',
+    label: 'quotes.js?v= (quotes)',
+    pattern: /(src="quotes\.js\?v=)([^"]+)(")/,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  },
   // NOTE: All OTHER JS files (script.js, account.js, firebase.js loaded into
   // index.html/account.html/admin/new-anime.html, admin-fab.js, new-anime.js,
   // card-render.js) intentionally are NOT in TARGETS. Those HTML files use

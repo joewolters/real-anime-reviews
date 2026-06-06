@@ -29,6 +29,11 @@ const ADMIN_MENU_ITEMS = [
     href: 'admin/season-reviews.html',
   },
   {
+    label: 'Quotes',
+    jp: '名言',
+    href: 'admin/quotes.html',
+  },
+  {
     label: 'Suggestion Queue',
     jp: '提案',
     href: 'admin/suggestions.html',
