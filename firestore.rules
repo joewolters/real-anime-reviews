@@ -1,88 +1,177 @@
 rules_version = '2';
+
+// =============================================================================
+// ⚠️⚠️  v1.9.0 STAGED RULES — NOT YET DEPLOYED TO PRODUCTION  ⚠️⚠️
+// -----------------------------------------------------------------------------
+// This file is the v1.9.0 TARGET (gate 1). Production is STILL running the
+// previous rules. These rules intentionally BREAK the current live client:
+//   • H1 — the client may no longer write likesCount/dislikesCount directly
+//     (counts become Cloud-Function-owned). Live voting writes counts the old
+//     way and would be DENIED.
+//   • H3 — notifications create is `if false` (Cloud-Function-only). The live
+//     client writes notifications directly and would be DENIED.
+// Therefore: DO NOT `firebase deploy --only firestore` (and never a bare
+// `firebase deploy`) until the vote/notification Cloud Functions are live and
+// the client is cut over (the 3-step migration, gates 2 -> 6). Emulator-green
+// is gate 1's finish line. Contract: docs/DATA-MODEL.md.
+// =============================================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ---------- helpers ----------
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
-    // =========================
-    // USER PROFILES
-    // =========================
+    // ADMIN_UID — the existing hardcoded admin (status quo). M4: migrate to a
+    // CF-set custom claim (request.auth.token.admin == true) in a later gate so
+    // it rotates without a rules redeploy. Until then, the literal stands.
+    function isAdmin() { return isSignedIn() && request.auth.uid == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'; }
+    // L2 — client-written timestamps must equal the server time (no backdating
+    // to pin content, no future-dating). serverTimestamp() satisfies this.
+    function createdNow() { return request.resource.data.createdAt == request.time; }
+    // Vote docs: clients write only their own vote; the COUNT lives on the
+    // parent and is Cloud-Function-owned (H1). M5: a 2s clamp on changing a
+    // vote blunts toggle-spam at the source (toggle-OFF is a delete, unclamped).
+    // L5: vote docs carry `uid == voterUid` so a departing user's votes scattered
+    // under OTHER people's content are findable by a collectionGroup('votes')
+    // sweep in onUserDelete (a CG query can't filter by leaf doc-id alone).
+    function voteCreateOk(voterUid) {
+      return isOwner(voterUid)
+        && request.resource.data.value in [1, -1]
+        && request.resource.data.uid == voterUid
+        && request.resource.data.updatedAt == request.time;
+    }
+    function voteUpdateOk(voterUid) {
+      return isOwner(voterUid)
+        && request.resource.data.value in [1, -1]
+        && request.resource.data.uid == voterUid
+        && request.resource.data.updatedAt == request.time
+        && request.time > resource.data.updatedAt + duration.value(2, 's');
+    }
+    // Profile field validation (shared by create + update). M1 reserved-name
+    // denylist; M2 photoURL constrained to known-good origins.
+    function profileFieldsOk() {
+      return request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 40
+        && !(request.resource.data.displayName.lower() in ['blake', 'admin', 'administrator', 'moderator', 'mod', 'owner', 'staff'])
+        && (!('bio' in request.resource.data) || (request.resource.data.bio is string && request.resource.data.bio.size() <= 500))
+        && (!('photoURL' in request.resource.data)
+            || request.resource.data.photoURL == null
+            || (request.resource.data.photoURL is string
+                && request.resource.data.photoURL.matches('https://(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)/.*')));
+    }
+
+    // =========================================================================
+    // USER PROFILES + per-user lists
+    // =========================================================================
     match /users/{uid} {
-      allow get: if true; // optional; tighten later
+      // get stays PUBLIC (status quo). The live comment/review/thread author
+      // display cross-reads users/{otherUid} (script.js:4125/4898/5124), so
+      // tightening to owner-only would break it. Tighten only AFTER those reads
+      // migrate to profiles/{uid} (a later code gate). See docs/DATA-MODEL.md.
+      allow get: if true;
+      allow list: if isOwner(uid);
       allow create, update, delete: if isOwner(uid);
+
       match /favorites/{animeId} {
-        allow get, list: if isOwner(uid);
-        allow create, update, delete: if isOwner(uid);
+        allow get, list, create, update, delete: if isOwner(uid);
       }
       match /watchlist/{animeId} {
-        allow get, list: if isOwner(uid);
-        allow create, update, delete: if isOwner(uid);
+        allow get, list, create, update, delete: if isOwner(uid);
       }
+
+      // NOTIFICATIONS — H3: create is Cloud-Function-only (Admin SDK bypasses
+      // rules). This closes the live spoof/spam vector (any signed-in user
+      // could forge a "from Blake" ping into anyone's bell). Owner may only
+      // mark-read and dismiss.
       match /notifications/{notifId} {
         allow get, list: if isOwner(uid);
-        allow create: if isSignedIn()
-          && request.resource.data.toUid == uid
-          && request.resource.data.fromUid == request.auth.uid
-          && request.resource.data.type is string
-          && (request.resource.data.type == "comment_vote" || request.resource.data.type == "review_vote")
-          && request.resource.data.value is int
-          && (request.resource.data.value == 1 || request.resource.data.value == -1)
-          && request.resource.data.animeId is string
-          && request.resource.data.animeTitle is string
-          && request.resource.data.targetId is string
-          && request.resource.data.fromDisplayName is string
-          && (!('fromPhotoURL' in request.resource.data) || request.resource.data.fromPhotoURL is string || request.resource.data.fromPhotoURL == null)
-          && ('createdAt' in request.resource.data);
-        allow update, delete: if isOwner(uid);
+        allow create: if false;
+        allow update: if isOwner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+        allow delete: if isOwner(uid);
+      }
+      // notifMeta / notifPrefs (added with the gate-6 notification rework).
+      match /notifMeta/{docId} {
+        allow get: if isOwner(uid);
+        allow create, update, delete: if false; // CF-only (unread counter)
+      }
+      match /notifPrefs/{docId} {
+        allow get, create, update, delete: if isOwner(uid); // owner controls mute/snooze
       }
     }
-    // =========================
-    // Collection Group Reads for Activity Feed
-    // =========================
-    match /{parentPath=**}/items/{docId} {
-      allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
-    }
-    match /{parentPath=**}/threads/{docId} {
-      allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
-    }
-    // =========================
-    // COMMENTS (under Blake reviews)
-    // =========================
+
+    // =========================================================================
+    // Collection-group reads for the activity feed (owner-only).
+    // `replies` is NEW (depth-1 comment replies) and is deliberately a distinct
+    // segment from `threads` (the per-review reply subcollection).
+    // =========================================================================
+    match /{path=**}/items/{docId}   { allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid; }
+    match /{path=**}/threads/{docId} { allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid; }
+    match /{path=**}/replies/{docId} { allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid; }
+
+    // =========================================================================
+    // COMMENTS — `{anime}` is a catalog slug OR an `al:<aniListId>` per-season
+    // key (the wildcard already accepts the colon; this is the per-season reuse,
+    // no separate seasonComments collection). M3: create pins uid==auth.uid.
+    // =========================================================================
     match /comments/{anime}/items/{cid} {
       allow get, list: if true;
       allow create: if isSignedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500
         && request.resource.data.displayName is string
         && (!('photoURL' in request.resource.data) || request.resource.data.photoURL is string || request.resource.data.photoURL == null)
-        && ('createdAt' in request.resource.data)
-        && request.resource.data.likesCount is int
-        && request.resource.data.dislikesCount is int;
-      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
-      allow update: if (
-          isSignedIn()
-          && resource.data.uid == request.auth.uid
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['text','editedAt','photoURL','displayName'])
-        )
-        || (
-          isSignedIn()
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['likesCount','dislikesCount'])
-          && request.resource.data.likesCount is int
-          && request.resource.data.dislikesCount is int
-          && request.resource.data.likesCount >= 0
-          && request.resource.data.dislikesCount >= 0
-        );
-      match /votes/{uid} {
+        && createdNow()
+        && request.resource.data.likesCount == 0
+        && request.resource.data.dislikesCount == 0;
+      // owner may edit text only. H1: there is NO branch that writes
+      // likesCount/dislikesCount — those are Cloud-Function-owned now.
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']);
+      // owner OR admin (the day-1 mod tool) may delete.
+      allow delete: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
+
+      match /votes/{voterUid} {
         allow get, list: if true;
-        allow create, update: if isOwner(uid)
-          && request.resource.data.value is int
-          && (request.resource.data.value == 1 || request.resource.data.value == -1)
-          && ('updatedAt' in request.resource.data);
-        allow delete: if isOwner(uid);
+        allow create: if voteCreateOk(voterUid);
+        allow update: if voteUpdateOk(voterUid);
+        allow delete: if isOwner(voterUid);
+      }
+
+      // NEW — depth-1 replies (a reply cannot itself be replied to).
+      match /replies/{rid} {
+        allow get, list: if true;
+        allow create: if isSignedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.displayName is string
+          && createdNow()
+          && request.resource.data.likesCount == 0
+          && request.resource.data.dislikesCount == 0;
+        allow update: if isSignedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']);
+        allow delete: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
+        match /votes/{voterUid} {
+          allow get, list: if true;
+          allow create: if voteCreateOk(voterUid);
+          allow update: if voteUpdateOk(voterUid);
+          allow delete: if isOwner(voterUid);
+        }
       }
     }
-    // =========================
-    // COMMUNITY REVIEWS (one per user per anime)
-    // =========================
+
+    // =========================================================================
+    // COMMUNITY REVIEWS — one per user per anime (doc id == reviewer uid).
+    // `{anime}` is a slug OR `al:<id>` per-season key (reuse, same as comments).
+    // =========================================================================
     match /reviews/{anime}/items/{uid} {
       allow get, list: if true;
       allow create: if isOwner(uid)
@@ -90,143 +179,263 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && (!('photoURL' in request.resource.data) || request.resource.data.photoURL is string || request.resource.data.photoURL == null)
         && request.resource.data.title is string
+        && request.resource.data.title.size() <= 120
         && request.resource.data.body is string
+        && request.resource.data.body.size() <= 5000
         && request.resource.data.rating is number
         && request.resource.data.rating >= 1 && request.resource.data.rating <= 10
-        && ('createdAt' in request.resource.data)
-        && ('updatedAt' in request.resource.data)
-        && request.resource.data.likesCount is int
-        && request.resource.data.dislikesCount is int;
-      allow update: if (
-          isOwner(uid)
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.diff(resource.data).changedKeys()
-              .hasOnly(['title','body','rating','updatedAt','displayName','photoURL'])
-        )
-        || (
-          isSignedIn()
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['likesCount','dislikesCount'])
-          && request.resource.data.likesCount is int
-          && request.resource.data.dislikesCount is int
-          && request.resource.data.likesCount >= 0
-          && request.resource.data.dislikesCount >= 0
-        );
-      allow delete: if isOwner(uid);
+        && createdNow()
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.likesCount == 0
+        && request.resource.data.dislikesCount == 0;
+      // owner edits content only — H1: no count branch.
+      allow update: if isOwner(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'rating', 'updatedAt', 'displayName', 'photoURL']);
+      allow delete: if isOwner(uid) || isAdmin();
+
       match /votes/{voterUid} {
         allow get, list: if true;
-        allow create, update: if isOwner(voterUid)
-          && request.resource.data.value is int
-          && (request.resource.data.value == 1 || request.resource.data.value == -1)
-          && ('updatedAt' in request.resource.data);
+        allow create: if voteCreateOk(voterUid);
+        allow update: if voteUpdateOk(voterUid);
         allow delete: if isOwner(voterUid);
       }
+
+      // existing reply subcollection on a community review (kept).
       match /threads/{tid} {
         allow get, list: if true;
         allow create: if isSignedIn()
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
           && request.resource.data.displayName is string
-          && (!('photoURL' in request.resource.data) || request.resource.data.photoURL is string || request.resource.data.photoURL == null)
-          && ('createdAt' in request.resource.data)
-          && request.resource.data.likesCount is int
-          && request.resource.data.dislikesCount is int;
-        allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
-        allow update: if (
-            isSignedIn()
-            && resource.data.uid == request.auth.uid
-            && request.resource.data.diff(resource.data).changedKeys().hasOnly(['text','editedAt','photoURL','displayName'])
-          )
-          || (
-            isSignedIn()
-            && request.resource.data.diff(resource.data).changedKeys().hasOnly(['likesCount','dislikesCount'])
-            && request.resource.data.likesCount is int
-            && request.resource.data.dislikesCount is int
-            && request.resource.data.likesCount >= 0
-            && request.resource.data.dislikesCount >= 0
-          );
+          && createdNow()
+          && request.resource.data.likesCount == 0
+          && request.resource.data.dislikesCount == 0;
+        allow update: if isSignedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']);
+        allow delete: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
         match /votes/{voterUid} {
           allow get, list: if true;
-          allow create, update: if isOwner(voterUid)
-            && request.resource.data.value is int
-            && (request.resource.data.value == 1 || request.resource.data.value == -1)
-            && ('updatedAt' in request.resource.data);
+          allow create: if voteCreateOk(voterUid);
+          allow update: if voteUpdateOk(voterUid);
           allow delete: if isOwner(voterUid);
         }
       }
     }
-    // =========================
-    // OFFICIAL (Blake) RATING VOTES (per anime)
-    // =========================
+
+    // =========================================================================
+    // OFFICIAL (Blake) RATING VOTE TALLIES — L1: the aggregate counts become
+    // Cloud-Function-owned (same rework as comment/review counts). Clients only
+    // write their own vote doc.
+    // =========================================================================
     match /official/{animeId} {
       allow get, list: if true;
-      allow create: if isSignedIn()
-        && request.resource.data.animeId is string
-        && request.resource.data.likesCount is int
-        && request.resource.data.dislikesCount is int
-        && request.resource.data.likesCount >= 0
-        && request.resource.data.dislikesCount >= 0
-        && ('updatedAt' in request.resource.data);
-      allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).changedKeys()
-            .hasOnly(['animeId','likesCount','dislikesCount','updatedAt'])
-        && request.resource.data.likesCount is int
-        && request.resource.data.dislikesCount is int
-        && request.resource.data.likesCount >= 0
-        && request.resource.data.dislikesCount >= 0;
-      allow delete: if false;
+      allow create, update, delete: if false; // CF-only aggregate
       match /votes/{voterUid} {
         allow get, list: if true;
-        allow create, update: if isOwner(voterUid)
-          && request.resource.data.value is int
-          && (request.resource.data.value == 1 || request.resource.data.value == -1)
-          && ('updatedAt' in request.resource.data);
+        allow create: if voteCreateOk(voterUid);
+        allow update: if voteUpdateOk(voterUid);
         allow delete: if isOwner(voterUid);
       }
     }
-    // =========================
-    // SUGGESTIONS (v1.6.11 — public submit, admin-managed queue)
-    // Path: suggestions/{docId}
-    // Visitors create; ADMIN_UID reads/lists/updates/deletes.
-    // =========================
+
+    // =========================================================================
+    // COMMUNITY HUB — top-level `forum` (NOT `threads`, to avoid the existing
+    // collection-group rule). H2: counters/mod-flags pinned at create; no
+    // client branch writes a counter. H5: removing redacts the body/title.
+    // =========================================================================
+    match /forum/{threadId} {
+      allow get, list: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 4000
+        && request.resource.data.tag in ['general', 'recommend', 'blakes-44', 'offtopic']
+        && createdNow()
+        && request.resource.data.lastPostAt == request.time
+        && request.resource.data.postCount == 0
+        && request.resource.data.reportCount == 0
+        && (!('hotScore' in request.resource.data) || request.resource.data.hotScore == 0)
+        && request.resource.data.pinned == false
+        && request.resource.data.locked == false
+        && request.resource.data.removed == false;
+      // owner edit (body only)
+      allow update: if isSignedIn() && resource.data.authorUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+        || // owner soft-delete (H5: must redact)
+        ( isSignedIn() && resource.data.authorUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'title', 'editedAt'])
+          && request.resource.data.removed == true
+          && request.resource.data.body == '' && request.resource.data.title == '' )
+        || // admin mod tools (pin / lock / remove). H5: if removed, body+title redacted.
+        ( isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned', 'locked', 'removed', 'body', 'title', 'editedAt'])
+          && (request.resource.data.removed == false || (request.resource.data.body == '' && request.resource.data.title == '')) );
+      // counters (postCount/lastPostAt/reportCount/hotScore) have NO client
+      // branch -> CF-only. delete is CF-only (soft-delete + cascade).
+      allow delete: if false;
+
+      match /posts/{postId} {
+        allow get, list: if true;
+        allow create: if isSignedIn()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 4000
+          && createdNow()
+          && request.resource.data.likesCount == 0
+          && request.resource.data.reportCount == 0
+          && request.resource.data.removed == false
+          // parent must exist and not be locked (one get() per reply — cheap vs abuse)
+          && get(/databases/$(database)/documents/forum/$(threadId)).data.locked == false;
+        allow update: if isSignedIn() && resource.data.authorUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+          || ( isSignedIn() && resource.data.authorUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt'])
+            && request.resource.data.removed == true && request.resource.data.body == '' )
+          || ( isAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt'])
+            && (request.resource.data.removed == false || request.resource.data.body == '') );
+        allow delete: if false;
+        match /votes/{voterUid} {
+          allow get, list: if true;
+          allow create: if voteCreateOk(voterUid);
+          allow update: if voteUpdateOk(voterUid);
+          allow delete: if isOwner(voterUid);
+        }
+      }
+    }
+
+    // =========================================================================
+    // DIRECT MESSAGES — admin-floor only in v1.9.0 (one participant is always
+    // ADMIN_UID, so there is no stranger-to-stranger surface). `kind:"peer"` is
+    // BANKED: peer create is implicitly DENIED here (create requires
+    // kind=="admin"); adding peer later is one additive clause, zero migration.
+    // H4: reads are member-pinned and there is NO messages collection-group rule.
+    // (Message send moves to a callable CF at gate 10; these rules are the floor.)
+    // =========================================================================
+    match /conversations/{convId} {
+      allow get, list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.kind == 'admin'
+        && (request.resource.data.participants[0] == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'
+            || request.resource.data.participants[1] == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1')
+        && createdNow()
+        && request.resource.data.state == 'open'
+        && (!('lastMessageText' in request.resource.data) || request.resource.data.lastMessageText.size() <= 140);
+      // a participant maintains the summary; lock is admin-only.
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'lastMessageText', 'lastSenderUid', 'unread'])
+        || ( isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']) );
+      allow delete: if false; // CF cascade (onUserDelete / admin)
+
+      match /messages/{msgId} {
+        allow get, list: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+        allow create: if isSignedIn()
+          && request.resource.data.senderUid == request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants
+          && get(/databases/$(database)/documents/conversations/$(convId)).data.state == 'open'
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && createdNow();
+        allow update, delete: if false; // immutable; moderation via state:"locked" / CF
+      }
+
+      match /reads/{rUid} {
+        allow get: if isOwner(rUid);
+        allow create, update: if isOwner(rUid)
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+        allow delete: if false;
+      }
+    }
+
+    // =========================================================================
+    // PROFILES — public identity. M1: reserved-name denylist + isAdmin is the
+    // only authority signal. M2: photoURL constrained to known-good origins.
+    // isAdmin/isBanned are CF-only (absent from the owner-writable key set).
+    // =========================================================================
+    match /profiles/{uid} {
+      allow get, list: if true;
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt'])
+        && profileFieldsOk();
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt'])
+        && profileFieldsOk();
+      allow delete: if false; // account deletion is the onUserDelete cascade CF
+    }
+
+    // =========================================================================
+    // SUGGESTION COUNTS — CF-only writes, admin-only reads (visitor-visible
+    // counts would invite brigading a title up the list).
+    // =========================================================================
+    match /suggestionCounts/{anilistId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // =========================================================================
+    // REPORTS — moderation queue. Signed-in create (reporterUid pinned),
+    // admin-only read/manage. L3: the queue re-fetches live public content;
+    // snapshotText is treated as unverified.
+    // =========================================================================
+    match /reports/{reportId} {
+      allow get, list, update, delete: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['reporterUid', 'reason', 'note', 'status', 'targetType', 'targetPath', 'targetUid', 'targetAnimeId', 'snapshotText', 'createdAt'])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.reason in ['spam', 'harassment', 'offtopic', 'other']
+        && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 500))
+        && request.resource.data.status == 'new'
+        && request.resource.data.targetType in ['review', 'comment', 'reply', 'thread', 'forum', 'post', 'dm']
+        && request.resource.data.targetPath is string
+        && (!('snapshotText' in request.resource.data) || (request.resource.data.snapshotText is string && request.resource.data.snapshotText.size() <= 500))
+        && createdNow();
+    }
+
+    // =========================================================================
+    // SUGGESTIONS (existing) — public create + ADMIN-only manage. Q2: an
+    // OPTIONAL signed-in `submitterUid` enables the suggestion-reply channel.
+    // =========================================================================
     match /suggestions/{docId} {
-      // Anyone can create; field shape enforced (spam defense).
-      // v1.6.11 gate 3e: extended with 6 optional AniList enrichment fields
-      // (visitors who pick from the search dropdown include them; raw-title
-      // fallback submissions omit them and still pass).
       allow create: if request.resource.data.keys().hasOnly(['title', 'reason', 'submittedAt', 'status',
-                                                              'anilistId', 'coverImage', 'format', 'year',
-                                                              'englishTitle', 'romajiTitle'])
+                                                             'anilistId', 'coverImage', 'format', 'year',
+                                                             'englishTitle', 'romajiTitle', 'submitterUid'])
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() < 200
         && (!('reason' in request.resource.data)
-            || (request.resource.data.reason is string
-                && request.resource.data.reason.size() < 1000))
+            || (request.resource.data.reason is string && request.resource.data.reason.size() < 1000))
         && request.resource.data.status == 'new'
         && ('submittedAt' in request.resource.data)
-        // Optional AniList enrichment fields (gate 3e)
+        // Q2: optional submitter uid; if present, must be the caller's own uid.
+        && (!('submitterUid' in request.resource.data)
+            || (request.resource.data.submitterUid is string
+                && isSignedIn()
+                && request.resource.data.submitterUid == request.auth.uid))
         && (!('anilistId' in request.resource.data)
-            || (request.resource.data.anilistId is int
-                && request.resource.data.anilistId > 0))
+            || (request.resource.data.anilistId is int && request.resource.data.anilistId > 0))
         && (!('coverImage' in request.resource.data)
-            || (request.resource.data.coverImage is string
-                && request.resource.data.coverImage.size() < 500))
+            || (request.resource.data.coverImage is string && request.resource.data.coverImage.size() < 500))
         && (!('format' in request.resource.data)
-            || (request.resource.data.format is string
-                && request.resource.data.format.size() < 20))
+            || (request.resource.data.format is string && request.resource.data.format.size() < 20))
         && (!('year' in request.resource.data)
-            || (request.resource.data.year is int
-                && request.resource.data.year > 1900
-                && request.resource.data.year < 2100))
+            || (request.resource.data.year is int && request.resource.data.year > 1900 && request.resource.data.year < 2100))
         && (!('englishTitle' in request.resource.data)
-            || (request.resource.data.englishTitle is string
-                && request.resource.data.englishTitle.size() < 200))
+            || (request.resource.data.englishTitle is string && request.resource.data.englishTitle.size() < 200))
         && (!('romajiTitle' in request.resource.data)
-            || (request.resource.data.romajiTitle is string
-                && request.resource.data.romajiTitle.size() < 200));
-      // Admin-only read / list / update / delete.
-      allow get, list, update, delete: if isSignedIn()
-        && request.auth.uid == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
+            || (request.resource.data.romajiTitle is string && request.resource.data.romajiTitle.size() < 200));
+      allow get, list, update, delete: if isAdmin();
     }
   }
 }

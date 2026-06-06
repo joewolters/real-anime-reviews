@@ -1,0 +1,6 @@
+# Cloud Functions local artifacts — never committed, never deployed to hosting.
+node_modules/
+*.log
+.firebase/
+# Build/runtime junk
+.runtimeconfig.json

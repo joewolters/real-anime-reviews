@@ -1,0 +1,21 @@
+{
+  "name": "functions",
+  "description": "Cloud Functions for Real Anime Reviews — FIRST server-side surface, introduced v1.9.0 (Community Overhaul). Gen-2 functions. See docs/DATA-MODEL.md for the CF inventory and docs/DEPLOYMENT.md for the deploy/Blaze/budget setup.",
+  "private": true,
+  "type": "commonjs",
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "firebase": "^12.14.0"
+  }
+}

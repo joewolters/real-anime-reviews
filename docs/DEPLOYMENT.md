@@ -114,6 +114,53 @@ If the active project or account looks wrong, **stop and fix before deploying** 
 
 ---
 
+<!-- author: Code | date: 2026-06-06 -->
+## Cloud Functions (v1.9.0+) — the first server surface
+
+Before v1.9.0 this project was static hosting only. v1.9.0 introduces **Cloud Functions** (gen-2, in `functions/`). They are a **separate deploy surface** from hosting and have their own rules.
+
+### ⚠️ Two separate deploy verbs — never mix them
+```bash
+firebase deploy --only hosting     # the static site (unchanged — this is the routine deploy)
+firebase deploy --only functions   # the Cloud Functions  (npm run deploy:functions)
+```
+**NEVER run a bare `firebase deploy` once functions exist** — it would redeploy functions on every routine static change (slow, and it can disturb live functions). Hosting and functions ship independently. `functions/**` is in the hosting `ignore` array, so server code never lands on the public static site (the `.gitignore`↔`firebase.json` mirror rule, applied to a new dir).
+
+### ⚠️ Blaze plan is required — and the upgrade is BLAKE's billing action
+Cloud Functions do not run on the free Spark plan. The first `firebase deploy --only functions` will fail until the project is on **Blaze (pay-as-you-go)**. For a single-curator site the real cost is realistically a few cents to a couple dollars a month — the danger isn't the baseline, it's a runaway bug/loop. So we arm guardrails first.
+
+**Blaze upgrade (Blake does this in the console — Code cannot and must not):**
+1. Open the [Firebase Console](https://console.firebase.google.com/) and select the **real-anime-reviews** project.
+2. Bottom-left of the sidebar, click the plan badge (**"Spark / Upgrade"**).
+3. Choose **Blaze (Pay as you go)** → **Continue**.
+4. Select or create a **Cloud Billing account** (a card is required; Google's free monthly allotment still applies before any charge).
+5. When prompted, **set a budget** (next step) and **Confirm**.
+
+**Budget alert (do this in the same flow, or anytime after):**
+1. The Blaze upgrade screen offers "Set a budget" — set, e.g., **$5/month**. (Or later: GCP Console → **Billing → Budgets & alerts → Create budget**, scope to the project.)
+2. Set alert thresholds at **50% / 90% / 100%**.
+3. Confirm the alert emails go to Blake's address.
+> A budget alert does **not** cap spend — it emails a warning. The hard cap is `maxInstances` in code (below). Use both.
+
+### Billing guardrail in code
+`functions/index.js` sets a global `maxInstances` cap via `setGlobalOptions({ maxInstances: 10 })`, so no function — including a future buggy or loop-triggered one — can scale to the Blaze ceiling. Tune per-function as real functions land. Also: no trigger may write to a path it watches (self-retrigger loop), and counter/fan-out functions dedupe on `context.eventId` (see `docs/DATA-MODEL.md`).
+
+### Local development + tests
+```bash
+cd functions && npm install        # one-time: installs firebase-admin + firebase-functions
+npm run test:functions             # pure-logic CF unit tests (node --test) — no emulator, no Java
+npm run emulators                  # firebase emulators:start --only functions,firestore,auth
+```
+- **`npm run test:functions`** is the fast unit layer (most CF bug surface). It needs no emulator.
+- **The full emulator suite needs a JDK 21+ installed** — the Firestore + Auth emulators are Java processes, and current `firebase-tools` **requires Java 21 or newer** (it rejects Java < 21). The **functions-only** emulator (`firebase emulators:exec --only functions …`) is Node-only and runs without Java (that's how `ping` was verified at gate P1). If `npm run emulators` / `npm run test:rules` errors with a Java-version message, install a JDK 21+ (e.g., Eclipse Temurin 21) and retry.
+- **`npm run test:rules`** runs the `firestore.rules` security tests in the Firestore emulator (`@firebase/rules-unit-testing`). Needs Java 21+. This is how rule changes are verified before the cutover deploy.
+- Keep `npm test` (Playwright/DOM) and `npm run test:functions` (server) separate — a CSS change must never force an emulator boot.
+
+### The `ping` health-check
+`functions/index.js` ships a no-op `ping` function whose only job is to prove the deploy path end-to-end. After Blaze is enabled: `npm run deploy:functions`, then open the printed `…/ping` URL (or curl it) and confirm `{"message":"pong",…}`.
+
+---
+
 ## Custom domain (Namecheap → Firebase)
 
 `realanimereviews.com` is registered at Namecheap. DNS records point at Firebase Hosting; Firebase verifies ownership via a TXT record, then provisions SSL automatically.

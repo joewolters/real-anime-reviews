@@ -10,7 +10,12 @@
     "bump": "node scripts/bump-version.js",
     "anilist": "node scripts/anilist-fetch.js",
     "backfill": "node scripts/anilist-backfill.js",
-    "mode1": "node scripts/mode1-server.js"
+    "mode1": "node scripts/mode1-server.js",
+    "test:functions": "cd functions && node --test",
+    "emulators": "firebase emulators:start --only functions,firestore,auth",
+    "deploy:functions": "firebase deploy --only functions",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-rar \"node --test functions/rules-tests/rules.spec.js\"",
+    "test:cf": "firebase emulators:exec --only functions,firestore --project demo-rar \"node --test --test-concurrency=1 functions/cf-tests/cf-integration.spec.js functions/cf-tests/cf-cascade.spec.js\""
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

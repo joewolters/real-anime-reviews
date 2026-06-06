@@ -1,190 +1,136 @@
+<!-- author: Code | date: 2026-06-06 -->
 # Architecture
 
-How the pieces of Real Anime Reviews fit together. The high-level shape: a static site reads from a hand-maintained anime database (`animeData.js`), renders a UI that talks to Firestore for everything user-generated, and is deployed via Firebase Hosting.
+How the pieces of Real Anime Reviews fit together. The high-level shape: a **static site** (no production server) reads from a hand-maintained anime database (`animeData.js`), enriches it live from **AniList** (GraphQL), renders the UI, and talks to **Firebase** (Firestore + Auth + Storage) for everything user-generated. Deployed via **Firebase Hosting**.
+
+> **Ground-truth note (2026-06-06, v1.8.4 LIVE):** this doc was rewritten to the *verified* current state at the v1.9.0 gate-0 study (the prior version had drifted — it described a pre-v1.7.4 single-IIFE `script.js` and omitted `suggestions`, the secondary/tertiary modal, the constellation veil, and the real notification rules). The **v1.9.0 Community Overhaul** then extends the data model substantially — that forward-looking contract lives in **[`docs/DATA-MODEL.md`](DATA-MODEL.md)**, not here. This doc describes what is LIVE today.
 
 ## Data flow
 
-```mermaid
-flowchart LR
-    Excel[Anime_Master_Table.xlsx<br/>in Master List/<br/><i>canonical source of truth</i>]
-    JS[animeData.js<br/>global animeData array]
-    Site[Live site<br/>realanimereviews.com]
-    FS[(Firestore<br/>users · comments · reviews<br/>threads · votes · notifications)]
-
-    Excel -->|hand-propagated<br/>future: sync script| JS
-    JS -->|loaded as global by index.html| Site
-    Site -->|read/write user content| FS
-    FS -->|onSnapshot live listeners| Site
+```
+Anime_Master_Table.xlsx  (in Master List/, canonical — Code edits it programmatically)
+        │  scripts/sync-excel-to-js.js  (npm run sync)
+        ▼
+   animeData.js  (global `animeData` array — classic script, NOT a module)
+        │  loaded as a classic <script> by index.html
+        ▼
+   Live site (realanimereviews.com)  ──fetch──▶  AniList GraphQL  (covers, relations, characters, trending/airing)
+        │                                          (franchise-fetch.js)
+        └──read/write user content──▶  Firestore  ──onSnapshot live listeners──▶  back to the site
 ```
 
-**The flow in plain English:**
-
-1. Blake maintains anime entries in `Anime_Master_Table.xlsx` (lives outside the repo, in `Master List/`).
-2. Entries get hand-copied into `animeData.js` as a global `animeData` array. Automating this is on the [ROADMAP](../ROADMAP.md#big-vision-ideas).
-3. `index.html` loads `animeData.js` as a regular `<script>` tag, making the array available globally to `script.js`.
-4. `script.js` renders cards, modal, search, filters, etc., all from that array.
-5. For anything user-generated (comments, reviews, votes, favorites, watchlist, notifications), the site talks to Firestore directly via the Firebase Web SDK.
-6. Firestore pushes live updates back to the site via `onSnapshot` listeners — that's why comments and vote counts update without a page refresh.
+**Plain English:**
+1. Blake maintains anime entries in `Anime_Master_Table.xlsx` (outside the repo, in `Master List/`). Blake does **not** open Excel — Code performs all Excel writes programmatically (hard project rule).
+2. `npm run sync` (`scripts/sync-excel-to-js.js`) regenerates `animeData.js`. ⚠️ That script has **two halves** — a parse half (`rowToAnime`) and a hand-rolled serialize half (`renderJsFile`); any new field must be edited in BOTH or it's silently dropped.
+3. `index.html` loads `animeData.js` as a classic `<script>`, exposing a global `animeData` array. ⚠️ It is a lexical `const`, **not** a `window` property — read the bare global in any `page.evaluate`/test.
+4. `script.js` renders cards, the modal stack, search, filters, the three nav "places," and the discovery surfaces, all from that array + live AniList data.
+5. For anything user-generated (comments, community reviews, votes, favorites, watchlist, notifications, suggestions), the site talks to Firestore directly via the Firebase Web SDK. There is **no production server** — `scripts/mode1-server.js` is a local admin/dev tool only.
+6. Firestore pushes live updates via `onSnapshot` — comments/vote counts update without a refresh.
 
 ---
 
-## File structure
-
-Top of the repo (`Current Version/`):
+## File structure (top of `Current Version/`)
 
 | File / folder | Role |
 |---|---|
-| `index.html` | Main page — header, card grid, anime detail modal (left = Blake's review, right = community tab), auth modal, profile modal, notification dropdown |
-| `account.html` | Account page — 4 tabs (Profile, Watchlist, Favorites, Activity) |
-| `404.html` | Firebase Hosting fallback page |
-| `style.css` | Desktop styling |
-| `mobile.css` | Mobile overrides, loaded via `@media (max-width: 900px)` |
-| `animeData.js` | Global `animeData` array — every anime entry. Plain JS, no module exports. |
-| `script.js` | All main-page logic — single IIFE, ~4,000 lines, ~21 sections |
-| `account.js` | Account page logic — ES module |
-| `firebase.js` | Initializes Firebase v12.2.1 and exports `app`, `auth`, `db` — ES module |
-| `firebase.json` | Firebase Hosting config (public dir, rewrites, ignores) |
-| `.firebaserc` | Pins deploy target to project ID `real-anime-reviews` |
-| `.gitignore` | Git exclusions (Firebase cache, editor state, `PERSONAL.md`, `.env*`) |
-| `assets/` | Cover art (49 files), placeholder, Instagram icon, preview image, `avatars/` subfolder |
-| `UpdateLog/` | Blake's working notes (currently `RealAnimeReviewsUpdateLog.docx`) |
-| `docs/` | This directory — ARCHITECTURE.md, DEPLOYMENT.md |
-
-Doc files in repo root: `README.md`, `CHANGELOG.md`, `ROADMAP.md`, and (gitignored) `PERSONAL.md`.
+| `index.html` | Main page — header + nav places (Den / For You / Discover), the home composition, the 3-layer modal stack, auth/profile modals, the welcome "door," the constellation veil |
+| `account.html` | Account page — tabs (Profile / Watchlist / Favorites / Activity); carries `data-surface="foryou"` + the lit veil |
+| `suggest.html` | Public "suggest an anime" page |
+| `404.html` | Firebase Hosting fallback |
+| `admin/` | Admin-only pages (`new-anime`, `edit`, `season-reviews`, `suggestions`, `quotes`) + shared admin modules (`chat-drawer.js`, `section-editor.js`, `modal-scroll-lock.js`, `admin-fab.js`); auth-gated client-side via a hardcoded `ADMIN_UID`, with `firestore.rules` as the real security |
+| `style.css` / `mobile.css` | Desktop styling / mobile overrides (`@media (max-width:900px)`); mobile is deferred to v2.0 |
+| `animeData.js` | Global `animeData` array — every catalog entry. Classic script, no module exports. |
+| `script.js` | Main-page logic — a **~5,500-line ES module** (`type="module"`): the nav places, the home composition, the 3-layer modal, comments + community reviews + votes, the discovery surfaces, the veil |
+| `account.js` | Account-page logic — ES module |
+| `firebase.js` | Initializes Firebase and exports `app`, `auth`, `db` — ES module. The web config is intentionally public (security is in the rules). |
+| `franchise-fetch.js` | Shared AniList GraphQL layer (`window.franchiseFetch` + `module.exports`) — franchise traversal, media/character/staff detail, and the discovery queries (`searchMediaList`/`fetchTrendingList`/`fetchAiringList`) |
+| `markdown.js` | The **single, shared, XSS-safe** renderer — `window.renderMarkdown` (block) + `window.renderMarkdownInline` (no headers/lists) + `module.exports`. Escapes ALL input first, then re-introduces a fixed markdown whitelist. The one place user-authored text is turned into HTML. |
+| `card-render.js` | Shared card markup (`createCard`) used by the homepage and admin previews |
+| `season-reviews/` | `<aniListId>.md` per-season reviews + a generated `index.json`; static-deployed |
+| `scripts/` | Local tooling — `sync-excel-to-js.js`, `bump-version.js`, `mode1-server.js` (local Express; `npm run mode1`), AniList backfills, `lib/` shared helpers. Never deployed to hosting. |
+| **`functions/`** | **NEW (v1.9.0 P1) — Cloud Functions** (first-ever server surface). Own `package.json`/deps; gen-2 functions; deployed via `firebase deploy --only functions`, **never** to hosting. See [DATA-MODEL.md](DATA-MODEL.md) + [DEPLOYMENT.md § Cloud Functions](DEPLOYMENT.md). |
+| `firebase.json` | Hosting config (public dir + ignore array + redirects) + `firestore` rules/indexes + (new) `functions` + `emulators` blocks |
+| `.firebaserc` | Pins the deploy target to project `real-anime-reviews` |
+| `tests/` | Playwright suite (DOM, runs against a local static server). CF tests live separately in `functions/test/`. |
+| `docs/` | This dir — ARCHITECTURE, DEPLOYMENT, DATA-MODEL, plus the rolling Code/Cowork docs |
 
 ---
 
 ## Code organization
 
-### `script.js` (~4,000 lines)
-
-Wrapped in a single IIFE to avoid leaking globals. Has ~21 section banners (`// ---------- NAME ----------`) that map to functional areas:
-
-| Section | What lives there |
-|---|---|
-| **Firebase imports** | ES module imports for `firebase-firestore` and `firebase-auth` |
-| **DOM HOOKS** | All `document.getElementById(...)` calls hoisted to the top |
-| **STATE** | Module-level state vars (favorites set, watchlist set, spotlight index, etc.) |
-| **UTIL** | `slug()`, `escapeHtml()`, `shuffle()`, `toYouTubeEmbedSrc()`, etc. |
-| **AUTH MODAL** | Sign-in / sign-up / password reset modal logic |
-| **SEARCH** | `matchesSearch(anime, q)` |
-| **FILTERS** | Genre / tag / studio facet filter UI + `matchesFilters(anime, f)` |
-| **GRID + CARDS** | `createCard(anime)`, `renderGrid()` |
-| **FEATURED (Latest Review)** | `buildFeaturedDrop()` — the "LATEST ANIME DROP!" card on the home page |
-| **SPOTLIGHT (Top 10)** | `buildSpotlight()`, auto-cycle timer, prev/next controls |
-| **RECOMMENDED RAIL** | `mountRail(genre, direction)` — the auto-scrolling "Anime by Genre" carousel |
-| **COMMENTS** | `subscribeComments(anime)`, `wireComments(anime)` — per-anime comments + voting + edit/delete |
-| **MODAL** | `openModal(anime)`, `closeModal()` — assembles the dual-sheet detail view |
-| **VIEWS** | `showHome()`, `showAll()` — switches between home and full-grid views |
-| **WIRES** | Top-level event listener bindings |
-| **INIT** | `init()` — bootstraps everything on load |
-
-Community reviews + discussion threads + official-rating votes have their own subsections (`wireCommunity()`, `wireOfficialVotes()`) — they're substantial enough that they read like their own modules even though they're inline.
-
-### `account.js` (~780 lines)
-
-ES module, simpler than `script.js`. Key functions:
-
-- `activateTab(name)` — switches between Profile / Watchlist / Favorites / Activity tabs
-- `subscribeSavedLists(user)` — live listeners for favorites + watchlist
-- `subscribeActivity(user)` — merges `collectionGroup('items')` + `collectionGroup('threads')` queries (this is what needs the composite indexes)
-- `subscribeNotifications(user)` — notification inbox
-- `downscaleImage(file, max=512)` + the upload pipeline — avatar upload flow (resizes to 512px max, uploads to Firebase Storage at `avatars/{uid}/profile.{ext}`)
-
-### `firebase.js` (30 lines)
-
-One job: initialize Firebase v12.2.1 with the public web config and export `app`, `auth`, `db`. The web API key is intentionally public (security comes from Firestore rules, not key secrecy).
+- **`script.js`** (~5,500-line ES module) — the homepage + modal monolith. Notable subsystems: the three nav **places** (`setActivePlace` is the single funnel that flips `data-surface` on `<html>`; `moveMarker` slides the gold marker; `showForYou`/`showDiscover`/the Den); the **3-layer modal** (`openModal` primary → `openSecondaryModal`/`.secondary-layer` z6000 → tertiary z7000); **comments** (`subscribeComments`/`wireComments`); **community reviews** (`subscribeReviews`/`communityMarkup`) with a per-review `threads` reply subcollection; **official-rating votes**; the **discovery layer** (`window.rarDiscovery` — caches + `createDiscoveryCard` + the Den/For-You/Discover rails); the **constellation veil** (`body::after` + per-surface `data-surface` density + the `#veil-pulse` animation, index.html only); the **welcome door**; and the client-side notification listener (`cleanupOldNotifications`, `NOTIF_KEEP=10`).
+- **`account.js`** (ES module) — `activateTab`, `subscribeSavedLists` (favorites + watchlist, incl. non-catalog `al:<aniListId>` saves), `subscribeActivity` (merges the `collectionGroup('items')` + `collectionGroup('threads')` queries — this is what needs the composite indexes), `subscribeNotifications` (the bell), the avatar upload pipeline (resizes → Firebase Storage `avatars/{uid}/…`).
+- **`firebase.js`** — initializes Firebase, exports `app`/`auth`/`db`. Web API key is intentionally public.
 
 ---
 
-## Firestore data model
+## Firestore data model (LIVE today — verified from `firestore.rules`)
 
-Five collection families:
+> For the **v1.9.0** additions (the Community Hub `forum`, per-season `seasonComments`, `conversations`/DMs, `profiles`, `suggestionCounts`, `reports`, the reworked notifications) and every proposed rule change, see **[`docs/DATA-MODEL.md`](DATA-MODEL.md)**. Below is what exists in production now.
 
 ### 1. User profiles + per-user lists
-
 ```
-/users/{uid}                           — profile doc (displayName, photoURL)
-/users/{uid}/favorites/{animeId}       — favorited anime
-/users/{uid}/watchlist/{animeId}       — watchlist anime
-/users/{uid}/notifications/{notifId}   — notifications inbox
+/users/{uid}                          — profile doc (get: public — "tighten later"; write: owner)
+/users/{uid}/favorites/{animeId}      — owner only
+/users/{uid}/watchlist/{animeId}      — owner only
+/users/{uid}/notifications/{notifId}  — owner reads; CLIENT-written (see vuln note)
 ```
+Favorites/watchlist hold both catalog slugs and non-catalog `al:<aniListId>` doc-ids. Notifications are pruned to the newest 10 **client-side** (`script.js:1585` `cleanupOldNotifications`, fired by the listener at `:1720`) — so pruning only runs when the recipient loads a page.
 
-Owner-only read/write. Notifications are pruned to the newest 10 client-side.
+> **⚠️ Security note — the notification create rule is a live spoof/spam vector.** `firestore.rules:20-36` lets **any signed-in user create a notification in any other user's subcollection**, constrained only to `type ∈ {comment_vote, review_vote}`, `value ±1`, and a field shape — it **never checks `fromDisplayName` against the real sender**, and there is no `createdAt == request.time` clamp. A hand-rolled client can therefore spam a victim's bell with backdated notifications forged "from Blake." **Fix plan (v1.9.0):** all cross-user notification creates move to **Cloud-Function-written** (Admin SDK), the client `create` rule becomes `if false`, and `update` tightens to `hasOnly(['read','readAt'])`. This is the single most important rule change in v1.9.0 — see [DATA-MODEL.md § Notifications](DATA-MODEL.md).
 
-### 2. Comments (under Blake's official anime modal)
-
+### 2. Comments (under Blake's catalog reviews)
 ```
-/comments/{animeId}/items/{commentId}
-/comments/{animeId}/items/{commentId}/votes/{voterUid}    — value: 1 or -1
+/comments/{animeSlug}/items/{commentId}
+/comments/{animeSlug}/items/{commentId}/votes/{voterUid}   — value 1 | -1
 ```
-
-Public read. Signed-in create. Author-only edit/delete.
+Public read; signed-in create (`uid == auth.uid`); owner edits text / owner deletes. ⚠️ The vote-count update rule lets **anyone** bump `likesCount`/`dislikesCount` directly (no vote-doc backing) — flagged for the v1.9.0 count→Cloud-Function rework.
 
 ### 3. Community reviews (one per user per anime)
-
 ```
-/reviews/{animeId}/items/{reviewerUid}                        — doc ID == reviewer UID (enforces 1-per-user)
-/reviews/{animeId}/items/{reviewerUid}/votes/{voterUid}       — votes on the review
-/reviews/{animeId}/items/{reviewerUid}/threads/{tid}          — discussion comments under the review
-/reviews/{animeId}/items/{reviewerUid}/threads/{tid}/votes/{voterUid}  — votes on the discussion comments
+/reviews/{animeSlug}/items/{reviewerUid}                     — doc id == reviewer uid (1-per-user)
+/reviews/{animeSlug}/items/{reviewerUid}/votes/{voterUid}
+/reviews/{animeSlug}/items/{reviewerUid}/threads/{tid}       — replies under the review
+/reviews/{animeSlug}/items/{reviewerUid}/threads/{tid}/votes/{voterUid}
 ```
+Using the uid as the doc id makes "does this user already have a review?" a single `getDoc`. ⚠️ Deleting a review does **not** cascade-delete its `threads/` subtree (Firestore has no cascade) — see Quirks + the v1.9.0 cascade Cloud Function.
 
-Using the UID as the doc ID makes "does this user already have a review?" trivially answerable without a query.
-
-### 4. Official rating votes (the "Agree with my Rating?" widget)
-
+### 4. Official (Blake) rating votes
 ```
-/official/{animeId}                       — aggregate (likesCount, dislikesCount)
-/official/{animeId}/votes/{voterUid}      — each user's vote (value: 1 or -1)
+/official/{animeId}                    — aggregate likesCount/dislikesCount
+/official/{animeId}/votes/{voterUid}   — value 1 | -1
 ```
+By design these do **not** notify and do **not** appear in the activity feed. (Same world-writable-count caveat as comments.)
 
-By design, official-rating votes do **not** generate notifications and do **not** appear in the activity feed.
+### 5. Suggestions (the public "suggest an anime" box)
+```
+/suggestions/{docId}   — PUBLIC create (strict field shape: title/reason/status/submittedAt
+                          + optional anilistId/coverImage/format/year/englishTitle/romajiTitle)
+```
+**ADMIN_UID is the only reader/lister/updater/deleter** — the queue is a private admin surface (`admin/suggestions`). ⚠️ Today a suggestion stores **no submitter uid** (anonymous-by-shape) — v1.9.0 adds an optional signed-in submitter uid so Blake can reply (the "suggestion reply" channel).
 
-### 5. Required composite indexes
+### 6. Required composite indexes
+Two collection-group indexes power the My Activity feed in `account.js` (`collectionGroup('items')` + `collectionGroup('threads')`, each `uid ASC + createdAt DESC`). There are also the two collection-group **rules** `{parentPath=**}/items` and `{parentPath=**}/threads` (owner-only reads). ⚠️ `firestore.indexes.json` is currently an **empty stub** (`{"indexes":[],"fieldOverrides":[]}`) — the live indexes were auto-created via the console "create index" link. **v1.9.0 Gate 1 codifies all indexes into that file** (the new `forum`/`conversations`/`seasonComments`/`suggestionCounts` queries need composites). If activity ever returns "query requires an index," click the link Firebase prints.
 
-Two collection-group indexes power the My Activity feed in `account.js`:
+---
 
-- Collection group **`items`** → `uid ASC + createdAt DESC`
-- Collection group **`threads`** → `uid ASC + createdAt DESC`
+## Cloud Functions (NEW in v1.9.0 — first-ever server surface)
 
-If activity ever returns "query requires an index" in the console, click the link Firebase provides and let it auto-create. If you ever recreate the Firebase project, you have to recreate these manually.
+Before v1.9.0 there was **no server-side code** — everything was static hosting + client-written Firestore. Cloud Functions enter to do the three things `firestore.rules` cannot: (1) write into a document the acting user doesn't own (trustworthy notification fan-out), (2) cascade-delete a subtree, (3) count / rate-limit across documents.
+
+- **Scaffold (gate P1, LIVE in the repo):** `functions/` with its own `package.json` (gen-2 functions, `firebase-admin` + `firebase-functions`), a global `maxInstances` billing cap, and a no-op **`ping`** health-check proving the deploy path. `firebase.json` gained `functions` + `emulators` blocks; `functions/**` is in the hosting ignore so server code never deploys to the static site.
+- **Tests are a separate track:** `npm run test:functions` (pure-logic units via `node --test functions/test/`, no emulator) vs. `npm test` (Playwright/DOM). Emulator-backed integration specs use `firebase emulators:exec` (needs a JDK installed for the Firestore/Auth emulators).
+- **The day-1 function inventory + every rule change + the security reasoning live in [`docs/DATA-MODEL.md`](DATA-MODEL.md).** Deploy/Blaze/budget details: [DEPLOYMENT.md § Cloud Functions](DEPLOYMENT.md).
 
 ---
 
 ## Notable quirks and lessons
 
-### Runtime version-tag rewrite
-
-`script.js:37–40` runs on `DOMContentLoaded` and overwrites `#changelog-version` with `` `v${window.APP_VERSION}` ``:
-
-```javascript
-document.addEventListener("DOMContentLoaded", () => {
-  const el = document.getElementById("changelog-version");
-  if (el && window.APP_VERSION) el.textContent = `v${window.APP_VERSION}`;
-});
-```
-
-This means **the static HTML can be different from what users see post-JS**. We discovered this during the v1.3.4 cleanup — the static fallback in `index.html` was stuck at `v1.0.1` even though the live site showed `v1.3.4` (because `APP_VERSION = "1.3.4"` and the JS overwrites the tag).
-
-**Lesson:** Keep static fallbacks in sync with what JS will render. Users with JS disabled (or slow JS load) only see the static content.
-
-### HTML quote-convention split
-
-`index.html` has two quote conventions intentionally:
-
-- **HTML attributes** use straight ASCII `"` (required by the HTML spec; curly quotes break attribute parsing)
-- **Decorative text content** uses curly typographic `"..."` (e.g., `"Anime by Genre"`, `"My Top 10"`)
-
-Both conventions are valid in their contexts, but if you ever search/replace by quote character, you need to be deliberate about which one. The Read tool in some terminals renders both as straight, which can hide the distinction — verify with byte-level inspection if it matters.
-
-### One review per user per anime
-
-Enforced by using `request.auth.uid` as the doc ID at `/reviews/{animeId}/items/{uid}`. Two side effects worth knowing:
-
-1. The "do I already have a review?" check is a `getDoc(doc(...))` instead of a query.
-2. If a user deletes their review and re-creates it, the existing `/threads/` subcollection is **not** automatically wiped. Firestore client SDK doesn't cascade-delete subcollections — see the [ROADMAP "Cloud Function for cascading deletes"](../ROADMAP.md#polish--tech-debt) item.
-
-### Featured Drop = last entry in animeData
-
-The "LATEST ANIME DROP!" card on the home page (`script.js:1054–1073`, `buildFeaturedDrop()`) picks `animeData[animeData.length - 1]` — the LAST entry in the array. So when Blake adds a new anime, he just appends it to `animeData.js` and it becomes the featured drop automatically. No manual "set featured" toggle.
+- **Runtime version-tag rewrite.** On `DOMContentLoaded`, `script.js` overwrites the changelog version span with `` `v${window.APP_VERSION}` ``, so the static HTML can differ from what users see post-JS. Keep the static fallback in sync with `APP_VERSION` (the v1.3.4-era bug).
+- **HTML quote-convention split.** HTML *attributes* use straight ASCII `"` (curly breaks parsing); decorative *text content* may use curly `"…"`. The `Edit` tool can silently swap them — `git diff` after every HTML edit and verify with byte-level inspection if it matters.
+- **One review per user per anime.** Enforced by using `auth.uid` as the doc id at `/reviews/{slug}/items/{uid}`. Side effect: deleting + recreating a review leaves the old `/threads/` subcollection orphaned — Firestore client SDK does not cascade. The v1.9.0 cascade Cloud Function fixes this for real.
+- **`window.animeData` is undefined.** `animeData` is a classic-script lexical `const`, not a `window` property. Read the bare global.
+- **The secondary modal is `.secondary-layer` (a CLASS), not an id.** Tests/probes using `#secondary-layer` will report "not visible."
+- **`data-surface` is set in exactly one place** (`setActivePlace`, `script.js:3209`) — the single funnel that drives the veil density per nav place. Don't write it elsewhere.
+- **`sync-excel-to-js.js` is parse + serialize.** Any new `animeData` field must be added to BOTH halves or it's dropped on the next sync.
+- **Featured "Latest Drop" = last entry in `animeData`** — appending a new anime makes it the featured drop automatically; no toggle.

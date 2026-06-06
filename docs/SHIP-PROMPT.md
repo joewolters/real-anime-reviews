@@ -1,19 +1,26 @@
 <!-- author: Cowork | date: 2026-06-06 -->
-# v1.8.4 — THE SWEEP (docs cascade → bump ×47 → audits → commit → preview — FAST-TRACK, STOP before prod)
+# v1.9.0 — GATE 3: cascade + rate-limit + suggestionCounts, then the FIRST CHECKPOINT COMMIT (APPLY — emulator finish line, NO deploy)
 
-G8b smoke passed (update log approved as-is — Blake retracted his restructure note). Two tiny tidy-ups ride as item 0, then the full close-out of the 10-gate ship. **Do NOT deploy to production — that waits for Blake's explicit "ship it" in chat. He has not said it.**
+> Gate 2 closed green (18/18 units · 5/5 CF integration · 35/35 rules; CFs emulator-only until the gate-6 atomic cutover — your call, approved). Build gate 3 against `docs/DATA-MODEL.md`, then commit the P0→3 checkpoint.
 
-## 0. Two tidy-ups (Blake, final smoke)
-- **(a) Quotes admin description** — trim the page's intro blurb: drop the technical detail (the `quotes.json` runtime mention etc.). Keep one short plain line about what the page does.
-- **(b) The hint pill** — the arrow should point **up** (↑) instead of sideways, and the Japanese text currently wraps onto two lines (his screenshot: その先 / へ split) — size/extend it so the JP reads on one line.
+## 1 — Cascade deletes
+1. **`reviews/items` cascade** — on review delete, remove its `threads` + all `votes` (this orphan exists in production TODAY; the CF closes it at cutover).
+2. **`forum/{tid}` cascade** — thread removal cleans its `posts` (+ their votes if any).
+3. **`onUserDelete` — DAY-1 per Blake's locked answer.** Account deletion wipes: all authored content (comments/reviews/posts/threads), the user's **foreign `votes/{uid}` docs** (the collection-group sweep from your study, M6/L5), their notifications/saves/profile, and **tombstones every `conversations` they're in**. This is the function that makes the privacy page's deletion promise true — be thorough.
 
-## The cascade
-1. **CHANGELOG.md** — v1.8.4 MINOR (arguably the biggest visitor ship yet — if your honest read says the lead warrants *Overhaul* phrasing, write it that way; the widget tier will then derive "Big Update" honestly). The visitor story: the For You + Discover surfaces, the blended catalog (NOT-REVIEWED stickers, gold pins, request path, saves everywhere), the real nav + composed homepage, the constellation veil + pulse, the door's update log + quotes. Admin: the Quotes page. Author marker per convention.
-2. **Widget** — visitor-first per the skill **including the new `.vs-head`/`data-tier` authoring shape** (the skill doc has the template — Cowork updated it). This ship is rich; bullets accordingly, no provider names anywhere.
-3. **`bump-version 1.8.4`** — expect **47**, `--check` all agree.
-4. **ROADMAP.md + NEXT.md** — v1.8.4 ✅ shipped (scoped as built, G1→G8b incl. the pivots), "Live at" → v1.8.4, next pointer → **v1.9.0 Community/Account overhaul** (the design-study ship; Blake: "asap"). **Bank the deferred knobs** in NEXT: the For-You title alternates · the veil-pulse tuning knobs + the account/suggest pulse extension · the showcase bottom-align knob · the "N people requested" v1.9.0 Cloud-Function plan · the "Blake's Constellation" static-SVG polish idea.
-5. **Audits** — `npm test` (84 floor; item 0 may touch a hint/quotes spec — report final), gitignore↔firebase mirror (quotes.json + admin/quotes.* are public BY DESIGN), smart-quote sweep, **full `git diff` review** (10 gates of changes — watch for stray debug/junk; `animeData.js` should be untouched this ship).
-6. **Commit + push** — ONE Blake-authored commit (`--author="Blake Wolters <196413457+joewolters@users.noreply.github.com>"`), ZERO trailers, the 7 Cowork excludes restore-staged out (`COWORK-STYLE.md` stays untracked), rolling docs ride in. Verify author + trailers post-commit.
-7. **Preview deploy** — verify on the channel: APP_VERSION **1.8.4**, `admin/quotes.html` + `quotes.json` **200**, leak checks **404** (SHIP docs, CODE-HANDOFF, HANDOFF, tests/, .env), and spot-check the veil + door render on the channel.
+## 2 — Rate limiting
+Implement per your own gate-0 §5 plan — **detect-and-undo `onCreate` trigger first** (doesn't change the client write path), the callable pre-block stays the documented escalation if abuse appears. If you've since changed your mind on that ordering, say so in the report with reasoning — your call, named explicitly.
 
-Report: the sweep table + preview URL + Blake's preview smoke steps. Then STOP and wait — no prod.
+## 3 — `aggregateSuggestionCounts`
+On each `suggestions` create: increment the count-only `suggestionCounts/{anilistId}` doc (+ snapshot title/cover/format/year per the contract). Idempotent like gate 2 (`cfProcessed` marker).
+
+## 4 — Verify (emulator)
+No orphans after each cascade · `onUserDelete` leaves ZERO trace of the user (assert the foreign-votes sweep + convo tombstones specifically) · flood gets detected-and-undone · rollup count exact under concurrent suggestions · all three existing tracks still green. Report all counts.
+
+## 5 — FIRST CHECKPOINT COMMIT (after everything above is green)
+One Blake-authored commit of the P0→3 working tree (`Blake Wolters <196413457+joewolters@users.noreply.github.com>`, **zero trailers**), your established excludes pattern for the Cowork-managed rolling docs, push to origin. **NO deploy of any kind** — this is a git save-point only; production stays byte-for-byte unchanged. Confirm `npm test` (the 84 floor) still passes pre-commit per project rule #7 — server-only changes shouldn't move it, but prove it.
+
+## Report back (SHIP-OUTPUT.md)
+Plain-English function descriptions (Blake reads this) · test counts all tracks · the rate-limit ordering call · commit hash + what's in it + push confirmation · production-untouched confirmation · working-tree state for gate 4 (comments overhaul — the first VISITOR-FACING gate; flag anything it should know).
+
+House rules apply. Stop after the checkpoint commit.

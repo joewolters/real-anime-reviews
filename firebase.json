@@ -17,7 +17,8 @@
       "package.json",
       "package-lock.json",
       "playwright-report/**",
-      "test-results/**"
+      "test-results/**",
+      "functions/**"
     ],
     "cleanUrls": true,
     "trailingSlash": false,
@@ -29,5 +30,17 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs22",
+    "ignore": ["node_modules", ".git", "*.log", ".firebase", ".runtimeconfig.json"]
+  },
+  "emulators": {
+    "functions": { "port": 5001 },
+    "firestore": { "port": 8080 },
+    "auth": { "port": 9099 },
+    "ui": { "enabled": true, "port": 4000 },
+    "singleProjectMode": true
   }
 }
