@@ -20,6 +20,26 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-06-08 -->
+## v1.9.0 — MINOR (2026-06-08)
+
+**Community Overhaul.** The site gains a real community layer — comments, reviews, and a notification center — while Blake's voice stays the unmistakable center (his rating leads; gold is his alone, community is purple).
+
+**Visitor-facing:**
+
+- **Comments + replies** on every anime: write in markdown, like the ones you find helpful, and sort by Top / Newest / Most-helpful. Threaded one level deep.
+- **Community reviews:** leave a full review with a rating, mark others' reviews Helpful or Not-helpful, and see the spread on a rating histogram — purple bars for the community, a single gold tick for Blake's score, which always leads above it.
+- **The Lantern** — a notification center in the header. It glows gold when Blake himself pings you and a cooler purple for community activity, lights unread items until you read them, and takes you straight to the exact comment when you tap a notification. On both the home and account pages.
+- **A composed header rail** (search · the Lantern · your head/avatar) with the real navigation now on the account page too.
+
+**Under the hood:**
+
+- All vote counts and cross-user notifications are now written by the server (Cloud Functions), closing a notification-spoofing hole — the browser only records your own vote.
+- New security rules for every community surface, plus new database indexes.
+- An internal-docs exposure fix (some project notes were reachable on the public site; no user data was ever involved).
+
+**Known issue (fix coming):** a notification that points at a *review* doesn't always scroll you to the exact review yet.
+
 <!-- author: Code | date: 2026-06-06 -->
 ## v1.8.4 — MINOR (2026-06-06)
 
