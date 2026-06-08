@@ -4897,6 +4897,114 @@ body.filter-open { overflow: hidden; }
 .review-composer .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .review-composer .signin-hint { opacity: .85; }
 
+/* ============================================================
+   v1.9.1 / v1.9.1b — shared visitor composer (window.RarComposer).
+   A compact formatting toolbar + a SUBDUED live preview that read as ONE
+   unit (not three stacked boxes). The long-form review composer also gets a
+   premium ⌘/Ctrl+Enter keycap hint; comments/replies/threads drop the hint
+   (Enter-to-post is intuitive). Toolbar + preview + hint hide when the
+   composer is read-only (signed out / locked). Purple-cosmos; gold = Blake.
+   NB: these carry the `hidden` attr toggled from JS, and several have an
+   author `display`, so each needs an explicit `[hidden]{display:none}` (the
+   `[hidden]`-symmetry rule) or the author display would win and they'd show.
+   ============================================================ */
+.composer-toolbar {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 6px;          /* sits just above the textarea — no filled box around it */
+  width: fit-content;
+}
+.composer-toolbar[hidden] { display: none; }
+.ct-btn {
+  min-width: 30px; height: 27px;
+  display: grid; place-items: center;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(187,134,252,.28);
+  background: rgba(187,134,252,.10);
+  color: #efe7ff;
+  font-size: .92rem; line-height: 1;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .1s ease;
+}
+.ct-btn strong, .ct-btn em { font-size: .92rem; }
+.ct-btn:hover { background: rgba(187,134,252,.24); border-color: rgba(187,134,252,.55); }
+.ct-btn:active { transform: translateY(1px); }
+.ct-btn:focus-visible { outline: 2px solid rgba(187,134,252,.7); outline-offset: 1px; }
+
+/* subdued preview — a light left-accented panel, never a heavy box that dominates */
+.composer-preview {
+  margin: 6px 0 0;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: rgba(187,134,252,.06);
+  border-left: 2px solid rgba(187,134,252,.5);
+  color: #e7ddf5;
+  font-size: .9rem;
+  overflow-wrap: anywhere;
+}
+.composer-preview[hidden] { display: none; }
+.composer-preview.is-inline { white-space: pre-wrap; }   /* keep newlines, mirrors the comment bubble */
+.composer-preview::before {
+  content: "Preview";
+  display: block;
+  font-size: .64rem; letter-spacing: .09em; text-transform: uppercase;
+  color: rgba(187,134,252,.7);
+  margin-bottom: 4px;
+}
+.composer-preview p { margin: 0 0 .45em; }
+.composer-preview p:last-child { margin-bottom: 0; }
+.composer-preview a { color: #d9b8ff; }
+.composer-preview .md-h { margin: .4em 0 .15em; line-height: 1.2; }
+.composer-preview ul { margin: .2em 0; padding-left: 1.2em; }
+.composer-preview code { background: rgba(0,0,0,.3); padding: 1px 5px; border-radius: 5px; }
+
+/* premium review-only hint — styled keycaps, not a plain gray line */
+.composer-keyhint {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 0 0;
+  font-size: .74rem;
+  color: rgba(207,199,217,.7);
+}
+.composer-keyhint[hidden] { display: none; }
+.composer-keyhint .ck-keys { display: inline-flex; align-items: center; gap: 4px; }
+.composer-keyhint .ck-kbd {
+  font: inherit; font-size: .72rem; line-height: 1;
+  padding: 3px 7px; border-radius: 6px;
+  color: #efe7ff;
+  background: rgba(187,134,252,.16);
+  border: 1px solid rgba(187,134,252,.42);
+  box-shadow: 0 1px 0 rgba(187,134,252,.22);
+}
+.composer-keyhint .ck-plus { color: rgba(187,134,252,.8); font-size: .7rem; }
+.composer-keyhint .ck-label { letter-spacing: .01em; }
+
+/* v1.9.1b — "My review" filter chip (sits with Sort / Ratings) */
+.comm-mine-chip {
+  align-self: center;
+  margin-left: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: .8rem; font-weight: 600;
+  color: #d9cdf0;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(187,134,252,.35);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.comm-mine-chip:hover { background: rgba(187,134,252,.16); border-color: rgba(187,134,252,.6); }
+.comm-mine-chip.is-active {
+  color: #fff;
+  background: rgba(187,134,252,.28);
+  border-color: rgba(187,134,252,.85);
+  box-shadow: 0 0 0 2px rgba(187,134,252,.18);
+}
+.comm-mine-chip[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-btn, .comm-mine-chip { transition: none; }
+}
+
 /* List */
 .review-list { list-style: none; display: grid; gap: 10px; }
 .review-row {

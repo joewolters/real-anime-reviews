@@ -21,6 +21,25 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-08 -->
+## v1.9.1 — MINOR (2026-06-08)
+
+**Composer redesign + community polish.** The comment and review composers are rebuilt with a real formatting toolbar, a live styled preview, and keyboard shortcuts; reviewers can filter to their own review; and two live bugs are fixed (the season label and the review-notification scroll-to-highlight). All client-side — a hosting-only ship.
+
+**Visitor-facing:**
+
+- **Rebuilt comment + review composers** — a B / I / link toolbar, Ctrl/⌘+B/I shortcuts, a live preview that renders your formatting as you type, and Enter-to-post (Ctrl/⌘+Enter on the long-form review). The toolbar hides when signed out.
+- **"My review" filter** — isolate your own review on any anime's community list.
+- **Season label fix** — the "airing now" dateline now derives the current season from today's date (Spring 2026 · 春) and self-rolls each month, instead of showing a stale season.
+- **Review-notification halo** — a "found your review helpful" notification now scrolls to AND visibly highlights the exact review (it was opening the anime, but the highlight was clipped invisible).
+
+**Under the hood:**
+
+- New `composer-toolbar.js` (`window.RarComposer`) shared by the review / comment / reply / discussion composers; reuses the markdown renderer (XSS-safe, escape-first) and the section-editor `wrap()` primitive. No rules / functions / schema touched.
+- Self-rolling `currentSeasonInfo(date)` helper (anime broadcast-season convention: Jan–Mar WINTER, Apr–Jun SPRING, Jul–Sep SUMMER, Oct–Dec FALL).
+- Sticky review deep-link that survives the review list's per-snapshot rebuild; the halo now lands on the `.review-row` itself (its own box-shadow isn't clipped by the row's `overflow:hidden` — the cause of the invisible halo).
+- Tests: `npm test` 104 (added season-label + composer specs); the emulator deep-link e2e rewritten to assert the halo's painted box-shadow (visibility), not class presence.
+
+<!-- author: Code | date: 2026-06-08 -->
 ## v1.9.0 — MINOR (2026-06-08)
 
 **Community Overhaul.** The site gains a real community layer — comments, reviews, and a notification center — while Blake's voice stays the unmistakable center (his rating leads; gold is his alone, community is purple).

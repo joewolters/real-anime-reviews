@@ -1795,6 +1795,11 @@ function parseNotifTarget(targetPath) {
 }
 if (typeof window !== 'undefined') window.parseNotifTarget = parseNotifTarget;
 
+// v1.9.1 — a pending review deep-link target, applied (sticky) by subscribeReviews so
+// it survives the review list's per-snapshot rebuilds. Set by openNotifTarget, cleared
+// after it lands (guard window) or when the modal closes.
+let pendingReviewDeepLink = null;
+
 function openNotifTarget(targetPath, animeId) {
   const t = parseNotifTarget(targetPath);
   if (t.kind === 'comment') {
@@ -1804,9 +1809,13 @@ function openNotifTarget(targetPath, animeId) {
     return;
   }
   if (t.kind === 'review') {
+    // v1.9.1 — reviews render in a list that subscribeReviews REBUILDS on every
+    // snapshot / vote / sort change, so the old one-shot scroll+halo got wiped right
+    // after it landed (the carried deep-link bug). Hand the target to subscribeReviews
+    // instead: it re-applies the scroll (once) + halo (each render) until consumed —
+    // sticky across rebuilds. (gate 6d item 4: halo the review's title bar.)
+    pendingReviewDeepLink = { slug: t.slug, id: t.id, scrolled: false };
     openAnimeFromId(t.slug);
-    // gate 6d item 4: halo the review's title bar, not the whole row/avatar.
-    scrollHighlightNotif(() => { const it = findByData('.review-row', 'id', t.id); return it && (it.querySelector('.row-toggle') || it); });
     return;
   }
   if (t.kind === 'hash') { try { window.location.hash = '#' + t.path; } catch (_) {} return; }
@@ -2883,13 +2892,26 @@ function refreshDiscoverCarousel(el) {
   });
 }
 
-// A small bilingual dateline per rail (honest data already in hand). No motion.
-function seasonLabel(list) {
-  const m = (Array.isArray(list) ? list : []).find((x) => x && x.season && x.seasonYear);
-  if (!m) return '';
-  const jp = ({ WINTER: '冬', SPRING: '春', SUMMER: '夏', FALL: '秋' })[m.season] || '';
-  const en = m.season.charAt(0) + m.season.slice(1).toLowerCase();
-  return en + ' ' + m.seasonYear + (jp ? ' · ' + jp : '');
+// A small bilingual dateline per rail. v1.9.1 — the dateline is now the CURRENT
+// anime broadcast season computed from today's date, so it self-rolls by month and
+// never reads a stale season off whatever anime happens to sit first in the airing
+// list (that bug showed "FALL 1999"). Anime broadcast-season convention (what
+// AniList's airing `season` enum uses): Jan–Mar WINTER, Apr–Jun SPRING, Jul–Sep
+// SUMMER, Oct–Dec FALL — e.g. June = Spring. `currentSeasonInfo(date)` is a pure
+// helper (exposed for tests); `date` defaults to now.
+const SEASON_JP = { WINTER: '冬', SPRING: '春', SUMMER: '夏', FALL: '秋' };
+const SEASON_BY_MONTH = ['WINTER','WINTER','WINTER','SPRING','SPRING','SPRING','SUMMER','SUMMER','SUMMER','FALL','FALL','FALL'];
+function currentSeasonInfo(date) {
+  const d = (date instanceof Date && !isNaN(date.getTime())) ? date : new Date();
+  const season = SEASON_BY_MONTH[d.getMonth()];
+  const year = d.getFullYear();
+  const jp = SEASON_JP[season] || '';
+  const en = season.charAt(0) + season.slice(1).toLowerCase();
+  return { season, year, jp, label: en + ' ' + year + (jp ? ' · ' + jp : '') };
+}
+if (typeof window !== 'undefined') window.currentSeasonInfo = currentSeasonInfo;
+function seasonLabel() {
+  return currentSeasonInfo().label;
 }
 function setRailMeta(blockId, text) {
   const block = document.getElementById(blockId);
@@ -2946,7 +2968,7 @@ async function buildDiscoverSections() {
   const airing = await window.rarDiscovery.fetchAiringCached('all');
   renderDiscoverInto(discoverAiringEl, Array.isArray(airing) ? airing.slice(0, 10) : null,
     { empty: 'Nothing airing surfaced right now.', carousel: true, onRetry: buildDiscoverSections });
-  setRailMeta('discover-airing-block', seasonLabel(airing));
+  setRailMeta('discover-airing-block', seasonLabel());
 
   // 2) Community picks — seeded shuffle of the DEEP trending pool (fresh per login).
   setRailLoading(discoverTrendingEl);
@@ -3611,7 +3633,7 @@ async function fillHomeAiring() {
   const airing = await window.rarDiscovery.fetchAiringCached('all');
   renderDiscoverInto(homeAiringRail, Array.isArray(airing) ? airing.slice(0, 12) : null,
     { empty: 'Nothing airing surfaced right now.', carousel: true, onRetry: fillHomeAiring });
-  setRailMeta('home-airing-block', seasonLabel(Array.isArray(airing) ? airing : []));
+  setRailMeta('home-airing-block', seasonLabel());
 }
 
 // FOR YOU on home — chrome (head/sub/more by auth) + the rail. Signed in: a teaser of
@@ -4679,6 +4701,12 @@ postBtn.addEventListener('click', async (e) => {
 
 
 
+    // v1.9.1 — premium composer: B/I/🔗 toolbar, Ctrl/⌘+B/I, live inline preview,
+    // Enter to post (Shift+Enter = newline). XSS-safe (renderMarkdownInline preview).
+    if (window.RarComposer) {
+      window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click() });
+    }
+
     // Thread lock (commentsMeta/{s}.locked) — admins lock a thread; when locked
     // the composer is disabled with a Blake-voiced note. Admins get a toggle.
     let threadLocked = false;
@@ -5059,6 +5087,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
         postBtn.disabled = false;
       }
     });
+
+    // v1.9.1 — same premium composer on the reply box (inline preview + Enter to post).
+    if (window.RarComposer) {
+      window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click() });
+    }
   }
 
   // ---------- REPORT MODAL (branded — no native dialogs) ----------
@@ -5172,6 +5205,7 @@ function communityMarkup(anime) {
     `<div class="comm-sort-row">`,
     `  <label class="comm-sort"><span>Sort</span><select id="comm-sort-${s}"><option value="most-liked">Most helpful</option><option value="newest">Newest</option></select></label>`,
     `  <label class="comm-sort"><span>Ratings</span><select id="comm-filter-${s}"><option value="all">All ratings</option><option value="high">8&ndash;10</option><option value="mid">5&ndash;7</option><option value="low">1&ndash;4</option></select></label>`,
+    `  <button type="button" class="comm-mine-chip" id="comm-mine-${s}" aria-pressed="false" hidden>★ My review</button>`,
     `</div>`,
     `<ul class="review-list" id="comm-list-${s}"></ul>`
   ].join('\n');
@@ -5224,6 +5258,7 @@ function subscribeReviews(anime) {
   const countEl = document.getElementById(`comm-count-${s}`);
   const sortEl  = document.getElementById(`comm-sort-${s}`);
   const filterEl = document.getElementById(`comm-filter-${s}`);
+  const mineEl   = document.getElementById(`comm-mine-${s}`);   // v1.9.1b "My review" chip
   const histEl   = document.getElementById(`comm-histogram-${s}`);
   const blakeRating = parseFloat(anime && anime.Rating);
   if (!listEl) return () => {};
@@ -5235,6 +5270,7 @@ function subscribeReviews(anime) {
   if (!subscribeReviews._threadUnsubs) subscribeReviews._threadUnsubs = [];
 
   let lastRows = [];
+  let showMineOnly = false;   // v1.9.1b — "My review" filter toggle
   let openReviewIds = new Set();
   let openThreadIds = new Set();
 
@@ -5332,12 +5368,50 @@ function subscribeReviews(anime) {
     if (rt >= 5) return 'mid';
     return 'low';
   }
+  // v1.9.1 — sticky review deep-link. The list is rebuilt on every snapshot/vote/sort,
+  // so a one-shot scroll+halo gets wiped. While a deep-link for THIS anime is pending,
+  // re-apply the halo on every render (restarting the flash across rebuilds) and scroll
+  // to it once; consume after a short guard window so a later background re-render
+  // doesn't yank the view back to it.
+  function applyReviewDeepLink() {
+    const p = pendingReviewDeepLink;
+    if (!p || p.slug !== s) return;
+    let target = null;
+    listEl.querySelectorAll('.review-row').forEach((li) => { if (li.dataset.id === p.id) target = li; });
+    if (!target) return;
+    // v1.9.1c — halo the WHOLE `.review-row`, NOT its `.row-toggle` child. The row has
+    // `overflow:hidden` (for its rounded corners + line-clamp), which CLIPS a child's
+    // outer box-shadow to nothing → the carried "invisible halo" bug. An element's own
+    // outset box-shadow is NOT clipped by its own overflow, so on the row it renders as
+    // a visible purple card glow (matching how the comment halo lands on the `.bubble`).
+    const el = target;
+    // Add the class only if MISSING — do NOT reflow-restart on every render. A freshly
+    // rebuilt row plays the 2.4s glow from its start anyway; re-appending the SAME row
+    // (sort / auth / mine-chip re-render) would otherwise restart the animation back to
+    // 0% (transparent) each time and never let it reach its visible peak — which is why
+    // the glow looked absent even after the clip fix. So: rebuilt rows get a fresh glow,
+    // persisting rows keep glowing uninterrupted.
+    if (!el.classList.contains('rar-deeplink-flash')) el.classList.add('rar-deeplink-flash');
+    if (!p.scrolled) {
+      p.scrolled = true;
+      try {
+        const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        el.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+      } catch (_) {}
+      setTimeout(() => { if (pendingReviewDeepLink === p) pendingReviewDeepLink = null; }, 4000);
+    }
+  }
   function renderRows(rows) {
+    updateMineChip();
     const mode = (sortEl?.value || 'most-liked');   // "Most helpful" by default
     const band = (filterEl?.value || 'all');
+    const meUid = auth.currentUser && auth.currentUser.uid;
     let sorted = rows.slice();
 
-    if (band !== 'all') sorted = sorted.filter(r => bandOf(r.rating) === band);
+    // v1.9.1b — "My review" isolates the signed-in user's own review; it overrides the
+    // ratings band (you always want YOUR review regardless of its score).
+    if (showMineOnly && meUid) sorted = sorted.filter(r => r.uid === meUid);
+    else if (band !== 'all') sorted = sorted.filter(r => bandOf(r.rating) === band);
 
     if (mode === 'newest') {
       sorted.sort((a,b) => b.createdAtMillis - a.createdAtMillis);
@@ -5357,6 +5431,7 @@ function subscribeReviews(anime) {
       return;
     }
     sorted.forEach(r => listEl.appendChild(r.li));
+    applyReviewDeepLink();
   }
 
   const onSortChange = () => {
@@ -5373,6 +5448,31 @@ function subscribeReviews(anime) {
   if (sortEl) sortEl.addEventListener('change', onSortChange);
   const onFilterChange = () => { renderRows(lastRows); try { filterEl.blur(); } catch(_) {} };
   if (filterEl) filterEl.addEventListener('change', onFilterChange);
+
+  // v1.9.1b — "My review" chip: isolates the signed-in user's own review. Shown only
+  // when they're signed in AND have posted a review here; resets gracefully otherwise.
+  function updateMineChip() {
+    if (!mineEl) return;
+    const meUid = auth.currentUser && auth.currentUser.uid;
+    const hasMine = !!(meUid && lastRows.some(r => r.uid === meUid));
+    mineEl.hidden = !hasMine;
+    if (!hasMine && showMineOnly) {
+      showMineOnly = false;
+      mineEl.setAttribute('aria-pressed', 'false');
+      mineEl.classList.remove('is-active');
+    }
+  }
+  if (mineEl) {
+    mineEl.addEventListener('click', () => {
+      showMineOnly = !showMineOnly;
+      mineEl.setAttribute('aria-pressed', showMineOnly ? 'true' : 'false');
+      mineEl.classList.toggle('is-active', showMineOnly);
+      renderRows(lastRows);
+      try { mineEl.blur(); } catch (_) {}
+    });
+  }
+  // sign-in / sign-out while the modal is open → re-evaluate the chip + re-render.
+  const mineAuthUnsub = onAuthStateChanged(auth, () => { renderRows(lastRows); });
 
   const unsubMain = onSnapshot(qref, (snap) => {
     try { subscribeReviews._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
@@ -5699,6 +5799,11 @@ function subscribeReviews(anime) {
       });
       syncThreadComposer();
 
+      // v1.9.1 — premium composer on the review discussion box too (inline preview + Enter to post).
+      if (window.RarComposer && threadInput) {
+        window.RarComposer.enhance(threadInput, { inline: true, submit: 'enter', onSubmit: () => threadPost && threadPost.click() });
+      }
+
       let posting = false;
 
       threadPost?.addEventListener('click', async (e) => {
@@ -5850,7 +5955,7 @@ function subscribeReviews(anime) {
         subscribeReviews._voteUnsubs.push(unsubVote);
       }
 
-      rows.push({ li, createdAtMillis, score, rating });
+      rows.push({ li, createdAtMillis, score, rating, uid: d.uid });
     });
 
     lastRows = rows;
@@ -5866,6 +5971,7 @@ function subscribeReviews(anime) {
     try { unsubMain(); } catch(_) {}
     try { sortEl?.removeEventListener('change', onSortChange); } catch(_) {}
     try { filterEl?.removeEventListener('change', onFilterChange); } catch(_) {}
+    try { mineAuthUnsub && mineAuthUnsub(); } catch(_) {}
     try { subscribeReviews._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     try { subscribeReviews._voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     try { subscribeReviews._threadUnsubs.forEach(fn => fn && fn()); } catch(_) {}
@@ -6012,6 +6118,17 @@ if (purl) data.photoURL = purl;
       sync();
     }
   });
+
+  // v1.9.1 — premium review composer: B/I/🔗 toolbar, Ctrl/⌘+B/I, a live FULL-markdown
+  // preview (headers + lists, exactly how the review will render), and Ctrl/⌘+Enter to
+  // publish (Enter = newline) so a multi-paragraph review is never truncated. Only fires
+  // when the form already validates, so no native validation bubbles appear.
+  if (window.RarComposer) {
+    window.RarComposer.enhance(bodyEl, { inline: false, submit: 'mod', onSubmit: () => {
+      if (pubBtn.disabled) return;
+      if (typeof form.requestSubmit === 'function') form.requestSubmit(); else pubBtn.click();
+    } });
+  }
 
   // Author actions already work; doc id will be the uid now.
   listEl.addEventListener('click', async (e) => {
@@ -6656,6 +6773,10 @@ function closeModal() {
   modal.classList.remove('duo');
   updateScrollLock();
   isSpotlightHovered = false;
+
+  // v1.9.1 — drop any unconsumed review deep-link so reopening this anime later
+  // doesn't re-yank the view to a stale target.
+  pendingReviewDeepLink = null;
 
   // clear contents to avoid lingering listeners
   modalContent.innerHTML = '';
