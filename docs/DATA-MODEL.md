@@ -1,6 +1,23 @@
 <!-- author: Code | date: 2026-06-06 -->
 # v1.9.0 Community Overhaul — Firestore Data Model (the CONTRACT)
 
+## ⚡ READ-FIRST
+- **What this is:** the v1.9.0 **Firestore data model — the binding CONTRACT** that `firestore.rules`, the Cloud Functions (`functions/`), and the client all implement. Collections, doc shapes, CF-only-write rules, indexes, the path-collision ledger, and the protect-the-heart invariants.
+- **When to open it:** any time you touch `firestore.rules`, a Cloud Function, or a community read/write (comments / reviews / forum / DMs / notifications / profiles / reports / suggestionCounts) — or you need to know WHY a write must be CF-only. The security fixes (H1–H5 / M1–M6) are binding.
+- A fresh Code does NOT read this at session start — open it only when your gate works the data layer.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+- **CHANGED — existing collections** — open if you touch notifications / suggestions / comments / reviews / official / replies, or the deferred `users/{uid}` tightening.
+- **NEW — collections** — open if you touch the forum hub, per-season reuse, DMs (conversations/messages/reads), profiles, suggestionCounts, or reports.
+- **CF-only writes — consolidated** — open if you need WHY a client rule can't do a write (and which CF owns it).
+- **Cloud Functions inventory** — open if you need the CF list + what each does.
+- **Path-collision ledger** — open if you're adding a collection/path and need to confirm no collision.
+- **Indexes to add** — open if a query needs a composite index (`firestore.indexes.json`).
+- **Test plan (two tracks)** — open if you need the rules-emulator + functions test split.
+- **Protect-the-heart invariants (bake as assertions)** — open if you need the gold-is-Blake-only / community-supporting-cast invariants to assert.
+
 > **This is the frozen data contract for the whole v1.9.0 ship.** Every later gate builds against it. It folds in Blake's 7 gate-0 answers and the 5 HIGH-severity + supporting security fixes from the adversarial review. The LIVE-today schema is in [ARCHITECTURE.md § Firestore data model](ARCHITECTURE.md); this doc is the **target**. Nothing here is applied yet — the rules rewrite is Gate 1.
 
 **Conventions:**

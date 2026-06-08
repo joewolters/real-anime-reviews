@@ -41,32 +41,38 @@
         <h1><a href="index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
 
         <div class="toolbar">
-          <button type="button" id="view-all-btn" class="inline-header-btn" onclick="location.href='index.html#all'">View All Animes</button>
+          <!-- gate 6d item 7: the real nav comes to the account page (static links back
+               to the home surfaces) + the logo/Den as a clear way back. -->
+          <nav class="nav-places" aria-label="Sections">
+            <button type="button" class="inline-header-btn place-btn" onclick="location.href='index.html'">Blake&rsquo;s Den <span class="jp-mini">隠れ家</span></button>
+            <button type="button" class="inline-header-btn place-btn" onclick="location.href='index.html?place=foryou'">For You <span class="jp-mini">君へ</span></button>
+            <button type="button" class="inline-header-btn place-btn" onclick="location.href='index.html?place=discover'">Discover <span class="jp-mini">発見</span></button>
+          </nav>
+          <span class="toolbar-seam" aria-hidden="true"></span>
+          <div class="nav-tools" role="group" aria-label="Tools">
+            <button type="button" id="view-all-btn" class="inline-header-btn tool-btn" onclick="location.href='index.html#all'">View All <span class="jp-mini">全作品</span></button>
+          </div>
         </div>
       </div>
 
       <!-- same search+topline structure as index so it styles identically -->
       <nav class="nav-links">
-        <div class="nav-topline">
-  <button type="button" id="notif-btn" class="as-link notif-btn" aria-label="Notifications" aria-expanded="false">
-    <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-  <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.1-1.6-5.6-4.5-6.3V4c0-.8-.7-1.5-1.5-1.5S10.5 3.2 10.5 4v.7C7.6 5.4 6 7.9 6 11v5l-2 2v1h16v-1l-2-2z"/>
-</svg>
-    <span id="notif-dot" class="notif-dot" hidden></span>
-  </button>
-
-  <button type="button" id="auth-open" class="as-link" style="display:none;">My Account</button>
-</div>
-
-<div id="notif-menu" class="notif-menu" hidden aria-label="Notifications dropdown"></div>
-
-
+        <!-- gate 6d: same composed rail as index (search left, circular tokens right). -->
         <form id="search-form" class="search-wrap" role="search" autocomplete="off" novalidate
               onsubmit="event.preventDefault(); location.href='index.html#all'">
           <input id="site-search" type="search" placeholder="Search anime…" aria-label="Search anime" />
           <button type="submit" class="search-btn" aria-label="Search">Search</button>
-          <button type="button" class="clear-btn" aria-label="Clear" onclick="document.getElementById('site-search').value=''">✕</button>
         </form>
+        <div class="header-tokens">
+          <button type="button" id="notif-btn" class="notif-btn" aria-label="Notifications" aria-expanded="false">
+            <svg class="lantern-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path class="lantern-body" d="M9 3h6M10 3v2.2M14 3v2.2M7.5 9.4a4.5 4.5 0 0 1 9 0v6.6a1.4 1.4 0 0 1-1.4 1.4H8.9A1.4 1.4 0 0 1 7.5 16zM10 20h4"/>
+              <path class="lantern-flame" d="M12 8.4c1.6 1 2.4 2.2 2.4 3.6a2.4 2.4 0 1 1-4.8 0c0-1 .5-1.9 1.2-2.7.3.5.7.8 1.2.9-.2-.6-.2-1.2 0-1.8z"/>
+            </svg>
+            <span id="notif-dot" class="notif-dot" hidden></span>
+          </button>
+          <button type="button" id="auth-open" class="account-token" aria-label="My Account" style="display:none;"></button>
+        </div>
       </nav>
     </div>
   </header>
@@ -204,8 +210,7 @@
         <p class="footer-text">
           Hey people I'm Blake and this has been a pet project of mine for a couple months now and I'm super happy that it's finally out. 
         This orignally started off as a place where I would "just leave my reviews" for my friends/family to look at so they know which 
-        anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I was praying for chatGPT to
-        practically vibe code the entire website for me. All that aside I'm SUPER happy with how this turned out. If any information is 
+        anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I'd practically vibe-coded the entire website — with coding help from Claude. All that aside I'm SUPER happy with how this turned out. If any information is 
         wrong feel free to reach out to me via Instagram. I plan to continue updating this little site and I hope to see y'all around.
         </p>
 

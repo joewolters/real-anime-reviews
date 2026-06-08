@@ -1,6 +1,29 @@
 <!-- author: Code | date: 2026-05-09 -->
 # AniList API Spike — Reference for Phase A / Mode 1
 
+## ⚡ READ-FIRST
+
+- **What this doc is:** the single source of truth for what the AniList GraphQL API actually returns (the `Media` object), how its fields map to the current `animeData.js`/Excel schema, and copy-paste queries to verify any claim.
+- **Endpoint in one line:** `https://graphql.anilist.co` — GraphQL over HTTPS POST, no auth/key for reads, 90 req/min/IP, free.
+- **DO NOT read this top-to-bottom at session start.** It is deep reference, not onboarding. Open it ONLY when a task actually touches AniList.
+- **Open it when:** you are building/editing the v1.5.0 Excel sync or v1.6.0 Mode 1 fetch, deciding how an Excel column or Mode 1 form field maps to AniList, or you need a working GraphQL query to run at <https://anilist.co/graphiql>.
+- **Skip it when:** the task is pure card rendering, CSS, deploy config, or anything not pulling data from AniList.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+
+- **1 · The endpoint and how it works** — open if you need the URL, protocol, auth, rate limit, or why GraphQL.
+- **2 · The fields AniList offers (the `Media` object)** — open if you need the exact field name/type/example for a piece of anime data.
+- **3 · Fields that map cleanly to current `animeData.js`** — open if you need the direct old-field → AniList-field crosswalk.
+- **4 · New capabilities AniList unlocks (not in current schema)** — open if you're deciding which new Excel columns to add.
+- **5 · Schema-design decisions Phase A needs to make** — open if you're choosing string-vs-array, replace-vs-merge, or ID storage shape.
+- **6 · Ready-to-run queries (paste into anilist.co/graphiql)** — open if you need a working GraphQL query to copy and run.
+- **7 · Verification steps for whoever picks this up next** — open if you need to confirm the live API still matches this doc.
+- **8 · Summary recommendations for Phase A (v1.5.0)** — open if you need the bottom-line "what to do in v1.5.0" list.
+
+---
+
 > **Status:** Read-only research, no code or site changes. Output of Phase A pre-work task.
 >
 > **Why this exists:** Phase A (v1.5.0 Excel sync) and Phase B (v1.6.0 Mode 1) both need a single source of truth for what AniList actually returns. This doc is that source. Every Excel column and every Mode 1 form field can map back to a documented AniList capability listed here.

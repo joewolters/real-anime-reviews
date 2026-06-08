@@ -1,5 +1,23 @@
 # Roadmap
 
+## ⚡ READ-FIRST
+- **Live at v1.8.4** ("Discovery & Blend", shipped 2026-06-06). **The active ship is v1.9.0 — Community + Account UI/UX Overhaul** (the largest update yet; mid-build — see `docs/CODE-HANDOFF.md` for the exact gate state).
+- **THE PROJECT RULES live in the "Project rules for any AI working on this codebase" section below** — read those once if you haven't (Excel-canonical, mark-your-changes, test-before-commit, slow-and-safe ladder). They bind every change.
+- The **"Current state"** section is a long historical run-on of every shipped version — DEEP reference, NOT onboarding reading. For the current state read `docs/CODE-HANDOFF.md`; for the actionable backlog read `docs/NEXT.md`.
+- This doc = the locked strategic version ladder + the project rules. `CHANGELOG.md` + git = the authoritative shipped history.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+- **End goal — the two modes** — open if you need the Mode 1 / Mode 2 long-term vision.
+- **Project rules for any AI working on this codebase** — open (READ ONCE) for the binding rules every change must follow.
+- **Current state** — open ONLY if you need the full shipped-version history run-on (long; CODE-HANDOFF has the current state instead).
+- **Phase A / Phase B / Phase B-side** — open if you need the historical Mode-1 build arc + one-time data-work phases.
+- **v1.9.0 — Community + Account UI/UX Overhaul** — open if you need the roadmap-level scope of the active ship (build detail is in CODE-HANDOFF + DATA-MODEL).
+- **v2.0.0 — Mobile compatibility overhaul** — open if you need the post-community mobile plan.
+- **Phase C / Phase D (Mode 2)** — open if you need the test-scaffolding history or the future caretaker-AI build order.
+- **Big-vision ideas / Polish / tech debt / Known issues / Deferred / What's NOT on this roadmap** — open if you need long-horizon ideas, the do-whenever cleanup list, known bugs, or scope boundaries.
+
 > **North star:** A real working site for strangers looking for anime recommendations from an actual normal person.
 
 ---

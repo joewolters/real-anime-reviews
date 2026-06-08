@@ -1571,16 +1571,36 @@ function confirmDialog({
     window.location.href = 'account.html';
   }
 });
-// ===== Notifications dropdown (functional) =====
-let notifOpen = false;
+// ===== Lantern notification center (v1.9.0 Community Overhaul) =====
+// Replaces the old bell + dropdown. The Lantern glyph on #notif-btn runs COLD
+// (dim purple) when caught-up; WARM with a GOLD ember (.lantern-lit) when there's
+// unread FROM BLAKE, or a COOL purple ember (.lantern-lit-community) when the only
+// unread is community. Unread is client-computed vs lastSeenAt (no hot counter doc).
+let unsubNotifs     = null;   // notifications listener
+let unsubNotifPrefs = null;   // notifPrefs/prefs listener (lastSeenAt + muted)
+let lastNotifs      = [];     // newest-first plain objects { id, ...data }
+let notifLastSeenMs = 0;      // lastSeenAt in millis (0 = never seen)
+let notifMuted      = {};     // { [type]: true }
+let notifCenterOpen = false;
 
-let unsubNotifs = null;
-let lastNotifs  = [];
-
-// Keep notifications small so the dropdown + Firestore don't grow forever
-const NOTIF_KEEP  = 10;   // show/keep newest 10
-const NOTIF_FETCH = 50;   // fetch extra so we can delete the old ones
+const NOTIF_KEEP  = 10;   // keep newest 10 in Firestore
+const NOTIF_FETCH = 50;   // fetch extra so we can prune the old ones
 let notifCleanupInFlight = false;
+
+// Blake. Blake-origin pings get a gold pin and sort first (critic H4).
+const NOTIF_ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
+
+// Every type the center understands. Anything else falls back gracefully.
+const NOTIF_VOTE_TYPES = ['comment_vote', 'review_vote'];
+const NOTIF_TYPE_META = {
+  reply:               { glyph: '↩', label: 'Replies',     verb: 'replied to you' },
+  dm:                  { glyph: '✉', label: 'Messages',    verb: 'sent you a message' },
+  blake_message:       { glyph: '★', label: 'From Blake',  verb: 'sent you a message' },
+  suggestion_accepted: { glyph: '✓', label: 'Suggestions', verb: 'accepted your suggestion' },
+  new_season:          { glyph: '◷', label: 'New seasons', verb: 'has a new season' },
+  comment_vote:        { glyph: '♥', label: 'Likes',       verb: 'liked your comment' },
+  review_vote:         { glyph: '♥', label: 'Likes',       verb: 'liked your review' },
+};
 
 async function cleanupOldNotifications(uid, snapDocs) {
   if (!uid) return;
@@ -1598,13 +1618,6 @@ async function cleanupOldNotifications(uid, snapDocs) {
   }
 }
 
-
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (m) => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[m]));
-}
-
 function timeAgoMs(ms) {
   const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
   if (s < 60) return 'just now';
@@ -1613,141 +1626,432 @@ function timeAgoMs(ms) {
   const d = Math.floor(h / 24); return `${d}d ago`;
 }
 
-function renderNotifShell() {
-  if (!notifMenu) return;
-  notifMenu.innerHTML = `
-    <div class="notif-head">
-      <div class="notif-title">Notifications</div>
-      <div class="notif-sub">No notifications yet.</div>
-    </div>
-    <div class="notif-divider"></div>
-    <div class="notif-list">
-      <div class="notif-empty">
-        <div class="notif-line">No notifications yet.</div>
+// Defensive createdAt → millis (Firestore Timestamp | number | {seconds} | null).
+function notifCreatedMs(n) {
+  const c = n && n.createdAt;
+  if (c == null) return 0;
+  if (typeof c === 'number') return c;
+  if (typeof c.toMillis === 'function') return c.toMillis();
+  if (typeof c.seconds === 'number') return c.seconds * 1000;
+  return 0;
+}
+
+// Is this notification from Blake? (origin uid OR the dedicated type.)
+function notifIsBlake(n) {
+  if (!n) return false;
+  return n.type === 'blake_message' || n.fromUid === NOTIF_ADMIN_UID;
+}
+
+// ── PURE testable model (exposed on window for Playwright). Pure function of its
+// inputs: notifs = plain objects with { fromUid, type, createdAtMillis, ... }.
+// Returns { unreadCount, unreadBlake, sorted, rollup }. The on-page renderer calls
+// this too so tests reflect reality.
+function lanternModel(notifs, lastSeenMillis, adminUid) {
+  const list = Array.isArray(notifs) ? notifs : [];
+  const admin = adminUid || NOTIF_ADMIN_UID;
+  const seen = Number(lastSeenMillis) || 0;
+
+  const ms = (n) => Number(n && n.createdAtMillis) || 0;
+  const isBlake = (n) => !!n && (n.type === 'blake_message' || n.fromUid === admin);
+  const isVote = (n) => !!n && NOTIF_VOTE_TYPES.indexOf(n.type) !== -1;
+
+  const unreadCount = list.filter((n) => ms(n) > seen).length;
+  // Blake-origin unread only — drives the GOLD ember (gold = Blake). Community-only
+  // unread keeps the lantern cool/purple. (See updateLanternGlyph.)
+  const unreadBlake = list.filter((n) => ms(n) > seen && isBlake(n)).length;
+
+  // Non-vote notifications, Blake-origin first, then createdAt desc.
+  const sorted = list.filter((n) => !isVote(n)).slice().sort((a, b) => {
+    const ba = isBlake(a) ? 1 : 0;
+    const bb = isBlake(b) ? 1 : 0;
+    if (ba !== bb) return bb - ba;            // Blake first
+    return ms(b) - ms(a);                     // then newest first
+  });
+
+  // Vote-type notifications collapse into one summary row.
+  const votes = list.filter(isVote);
+  const rollup = { count: votes.length, hasAny: votes.length > 0 };
+
+  return { unreadCount, unreadBlake, sorted, rollup };
+}
+if (typeof window !== 'undefined') window.lanternModel = lanternModel;
+
+// Adapt the live notif docs (Firestore shape) into the plain-object shape the
+// pure model expects, then run the model.
+function lanternModelFromLive(notifs, lastSeenMillis) {
+  const plain = (notifs || []).map((n) => ({ ...n, createdAtMillis: notifCreatedMs(n) }));
+  return lanternModel(plain, lastSeenMillis, NOTIF_ADMIN_UID);
+}
+
+// Resolve the verb shown for a row: explicit n.verb wins, else a sensible
+// per-type phrase, else a neutral fallback. Always escaped at render time.
+function notifVerb(n) {
+  if (n && typeof n.verb === 'string' && n.verb.trim()) return n.verb.trim();
+  const meta = NOTIF_TYPE_META[n && n.type];
+  if (meta && meta.verb) return meta.verb;
+  // Legacy vote rows carried value/type but no verb.
+  if (n && (n.type === 'comment_vote' || n.type === 'review_vote')) {
+    return (n.value === -1 ? 'disliked' : 'liked') +
+           (n.type === 'review_vote' ? ' your review' : ' your comment');
+  }
+  return 'sent you tidings';
+}
+
+// ── The notification CENTER (veil-wearing center sheet). Built once, .active to
+// open, closed via backdrop / Escape / close button. Mirrors the secondary-layer
+// pattern; reduced-motion aware.
+let lanternEl = null;
+let notifRollupOpen = false;     // is the vote rollup expanded into its "who liked" list?
+let lanternBackChip = null;      // floating "← Notifications" chip after a deep-link
+
+// A floating back affordance so a deep-link has an easy way home (gate-6c item 4).
+function showLanternBackChip() {
+  if (!lanternBackChip) {
+    lanternBackChip = document.createElement('button');
+    lanternBackChip.type = 'button';
+    lanternBackChip.className = 'lantern-back-chip';
+    lanternBackChip.innerHTML = '<span aria-hidden="true">←</span> Back to Notifications';
+    lanternBackChip.setAttribute('aria-label', 'Back to notifications');
+    lanternBackChip.addEventListener('click', () => { hideLanternBackChip(); openLanternCenter(); });
+    document.body.appendChild(lanternBackChip);
+  }
+  lanternBackChip.classList.add('show');
+}
+function hideLanternBackChip() {
+  if (lanternBackChip) lanternBackChip.classList.remove('show');
+}
+
+function ensureLanternEl() {
+  if (lanternEl) return;
+  lanternEl = document.createElement('div');
+  lanternEl.className = 'lantern-layer';
+  lanternEl.hidden = true;
+  lanternEl.innerHTML =
+    '<div class="lantern-backdrop"></div>' +
+    '<div class="lantern-center" role="dialog" aria-modal="true" aria-label="Notifications" tabindex="-1">' +
+      '<div class="lantern-head">' +
+        '<div class="lantern-head-titles">' +
+          '<div class="lantern-kicker" lang="ja">便り</div>' +
+          '<div class="lantern-title">Notifications</div>' +
+        '</div>' +
+        '<div class="lantern-head-actions">' +
+          '<button type="button" class="lantern-markread" data-act="markread">Mark all read</button>' +
+          '<button type="button" class="lantern-close" data-act="close" aria-label="Close">×</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="lantern-scroll"></div>' +
+    '</div>';
+  document.body.appendChild(lanternEl);
+  lanternEl.querySelector('.lantern-backdrop').addEventListener('click', closeLanternCenter);
+  lanternEl.addEventListener('click', onLanternClick);
+}
+
+function onLanternKeydown(e) {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeLanternCenter(); }
+}
+
+function onLanternClick(e) {
+  const act = e.target.closest('[data-act]');
+  if (act) {
+    const kind = act.dataset.act;
+    if (kind === 'close') { e.preventDefault(); closeLanternCenter(); return; }
+    if (kind === 'markread') { e.preventDefault(); markAllNotifsRead(); return; }
+  }
+  // Per-type mute toggle.
+  const mute = e.target.closest('.lantern-mute[data-type]');
+  if (mute) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleNotifMute(mute.dataset.type);
+    return;
+  }
+  // Rollup drill-down — expand to "exactly who liked".
+  const roll = e.target.closest('[data-rollup-toggle]');
+  if (roll) { e.preventDefault(); notifRollupOpen = !notifRollupOpen; renderLanternCenter(); return; }
+  // A deep-linkable notification row OR an itemized vote row → land on it + offer a way back.
+  const link = e.target.closest('.lantern-row[data-target], .lantern-vote-item[data-target]');
+  if (link) {
+    const tgt = link.dataset.target, aid = link.dataset.animeid;
+    if (!tgt && !aid) return;
+    closeLanternCenter();
+    openNotifTarget(tgt, aid);
+    showLanternBackChip();
+  }
+}
+
+// Deep-link: prefer targetPath (comments/<slug>/items/<id>, forum/<tid>,
+// conversations/<id>); fall back to animeId → openAnimeFromId for legacy rows.
+// Pure deep-link parse (exposed for tests). comments/<slug>/items/<cid>[/replies/..]
+// → land on the parent comment; reviews/<slug>/items/<uid> → the review row;
+// forum/<tid> + conversations/<id> → a hash route (no on-page router yet).
+function parseNotifTarget(targetPath) {
+  const path = (targetPath || '').trim();
+  const mc = /^comments\/([^/]+)\/items\/([^/]+)/.exec(path);
+  if (mc) return { kind: 'comment', slug: mc[1], id: mc[2] };
+  const mr = /^reviews\/([^/]+)\/items\/([^/]+)/.exec(path);
+  if (mr) return { kind: 'review', slug: mr[1], id: mr[2] };
+  if (/^(forum|conversations)\//.test(path)) return { kind: 'hash', path };
+  return { kind: 'none' };
+}
+if (typeof window !== 'undefined') window.parseNotifTarget = parseNotifTarget;
+
+function openNotifTarget(targetPath, animeId) {
+  const t = parseNotifTarget(targetPath);
+  if (t.kind === 'comment') {
+    openAnimeFromId(t.slug);
+    // gate 6d item 4: halo ONLY the message bubble, not the avatar column.
+    scrollHighlightNotif(() => { const it = findByData('.comment-item', 'cid', t.id); return it && (it.querySelector('.bubble') || it); });
+    return;
+  }
+  if (t.kind === 'review') {
+    openAnimeFromId(t.slug);
+    // gate 6d item 4: halo the review's title bar, not the whole row/avatar.
+    scrollHighlightNotif(() => { const it = findByData('.review-row', 'id', t.id); return it && (it.querySelector('.row-toggle') || it); });
+    return;
+  }
+  if (t.kind === 'hash') { try { window.location.hash = '#' + t.path; } catch (_) {} return; }
+  if (animeId) openAnimeFromId(animeId);
+}
+
+// Find a comment/reply/review element by its data-attribute value (a DOM scan
+// avoids CSS attribute-selector escaping issues with arbitrary Firestore ids).
+function findByData(sel, key, val) {
+  const nodes = document.querySelectorAll(sel);
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].dataset && nodes[i].dataset[key] === val) return nodes[i];
+  }
+  return null;
+}
+
+// The modal + its comment/review list load ASYNC after openAnimeFromId. Poll for
+// the target, then scroll to it + flash a highlight (reduced-motion: static fade).
+function scrollHighlightNotif(getEl) {
+  let tries = 0;
+  const tick = () => {
+    const el = getEl();
+    if (el) {
+      try {
+        const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        el.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+        el.classList.add('rar-deeplink-flash');
+        setTimeout(() => { try { el.classList.remove('rar-deeplink-flash'); } catch (_) {} }, 2400);
+      } catch (_) {}
+      return;
+    }
+    if (++tries < 40) setTimeout(tick, 150);   // up to ~6s for the list to render
+  };
+  setTimeout(tick, 300);   // give the modal a beat to open
+}
+
+// One row of the center, rendered per-type. Every user-derived string escaped.
+function renderLanternRow(n) {
+  const type = (n && n.type) || '';
+  const meta = NOTIF_TYPE_META[type] || { glyph: '◆' };
+  const blake = notifIsBlake(n);
+  const name = n.fromDisplayName || (blake ? 'Blake' : 'Someone');
+  const verb = notifVerb(n);
+  const title = n.animeTitle || n.animeId || '';
+  const ms = notifCreatedMs(n);
+  const ago = ms ? timeAgoMs(ms) : '';
+  const unread = ms > notifLastSeenMs;   // gate 6e: unread rows glow until read+closed
+
+  const avatar = n.fromPhotoURL
+    ? `<img src="${escapeHtml(n.fromPhotoURL)}" alt="">`
+    : `<span>${escapeHtml(String(name).trim().slice(0,1).toUpperCase() || '?')}</span>`;
+
+  const target = n.targetPath || '';
+  const animeAttr = n.animeId || '';
+  const metaLine = [title, ago].filter(Boolean).map(escapeHtml).join(' · ');
+
+  return `
+    <div class="lantern-row${blake ? ' lantern-row--blake' : ''}${unread ? ' is-unread' : ''}" data-type="${escapeHtml(type)}" data-target="${escapeHtml(target)}" data-animeid="${escapeHtml(animeAttr)}">
+      ${blake ? '<span class="lantern-pin" aria-hidden="true">★</span>' : ''}
+      <div class="lantern-avatar"><span class="lantern-row-glyph" aria-hidden="true">${escapeHtml(meta.glyph || '◆')}</span>${avatar}</div>
+      <div class="lantern-row-text">
+        <div class="lantern-row-line"><strong>${escapeHtml(name)}</strong> ${escapeHtml(verb)}</div>
+        ${metaLine ? `<div class="lantern-row-meta">${metaLine}</div>` : ''}
       </div>
     </div>
   `;
 }
 
-function updateNotifDot(notifs) {
-  if (!notifDot) return;
-  const hasUnread = (notifs || []).some(n => n.read !== true);
-  notifDot.hidden = !hasUnread;
+// The vote summary row (warm-but-purple, never gold). Clicking it DRILLS DOWN to an
+// itemized "who liked" list built from the already-loaded vote notifications — each
+// carries a server-sourced fromDisplayName + targetPath (gate-6c item 3). Cheapest
+// honest version: limited to the un-pruned inbox window (the complete who-liked-ever
+// history would need a per-item votes-subcollection query — proposed post-cutover).
+function renderLanternRollup(votes, expanded) {
+  if (!votes || !votes.length) return '';
+  const n = votes.length;
+  const anyUnread = (votes || []).some((v) => notifCreatedMs(v) > notifLastSeenMs);   // gate 6e
+  const items = expanded ? `<div class="lantern-rollup-items">${votes.map((v) => {
+    const name = escapeHtml(v.fromDisplayName || 'Someone');
+    const verb = escapeHtml(notifVerb(v));
+    const where = [v.animeTitle || v.animeId || '', notifCreatedMs(v) ? timeAgoMs(notifCreatedMs(v)) : ''].filter(Boolean).map(escapeHtml).join(' · ');
+    return `<div class="lantern-vote-item" data-target="${escapeHtml(v.targetPath || '')}" data-animeid="${escapeHtml(v.animeId || '')}">
+      <span class="lvi-glyph" aria-hidden="true">${v.value === -1 ? '👎' : '👍'}</span>
+      <div class="lvi-text"><strong>${name}</strong> ${verb}${where ? `<span class="lvi-meta"> · ${where}</span>` : ''}</div>
+    </div>`;
+  }).join('')}</div>` : '';
+  return `
+    <div class="lantern-rollup${expanded ? ' is-open' : ''}${anyUnread ? ' is-unread' : ''}" data-rollup-toggle role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}">
+      <span class="lantern-rollup-glyph" aria-hidden="true">♥</span>
+      <div class="lantern-rollup-text">
+        <div class="lantern-rollup-line">Your takes got liked</div>
+        <div class="lantern-rollup-meta">${n} recent · tap to see who</div>
+      </div>
+      <span class="lantern-rollup-chev" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
+    </div>${items}
+  `;
 }
 
-function renderNotifications(notifs) {
-  if (!notifMenu) return;
-
-  const unreadCount = (notifs || []).filter(n => n.read !== true).length;
-  const subline = unreadCount ? `${unreadCount} unread` : `All caught up`;
-
-  const rows = (notifs || []).map((n) => {
-    const name = n.fromDisplayName || 'Someone';
-    const verb = (n.value === -1) ? 'disliked' : 'liked';
-    const what = (n.type === 'review_vote') ? 'your review' : 'your comment';
-    const title = n.animeTitle || n.animeId || 'an anime';
-
-    const ms = n.createdAt?.toMillis ? n.createdAt.toMillis()
-      : (typeof n.createdAt === 'number' ? n.createdAt : Date.now());
-
-    const avatar = n.fromPhotoURL
-      ? `<img src="${esc(n.fromPhotoURL)}" alt="">`
-      : `<span>${esc(String(name).trim().slice(0,1).toUpperCase() || '?')}</span>`;
-
-    return `
-      <div class="notif-row" data-id="${esc(n.id)}" data-animeid="${esc(n.animeId)}">
-        <div class="notif-avatar">${avatar}</div>
-        <div class="notif-text">
-          <div class="notif-line">${esc(name)} ${esc(verb)} ${esc(what)}</div>
-          <div class="notif-meta">${esc(title)} · ${esc(timeAgoMs(ms))}</div>
-        </div>
-      </div>
-    `;
+// Compact per-type mute control strip.
+function renderLanternMutes() {
+  const types = ['reply', 'dm', 'comment_vote', 'new_season', 'suggestion_accepted'];
+  const chips = types.map((t) => {
+    const meta = NOTIF_TYPE_META[t] || {};
+    const off = !!notifMuted[t];
+    return `<button type="button" class="lantern-mute${off ? ' is-muted' : ''}" data-type="${escapeHtml(t)}" aria-pressed="${off}" title="${off ? 'Unmute' : 'Mute'} ${escapeHtml(meta.label || t)}">${escapeHtml(meta.label || t)}</button>`;
   }).join('');
+  return `<div class="lantern-mutes"><span class="lantern-mutes-label">Mute</span>${chips}</div>`;
+}
+
+function renderLanternCenter() {
+  if (!lanternEl) return;
+  const scroll = lanternEl.querySelector('.lantern-scroll');
+  if (!scroll) return;
+
+  const { sorted } = lanternModelFromLive(lastNotifs, notifLastSeenMs);
+  const votes = (lastNotifs || []).filter((n) => n && (n.type === 'comment_vote' || n.type === 'review_vote'));
+  const rows = sorted.map(renderLanternRow).join('');
+  const rollupHtml = renderLanternRollup(votes, notifRollupOpen);
 
   const empty = `
-    <div class="notif-empty">
-      <div class="notif-line">No notifications yet.</div>
+    <div class="lantern-empty">
+      <div class="lantern-empty-glyph" aria-hidden="true">🏮</div>
+      <div class="lantern-empty-line">You're all caught up.</div>
     </div>
   `;
 
-  notifMenu.innerHTML = `
-    <div class="notif-head">
-      <div class="notif-title">Notifications</div>
-      <div class="notif-sub">${esc(subline)}</div>
-    </div>
-    <div class="notif-divider"></div>
-    <div class="notif-list">
-      ${rows || empty}
-    </div>
-  `;
+  scroll.innerHTML = renderLanternMutes() + (
+    (rows || rollupHtml) ? `<div class="lantern-list">${rollupHtml}${rows}</div>` : empty
+  );
 }
 
-async function markVisibleNotifsRead() {
-  if (!auth.currentUser) return;
-  const uid = auth.currentUser.uid;
+// Toggle the Lantern glyph between COLD and WARM (lit) by unread count.
+function updateLanternGlyph() {
+  if (!notifBtn) return;
+  const { unreadCount, unreadBlake } = lanternModelFromLive(lastNotifs, notifLastSeenMs);
+  // GOLD ember = Blake-origin unread ONLY (gold is Blake's). Community-only unread
+  // gets a COOL purple ember. The two classes are mutually exclusive.
+  notifBtn.classList.toggle('lantern-lit', unreadBlake > 0);
+  notifBtn.classList.toggle('lantern-lit-community', unreadCount > 0 && unreadBlake === 0);
+  if (notifDot) notifDot.hidden = unreadCount === 0;   // ember shows for any unread (color by origin)
+  notifBtn.setAttribute('aria-label', unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications');
+}
 
-  const unreadIds = (lastNotifs || [])
-    .filter(n => n.read !== true)
-    .map(n => n.id);
+// "Mark all read" = ONE write to notifPrefs/prefs.lastSeenAt (merge). No per-notif
+// read flips anymore.
+async function markAllNotifsRead() {
+  const user = auth.currentUser;
+  if (!user) return;
+  // optimistic: light goes cold immediately
+  notifLastSeenMs = Date.now();
+  updateLanternGlyph();
+  renderLanternCenter();
+  try {
+    await setDoc(doc(db, 'users', user.uid, 'notifPrefs', 'prefs'),
+      { lastSeenAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    console.warn('Mark-all-read failed:', err);
+  }
+}
 
-  if (!unreadIds.length) return;
-
-  await Promise.all(unreadIds.map((id) =>
-    updateDoc(doc(db, 'users', uid, 'notifications', id), {
-      read: true,
-      readAt: serverTimestamp()
-    }).catch(() => {})
-  ));
+// Per-type mute → notifPrefs/prefs.muted.{type} (merge). The Cloud Function honors
+// `muted` at source; we only flip the flag.
+async function toggleNotifMute(type) {
+  const user = auth.currentUser;
+  if (!user || !type) return;
+  const next = !notifMuted[type];
+  notifMuted = { ...notifMuted, [type]: next };   // optimistic
+  renderLanternCenter();
+  try {
+    await setDoc(doc(db, 'users', user.uid, 'notifPrefs', 'prefs'),
+      { muted: { [type]: next } }, { merge: true });
+  } catch (err) {
+    console.warn('Mute toggle failed:', err);
+  }
 }
 
 function subscribeNotifications(user) {
-  if (unsubNotifs) { try { unsubNotifs(); } catch(_) {} unsubNotifs = null; }
+  if (unsubNotifs)     { try { unsubNotifs(); }     catch(_) {} unsubNotifs = null; }
+  if (unsubNotifPrefs) { try { unsubNotifPrefs(); } catch(_) {} unsubNotifPrefs = null; }
   lastNotifs = [];
-  renderNotifShell();
-  updateNotifDot([]);
+  notifLastSeenMs = 0;
+  notifMuted = {};
+  updateLanternGlyph();
+  if (notifCenterOpen) renderLanternCenter();
 
   if (!user) return;
 
+  // Reactive lastSeenAt + muted (owner-writable prefs doc; also holds `muted`).
+  unsubNotifPrefs = onSnapshot(doc(db, 'users', user.uid, 'notifPrefs', 'prefs'), (snap) => {
+    const data = snap.exists() ? snap.data() : {};
+    const seen = data && data.lastSeenAt;
+    notifLastSeenMs = seen && typeof seen.toMillis === 'function' ? seen.toMillis()
+      : (typeof seen === 'number' ? seen : notifLastSeenMs);
+    notifMuted = (data && data.muted) || {};
+    updateLanternGlyph();
+    if (notifCenterOpen) renderLanternCenter();
+  }, () => {});
+
   const q = query(
-  collection(db, 'users', user.uid, 'notifications'),
-  orderBy('createdAt', 'desc'),
-  limit(NOTIF_FETCH)
-);
+    collection(db, 'users', user.uid, 'notifications'),
+    orderBy('createdAt', 'desc'),
+    limit(NOTIF_FETCH)
+  );
 
-unsubNotifs = onSnapshot(q, (snap) => {
-  // delete old ones (anything after newest 10)
-  cleanupOldNotifications(user.uid, snap.docs);
-
-  // only show the newest 10 in the UI
-  const shownDocs = snap.docs.slice(0, NOTIF_KEEP);
-  lastNotifs = shownDocs.map(d => ({ id: d.id, ...d.data() }));
-
-  renderNotifications(lastNotifs);
-  updateNotifDot(lastNotifs);
-}, (err) => {
-  console.warn('Notifications listen failed:', err);
-});
-
+  unsubNotifs = onSnapshot(q, (snap) => {
+    cleanupOldNotifications(user.uid, snap.docs);   // prune anything past newest 10
+    const shownDocs = snap.docs.slice(0, NOTIF_KEEP);
+    lastNotifs = shownDocs.map(d => ({ id: d.id, ...d.data() }));
+    updateLanternGlyph();
+    if (notifCenterOpen) renderLanternCenter();
+  }, (err) => {
+    console.warn('Notifications listen failed:', err);
+  });
 }
 
-function closeNotifMenu() {
-  if (!notifMenu || !notifBtn) return;
-  notifOpen = false;
-  notifMenu.hidden = true;
-  notifBtn.setAttribute('aria-expanded', 'false');
+function openLanternCenter() {
+  if (!auth.currentUser) return;   // logged out: clicking does nothing
+  ensureLanternEl();
+  hideLanternBackChip();           // we're back in the center; drop the "← Notifications" chip
+  notifCenterOpen = true;
+  notifBtn?.setAttribute('aria-expanded', 'true');
+  renderLanternCenter();
+  lanternEl.hidden = false;
+  void lanternEl.offsetWidth;      // reflow so the transition runs
+  lanternEl.classList.add('active');
+  document.documentElement.style.overflow = 'hidden';
+  document.addEventListener('keydown', onLanternKeydown);
 }
 
-function toggleNotifMenu() {
-  if (!notifMenu || !notifBtn) return;
+function closeLanternCenter() {
+  if (!lanternEl || !notifCenterOpen) return;
+  notifCenterOpen = false;
+  notifBtn?.setAttribute('aria-expanded', 'false');
+  lanternEl.classList.remove('active');
+  document.removeEventListener('keydown', onLanternKeydown);
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const done = () => { if (lanternEl) lanternEl.hidden = true; };
+  if (reduce) done(); else setTimeout(done, 300);
+  document.documentElement.style.overflow = (modal && modal.classList.contains('active')) ? 'hidden' : '';
+  markAllNotifsRead();   // gate 6e: reading then closing clears the unread glow on next open
+}
 
-  // Logged out: clicking does nothing (per your spec)
-  if (!auth.currentUser) return;
-
-  notifOpen = !notifOpen;
-  notifMenu.hidden = !notifOpen;
-  notifBtn.setAttribute('aria-expanded', String(notifOpen));
-  if (notifOpen) markVisibleNotifsRead();
+function toggleLanternCenter() {
+  if (notifCenterOpen) closeLanternCenter();
+  else openLanternCenter();
 }
 
 function openAnimeFromId(animeId) {
@@ -1765,40 +2069,17 @@ function openAnimeFromId(animeId) {
   const found = list.find(a => makeId(a.Title) === animeId);
   if (!found) return;
 
-  // open modal using whatever your project calls it
   if (typeof openModal === 'function') openModal(found);
   else if (typeof openAnimeModal === 'function') openAnimeModal(found);
   else if (typeof showModal === 'function') showModal(found);
 }
 
-renderNotifShell();
-closeNotifMenu();
+updateLanternGlyph();
 
 notifBtn?.addEventListener('click', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  toggleNotifMenu();
-});
-
-notifMenu?.addEventListener('click', (e) => {
-  const row = e.target.closest('.notif-row');
-  if (!row) return;
-
-  closeNotifMenu();
-  openAnimeFromId(row.dataset.animeid);
-});
-
-// click outside closes
-document.addEventListener('click', (e) => {
-  if (!notifOpen) return;
-  if (notifBtn?.contains(e.target)) return;
-  if (notifMenu?.contains(e.target)) return;
-  closeNotifMenu();
-});
-
-// ESC closes
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeNotifMenu();
+  toggleLanternCenter();
 });
 
 
@@ -1859,7 +2140,28 @@ document.addEventListener('keydown', (e) => {
 
   onAuthStateChanged(auth, (user) => {
   const signedIn = !!user;
-  authOpenBtn.textContent = 'My Account';
+  // Header identity: signed-in shows a HEAD/avatar token (photo, else an initial in a
+  // ring); clicking still routes to account.html (behavior preserved). Signed-out shows
+  // a generic head SILHOUETTE token that opens the branded sign-in modal.
+  // (gate-6c item 2 + gate-6d rail redesign — both states are circular tokens.)
+  if (authOpenBtn) {
+    if (signedIn) {
+      const photo = user.photoURL;
+      const initial = String((user.displayName || user.email || '?').trim().charAt(0) || '?').toUpperCase();
+      authOpenBtn.classList.add('is-avatar');
+      authOpenBtn.setAttribute('aria-label', 'My Account');
+      authOpenBtn.title = 'My Account';
+      authOpenBtn.innerHTML = photo
+        ? `<img class="account-av-img" src="${escapeHtml(photo)}" alt="">`
+        : `<span class="account-av-initial" aria-hidden="true">${escapeHtml(initial)}</span>`;
+    } else {
+      authOpenBtn.classList.remove('is-avatar');
+      authOpenBtn.removeAttribute('title');
+      authOpenBtn.setAttribute('aria-label', 'Sign in');
+      // gate 6d: a generic head silhouette (not the word "Sign in"); still opens the modal.
+      authOpenBtn.innerHTML = '<svg class="account-silhouette" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.2" r="3.6"></circle><path d="M5.5 19.6a6.5 6.5 0 0 1 13 0"></path></svg>';
+    }
+  }
   if (signOutBtn) signOutBtn.style.display = signedIn ? '' : 'none';
 
   // NEW: keep favorites/watchlist synced
@@ -3908,6 +4210,18 @@ function positionFeaturedDrop() {
     return slug((anime && anime.Title) ? anime.Title : "anime");
   }
 
+  // communityKey(ctx) — the comments/reviews collection key. A catalog anime
+  // uses its title slug; an AniList-only context (the secondary modal, gate 9)
+  // uses the `al:<aniListId>` discriminator. Built now so gate 9 just calls it.
+  function communityKey(ctx) {
+    if (!ctx) return 'anime';
+    if (ctx.aniListId && !ctx.Title) return 'al:' + Number(ctx.aniListId);
+    if (ctx.Title) return animeSlug(ctx);
+    if (ctx.aniListId) return 'al:' + Number(ctx.aniListId);
+    return animeSlug(ctx);
+  }
+  if (typeof window !== 'undefined') window.communityKey = communityKey;
+
   function commentsMarkup(anime) {
   const s = animeSlug(anime);
   return [
@@ -3918,11 +4232,14 @@ function positionFeaturedDrop() {
     '      <label class="sort">',
     '        <span>Sort</span>',
     '        <select id="comments-sort-' + s + '">',
+    '          <option value="top">Top</option>',
     '          <option value="newest">Newest</option>',
     '          <option value="oldest">Oldest</option>',
     '          <option value="most-liked">Most liked</option>',
     '        </select>',
     '      </label>',
+    '      <span class="comments-lock-note" id="comments-lock-' + s + '" hidden>🔒 Blake closed this thread</span>',
+    '      <span class="comments-admin-lock" id="comments-adminlock-' + s + '" hidden></span>',
     '    </div>',
     '  </div>',
     '',
@@ -3944,15 +4261,19 @@ function positionFeaturedDrop() {
 
   function officialVotesMarkup(anime) {
   const s = animeSlug(anime);
+  // gate 6d item 9: thumbs-up/down icons (same SVG as the review Helpful/Not-helpful
+  // pills) so the rating-agreement control matches the rest of the UI.
+  const thumbUp = '<svg class="vote-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1z"/></svg>';
+  const thumbDown = '<svg class="vote-ico vote-ico--down" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1z"/></svg>';
   return [
     `<div class="official-votes-bar" id="official-votes-${s}">`,
     `  <span class="label">Agree with my Rating?</span>`,
     `  <div class="official-votes">`,
-    `    <button type="button" class="vote-btn like" data-action="like" aria-label="Like Blake's rating">`,
-    `      ▲ <span class="vcount">0</span>`,
+    `    <button type="button" class="vote-btn like" data-action="like" aria-label="Agree with Blake's rating" title="Agree">`,
+    `      ${thumbUp} <span class="vcount">0</span>`,
     `    </button>`,
-    `    <button type="button" class="vote-btn dislike" data-action="dislike" aria-label="Dislike Blake's rating">`,
-    `      ▼ <span class="vcount">0</span>`,
+    `    <button type="button" class="vote-btn dislike" data-action="dislike" aria-label="Disagree with Blake's rating" title="Disagree">`,
+    `      ${thumbDown} <span class="vcount">0</span>`,
     `    </button>`,
     `  </div>`,
     `</div>`
@@ -3967,8 +4288,11 @@ function positionFeaturedDrop() {
     const d = Math.floor(h / 24); return `${d}d ago`;
   }
 
-  function commentItemEl({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0 }) {
+  function commentItemEl({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0, pinned = false, showReplies = true }) {
   const li = document.createElement('li'); li.className = 'comment-item';
+  if (pinned) li.classList.add('is-pinned');
+  li.dataset.cid = id;
+  li.dataset.uid = uid || '';
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
@@ -3981,18 +4305,33 @@ function positionFeaturedDrop() {
   const bubble = document.createElement('div'); bubble.className = 'bubble';
 
   const meta = document.createElement('div'); meta.className = 'meta';
+  if (pinned) {
+    const pinChip = document.createElement('span'); pinChip.className = 'pin-chip'; pinChip.textContent = '📌 Pinned';
+    meta.appendChild(pinChip);
+  }
   const nameEl = document.createElement('span'); nameEl.className = 'name'; nameEl.textContent = displayName || 'User';
   const sepTxt = document.createTextNode(' · ');
   const millis = createdAt?.toMillis ? createdAt.toMillis() : (typeof createdAt === 'number' ? createdAt : Date.now());
   const timeEl = document.createElement('time'); timeEl.textContent = timeAgo(millis);
   meta.appendChild(nameEl); meta.appendChild(sepTxt); meta.appendChild(timeEl);
 
-  const p = document.createElement('p'); p.textContent = text || '';
+  // body — rendered through the shared XSS-safe inline renderer (bold/italic/
+  // code/links; NO headers). Raw markdown stashed for the inline editor.
+  const p = document.createElement('p'); p.className = 'comment-body';
+  p.innerHTML = (window.renderMarkdownInline ? window.renderMarkdownInline(text || '') : escapeHtml(text || ''));
+  p.dataset.raw = text || '';
 
   bubble.appendChild(meta);
   bubble.appendChild(p);
 
-  // Votes (like / dislike)
+  // lazy reply panel host (mounted on first toggle)
+  const repliesHost = document.createElement('div');
+  repliesHost.className = 'replies-host';
+  bubble.appendChild(repliesHost);
+
+  // foot row: votes + reply toggle + actions
+  const foot = document.createElement('div'); foot.className = 'comment-foot';
+
   const votes = document.createElement('div');
   votes.className = 'votes';
   votes.innerHTML = `
@@ -4003,44 +4342,66 @@ function positionFeaturedDrop() {
       ▼ <span class="vcount">${dislikesCount}</span>
     </button>
   `;
-  bubble.appendChild(votes);
+  foot.appendChild(votes);
 
-  // author-only actions (Edit/Delete)
-  const user = auth.currentUser;
-  if (user && user.uid === uid) {
-    const actions = document.createElement('div');
-    actions.className = 'actions';
-
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'action-btn edit';
-    editBtn.textContent = 'Edit';
-    editBtn.dataset.action = 'edit';
-    editBtn.dataset.id = id;
-
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'action-btn delete';
-    delBtn.textContent = 'Delete';
-    delBtn.dataset.action = 'delete';
-    delBtn.dataset.id = id;
-
-    actions.appendChild(editBtn);
-    actions.appendChild(delBtn);
-    meta.appendChild(actions);
+  // Reads as "open the conversation", not "write a reply" (Blake's gate-4 flag):
+  // a 💬 affordance + an up-front reply count (filled by subscribeComments). The
+  // discussion-thread rows reuse this element but have no nested replies -> hidden.
+  if (showReplies) {
+    const replyToggle = document.createElement('button');
+    replyToggle.type = 'button';
+    replyToggle.className = 'reply-toggle';
+    replyToggle.dataset.action = 'toggle-replies';
+    replyToggle.dataset.id = id;
+    replyToggle.innerHTML = '<span class="rt-icon" aria-hidden="true">💬</span> <span class="rt-label">Reply</span>';
+    foot.appendChild(replyToggle);
   }
+
+  // actions (edit/delete = author or admin; pin = admin; report = others)
+  const user = auth.currentUser;
+  const isAuthor = !!(user && user.uid === uid);
+  const isAdmin = (typeof window !== 'undefined' && window.__rarIsAdmin === true);
+  const actions = document.createElement('div'); actions.className = 'actions';
+
+  if (isAuthor) {
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button'; editBtn.className = 'action-btn edit';
+    editBtn.textContent = 'Edit'; editBtn.dataset.action = 'edit'; editBtn.dataset.id = id;
+    actions.appendChild(editBtn);
+  }
+  if (isAuthor || isAdmin) {
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button'; delBtn.className = 'action-btn delete' + ((isAdmin && !isAuthor) ? ' admin' : '');
+    delBtn.textContent = 'Delete'; delBtn.dataset.action = 'delete'; delBtn.dataset.id = id;
+    actions.appendChild(delBtn);
+  }
+  if (isAdmin) {
+    const pinBtn = document.createElement('button');
+    pinBtn.type = 'button'; pinBtn.className = 'action-btn pin' + (pinned ? ' is-on' : '');
+    pinBtn.textContent = pinned ? 'Unpin' : 'Pin';
+    pinBtn.dataset.action = 'pin'; pinBtn.dataset.id = id; pinBtn.dataset.pinned = pinned ? '1' : '0';
+    actions.appendChild(pinBtn);
+  }
+  if (user && !isAuthor) {
+    const repBtn = document.createElement('button');
+    repBtn.type = 'button'; repBtn.className = 'action-btn report';
+    repBtn.textContent = 'Report'; repBtn.dataset.action = 'report'; repBtn.dataset.id = id;
+    actions.appendChild(repBtn);
+  }
+  if (actions.childNodes.length) foot.appendChild(actions);
+
+  bubble.appendChild(foot);
 
   li.appendChild(avatar);
   li.appendChild(bubble);
 
-  // default vote state (not selected)
   setVoteUI(li, 0);
-
   return li;
 }
 function setVoteUI(li, value) {
-  const likeBtn = li.querySelector('.vote-btn.like');
-  const disBtn  = li.querySelector('.vote-btn.dislike');
+  const foot = li.querySelector(':scope > .bubble > .comment-foot') || li;
+  const likeBtn = foot.querySelector('.votes .vote-btn.like');
+  const disBtn  = foot.querySelector('.votes .vote-btn.dislike');
   if (likeBtn) likeBtn.classList.toggle('active', value === 1);
   if (disBtn)  disBtn.classList.toggle('active', value === -1);
 }
@@ -4060,17 +4421,33 @@ function setVoteUI(li, value) {
 
   let lastRows = [];
 
+  // close any open reply-panel listeners (they live on .replies-host._unsub and
+  // would otherwise leak when the snapshot rebuilds the list / on teardown).
+  const sweepReplies = () => {
+    try {
+      listEl.querySelectorAll('.replies-host').forEach((h) => {
+        if (h._unsub) { try { h._unsub(); } catch (_) {} h._unsub = null; }
+        if (h._voteUnsubs) { try { h._voteUnsubs.forEach((fn) => fn && fn()); } catch (_) {} h._voteUnsubs = null; }
+      });
+    } catch (_) {}
+  };
+
   function renderRows(rows) {
-    const mode = (sortEl?.value || 'newest');
+    const mode = (sortEl?.value || 'top');
     const sorted = rows.slice();
 
     if (mode === 'oldest') {
       sorted.sort((a, b) => a.createdAtMillis - b.createdAtMillis);
     } else if (mode === 'most-liked') {
       sorted.sort((a, b) => (b.likesCount - a.likesCount) || (b.createdAtMillis - a.createdAtMillis));
+    } else if (mode === 'top') {
+      sorted.sort((a, b) => ((b.likesCount - b.dislikesCount) - (a.likesCount - a.dislikesCount)) || (b.createdAtMillis - a.createdAtMillis));
     } else {
       sorted.sort((a, b) => b.createdAtMillis - a.createdAtMillis);
     }
+
+    // pinned comments always float to the top, regardless of sort mode (stable sort)
+    sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
     listEl.innerHTML = '';
     sorted.forEach(r => listEl.appendChild(r.li));
@@ -4093,6 +4470,9 @@ sortEl?.addEventListener('change', onSortChange);
     try { subscribeComments._voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     subscribeComments._voteUnsubs = [];
 
+    // close any open reply-panel listeners before the list is rebuilt
+    sweepReplies();
+
     const rows = [];
     let n = 0;
 
@@ -4108,6 +4488,7 @@ sortEl?.addEventListener('change', onSortChange);
 
       const likesCount    = (typeof d.likesCount === 'number') ? d.likesCount : 0;
       const dislikesCount = (typeof d.dislikesCount === 'number') ? d.dislikesCount : 0;
+      const pinned        = d.pinned === true;
 
       const li = commentItemEl({
         id: docSnap.id,
@@ -4117,7 +4498,8 @@ sortEl?.addEventListener('change', onSortChange);
         text: d.text || '',
         createdAt: d.createdAt,
         likesCount,
-        dislikesCount
+        dislikesCount,
+        pinned
       });
 
       // live author profile subscription
@@ -4155,7 +4537,18 @@ sortEl?.addEventListener('change', onSortChange);
         subscribeComments._voteUnsubs.push(unsubVote);
       }
 
-      rows.push({ li, createdAtMillis, likesCount, dislikesCount });
+      // up-front reply count so the toggle reads "💬 N replies" BEFORE opening
+      // (Blake's gate-4 flag: he didn't see the 2 replies / clicked it as "reply").
+      (async () => {
+        try {
+          const cnt = await getCountFromServer(collection(db, 'comments', s, 'items', docSnap.id, 'replies'));
+          const c = (cnt.data && cnt.data().count) || 0;
+          const lbl = li.querySelector('.reply-toggle .rt-label');
+          if (lbl && c > 0) lbl.textContent = `${c} ${c === 1 ? 'reply' : 'replies'}`;
+        } catch (_) {}
+      })();
+
+      rows.push({ li, createdAtMillis, likesCount, dislikesCount, pinned });
     });
 
     lastRows = rows;
@@ -4169,6 +4562,7 @@ sortEl?.addEventListener('change', onSortChange);
     try { sortEl && sortEl.removeEventListener('change', onSortChange); } catch (_) {}
     try { subscribeComments._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     try { subscribeComments._voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
+    sweepReplies();
     subscribeComments._authorUnsubs = [];
     subscribeComments._voteUnsubs = [];
   };
@@ -4285,6 +4679,43 @@ postBtn.addEventListener('click', async (e) => {
 
 
 
+    // Thread lock (commentsMeta/{s}.locked) — admins lock a thread; when locked
+    // the composer is disabled with a Blake-voiced note. Admins get a toggle.
+    let threadLocked = false;
+    const lockNote = document.getElementById(`comments-lock-${s}`);
+    const adminLockHost = document.getElementById(`comments-adminlock-${s}`);
+    function renderAdminLock() {
+      if (!adminLockHost) return;
+      const isAdmin = (typeof window !== 'undefined' && window.__rarIsAdmin === true);
+      if (!isAdmin) { adminLockHost.hidden = true; adminLockHost.innerHTML = ''; return; }
+      adminLockHost.hidden = false;
+      adminLockHost.innerHTML = `<button type="button" class="action-btn lock-toggle">${threadLocked ? '🔓 Unlock thread' : '🔒 Lock thread'}</button>`;
+    }
+    function applyLockState() {
+      if (lockNote) lockNote.hidden = !threadLocked;
+      if (threadLocked) {
+        input.readOnly = true;
+        input.placeholder = 'Blake closed this thread';
+        postBtn.disabled = true;
+      } else {
+        syncAuthUI(auth.currentUser);
+      }
+      renderAdminLock();
+    }
+    const unsubLock = onSnapshot(doc(db, 'commentsMeta', s), (ms) => {
+      threadLocked = !!(ms.exists() && ms.data() && ms.data().locked === true);
+      applyLockState();
+    }, () => {});
+    if (adminLockHost) {
+      adminLockHost.addEventListener('click', async (e) => {
+        const t = e.target.closest('.lock-toggle'); if (!t) return;
+        if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
+        try { await setDoc(doc(db, 'commentsMeta', s), { locked: !threadLocked }, { merge: true }); }
+        catch (err) { alert('Lock failed: ' + err.message); }
+      });
+    }
+    window.addEventListener('rar:admin-change', renderAdminLock);
+
     const unsubscribe = subscribeComments(anime);
 
     // Inline edit UI (no browser prompt)
@@ -4330,16 +4761,16 @@ function openInlineCommentEditor(editBtn, itemRef) {
     </div>
   `;
 
-  // put editor above vote buttons (votes stay visible below)
-  const votes = bubble.querySelector('.votes');
-  bubble.insertBefore(wrap, votes || null);
+  // put editor above the foot row (votes/actions stay visible below)
+  const foot = bubble.querySelector('.comment-foot');
+  bubble.insertBefore(wrap, foot || null);
 
   const ta = wrap.querySelector('.inline-editor');
   const count = wrap.querySelector('.inline-count');
   const saveBtn = wrap.querySelector('.action-btn.save');
   const cancelBtn = wrap.querySelector('.action-btn.cancel');
 
-  ta.value = (p.textContent || '').trim();
+  ta.value = (((p.dataset && p.dataset.raw != null) ? p.dataset.raw : (p.textContent || ''))).trim();
 
   const sync = () => {
     const n = ta.value.length;
@@ -4365,7 +4796,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
     saveBtn.disabled = true;
     try {
       await updateDoc(itemRef, { text: next, editedAt: serverTimestamp() });
-      p.textContent = next; // immediate UI update
+      p.innerHTML = (window.renderMarkdownInline ? window.renderMarkdownInline(next) : escapeHtml(next)); // immediate UI update
+      p.dataset.raw = next;
     } catch (err) {
       alert('Failed to edit: ' + err.message);
     } finally {
@@ -4381,113 +4813,344 @@ function openInlineCommentEditor(editBtn, itemRef) {
     listEl.addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
-      const u = auth.currentUser;
-      if (!u) return;
-
+      const action = btn.dataset.action;
       const id = btn.dataset.id;
+
+      // viewing replies is public — handle BEFORE the sign-in gate
+      if (action === 'toggle-replies') { toggleRepliesPanel(btn, s); return; }
+
+      const u = auth.currentUser;
+      if (!u) { ensureAuthOrOpen(e); return; }
+
+      // Reply voting — same NEW model as comments, one level deeper. The client
+      // writes ONLY its own vote doc; the onReplyVote CF owns the counts + the
+      // notification. (Handled before itemRef: here `id` is the reply id, not a
+      // comment id.)
+      if (action === 'reply-like' || action === 'reply-dislike') {
+        const commentLi = btn.closest('.comment-item');
+        const cid = commentLi && commentLi.dataset.cid;
+        const rid = btn.dataset.id;
+        if (!cid || !rid || cid.startsWith('pending-') || rid.startsWith('pending-')) return;
+        const want = (action === 'reply-like') ? 1 : -1;
+        const meUid = u.uid;
+        const voteRef = doc(db, 'comments', s, 'items', cid, 'replies', rid, 'votes', meUid);
+        try {
+          await runTransaction(db, async (tx) => {
+            const vSnap = await tx.get(voteRef);
+            const prev = vSnap.exists() ? (vSnap.data()?.value || 0) : 0;
+            const next = (prev === want) ? 0 : want;
+            if (next === 0) { if (vSnap.exists()) tx.delete(voteRef); }
+            else tx.set(voteRef, { uid: meUid, value: next, updatedAt: serverTimestamp() }, { merge: true });
+          });
+        } catch (err) {
+          // permission-denied is the expected M5 anti-spam clamp / pre-cutover
+          // staged-rules state — don't alarm the visitor.
+          if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
+        }
+        return;
+      }
+
       const itemRef = doc(db, 'comments', s, 'items', id);
 
-      const action = btn.dataset.action;
-
-// Voting (like / dislike)
-if (action === 'like' || action === 'dislike') {
-  if (!ensureAuthOrOpen(e)) return;
-  if (!id || id.startsWith('pending-')) return;
-
-  const commentRef = doc(db, 'comments', s, 'items', id);
-  const voteRef    = doc(db, 'comments', s, 'items', id, 'votes', auth.currentUser.uid);
-
-  try {
-    await runTransaction(db, async (tx) => {
-      const cSnap = await tx.get(commentRef);
-      if (!cSnap.exists()) return;
-
-      const vSnap = await tx.get(voteRef);
-
-      const c = cSnap.data() || {};
-      const prev = vSnap.exists() ? (vSnap.data()?.value || 0) : 0;
-
-      let next = 0;
-      if (action === 'like') next = (prev === 1) ? 0 : 1;
-      if (action === 'dislike') next = (prev === -1) ? 0 : -1;
-
-      let likes = (typeof c.likesCount === 'number') ? c.likesCount : 0;
-      let dislikes = (typeof c.dislikesCount === 'number') ? c.dislikesCount : 0;
-
-      // remove previous vote
-      if (prev === 1) likes--;
-      if (prev === -1) dislikes--;
-
-      // apply next vote
-      if (next === 1) likes++;
-      if (next === -1) dislikes++;
-
-      if (likes < 0) likes = 0;
-      if (dislikes < 0) dislikes = 0;
-
-      tx.update(commentRef, { likesCount: likes, dislikesCount: dislikes });
-      // create notification for comment owner (no self-notify, no unvote notify)
-const authorUid = c.uid;
-if (next !== 0 && authorUid && authorUid !== auth.currentUser.uid) {
-  const me = auth.currentUser;
-  const notifRef = doc(collection(db, 'users', authorUid, 'notifications'));
-
-  tx.set(notifRef, {
-    toUid: authorUid,
-    fromUid: me.uid,
-    fromDisplayName: me.displayName || (me.email ? me.email.split('@')[0] : 'Someone'),
-    fromPhotoURL: me.photoURL || null,
-    type: 'comment_vote',
-    value: next,              // 1 = like, -1 = dislike
-    animeId: s,               // slug
-    animeTitle: anime.Title || '',
-    targetId: id,             // commentId
-    createdAt: serverTimestamp()
-  });
-}
-
-
-      if (next === 0) {
-        if (vSnap.exists()) tx.delete(voteRef);
-      } else {
-        tx.set(voteRef, { uid: auth.currentUser.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
+      // Voting — the client writes ONLY its own vote doc; the gate-2 Cloud
+      // Function owns the like/dislike COUNTS + the notification. No client
+      // count/notif writes (that path is deleted; it lights up at the cutover).
+      if (action === 'like' || action === 'dislike') {
+        if (!id || id.startsWith('pending-')) return;
+        const meUid = u.uid;
+        const voteRef = doc(db, 'comments', s, 'items', id, 'votes', meUid);
+        try {
+          await runTransaction(db, async (tx) => {
+            const vSnap = await tx.get(voteRef);
+            const prev = vSnap.exists() ? (vSnap.data()?.value || 0) : 0;
+            let next = 0;
+            if (action === 'like') next = (prev === 1) ? 0 : 1;
+            if (action === 'dislike') next = (prev === -1) ? 0 : -1;
+            if (next === 0) { if (vSnap.exists()) tx.delete(voteRef); }
+            else tx.set(voteRef, { uid: meUid, value: next, updatedAt: serverTimestamp() }, { merge: true });
+          });
+        } catch (err) {
+          // permission-denied is the expected M5 anti-spam clamp (rapid re-vote)
+          // or the pre-cutover staged-rules state — don't alarm the visitor.
+          if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
+        }
+        return;
       }
-    });
-  } catch (err) {
-    alert('Vote failed: ' + err.message);
-  }
-  return;
-}
 
+      if (action === 'report') {
+        const li = btn.closest('.comment-item');
+        const body = li ? li.querySelector('.comment-body') : null;
+        openReportModal({
+          targetType: 'comment',
+          targetPath: 'comments/' + s + '/items/' + id,
+          targetUid: (li && li.dataset.uid) || '',
+          targetAnimeId: s,
+          snapshotText: (body && body.dataset && body.dataset.raw != null) ? body.dataset.raw : (body ? body.textContent : '')
+        });
+        return;
+      }
 
-      if (btn.dataset.action === 'delete') {
+      if (action === 'pin') {
+        if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
+        const makePinned = btn.dataset.pinned !== '1';
+        try { await updateDoc(itemRef, { pinned: makePinned }); }
+        catch (err) { alert('Pin failed: ' + err.message); }
+        return;
+      }
+
+      if (action === 'delete') {
         const ok = await confirmDialog({
-      title: 'Delete comment?',
-      message: 'This will permanently remove this comment.',
-      okText: 'Delete',
-      cancelText: 'Cancel',
-      danger: true
-});
-if (ok) await deleteDoc(itemRef);
-
-      } else if (btn.dataset.action === 'edit') {
-      openInlineCommentEditor(btn, itemRef);
+          title: 'Delete comment?',
+          message: 'This will permanently remove this comment.',
+          okText: 'Delete', cancelText: 'Cancel', danger: true
+        });
+        if (ok) { try { await deleteDoc(itemRef); } catch (err) { alert('Delete failed: ' + err.message); } }
+        return;
       }
+
+      if (action === 'edit') { openInlineCommentEditor(btn, itemRef); return; }
     });
 
-    return unsubscribe;
+    return () => {
+      try { unsubscribe(); } catch (_) {}
+      try { unsubLock && unsubLock(); } catch (_) {}
+      try { window.removeEventListener('rar:admin-change', renderAdminLock); } catch (_) {}
+    };
   }
+
+  // ---------- COMMENT REPLIES (depth-1) ----------
+  function buildReplyItem({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0 }) {
+    const li = document.createElement('li'); li.className = 'reply-item';
+    li.dataset.rid = id || '';
+    li.dataset.uid = uid || '';
+    const avatar = document.createElement('div'); avatar.className = 'avatar reply-avatar';
+    if (photoURL) avatar.innerHTML = `<img src="${escapeHtml(photoURL)}" alt="">`;
+    else avatar.textContent = (displayName || '?').toString().trim().charAt(0).toUpperCase() || '?';
+    const body = document.createElement('div'); body.className = 'reply-body-wrap';
+    const meta = document.createElement('div'); meta.className = 'meta';
+    const nameEl = document.createElement('span'); nameEl.className = 'name'; nameEl.textContent = displayName || 'User';
+    const sep = document.createTextNode(' · ');
+    const millis = createdAt?.toMillis ? createdAt.toMillis() : (typeof createdAt === 'number' ? createdAt : Date.now());
+    const t = document.createElement('time'); t.textContent = timeAgo(millis);
+    meta.appendChild(nameEl); meta.appendChild(sep); meta.appendChild(t);
+    const p = document.createElement('p'); p.className = 'reply-body';
+    p.innerHTML = (window.renderMarkdownInline ? window.renderMarkdownInline(text || '') : escapeHtml(text || ''));
+    // vote pills — same NEW model as comments (client writes ONLY its own vote
+    // doc; the onReplyVote CF owns the counts). Purple, never gold. Distinct
+    // reply-like/reply-dislike actions so the comment click handler can't hijack
+    // them (both bubble to the same delegated listEl listener).
+    const foot = document.createElement('div'); foot.className = 'reply-foot';
+    const votes = document.createElement('div'); votes.className = 'votes';
+    votes.innerHTML = `
+      <button type="button" class="vote-btn like" data-action="reply-like" data-id="${id}" aria-label="Like reply">
+        ▲ <span class="vcount">${likesCount}</span>
+      </button>
+      <button type="button" class="vote-btn dislike" data-action="reply-dislike" data-id="${id}" aria-label="Dislike reply">
+        ▼ <span class="vcount">${dislikesCount}</span>
+      </button>
+    `;
+    foot.appendChild(votes);
+    body.appendChild(meta); body.appendChild(p); body.appendChild(foot);
+    li.appendChild(avatar); li.appendChild(body);
+    setVoteUI(li, 0);
+    return li;
+  }
+
+  // Toggle a comment's reply panel. Lazy: the reply list is only subscribed when
+  // opened (flat fan-out), and unsubscribed on close.
+  function toggleRepliesPanel(toggleBtn, s) {
+    const item = toggleBtn.closest('.comment-item');
+    if (!item) return;
+    const cid = item.dataset.cid;
+    if (!cid || cid.startsWith('pending-')) return;
+    const host = item.querySelector(':scope > .bubble > .replies-host');
+    if (!host) return;
+
+    if (host.dataset.open === '1') {
+      // close
+      try { host._unsub && host._unsub(); } catch (_) {}
+      host._unsub = null;
+      try { (host._voteUnsubs || []).forEach((fn) => fn && fn()); } catch (_) {}
+      host._voteUnsubs = [];
+      host.innerHTML = '';
+      host.dataset.open = '0';
+      toggleBtn.classList.remove('is-open');
+      return;
+    }
+
+    host.dataset.open = '1';
+    toggleBtn.classList.add('is-open');
+    host.innerHTML = `
+      <ul class="replies-list"></ul>
+      <div class="reply-composer">
+        <textarea class="reply-input" maxlength="500" placeholder="Write a reply…"></textarea>
+        <button type="button" class="action-btn reply-post" disabled>Reply</button>
+      </div>
+    `;
+    const listUl = host.querySelector('.replies-list');
+    const input = host.querySelector('.reply-input');
+    const postBtn = host.querySelector('.reply-post');
+
+    const authed = !!auth.currentUser;
+    if (!authed) { input.readOnly = true; input.placeholder = 'Sign in to reply'; }
+    const lockNote = document.getElementById('comments-lock-' + s);
+    const replyLocked = !!(lockNote && !lockNote.hidden);
+    if (replyLocked) { input.readOnly = true; input.placeholder = 'Blake closed this thread'; postBtn.disabled = true; }
+    input.addEventListener('input', () => {
+      if (replyLocked) { postBtn.disabled = true; return; }
+      const v = input.value.trim();
+      postBtn.disabled = !(auth.currentUser && v.length > 0 && v.length <= 500);
+    });
+
+    // live reply list (oldest-first)
+    host._voteUnsubs = [];
+    const qref = query(collection(db, 'comments', s, 'items', cid, 'replies'), orderBy('createdAt', 'asc'));
+    host._unsub = onSnapshot(qref, (snap) => {
+      // tear down the previous round's per-reply vote listeners before rebuild
+      try { host._voteUnsubs.forEach((fn) => fn && fn()); } catch (_) {}
+      host._voteUnsubs = [];
+      listUl.innerHTML = '';
+      const meUid = auth.currentUser && auth.currentUser.uid;
+      snap.forEach((r) => {
+        const d = r.data();
+        const replyLi = buildReplyItem({
+          id: r.id, uid: d.uid, displayName: d.displayName || 'User',
+          photoURL: d.photoURL || null, text: d.text || '', createdAt: d.createdAt,
+          likesCount: (typeof d.likesCount === 'number') ? d.likesCount : 0,
+          dislikesCount: (typeof d.dislikesCount === 'number') ? d.dislikesCount : 0
+        });
+        listUl.appendChild(replyLi);
+        // live vote state for the current user (mirrors the comment vote sub)
+        if (meUid) {
+          const vref = doc(db, 'comments', s, 'items', cid, 'replies', r.id, 'votes', meUid);
+          const uv = onSnapshot(vref, (vs) => {
+            const val = (vs.exists() && typeof vs.data()?.value === 'number') ? vs.data().value : 0;
+            setVoteUI(replyLi, val);
+          });
+          host._voteUnsubs.push(uv);
+        }
+      });
+      const n = snap.size;
+      const lbl = toggleBtn.querySelector('.rt-label') || toggleBtn;
+      lbl.textContent = n ? `${n} ${n === 1 ? 'reply' : 'replies'}` : 'Reply';
+      toggleBtn.classList.add('is-open');
+    }, () => {});
+
+    postBtn.addEventListener('click', async () => {
+      const u = auth.currentUser;
+      if (!u) { openAuth('signin'); return; }
+      const text = input.value.trim();
+      if (!text || text.length > 500) return;
+      postBtn.disabled = true;
+      try {
+        await addDoc(collection(db, 'comments', s, 'items', cid, 'replies'), {
+          uid: u.uid,
+          displayName: u.displayName || (u.email ? u.email.split('@')[0] : 'User'),
+          photoURL: u.photoURL || null,
+          text,
+          createdAt: serverTimestamp(),
+          likesCount: 0,
+          dislikesCount: 0
+        });
+        input.value = '';
+      } catch (err) {
+        alert('Failed to reply: ' + err.message);
+      } finally {
+        postBtn.disabled = false;
+      }
+    });
+  }
+
+  // ---------- REPORT MODAL (branded — no native dialogs) ----------
+  function openReportModal({ targetType, targetPath, targetUid, targetAnimeId, snapshotText }) {
+    if (!auth.currentUser) { openAuth('signin'); return; }
+    document.querySelectorAll('.rar-report-overlay').forEach((n) => n.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'rar-report-overlay';
+    overlay.innerHTML = `
+      <div class="rar-report-modal" role="dialog" aria-modal="true" aria-label="Report content">
+        <h3 class="rar-report-title">Report this <span class="jp-mini">通報</span></h3>
+        <p class="rar-report-sub">Thanks for the heads up — I read every one of these myself.</p>
+        <label class="rar-report-field">
+          <span>What's wrong?</span>
+          <select class="rar-report-reason">
+            <option value="spam">Spam</option>
+            <option value="harassment">Harassment</option>
+            <option value="offtopic">Off-topic</option>
+            <option value="other">Something else</option>
+          </select>
+        </label>
+        <label class="rar-report-field">
+          <span>Anything to add? (optional)</span>
+          <textarea class="rar-report-note" maxlength="500" placeholder="A short note for Blake…"></textarea>
+        </label>
+        <div class="rar-report-actions">
+          <button type="button" class="action-btn rar-report-cancel">Cancel</button>
+          <button type="button" class="action-btn rar-report-send">Send report</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const close = () => { try { overlay.remove(); } catch (_) {} };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('.rar-report-cancel').addEventListener('click', close);
+    const onEsc = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); } };
+    document.addEventListener('keydown', onEsc);
+
+    overlay.querySelector('.rar-report-send').addEventListener('click', async () => {
+      const u = auth.currentUser;
+      if (!u) { openAuth('signin'); return; }
+      const reason = overlay.querySelector('.rar-report-reason').value;
+      const note = overlay.querySelector('.rar-report-note').value.trim();
+      const sendBtn = overlay.querySelector('.rar-report-send');
+      sendBtn.disabled = true;
+      const payload = {
+        reporterUid: u.uid,
+        reason,
+        status: 'new',
+        targetType: targetType || 'comment',
+        targetPath: targetPath || '',
+        targetUid: targetUid || '',
+        targetAnimeId: targetAnimeId || '',
+        snapshotText: (snapshotText || '').slice(0, 500),
+        createdAt: serverTimestamp()
+      };
+      if (note) payload.note = note;
+      try {
+        await addDoc(collection(db, 'reports'), payload);
+        overlay.querySelector('.rar-report-modal').innerHTML =
+          '<h3 class="rar-report-title">Got it — thanks.</h3><p class="rar-report-sub">On it — I\'ll take a look.</p><div class="rar-report-actions"><button type="button" class="action-btn rar-report-cancel">Close</button></div>';
+        overlay.querySelector('.rar-report-cancel').addEventListener('click', close);
+        setTimeout(close, 2200);
+      } catch (err) {
+        sendBtn.disabled = false;
+        alert('Report failed: ' + err.message);
+      }
+    });
+  }
+
   // ============================
 // COMMUNITY (right sheet)
 // ============================
 function communityMarkup(anime) {
   const s = animeSlug(anime);
+  const blakeRating = parseFloat(anime && anime.Rating);
+  const hasBlake = Number.isFinite(blakeRating);
   return [
     '<span class="close-button" aria-label="Close">&times;</span>',
     '<div class="community-header">',
-    '  <h2>COMMUNITY TAB</h2>',
-    '  <div class="community-right">',
-    `    <div class="community-avg"><span id="comm-avg-${s}">—</span><small id="comm-count-${s}">(0)</small></div>`,
+    '  <h2>COMMUNITY</h2>',
+    '</div>',
+    '',
+    // PROTECT THE HEART (gate 6 design call): Blake's gold rating now lives in the
+    // CENTER modal (his own review). The community tab is PURPLE — the histogram
+    // carries only a single gold tick at his score (never a gold canvas).
+    '<div class="comm-stats">',
+    '  <div class="comm-community-block">',
+    `    <div class="community-avg"><span class="cavg-label">Community</span> <span id="comm-avg-${s}">—</span><span class="cavg-max">/10</span> <small id="comm-count-${s}">(0)</small></div>`,
+    `    <div class="comm-histogram" id="comm-histogram-${s}" data-blake="${hasBlake ? blakeRating.toFixed(1) : ''}"></div>`,
     '  </div>',
     '</div>',
     '',
@@ -4506,7 +5169,10 @@ function communityMarkup(anime) {
     `  <p class="signin-hint" id="rev-hint-${s}" style="display:none;">Sign in to post a review.</p>`,
     '</form>',
     '',
-    `<div class="comm-sort-row"><label class="comm-sort"><span>Sort</span><select id="comm-sort-${s}"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="most-liked">Most liked</option></select></label></div>`,
+    `<div class="comm-sort-row">`,
+    `  <label class="comm-sort"><span>Sort</span><select id="comm-sort-${s}"><option value="most-liked">Most helpful</option><option value="newest">Newest</option></select></label>`,
+    `  <label class="comm-sort"><span>Ratings</span><select id="comm-filter-${s}"><option value="all">All ratings</option><option value="high">8&ndash;10</option><option value="mid">5&ndash;7</option><option value="low">1&ndash;4</option></select></label>`,
+    `</div>`,
     `<ul class="review-list" id="comm-list-${s}"></ul>`
   ].join('\n');
 }
@@ -4518,6 +5184,38 @@ function setReviewVoteUI(li, value) {
   if (disBtn)  disBtn.classList.toggle('active', value === -1);
 }
 
+// Community rating histogram — SUBORDINATE to Blake's gold rating. Purple bars +
+// a single gold reference tick at Blake's score (protect-the-heart: never a gold
+// canvas). Computed client-side from the already-subscribed review list.
+// Pure histogram math (exposed for tests): bar heights as % of the tallest bucket,
+// and the gold tick's left% mapped onto the 10-bucket axis (rating i centered at
+// (i-0.5)/10). tickLeft is null when there's no Blake rating.
+function histogramModel(dist, blakeRating) {
+  const max = Math.max(1, ...dist.slice(1));
+  const bars = [];
+  for (let i = 1; i <= 10; i++) bars[i] = Math.round((dist[i] / max) * 100);
+  const tickLeft = Number.isFinite(blakeRating)
+    ? Math.max(2, Math.min(98, ((blakeRating - 0.5) / 10) * 100))
+    : null;
+  return { bars, tickLeft };
+}
+if (typeof window !== 'undefined') window.histogramModel = histogramModel;
+
+function renderHistogram(histEl, dist, n, blakeRating) {
+  if (!histEl) return;
+  if (!n) { histEl.innerHTML = ''; histEl.classList.remove('has-data'); return; }
+  const { bars, tickLeft } = histogramModel(dist, blakeRating);
+  let barsHtml = '';
+  for (let i = 1; i <= 10; i++) {
+    barsHtml += `<span class="hist-bar" style="--h:${bars[i]}%" title="${i}/10 · ${dist[i]} review${dist[i] === 1 ? '' : 's'}"></span>`;
+  }
+  const tick = (tickLeft !== null)
+    ? `<span class="hist-tick" style="left:${tickLeft}%" title="Blake's rating: ${blakeRating.toFixed(1)}"></span>`
+    : '';
+  histEl.innerHTML = `<div class="hist-bars">${barsHtml}</div>${tick}<div class="hist-axis"><span>1</span><span>10</span></div>`;
+  histEl.classList.add('has-data');
+}
+
 
 function subscribeReviews(anime) {
   const s = animeSlug(anime);
@@ -4525,6 +5223,9 @@ function subscribeReviews(anime) {
   const avgEl   = document.getElementById(`comm-avg-${s}`);
   const countEl = document.getElementById(`comm-count-${s}`);
   const sortEl  = document.getElementById(`comm-sort-${s}`);
+  const filterEl = document.getElementById(`comm-filter-${s}`);
+  const histEl   = document.getElementById(`comm-histogram-${s}`);
+  const blakeRating = parseFloat(anime && anime.Rating);
   if (!listEl) return () => {};
 
   const qref = query(collection(db, 'reviews', s, 'items'), orderBy('createdAt', 'desc'));
@@ -4587,7 +5288,7 @@ function subscribeReviews(anime) {
     const saveBtn = wrap.querySelector('.action-btn.save');
     const cancelBtn = wrap.querySelector('.action-btn.cancel');
 
-    ta.value = (p.textContent || '').trim();
+    ta.value = (((p.dataset && p.dataset.raw != null) ? p.dataset.raw : (p.textContent || ''))).trim();
 
     const sync = () => {
       const n = ta.value.length;
@@ -4625,20 +5326,36 @@ function subscribeReviews(anime) {
     });
   }
 
+  function bandOf(rt) {
+    if (!Number.isFinite(rt)) return null;
+    if (rt >= 8) return 'high';
+    if (rt >= 5) return 'mid';
+    return 'low';
+  }
   function renderRows(rows) {
-    const mode = (sortEl?.value || 'newest');
-    const sorted = rows.slice();
+    const mode = (sortEl?.value || 'most-liked');   // "Most helpful" by default
+    const band = (filterEl?.value || 'all');
+    let sorted = rows.slice();
 
-    if (mode === 'oldest') {
-      sorted.sort((a,b) => a.createdAtMillis - b.createdAtMillis);
-    } else if (mode === 'most-liked') {
-      // score = likes - dislikes
-      sorted.sort((a,b) => (b.score - a.score) || (b.createdAtMillis - a.createdAtMillis));
-    } else {
+    if (band !== 'all') sorted = sorted.filter(r => bandOf(r.rating) === band);
+
+    if (mode === 'newest') {
       sorted.sort((a,b) => b.createdAtMillis - a.createdAtMillis);
+    } else {
+      // "Most helpful" — score = helpful − not-helpful, newest as the tiebreak
+      sorted.sort((a,b) => (b.score - a.score) || (b.createdAtMillis - a.createdAtMillis));
     }
 
     listEl.innerHTML = '';
+    if (!sorted.length) {
+      const empty = document.createElement('li');
+      empty.className = 'review-empty';
+      empty.textContent = (band === 'all')
+        ? 'No reviews yet — be the first to tell everyone what you thought.'
+        : 'No reviews in that rating range yet.';
+      listEl.appendChild(empty);
+      return;
+    }
     sorted.forEach(r => listEl.appendChild(r.li));
   }
 
@@ -4654,6 +5371,8 @@ function subscribeReviews(anime) {
   };
 
   if (sortEl) sortEl.addEventListener('change', onSortChange);
+  const onFilterChange = () => { renderRows(lastRows); try { filterEl.blur(); } catch(_) {} };
+  if (filterEl) filterEl.addEventListener('change', onFilterChange);
 
   const unsubMain = onSnapshot(qref, (snap) => {
     try { subscribeReviews._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
@@ -4665,6 +5384,7 @@ function subscribeReviews(anime) {
 
     listEl.innerHTML = '';
     let total = 0, n = 0;
+    const dist = new Array(11).fill(0); // rating histogram buckets, index 1..10
 
     const user = auth.currentUser;
     const rows = [];
@@ -4676,7 +5396,7 @@ function subscribeReviews(anime) {
       : null;
       const rating = parseFloat(d.rating);
 
-      if (!Number.isNaN(rating)) { total += rating; n++; }
+      if (!Number.isNaN(rating)) { total += rating; n++; dist[Math.min(10, Math.max(1, Math.round(rating)))]++; }
 
       const createdAtMillis =
         d.createdAt?.toMillis ? d.createdAt.toMillis() :
@@ -4703,15 +5423,17 @@ function subscribeReviews(anime) {
 
         <div class="row-detail" hidden>
           <div class="row-meta">by <span class="author-name">${escapeHtml(d.displayName || 'User')}</span> · ${timeAgo(toMillis(d.createdAt))}</div>
-          <p class="row-body">${nl2br(escapeHtml(stripAccidentalPaste(d.body)))}</p>
+          <div class="row-body">${window.renderMarkdown ? window.renderMarkdown(d.body || '') : nl2br(escapeHtml(d.body || ''))}</div>
          
           <div class="row-actions">
             <div class="review-votes">
-              <button type="button" class="vote-btn like" data-action="like" data-id="${docSnap.id}">
-                ▲ <span class="vcount">${likesCount}</span>
+              <button type="button" class="vote-btn like helpful" data-action="like" data-id="${docSnap.id}" aria-label="Mark this review helpful" title="Helpful">
+                <svg class="vote-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1z"/></svg>
+                <span class="vcount">${likesCount}</span>
               </button>
-              <button type="button" class="vote-btn dislike" data-action="dislike" data-id="${docSnap.id}">
-                ▼ <span class="vcount">${dislikesCount}</span>
+              <button type="button" class="vote-btn dislike not-helpful" data-action="dislike" data-id="${docSnap.id}" aria-label="Mark this review not helpful" title="Not helpful">
+                <svg class="vote-ico vote-ico--down" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1z"/></svg>
+                <span class="vcount">${dislikesCount}</span>
               </button>
             </div>
 
@@ -4820,9 +5542,9 @@ function subscribeReviews(anime) {
 
         if (!authed) {
           threadInput.readOnly = true;
-          threadInput.placeholder = 'Sign in to comment';
+          threadInput.placeholder = 'Sign in to join the discussion';
           threadPost.textContent = 'Sign in';
-          threadPost.disabled = true;
+          threadPost.disabled = false;   // gate-6 design call: the CTA opens the branded sign-in modal (its click handler runs ensureAuthOrOpen)
           if (threadComposer) threadComposer.setAttribute('aria-disabled', 'true');
           return;
         }
@@ -4890,7 +5612,8 @@ function subscribeReviews(anime) {
               text: td.text || '',
               createdAt: td.createdAt,
               likesCount: likesCountT,
-              dislikesCount: dislikesCountT
+              dislikesCount: dislikesCountT,
+              showReplies: false   // discussion-thread rows have no nested replies
             });
 
             // live author profile subscription
@@ -5055,43 +5778,20 @@ function subscribeReviews(anime) {
         const threadRef = doc(db, 'reviews', s, 'items', docSnap.id, 'threads', tid);
 
         if (action === 'like' || action === 'dislike') {
+          // NEW vote model (gate 5): client writes ONLY its own vote doc; the
+          // onThreadVote CF owns the counts (discussion votes don't notify).
           const voteRef = doc(db, 'reviews', s, 'items', docSnap.id, 'threads', tid, 'votes', auth.currentUser.uid);
-
+          const want = (action === 'like') ? 1 : -1;
           try {
             await runTransaction(db, async (tx) => {
-              const cSnap = await tx.get(threadRef);
-              if (!cSnap.exists()) return;
-
               const vSnap = await tx.get(voteRef);
-              const c = cSnap.data() || {};
               const prev = vSnap.exists() ? (vSnap.data()?.value || 0) : 0;
-
-              let next = 0;
-              if (action === 'like') next = (prev === 1) ? 0 : 1;
-              if (action === 'dislike') next = (prev === -1) ? 0 : -1;
-
-              let likes = (typeof c.likesCount === 'number') ? c.likesCount : 0;
-              let dislikes = (typeof c.dislikesCount === 'number') ? c.dislikesCount : 0;
-
-              if (prev === 1) likes--;
-              if (prev === -1) dislikes--;
-              if (next === 1) likes++;
-              if (next === -1) dislikes++;
-
-              if (likes < 0) likes = 0;
-              if (dislikes < 0) dislikes = 0;
-
-              tx.update(threadRef, { likesCount: likes, dislikesCount: dislikes });
-
-              // NO notifications for thread votes (per your spec)
-              if (next === 0) {
-                if (vSnap.exists()) tx.delete(voteRef);
-              } else {
-                tx.set(voteRef, { uid: auth.currentUser.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
-              }
+              const next = (prev === want) ? 0 : want;
+              if (next === 0) { if (vSnap.exists()) tx.delete(voteRef); }
+              else tx.set(voteRef, { uid: auth.currentUser.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
             });
           } catch (err) {
-            alert('Vote failed: ' + err.message);
+            if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
           }
           return;
         }
@@ -5150,7 +5850,7 @@ function subscribeReviews(anime) {
         subscribeReviews._voteUnsubs.push(unsubVote);
       }
 
-      rows.push({ li, createdAtMillis, score });
+      rows.push({ li, createdAtMillis, score, rating });
     });
 
     lastRows = rows;
@@ -5159,11 +5859,13 @@ function subscribeReviews(anime) {
     avgEl.textContent = n ? (total / n).toFixed(1) : '—';
     countEl.textContent = `(${n})`;
     avgEl?.parentElement?.classList.toggle('has-value', n > 0);
+    renderHistogram(histEl, dist, n, blakeRating);
   });
 
   return () => {
     try { unsubMain(); } catch(_) {}
     try { sortEl?.removeEventListener('change', onSortChange); } catch(_) {}
+    try { filterEl?.removeEventListener('change', onFilterChange); } catch(_) {}
     try { subscribeReviews._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     try { subscribeReviews._voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     try { subscribeReviews._threadUnsubs.forEach(fn => fn && fn()); } catch(_) {}
@@ -5327,65 +6029,26 @@ if (purl) data.photoURL = purl;
 
 if (action === 'like' || action === 'dislike') {
   if (!auth.currentUser) { openAuth('signin'); return; }
+  if (!id || id.startsWith('pending-')) return;
 
-  const reviewRef = doc(db, 'reviews', s, 'items', id);
-  const voteRef   = doc(db, 'reviews', s, 'items', id, 'votes', auth.currentUser.uid);
+  // NEW vote model (gate 5): the client writes ONLY its own vote doc; the
+  // onReviewVote Cloud Function owns the counts + the notification. The old client
+  // count-write + notification transaction is gone (the staged rules deny it, and
+  // it would double-write at the gate-6 cutover). "Helpful" = 1, "Not helpful" = -1.
+  const meUid = auth.currentUser.uid;
+  const voteRef = doc(db, 'reviews', s, 'items', id, 'votes', meUid);
+  const want = (action === 'like') ? 1 : -1;
 
   try {
     await runTransaction(db, async (tx) => {
-      const rSnap = await tx.get(reviewRef);
-      if (!rSnap.exists()) return;
-
       const vSnap = await tx.get(voteRef);
       const prev = vSnap.exists() ? (vSnap.data()?.value || 0) : 0;
-
-      let next = 0;
-      if (action === 'like') next = (prev === 1) ? 0 : 1;
-      if (action === 'dislike') next = (prev === -1) ? 0 : -1;
-
-      const r = rSnap.data() || {};
-      let likes = (typeof r.likesCount === 'number') ? r.likesCount : 0;
-      let dislikes = (typeof r.dislikesCount === 'number') ? r.dislikesCount : 0;
-
-      if (prev === 1) likes--;
-      if (prev === -1) dislikes--;
-
-      if (next === 1) likes++;
-      if (next === -1) dislikes++;
-
-      if (likes < 0) likes = 0;
-      if (dislikes < 0) dislikes = 0;
-
-      tx.update(reviewRef, { likesCount: likes, dislikesCount: dislikes });
-      // create notification for review owner (no self-notify, no unvote notify)
-const authorUid = r.uid;
-if (next !== 0 && authorUid && authorUid !== auth.currentUser.uid) {
-  const me = auth.currentUser;
-  const notifRef = doc(collection(db, 'users', authorUid, 'notifications'));
-
-  tx.set(notifRef, {
-    toUid: authorUid,
-    fromUid: me.uid,
-    fromDisplayName: me.displayName || (me.email ? me.email.split('@')[0] : 'Someone'),
-    fromPhotoURL: me.photoURL || null,
-    type: 'review_vote',
-    value: next,             // 1 = like, -1 = dislike
-    animeId: s,              // slug
-    animeTitle: anime.Title || '',
-    targetId: id,            // review docId (author uid)
-    createdAt: serverTimestamp()
-  });
-}
-
-
-      if (next === 0) {
-        if (vSnap.exists()) tx.delete(voteRef);
-      } else {
-        tx.set(voteRef, { uid: auth.currentUser.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
-      }
+      const next = (prev === want) ? 0 : want;
+      if (next === 0) { if (vSnap.exists()) tx.delete(voteRef); }
+      else tx.set(voteRef, { uid: meUid, value: next, updatedAt: serverTimestamp() }, { merge: true });
     });
   } catch (err) {
-    alert('Vote failed: ' + err.message);
+    if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
   }
   return;
 }
@@ -5589,49 +6252,21 @@ function wireOfficialVotes(anime) {
 
     const u = auth.currentUser;
     const voteRef = doc(db, 'official', s, 'votes', u.uid);
+    const want = (action === 'like') ? 1 : -1;
 
+    // NEW vote model (gate 6): the client writes ONLY its own vote doc; the
+    // onOfficialVote Cloud Function owns the `official/{slug}` aggregate counts.
+    // The old client count-write transaction is gone (the staged rules deny it).
     try {
       await runTransaction(db, async (tx) => {
-        const aSnap = await tx.get(aggRef);
         const vSnap = await tx.get(voteRef);
-
-        const a = aSnap.exists() ? (aSnap.data() || {}) : {};
         const prev = vSnap.exists() ? (vSnap.data()?.value || 0) : 0;
-
-        let next = 0;
-        if (action === 'like') next = (prev === 1) ? 0 : 1;
-        if (action === 'dislike') next = (prev === -1) ? 0 : -1;
-
-        let likes = (typeof a.likesCount === 'number') ? a.likesCount : 0;
-        let dislikes = (typeof a.dislikesCount === 'number') ? a.dislikesCount : 0;
-
-        if (prev === 1) likes--;
-        if (prev === -1) dislikes--;
-        if (next === 1) likes++;
-        if (next === -1) dislikes++;
-
-        if (likes < 0) likes = 0;
-        if (dislikes < 0) dislikes = 0;
-
-        tx.set(aggRef, {
-          animeId: s,
-          likesCount: likes,
-          dislikesCount: dislikes,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-
-        if (next === 0) {
-          if (vSnap.exists()) tx.delete(voteRef);
-        } else {
-          tx.set(voteRef, {
-            uid: u.uid,
-            value: next,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        }
+        const next = (prev === want) ? 0 : want;
+        if (next === 0) { if (vSnap.exists()) tx.delete(voteRef); }
+        else tx.set(voteRef, { uid: u.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
       });
     } catch (err) {
-      alert('Vote failed: ' + err.message);
+      if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
     }
   }
 
@@ -7912,6 +8547,13 @@ function onScrollHeader() {
     lazyFillOnView(homeForyouBlock, buildHomeForYou);
     document.getElementById('home-airing-more')?.addEventListener('click', (e) => { e.preventDefault(); showDiscover(); });
     showHome();
+    // gate 6d item 7: the account page's For You / Discover nav links land here via
+    // ?place=… — honor it after the default home is set.
+    try {
+      const _place = new URLSearchParams(location.search).get('place');
+      if (_place === 'foryou') showForYou();
+      else if (_place === 'discover') showDiscover();
+    } catch (_) {}
     initScrollReveal();   // v1.8.3 gate 3 — reveal-once home sections
     initWelcome();        // v1.8.3 gate 3 — first-visit "den door" splash
     // v1.8.4 gate 8 — the animated veil pulse: gate the faint baseline + the sweep behind
@@ -7967,6 +8609,16 @@ try {
 
   if (h === '#all') {
     if (typeof showAll === 'function') showAll();
+  } else if (h.startsWith('#notif=')) {
+    // gate 6f: a cross-page notification deep-link from the ACCOUNT page. Carry the
+    // FULL target here and hand it to the SAME scroll+poll+highlight path used for
+    // same-page deep-links, so the exact comment/review is scrolled to + haloed (not
+    // just the anime opened). Additive — does NOT touch #open=/#secondary=.
+    const target = decodeURIComponent(h.slice('#notif='.length));
+    if (typeof showAll === 'function') showAll();
+    if (typeof openNotifTarget === 'function') openNotifTarget(target);
+    // Normalize so a refresh doesn't re-fire (the async scroll already captured it).
+    history.replaceState({}, '', location.pathname + location.search + '#all');
   } else if (h.startsWith('#open=') || h.startsWith('#anime=')) {
     const isOpen = h.startsWith('#open=');
     const animeId = decodeURIComponent(h.slice(isOpen ? 6 : 7));

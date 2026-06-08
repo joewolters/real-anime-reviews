@@ -110,9 +110,15 @@ async function handleVoteWrite(event, kind) {
   const p = event.params;
   const voterUid = p.voterUid;
 
-  const parentRef = kind === 'comment'
-    ? db.doc('comments/' + p.anime + '/items/' + p.cid)
-    : db.doc('reviews/' + p.anime + '/items/' + p.reviewUid);
+  const parentRef = kind === 'review'
+    ? db.doc('reviews/' + p.anime + '/items/' + p.reviewUid)
+    : kind === 'reply'
+      ? db.doc('comments/' + p.anime + '/items/' + p.cid + '/replies/' + p.rid)
+      : kind === 'thread'
+        ? db.doc('reviews/' + p.anime + '/items/' + p.reviewUid + '/threads/' + p.tid)
+        : kind === 'official'
+          ? db.doc('official/' + p.animeId)
+          : db.doc('comments/' + p.anime + '/items/' + p.cid);
 
   // (1) exact counts
   const { likesDelta, dislikesDelta } = voteCountDeltas(before, after);
@@ -123,14 +129,23 @@ async function handleVoteWrite(event, kind) {
     ).catch(() => {}); // parent may have been deleted
   }
 
+  // thread (review-discussion) + official (Blake's-rating agreement) votes are
+  // counts-only — no notification (matches their pre-overhaul behavior).
+  if (kind === 'thread' || kind === 'official') return;
+  // gate-6 lock: a "Not helpful" review vote (value -1) does NOT notify.
+  if (kind === 'review' && after === -1) return;
+
   // (2) notification — only on a fresh up/down vote, never self, never on unvote
   const parentSnap = await parentRef.get();
-  const authorUid = kind === 'comment'
-    ? (parentSnap.exists ? parentSnap.data().uid : null)
-    : p.reviewUid; // a review's doc id IS the author uid
+  const authorUid = kind === 'review'
+    ? p.reviewUid // a review's doc id IS the author uid
+    : (parentSnap.exists ? parentSnap.data().uid : null); // comment & reply: author is on the doc
   if (!shouldNotify(voterUid, authorUid, after)) return;
 
-  const type = kind === 'comment' ? 'comment_vote' : 'review_vote';
+  // a reply vote reuses the comment_vote type (the DATA-MODEL enum has no
+  // reply_vote; "liked your reply" reads fine and the Lantern renders it as a
+  // comment-family ping). verb below carries the literal kind ("reply").
+  const type = kind === 'review' ? 'review_vote' : 'comment_vote';
 
   // mute-at-source: don't even write the doc if the recipient muted this type
   const prefsSnap = await db.doc('users/' + authorUid + '/notifPrefs/prefs').get();
@@ -145,7 +160,7 @@ async function handleVoteWrite(event, kind) {
     fromPhotoURL: ident.photo,
     type,
     value: after,
-    verb: (after === 1 ? 'liked your ' : 'disliked your ') + kind,
+    verb: kind === 'review' ? 'found your review helpful' : (after === 1 ? 'liked your ' : 'disliked your ') + kind,
     animeId: p.anime,
     targetPath,
     read: false,
@@ -161,6 +176,24 @@ exports.onCommentVote = onDocumentWritten(
 exports.onReviewVote = onDocumentWritten(
   'reviews/{anime}/items/{reviewUid}/votes/{voterUid}',
   (event) => handleVoteWrite(event, 'review')
+);
+// onReplyVote — same model one level deeper: a vote on a depth-1 comment reply.
+// Owns the reply's like/dislike counts + notifies the reply author (gate 4b).
+// onThreadVote — votes on a review's discussion thread. Counts-only (no notif),
+// migrated off the old client count-write transaction at gate 5.
+exports.onThreadVote = onDocumentWritten(
+  'reviews/{anime}/items/{reviewUid}/threads/{tid}/votes/{voterUid}',
+  (event) => handleVoteWrite(event, 'thread')
+);
+// onOfficialVote — votes on Blake's official rating (the agreement tally). Owns the
+// `official/{animeId}` aggregate counts. Counts-only, migrated at gate 6 (the cutover).
+exports.onOfficialVote = onDocumentWritten(
+  'official/{animeId}/votes/{voterUid}',
+  (event) => handleVoteWrite(event, 'official')
+);
+exports.onReplyVote = onDocumentWritten(
+  'comments/{anime}/items/{cid}/replies/{rid}/votes/{voterUid}',
+  (event) => handleVoteWrite(event, 'reply')
 );
 
 // -----------------------------------------------------------------------------

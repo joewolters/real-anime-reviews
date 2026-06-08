@@ -1,6 +1,26 @@
 <!-- author: Code | date: 2026-05-09 -->
 # Schema Diff — Excel ↔ animeData.js ↔ AniList
 
+## ⚡ READ-FIRST
+
+- **What this doc is:** a field-by-field schema diff across the three anime-data sources — Excel master (`Anime_Master_Table.xlsx`), `animeData.js`, and AniList — capturing every name/format mismatch and the per-field source-of-truth matrix for the v1.5.0 sync.
+- **Open it ONLY when** you are designing or editing `scripts/sync-excel-to-js.js` (Phase A / v1.5.0 Excel → animeData.js sync).
+- **Or when** you need the exact Excel↔JS column mapping, a known format mismatch (Tags `#hashtag` → array, `Watch` → `Platforms`, trailer `youtu.be` → `/embed/`), or which field wins in the three-way merge.
+- **Or when** you hit an open decision (Top10Rank, Studio multi-value, Description authority, AniList ID columns) and need the recorded recommendation.
+- Otherwise SKIP — this is deep reference, not session-start reading.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+
+- **1 · `animeData.js` — fully documented (read from source 2026-05-09)** — open if you need the exact JS field names, types, and shape quirks (`image` lowercase, `Rating` as string, no cross-source ID).
+- **2 · Pre-Excel notes (`All anime reviews .txt`) — documented** — open if you need the historical `.txt` shape or the age-gate `(18+)`/`(16+)` provenance.
+- **3 · `Anime_Master_Table.xlsx` — documented (read from CSV export 2026-05-09)** — open if you need the Excel column order, the 10 real vs 2 reference columns, or the fields missing from Excel.
+- **3.1 · Data quality observations (from CSV scan)** — open if you hit a dirty-data case (trailer URL formats, `Watch` comma-spacing, the `Shoen` typo, newlines in Review cells).
+- **4 · The eventual three-way merge for Mode 1** — open if you need the per-field source-of-truth authority matrix or the new AniList-sourced fields.
+- **5 · Decisions Phase A (v1.5.0) needs to make** — open if you need the recorded sync-script decisions (field naming, `image` casing, age rating, validation rules, sync direction, order preservation).
+- **6 · Resolved questions and next steps** — open if you need what's resolved vs still open for Blake, or the concrete next build step for the sync script.
+
 > **Status:** COMPLETE (2026-05-09). All three sources documented. Excel side resolved by Blake exporting a CSV copy after the Cowork sandbox couldn't open `.xlsx` directly. Schema-diff is now ready to inform `scripts/sync-excel-to-js.js` design (v1.5.0).
 >
 > **Why this doc exists:** Phase A pre-work step 2. Before writing the v1.5.0 Excel → animeData.js sync script, we need to know exactly what columns Excel has, what fields animeData.js has, and where they disagree. This doc surfaces those disagreements so the sync script doesn't have to guess.

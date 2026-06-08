@@ -2351,43 +2351,18 @@ body.modal-open {
 .nav-links {
   margin-left: auto;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
+  flex-direction: row;       /* gate 6d: ONE horizontal rail (was a stacked column) */
+  align-items: center;
+  gap: 14px;
   position: relative; /* anchor notif dropdown */
 }
 
-
-/* Top line container */
-.nav-topline {
+/* The two equal circular header tokens (Lantern + account head) sit as one composed
+   group to the RIGHT of the search (gate 6d). */
+.header-tokens {
   display: flex;
   align-items: center;
-  gap: 0.5px;
-}
-
-/* Make the top-line buttons look like text links (Godzilla-ish) */
-.nav-topline .as-link {
-  background: transparent;
-  border: none;
-  color: #ddd;
-  font: 700 0.95rem/1 'Montserrat', sans-serif;
-  padding: 0;
-  cursor: pointer;
-  opacity: 0.95;
-}
-
-.nav-topline .as-link:hover {
-  color: #fff;
-  text-decoration: underline;
-  opacity: 1;
-}
-
-/* Prevent the empty area of the top line from blocking the search below */
-.nav-topline { 
-  pointer-events: none;  /* container ignores pointer events */
-}
-.nav-topline .as-link {
-  pointer-events: auto;  /* the actual button/link still clickable */
+  gap: 10px;
 }
 
 /* (Optional) if anything else is layering oddly, ensure search sits above */
@@ -2396,13 +2371,14 @@ body.modal-open {
   z-index: 1;
 }
 /* ===== Notifications (bell + dropdown) ===== */
+/* ===== Lantern notification button (v1.9.0) ===== */
 .notif-btn{
   position: relative;
-  width: 34px;
-  height: 34px;
-  margin-top: 0.5px;
+  width: 44px;              /* gate 6d: bigger so the Lantern is unmistakable */
+  height: 44px;
   padding: 0;
   border-radius: 999px;
+  cursor: pointer;          /* gate 6e item 1: pointer cursor on hover */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2419,13 +2395,39 @@ body.modal-open {
   text-decoration: none !important;
 }
 
-.bell-icon{
-  width: 18px;
-  height: 18px;
-  fill: rgba(240, 230, 255, 0.95);
-  filter: none;
+/* The Lantern glyph. COLD = dim purple. WARM (.lantern-lit) = gold ember. */
+.lantern-icon{
+  width: 30px;            /* gate 6d: larger glyph (was 24) */
+  height: 30px;
+  display: block;
+}
+.lantern-icon .lantern-body{
+  fill: none;
+  stroke: rgba(216, 180, 254, 0.85);
+  stroke-width: 1.4;
+}
+.lantern-icon .lantern-flame{
+  fill: rgba(187, 134, 252, 0.55);
+  transition: fill .3s ease, opacity .3s ease;
+}
+/* WARM state — gold ember, lantern flame glows. */
+.notif-btn.lantern-lit{
+  border-color: rgba(255, 213, 74, 0.6);
+  box-shadow: 0 0 10px rgba(255, 213, 74, 0.22);
+}
+/* the warm glow lives on the centered SVG (drop-shadow) so it isn't clipped by the
+   header's overflow-x:clip the way a wide box-shadow near the edge was (item 1). */
+.notif-btn.lantern-lit .lantern-icon{
+  filter: drop-shadow(0 0 5px rgba(255, 213, 74, 0.75));
+}
+.notif-btn.lantern-lit .lantern-icon .lantern-flame{
+  fill: #ffd54a;
+}
+.notif-btn.lantern-lit .lantern-icon .lantern-body{
+  stroke: rgba(255, 224, 138, 0.95);
 }
 
+/* The unread ember (repurposed #notif-dot). Gold — Blake/unread only. */
 .notif-dot{
   position: absolute;
   top: 6px;
@@ -2434,133 +2436,333 @@ body.modal-open {
   height: 8px;
   border-radius: 999px;
   background: #ffd54a;
-  box-shadow: 0 0 12px rgba(255, 213, 74, 0.65);
+  box-shadow: 0 0 9px rgba(255, 213, 74, 0.7);
+}
+.notif-btn.lantern-lit .notif-dot{
+  transform-origin: center;
 }
 
-.notif-menu{
+/* Gentle gold glow pulse — NOT veilLinePulse, NOT #veil-pulse. Animation only
+   when the lantern is lit AND motion is allowed. */
+@keyframes lantern-ember{
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 213, 74, 0.55); opacity: 0.85; }
+  50%      { box-shadow: 0 0 11px rgba(255, 213, 74, 0.95); opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference){
+  .notif-btn.lantern-lit .notif-dot{
+    animation: lantern-ember 2.6s ease-in-out infinite;
+  }
+}
+/* Reduced-motion: static lit (no pulse) — backstop. */
+@media (prefers-reduced-motion: reduce){
+  .notif-btn.lantern-lit .notif-dot{ animation: none !important; }
+}
+
+/* COMMUNITY-only unread = a COOL purple ember (gate 6d: gold is Blake's alone).
+   Mutually exclusive with .lantern-lit; set by updateLanternGlyph. */
+.notif-btn.lantern-lit-community{
+  border-color: rgba(187, 134, 252, 0.55);
+  box-shadow: 0 0 10px rgba(187, 134, 252, 0.22);
+}
+.notif-btn.lantern-lit-community .lantern-icon{
+  filter: drop-shadow(0 0 5px rgba(187, 134, 252, 0.7));
+}
+.notif-btn.lantern-lit-community .lantern-icon .lantern-flame{
+  fill: rgba(187, 134, 252, 0.9);
+}
+.notif-btn.lantern-lit-community .notif-dot{
+  background: #bb86fc;
+  box-shadow: 0 0 9px rgba(187, 134, 252, 0.7);
+}
+@keyframes lantern-ember-purple{
+  0%, 100% { box-shadow: 0 0 5px rgba(187, 134, 252, 0.55); opacity: 0.85; }
+  50%      { box-shadow: 0 0 11px rgba(187, 134, 252, 0.95); opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference){
+  .notif-btn.lantern-lit-community .notif-dot{
+    animation: lantern-ember-purple 2.6s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  .notif-btn.lantern-lit-community .notif-dot{ animation: none !important; }
+}
+
+/* ===== Lantern notification CENTER (veil-wearing center sheet) ===== */
+.lantern-layer{
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lantern-layer[hidden]{ display: none; }
+
+.lantern-backdrop{
   position: absolute;
-  top: 38px;      /* sits under the top row */
-  right: 0;
-  width: 340px;
-  max-width: min(92vw, 380px);
-  padding: 10px;
-  border-radius: 16px;
-  z-index: 999;
-
-  background: rgba(25, 3, 45, 0.78);
-  border: 2px solid rgba(187, 134, 252, 0.28);
-  box-shadow: 0 14px 40px rgba(0,0,0,0.35), 0 0 18px rgba(185, 0, 255, 0.15);
-  backdrop-filter: blur(12px);
+  inset: 0;
+  background: rgba(8, 0, 18, 0.55);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+  opacity: 0;
+  transition: opacity .28s ease;
 }
+.lantern-layer.active .lantern-backdrop{ opacity: 1; }
 
-.notif-head{
-  display:flex;
-  align-items: baseline;
+.lantern-center{
+  position: relative;
+  width: min(440px, 94vw);
+  max-height: min(80vh, 640px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(26,8,46,0.98), rgba(14,3,28,0.99));
+  border: 1px solid rgba(187,134,252,0.26);
+  box-shadow: 0 34px 90px rgba(0,0,0,0.55), 0 0 26px rgba(185,0,255,0.14);
+  opacity: 0;
+  transform: translateY(14px) scale(0.98);
+  transition: transform .3s cubic-bezier(.16,.84,.44,1), opacity .26s ease;
+}
+.lantern-layer.active .lantern-center{ opacity: 1; transform: translateY(0) scale(1); }
+
+.lantern-head{
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px 6px;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid rgba(187,134,252,0.16);
 }
-
-.notif-title{
+.lantern-head-titles{ display: flex; flex-direction: column; gap: 2px; }
+.lantern-kicker{
+  color: rgba(216,180,254,0.85);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+}
+.lantern-title{
   color: #fff;
   font-weight: 800;
-  letter-spacing: 0.6px;
-  font-size: 0.95rem;
+  letter-spacing: 0.4px;
+  font-size: 1.05rem;
+}
+.lantern-head-actions{ display: flex; align-items: center; gap: 8px; }
+.lantern-markread{
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(187,134,252,0.34);
+  background: rgba(40,18,70,0.5);
+  color: #efd9ff;
+  font: 700 0.72rem/1 'Montserrat', sans-serif;
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.lantern-markread:hover{ background: rgba(60,28,100,0.7); border-color: rgba(187,134,252,0.6); }
+.lantern-close{
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(187,134,252,0.34);
+  background: rgba(14,3,28,0.6);
+  color: #efd9ff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s, transform .1s, border-color .15s;
+}
+.lantern-close:hover{ background: rgba(167,139,250,.28); color: #fff; transform: scale(1.06); }
+
+.lantern-scroll{
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 14px 16px;
 }
 
-.notif-sub{
-  color: rgba(255,255,255,0.72);
+/* Per-type mute strip */
+.lantern-mutes{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 2px 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(187,134,252,0.12);
+}
+.lantern-mutes-label{
+  color: rgba(255,255,255,0.6);
   font-weight: 700;
-  font-size: 0.72rem;
-  white-space: nowrap;
+  font-size: 0.68rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+.lantern-mute{
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(187,134,252,0.22);
+  background: rgba(255,255,255,0.03);
+  color: rgba(240,230,255,0.85);
+  font: 650 0.68rem/1 'Montserrat', sans-serif;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+.lantern-mute:hover{ border-color: rgba(187,134,252,0.45); }
+.lantern-mute.is-muted{
+  opacity: 0.5;
+  text-decoration: line-through;
+  border-color: rgba(187,134,252,0.14);
 }
 
-.notif-divider{
-  height: 1px;
-  margin: 4px 8px 8px;
-  background: linear-gradient(
-    90deg,
-    rgba(187,134,252,0.0),
-    rgba(187,134,252,0.55),
-    rgba(187,134,252,0.0)
-  );
-}
-
-.notif-list{
-  display:flex;
+.lantern-list{
+  display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 260px;
-  overflow:auto;
-  padding: 6px 8px 10px;
 }
 
-.notif-row{
-  display:flex;
-  gap: 10px;
-  padding: 10px;
+.lantern-row{
+  position: relative;
+  display: flex;
+  gap: 11px;
+  padding: 11px;
   border-radius: 14px;
   cursor: pointer;
   border: 1px solid rgba(187, 134, 252, 0.18);
   background: rgba(255,255,255,0.03);
   transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
-
-.notif-row:hover{
+.lantern-row:hover{
   transform: translateY(-1px);
   border-color: rgba(187, 134, 252, 0.38);
   box-shadow: 0 0 14px rgba(187, 134, 252, 0.18);
 }
+/* Blake-origin pin — the ONLY gold in the center besides the ember. */
+.lantern-row--blake{
+  border-color: rgba(255, 213, 74, 0.5);
+  background: linear-gradient(180deg, rgba(60,40,10,0.35), rgba(255,255,255,0.03));
+}
+.lantern-row--blake:hover{ box-shadow: 0 0 14px rgba(255, 213, 74, 0.22); }
 
-.notif-avatar{
-  width: 30px;
-  height: 30px;
+/* gate 6e: UNREAD glow inside the center — a row lights up until it's read + the
+   center is closed (Blake's request). Community unread = purple; Blake-origin = gold. */
+.lantern-row.is-unread{
+  border-color: rgba(187, 134, 252, 0.6);
+  box-shadow: 0 0 0 1px rgba(187, 134, 252, 0.35) inset, 0 0 14px rgba(187, 134, 252, 0.28);
+}
+.lantern-row--blake.is-unread{
+  border-color: rgba(255, 213, 74, 0.6);
+  box-shadow: 0 0 0 1px rgba(255, 213, 74, 0.4) inset, 0 0 14px rgba(255, 213, 74, 0.3);
+}
+.lantern-rollup.is-unread{
+  border-color: rgba(187, 134, 252, 0.6);
+  box-shadow: 0 0 0 1px rgba(187, 134, 252, 0.35) inset, 0 0 14px rgba(187, 134, 252, 0.28);
+}
+.lantern-pin{
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  color: #ffd54a;
+  font-size: 0.8rem;
+  text-shadow: 0 0 10px rgba(255,213,74,0.6);
+}
+
+.lantern-avatar{
+  position: relative;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
-  overflow:hidden;
-  flex: 0 0 30px;
+  overflow: visible;   /* gate 6d item 6: let the corner glyph badge break out (was clipping it) */
+  flex: 0 0 34px;
   background: rgba(255,255,255,0.10);
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 800;
   color: #fff;
 }
-
-.notif-avatar img{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display:block;
+.lantern-avatar img{ width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 999px; }
+.lantern-row-glyph{
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(20,6,38,0.95);
+  border: 1px solid rgba(187,134,252,0.4);
+  color: rgba(216,180,254,0.95);
+  font-size: 0.62rem;
+  line-height: 1;
+}
+.lantern-row--blake .lantern-row-glyph{
+  border-color: rgba(255,213,74,0.55);
+  color: #ffd54a;
 }
 
-.notif-text{
+.lantern-row-text{
   flex: 1;
-  display:flex;
+  display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
 }
-
-.notif-line{
+.lantern-row-line{
   color: #fff;
-  font-weight: 800;
+  font-weight: 650;
   font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lantern-row-line strong{ font-weight: 800; }
+.lantern-row-meta{
+  color: rgba(255,255,255,0.66);
+  font-weight: 650;
+  font-size: 0.72rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.notif-meta{
-  color: rgba(255,255,255,0.70);
-  font-weight: 650;
-  font-size: 0.74rem;
-}
-
-.notif-empty{
-  padding: 10px;
+/* Vote rollup — warm-but-PURPLE (community), never gold. */
+.lantern-rollup{
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 13px;
   border-radius: 14px;
-  border: 1px dashed rgba(187, 134, 252, 0.28);
-  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(187, 134, 252, 0.3);
+  background: linear-gradient(180deg, rgba(120,40,160,0.18), rgba(255,255,255,0.03));
+}
+.lantern-rollup-glyph{
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(187,134,252,0.18);
+  color: #d8b4fe;
+  font-size: 0.92rem;
+}
+.lantern-rollup-line{ color: #fff; font-weight: 800; font-size: 0.84rem; }
+.lantern-rollup-meta{ color: rgba(216,180,254,0.9); font-weight: 700; font-size: 0.72rem; }
+
+.lantern-empty{
+  text-align: center;
+  padding: 36px 16px;
+  color: rgba(255,255,255,0.8);
+}
+.lantern-empty-glyph{ font-size: 2rem; margin-bottom: 10px; opacity: 0.85; }
+.lantern-empty-line{ font-weight: 700; font-size: 0.92rem; }
+
+@media (prefers-reduced-motion: reduce){
+  .lantern-backdrop,
+  .lantern-center{ transition: none !important; }
+  .lantern-center{ transform: none !important; }
 }
 
 
@@ -4589,17 +4791,9 @@ body.filter-open { overflow: hidden; }
   letter-spacing: 1px;
 }
 
-/* When there is at least 1 review: golden pill + glow */
-.community-avg.has-value {
-  background: linear-gradient(180deg, #ffe27a, #ffd54a);
-  border-color: #e6b800;
-  box-shadow:
-    0 0 0 1px rgba(230,184,0,.6) inset,
-    0 0 16px rgba(255, 213, 74, .55);
-  color: #111;
-}
-.community-avg.has-value span,
-.community-avg.has-value small { color: #111; }
+/* (Removed in the v1.9.0 consistency audit) the legacy GOLD community-avg pill.
+   Community is PURPLE only — gold = Blake. The live treatment is the purple
+   .community-avg.has-value further below (gate 6c). */
 
 /* ---------- Pretty custom stepper (scoped) ---------- */
 .review-composer .number-wrap {
@@ -5259,6 +5453,27 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   100% { transform: translateY(0) scale(1); }
 }
 
+/* v1.9.0 consistency audit — reduced-motion backstops for animations that lacked
+   an explicit guard (project standard: every animation is tamed under
+   prefers-reduced-motion). Includes the two infinite blink dots. */
+@media (prefers-reduced-motion: reduce){
+  .credit-dot,
+  .blink-dot,
+  #genreShuffleBtn.is-spinning .genre-shuffle-icon,
+  #genreShuffleBtn.is-spinning .shuffle-icon,
+  .genre-shuffle-btn.is-spinning .genre-shuffle-icon,
+  .genre-shuffle-btn.is-spinning .shuffle-icon,
+  .random-btn.rolling .dice-icon,
+  .spotlight-stack.manual-nav .card.active,
+  #genre-rails.is-shuffling,
+  #avatar-pick:hover,
+  #avatar-pick:focus-visible,
+  .icon-btn.jiggle,
+  .secondary-save.jiggle{
+    animation: none !important;
+  }
+}
+
 /* NEW: keep icon-row visible if this card has saved state */
 .card.has-saved .icon-row {
   opacity: 1;
@@ -5707,6 +5922,144 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   align-items: center;
 }
 
+/* ===================================================================== */
+/* v1.9.0 gate 5 — community reviews overhaul.                            */
+/* PROTECT THE HEART: gold is reserved for Blake's rating (+ its tick).   */
+/* Community surfaces are PURPLE; the histogram is subordinate.           */
+/* ===================================================================== */
+.comm-stats { display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px; margin: 0 0 16px; }
+
+/* Blake's gold rating — the large PRIMARY element, before the crowd's numbers */
+.comm-blake-rating {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  padding: 8px 16px; border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,226,122,.16), rgba(255,213,74,.10));
+  border: 1px solid rgba(230,184,0,.55);
+  box-shadow: 0 0 0 1px rgba(230,184,0,.25) inset, 0 0 18px rgba(255,213,74,.16);
+}
+.comm-blake-rating .cbr-kicker { font: 800 .62rem/1 'Montserrat', sans-serif; letter-spacing: .12em; color: #ffd866; }
+.comm-blake-rating .cbr-score { font-family: 'Bebas Neue', sans-serif; font-size: 2.6rem; line-height: .95; color: #ffe08a; text-shadow: 0 0 18px rgba(255,213,74,.35); }
+.comm-blake-rating .cbr-max { font-weight: 800; color: #e9d9a6; opacity: .8; margin-left: 2px; }
+
+/* Community block — SUBORDINATE, purple */
+.comm-community-block { flex: 1 1 220px; min-width: 200px; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.community-avg .cavg-label { font: 800 .66rem/1 'Montserrat', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #b8a8d8; }
+.community-avg .cavg-max { opacity: .7; font-size: .85rem; }
+/* the community pill gets the premium framing IN PURPLE (gate 6c) — the gradient +
+   inset outline + outer glow the gold rating had, never gold. */
+.community-avg.has-value {
+  background: linear-gradient(180deg, rgba(187,134,252,.22), rgba(124,77,255,.14));
+  border-color: rgba(187,134,252,.6);
+  box-shadow: 0 0 0 1px rgba(187,134,252,.35) inset, 0 0 16px rgba(187,134,252,.40);
+  color: #e9ddff;
+}
+.community-avg.has-value span, .community-avg.has-value small,
+.community-avg.has-value .cavg-label, .community-avg.has-value .cavg-max { color: #e9ddff; }
+
+/* Rating histogram — purple bars + a single GOLD reference tick at Blake's score */
+.comm-histogram { position: relative; }
+.comm-histogram:not(.has-data) { display: none; }
+.comm-histogram .hist-bars { display: grid; grid-template-columns: repeat(10, 1fr); align-items: end; gap: 3px; height: 46px; }
+.comm-histogram .hist-bar { align-self: end; min-height: 2px; height: var(--h, 0%); background: linear-gradient(180deg, rgba(187,134,252,.9), rgba(187,134,252,.35)); border-radius: 3px 3px 0 0; }
+.comm-histogram .hist-tick { position: absolute; top: -3px; bottom: 16px; width: 2px; transform: translateX(-50%); background: #ffd54a; box-shadow: 0 0 8px rgba(255,213,74,.85); }
+.comm-histogram .hist-tick::before { content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); border: 4px solid transparent; border-top-color: #ffd54a; }
+.comm-histogram .hist-axis { display: flex; justify-content: space-between; font: 700 .62rem 'Montserrat', sans-serif; color: #9c8fbf; margin-top: 3px; }
+
+/* Review body — full markdown (headers/lists/quotes), purple accents */
+.review-row .row-body h1, .review-row .row-body h2, .review-row .row-body h3, .review-row .row-body h4 { font-family: 'Bebas Neue', sans-serif; letter-spacing: .5px; margin: 10px 0 4px; line-height: 1.1; }
+.review-row .row-body h1 { font-size: 1.4rem; } .review-row .row-body h2 { font-size: 1.2rem; }
+.review-row .row-body h3 { font-size: 1.05rem; } .review-row .row-body h4 { font-size: .95rem; color: #cbb0ff; }
+.review-row .row-body p { margin: 6px 0; }
+.review-row .row-body ul, .review-row .row-body ol { margin: 6px 0; padding-left: 20px; }
+.review-row .row-body a { color: #cbb0ff; text-decoration: underline; }
+.review-row .row-body code { background: rgba(187,134,252,.14); border-radius: 5px; padding: 1px 5px; font-size: .9em; }
+.review-row .row-body blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid rgba(187,134,252,.4); color: #cfc7d9; }
+
+/* "Helpful / Not helpful" pills keep the purple .vote-btn look (never gold). */
+.review-row .vote-btn.not-helpful.active { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.34); }
+
+/* Empty state — Blake's voice */
+.review-empty { list-style: none; text-align: center; color: #b8a8d8; padding: 18px 10px; font: 600 .92rem 'Montserrat', sans-serif; }
+
+/* sort + ratings filter row */
+.comm-sort-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin: 2px 0 10px; }
+
+/* Blake's gate-4 flag: the comment Replies toggle reads as "open the conversation" */
+.reply-toggle { display: inline-flex; align-items: center; gap: 5px; background: rgba(187,134,252,.10); }
+.reply-toggle .rt-icon { font-size: .95em; line-height: 1; }
+.reply-toggle.is-open { background: rgba(187,134,252,.22); border-color: rgba(187,134,252,.6); }
+
+/* Blake's gate-4 flag: report modal "needs a touch up" — a brand-bar accent. */
+.rar-report-modal { border-top: 3px solid #bb86fc; }
+.rar-report-title .jp-mini { color: #cbb0ff; font-weight: 700; font-size: .62em; margin-left: 6px; }
+
+/* ===================================================================== */
+/* v1.9.0 gate 6c — Lantern fix round                                     */
+/* ===================================================================== */
+/* item 2 / gate 6d — the account head TOKEN: a circular token matching the Lantern.
+   Signed-out = a generic head silhouette; signed-in = photo or initial. */
+.account-token {
+  width: 44px; height: 44px; padding: 0; border-radius: 999px; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(90,0,120,.16); border: 1px solid rgba(187,134,252,.45);
+  color: #e9ddff; font: 800 1rem 'Montserrat', sans-serif; cursor: pointer;
+  text-decoration: none !important;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.account-token:hover { border-color: rgba(187,134,252,.75); box-shadow: 0 0 14px rgba(187,134,252,.28); background: rgba(120,0,160,.22); }
+.account-token .account-av-img { width: 100%; height: 100%; object-fit: cover; }
+.account-token .account-av-initial { line-height: 1; }
+.account-token .account-silhouette { width: 26px; height: 26px; }
+.account-token .account-silhouette circle { fill: currentColor; }
+.account-token .account-silhouette path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* item 7 — review vote thumbs (purple via currentColor; scoped to review pills) */
+.review-row .vote-btn .vote-ico { width: 15px; height: 15px; fill: currentColor; display: block; }
+.review-row .vote-btn .vote-ico--down { transform: rotate(180deg); }
+
+/* item 3 — vote rollup drill-down ("exactly who liked") */
+.lantern-rollup { cursor: pointer; }
+.lantern-rollup .lantern-rollup-chev { margin-left: auto; opacity: .7; font-size: .8rem; }
+.lantern-rollup-items { margin: 2px 0 8px; padding-left: 8px; border-left: 2px solid rgba(187,134,252,.35); display: flex; flex-direction: column; gap: 6px; }
+.lantern-vote-item { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.lantern-vote-item:hover { background: rgba(187,134,252,.10); }
+.lantern-vote-item .lvi-glyph { font-size: .9em; line-height: 1.3; }
+.lantern-vote-item .lvi-text { font-size: .86rem; color: #e9ddff; line-height: 1.35; }
+.lantern-vote-item .lvi-meta { color: #b8a8d8; }
+
+/* item 4 — floating "back to notifications" chip after a deep-link */
+/* gate 6e item 3: the "back to notifications" affordance, made genuinely findable —
+   bottom-CENTER, larger, brighter, with an attention entrance (reduced-motion safe). */
+.lantern-back-chip {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 8000;
+  display: none; align-items: center; gap: 8px;
+  background: linear-gradient(180deg, rgba(60,30,100,.96), rgba(30,10,60,.96)); color: #f3ecff;
+  border: 1px solid rgba(187,134,252,.65); border-radius: 999px;
+  padding: 11px 18px; font: 800 .9rem 'Montserrat', sans-serif; cursor: pointer;
+  box-shadow: 0 8px 26px rgba(0,0,0,.45), 0 0 20px rgba(187,134,252,.4);
+}
+.lantern-back-chip.show { display: inline-flex; }
+.lantern-back-chip:hover { border-color: rgba(187,134,252,.9); box-shadow: 0 8px 26px rgba(0,0,0,.45), 0 0 26px rgba(187,134,252,.6); }
+@media (prefers-reduced-motion: no-preference){
+  .lantern-back-chip.show { animation: lanternBackChipIn .9s ease both; }
+}
+@keyframes lanternBackChipIn {
+  0%   { opacity: 0; transform: translate(-50%, 14px); }
+  55%  { opacity: 1; transform: translate(-50%, -3px); }
+  100% { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* item 5 — deep-link target highlight (reduced-motion: static fade) */
+@keyframes rarDeeplinkFlash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(187,134,252,0); }
+  15%      { box-shadow: 0 0 0 3px rgba(187,134,252,.55), 0 0 22px rgba(187,134,252,.45); }
+  60%      { box-shadow: 0 0 0 2px rgba(187,134,252,.35), 0 0 16px rgba(187,134,252,.30); }
+}
+.rar-deeplink-flash { border-radius: 12px; animation: rarDeeplinkFlash 2.4s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .rar-deeplink-flash { animation: none; box-shadow: 0 0 0 2px rgba(187,134,252,.55), 0 0 16px rgba(187,134,252,.4); transition: box-shadow .4s ease; }
+}
+
 /* Community sort row sits above reviews (right side) */
 .comm-sort-row{
   display: flex;
@@ -6088,6 +6441,10 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   font-weight: 800;
   opacity: .95;
 }
+
+/* gate 6d item 9 — thumbs icon in the rating-agreement bar (matches review pills) */
+.official-votes-bar .vote-ico{ width: 15px; height: 15px; fill: currentColor; display: block; }
+.official-votes-bar .vote-ico--down{ transform: rotate(180deg); }
 
 /* =========================================================
    FONT STEP 1: LOCK “CARD TITLE” FONT (so future font edits
@@ -8076,4 +8433,128 @@ html.rar-welcome-pending::before {
   .welcome-enter, .welcome-enter-arrow { transition: none; }
   .welcome-enter:hover { transform: none; }
   .welcome-enter:hover .welcome-enter-arrow { transform: none; }
+}
+
+/* ============================================================
+   v1.9.0 GATE 4 — comments overhaul (card UI, replies, report,
+   pin/lock). Purple = community; gold is reserved for Blake.
+   ============================================================ */
+.comment-item .bubble {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 14px;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.comment-item .bubble:hover {
+  border-color: rgba(187,134,252,.34);
+  box-shadow: 0 0 16px rgba(187,134,252,.16);
+}
+.comment-item .comment-body {
+  margin: 2px 0 0; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere;
+}
+.comment-item .comment-body a { color: #cbb0ff; text-decoration: underline; }
+.comment-item .comment-body code {
+  background: rgba(187,134,252,.14); border-radius: 5px; padding: 1px 5px; font-size: .9em;
+}
+
+.comment-item .comment-foot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+}
+.comment-item .comment-foot .actions { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
+.reply-toggle {
+  background: transparent; border: 1px solid rgba(255,255,255,.16); color: #e9ddff;
+  border-radius: 999px; padding: 4px 12px; font: 700 .78rem/1 'Montserrat', sans-serif;
+  cursor: pointer; transition: background .15s ease, border-color .15s ease;
+}
+.reply-toggle:hover, .reply-toggle.is-open { background: rgba(187,134,252,.14); border-color: rgba(187,134,252,.5); }
+
+.comment-item.is-pinned > .bubble {
+  border-color: rgba(187,134,252,.45); box-shadow: 0 0 0 1px rgba(187,134,252,.22) inset;
+}
+.comment-item .pin-chip {
+  display: inline-block; font: 800 .62rem/1 'Montserrat', sans-serif; letter-spacing: .04em;
+  color: #cbb0ff; background: rgba(187,134,252,.16); border: 1px solid rgba(187,134,252,.4);
+  border-radius: 999px; padding: 3px 8px; margin-right: 8px;
+}
+
+.comment-item .action-btn.report { color: #cbb0ff; border-color: rgba(187,134,252,.34); }
+.comment-item .action-btn.report:hover { background: rgba(187,134,252,.18); border-color: rgba(187,134,252,.6); }
+.comment-item .action-btn.pin.is-on { background: rgba(187,134,252,.22); border-color: rgba(187,134,252,.6); }
+.comment-item .action-btn.delete.admin { background: rgba(255,80,80,.10); border-color: rgba(255,80,80,.32); }
+
+.replies-host:empty { display: none; }
+.replies-host { margin: 10px 0 2px; padding-left: 12px; border-left: 2px solid rgba(187,134,252,.4); }
+.replies-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.reply-item { display: flex; gap: 8px; align-items: flex-start; }
+.reply-item .reply-avatar {
+  width: 26px; height: 26px; min-width: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(187,134,252,.18); color: #fff; font: 800 .72rem 'Montserrat', sans-serif; overflow: hidden;
+}
+.reply-item .reply-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.reply-item .reply-body-wrap { flex: 1; min-width: 0; }
+.reply-item .reply-body { margin: 1px 0 0; line-height: 1.45; font-size: .92rem; word-break: break-word; overflow-wrap: anywhere; }
+.reply-item .meta { font-size: .76rem; color: #b8a8d8; }
+.reply-item .meta .name { color: #fff; font-weight: 700; }
+/* Reply vote pills (gate 4b) — reuse the comment .vote-btn look (purple hover/
+   active inherited via .comment-item .vote-btn; PURPLE, never gold) at a smaller
+   scale, left-aligned under the lighter reply body. */
+.reply-item .reply-foot { display: flex; align-items: center; margin-top: 5px; }
+.reply-item .votes { margin-top: 0; gap: 6px; justify-content: flex-start; }
+.reply-item .vote-btn { padding: 2px 8px; font-size: .72rem; }
+.reply-composer { display: flex; gap: 8px; margin-top: 10px; align-items: flex-end; }
+.reply-composer .reply-input {
+  flex: 1; min-height: 38px; max-height: 120px; resize: vertical;
+  background: rgba(30,10,60,.5); color: #fff; border: 1px solid rgba(187,134,252,.3);
+  border-radius: 10px; padding: 8px 10px; font: 400 .9rem 'Montserrat', sans-serif;
+}
+.reply-composer .reply-post:disabled { opacity: .5; cursor: not-allowed; }
+
+.comments-lock-note { color: #cbb0ff; font: 700 .8rem 'Montserrat', sans-serif; margin-left: 10px; }
+.comments-admin-lock { margin-left: 8px; }
+/* gate 6d item 10: the admin lock-thread control as a BRANDED purple pill (admin
+   controls are purple — gold stays Blake's rating/identity). */
+.comments-admin-lock .lock-toggle {
+  font: 800 .72rem/1 'Montserrat', sans-serif;
+  padding: 6px 12px; border-radius: 999px; cursor: pointer; color: #e9ddff;
+  background: linear-gradient(180deg, rgba(187,134,252,.22), rgba(124,77,255,.16));
+  border: 1px solid rgba(187,134,252,.55);
+  box-shadow: 0 0 0 1px rgba(187,134,252,.18) inset;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.comments-admin-lock .lock-toggle:hover {
+  border-color: rgba(187,134,252,.8);
+  box-shadow: 0 0 12px rgba(187,134,252,.30);
+}
+
+.rar-report-overlay {
+  position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.7);
+  display: flex; align-items: center; justify-content: center;
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+.rar-report-modal {
+  width: min(440px, 92vw);
+  background: linear-gradient(180deg, rgba(40,12,72,.98), rgba(24,6,46,.98));
+  border: 1px solid rgba(187,134,252,.4); border-radius: 16px; padding: 22px 22px 18px;
+  box-shadow: 0 0 30px rgba(187,134,252,.45);
+}
+.rar-report-title { margin: 0 0 4px; font: 800 1.2rem 'Bebas Neue', sans-serif; letter-spacing: .04em; color: #fff; }
+.rar-report-title .jp-mini { font-size: .8rem; color: #cbb0ff; margin-left: 6px; }
+.rar-report-sub { margin: 0 0 14px; color: #d9c9ff; font-size: .9rem; }
+.rar-report-field { display: block; margin-bottom: 12px; }
+.rar-report-field > span { display: block; font: 700 .78rem 'Montserrat', sans-serif; color: #cbb0ff; margin-bottom: 5px; }
+.rar-report-field select, .rar-report-field textarea {
+  width: 100%; background: rgba(30,10,60,.78); color: #fff;
+  border: 1px solid rgba(187,134,252,.45); border-radius: 10px; padding: 8px 10px;
+  font: 400 .92rem 'Montserrat', sans-serif;
+}
+.rar-report-field textarea { min-height: 64px; resize: vertical; }
+.rar-report-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.rar-report-send { background: rgba(187,134,252,.22); border-color: rgba(187,134,252,.6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .comment-item .bubble, .reply-toggle, .comment-item .action-btn, .comments-admin-lock .lock-toggle { transition: none; }
+  .comment-item .bubble:hover { box-shadow: none; }
+  .rar-report-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

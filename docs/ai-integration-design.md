@@ -1,6 +1,24 @@
 <!-- author: Code | date: 2026-05-10 -->
 # AI Integration Design — Mode 1's "✨ AI" buttons
 
+## ⚡ READ-FIRST
+
+- WHAT: a *planning* doc for the real one-click "✨ AI" integration (v1.6.x). Today's baseline is a working 2-step copy/paste workaround; nothing here is built yet.
+- WHEN to open: only when actually building/scoping the AI "Generate" button — i.e. wiring `admin/new-anime.js` to a Claude proxy, choosing the proxy approach, or estimating effort/cost.
+- TL;DR decision: recommended path is **Option A — Firebase Cloud Function**; **Option B — local Node proxy** is the no-cost local-only fallback. The `.ai-panel` UI already exists.
+- If you're NOT building AI integration this session, you don't need this doc.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+
+- **1 · What we want** — open if you need the target one-click UX flow.
+- **2 · Why we don't have it in v1.6.0** — open if you need the CORS/server-intermediary reason it isn't built.
+- **3 · Three viable paths (recommended → not)** — open if you need the Option A/B/C setup steps, pros/cons, and effort.
+- **4 · Recommendation** — open if you need which option to pick and when.
+- **5 · UI is already in place** — open if you need the exact `.ai-panel` changes to ship.
+- **6 · Out-of-scope** — open if you need to know which AI approaches were ruled out and why.
+
 > Planning doc for v1.6.x. Baseline ships with a 2-step copy/paste workaround (panel opens with prompt → "Open Claude →" opens new tab → Blake pastes response back → "Use this" populates field). This doc plans the real one-click integration.
 
 ## 1 · What we want

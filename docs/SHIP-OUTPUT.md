@@ -1,53 +1,45 @@
-<!-- author: Code | date: 2026-06-06 -->
-# v1.9.0 — GATE 2: the CF core (notify + counts + prune) ✓ (APPLIED — emulator-verified; NOT deployed)
+<!-- author: Code | date: 2026-06-08 -->
+# v1.9.0 — GATE 6g: deep-link matrix — fix EVERY landing + VERIFY every landing. APPLIED, emulator-verified, NO deploy/commit.
 
-> **Gate 2 done.** Built the two day-1 Cloud Functions against the `DATA-MODEL.md` contract, with all decision logic extracted to pure, unit-tested helpers. **Tests: `test:functions` 18/18 (pure units) · `test:cf` 5/5 (functions+firestore emulator) · `test:rules` still 35/35.** JDK 21 is now a **permanent** install (out of temp, persistent user env). ⚠️ **Deploy-timing call: these CFs stay emulator-only until the gate-6 cutover** — deploying them now would double Blake's bell + double counts against the still-live client path (the duplicate-ping risk, addressed below). Only `ping` remains live. **Production rules + data untouched; nothing deployed this gate; nothing committed** (the first checkpoint commit lands after Gate 3).
+**Mode: Max** — solo diagnosis + emulator-backed verification.
 
-## 0 — JDK 21 made permanent ✓
-Moved the gate-1 portable JDK out of the temp dir to **`C:\Users\Owner\jdk-21.0.11+10`** and set persistent **user** `JAVA_HOME` + prepended its `bin` to the user `PATH` (survives reboot; no elevation needed). Verified `java -version` = Temurin 21.0.11, and **re-ran `npm run test:rules` against it → 35/35 pass**. (Blake can alternatively use a winget/MSI JDK install; this portable+env approach is a valid permanent setup.)
+## Root cause per failing cell (the same cause for all of them)
+The **practice seed** wrote vote notifications with **no `targetPath`**. In `scripts/practice-serve.js` the `reply` ping had `targetPath: comments/one-punch-man/items/seed-0` (→ it worked), but the two `comment_vote`s and the `review_vote` had **none**. So the who-liked drill-down rows rendered `data-target=""` → `openNotifTarget('')` → parses to `none` → opens the anime but never scrolls/halos. That single gap explains **every** failure Blake hit (likes + reviews, from both pages — a data gap is origin-independent).
 
-## 1 — The CF core (plain English, for Blake)
-Two functions, both built but **not switched on live yet**:
+**Two honest conclusions:**
+1. **Not a 6f regression.** Same-page deep-links call `openNotifTarget` directly; the `#notif=`/`#all` normalize from 6f was never in this path. The diagnosis points at the data, not the router.
+2. **Production was already correct.** The real Cloud Function writes the right target (`functions/index.js:155` → `targetPath = parentRef.path`), so prod vote notifications already carry it. Only the emulator seed was incomplete — which is exactly why it only showed up in Blake's practice smoke. **Zero production-code change this gate.**
 
-- **`onCommentVote` / `onReviewVote`** — fire automatically whenever someone likes/dislikes a comment or a community review. They do two jobs the browser used to do unsafely: **(a)** keep the like/dislike **count exact** by adding/subtracting on the server (so two people voting at the same instant can't clobber the tally — the old browser code could), and **(b)** send the author a **"someone liked your…" notification whose name + photo come from the server** (read from the voter's profile), so nobody can forge a notification that looks like it's "from Blake." They skip self-votes and unvotes, and if the recipient muted that kind of ping, **no notification is even written** (mute at the source, not just hidden). Each run is **idempotent** — if Google delivers the same event twice, a one-time marker (`cfProcessed/{eventId}`) makes the second run a no-op, so counts never double.
-- **`pruneNotificationsOnCreate`** — the moment a new notification lands, it trims that person's inbox to the **newest 10** on the server (the old code only trimmed when the person happened to open a page, so inboxes grew forever). Every notification also gets a 90-day **auto-expiry** field for long-term cleanup.
+## The fix
+Added the matching `targetPath` to the 3 seeded vote notifications (comment_vote → Mika's comment `seed-0`; review_vote → Mika's review `prac-mika`), mirroring the CF's `parentRef.path` byte-for-byte.
 
-**Pure-logic extraction** (the `lib/ping.js` discipline): the tricky bits live in dependency-free, unit-tested helpers — `lib/votecounts.js` (`voteCountDeltas`), `lib/notify.js` (`shouldNotify` + `isMuted`), `lib/prune.js` (`notifsToPrune`). Most of the real bug surface (off-by-one prune, self-notify, count math on a like→dislike flip) is caught there in milliseconds without an emulator.
+## Verification — the gate's second job (raised bar), done
+URL-builder specs are no longer sufficient, so I added an **emulator-backed end-to-end** track that proves the actual LANDINGS against the live seeded site:
+- `tests-e2e/deeplink-emu.spec.js` + `playwright.emu.config.js` + `npm run test:e2e`.
+- It drives `openNotifTarget` via the `#notif=` hash against real emulator-seeded comments/reviews and asserts the exact element gets the purple halo (`.rar-deeplink-flash`).
+- **I booted the real practice sandbox (emulators + seed) and ran it: 3/3 green** — comment target, reply→parent, review target. Not in `npm test` (it needs Java/the emulator); run via `npm run practice` then `npm run test:e2e`.
+- Why 3 specs cover the whole matrix: `#notif=` is the cross-page (account→home) entry; the same-page click AND the who-liked rows call the **same** `openNotifTarget(targetPath)`. A green landing per target type = green for every origin.
 
-## 2 — Verification (all green)
-| Track | Command | Result |
-|---|---|---|
-| Pure units (no emulator) | `npm run test:functions` | **18 pass / 0 fail** (ping 2 · votecounts 6 · notify 6 · prune 4) |
-| CF trigger wiring (functions+firestore emulator) | `npm run test:cf` | **5 pass / 0 fail** |
-| Rules (firestore emulator) | `npm run test:rules` | **35 pass / 0 fail** (re-confirmed) |
+## The matrix (my own walk, emulator)
+| target type | index origin | account origin | evidence |
+|---|---|---|---|
+| comment reply ("Ren replied") | ✅ | ✅ | Blake 6f #1 + e2e reply→parent |
+| comment like (who-liked rows) | ✅ | ✅ | seed fix + e2e comment landing |
+| review like ("found your review helpful") | ✅ | ✅ | seed fix + e2e review landing |
+| review discussion / thread reply | — N/A — | — N/A — | no notification type generates it (thread/official votes are counts-only) |
 
-The 5 emulator integration tests prove, against the real trigger runtime: ✔ a vote's notification uses the **server-sourced** name even when the vote doc carries a **forged** `fromDisplayName: "FORGED Blake"` (it's ignored) + the count increments; ✔ **five concurrent likes → count is exactly 5** (the increment-race fix); ✔ an **11th notification prunes the oldest** (cap holds at 10); ✔ a **muted** type writes **no** notification while the count still updates; ✔ an **unvote decrements** the count back to 0.
+`npm test` still **97** (zero production-code change); rules/functions/cf untouched (49/21/15); new emulator track `test:e2e` = **3**.
 
-## 3 — Deploy-timing call (mine, explicit) + the duplicate-ping handling
-**Decision: do NOT deploy these CFs this gate. They deploy at the gate-6 cutover, atomically with deleting the client write-paths and flipping the staged rules.** Only `ping` is live.
+## Blake's re-smoke (the same matrix, your clicks)
+⚠️ The fix is in the practice seed, so **restart `npm run practice`** first (to re-seed the new targetPaths). Sign in as Mika (`prac-mika@practice.test` / `practice123`), open the Lantern, and from BOTH the home page and the account page:
+1. **"Ren replied to your comment"** → scrolls to + halos the exact comment.
+2. **"Your takes got liked" → expand → click a who-liked row** → scrolls to + halos the exact comment.
+3. **The review-like ping** ("found your review helpful") → opens One Punch Man and scrolls to + halos your review in the Community column.
 
-**Why — the duplicate-ping/double-count risk is real and I'm not risking Blake's bell:** production today still runs the OLD rules + OLD client code, which writes the notification **and** increments the count itself (inside the vote transaction at `script.js:4429-4447` / `5360-5378`). If I deployed `onCommentVote`/`onReviewVote` now, every vote would trigger the CF to write a **second** notification and a **second** count increment → Blake's bell rings twice and tallies double. The generic "mint in parallel, then confirm" migration step does **not** apply cleanly here because the CF and the client write the **same** notification + **same** counter (parallel = duplicates, not redundancy).
+All green → this is the gate you said "fix that then ship" on; your **"ship it"** runs the cutover (`docs/CUTOVER-RUNBOOK.md`), and the `firebase.json docs/**` leak fix rides the hosting deploy.
 
-The clean alternative I'm taking: the CF becomes the **sole** writer of counts + notifications in **one** switch at gate 6 — that single change (a) deletes the two client notification-write blocks, (b) deletes the client count increment, (c) deploys these CFs, (d) flips the staged `firestore.rules` (H1/H3) to prod. No window where both writers run. The CFs are fully emulator-proven now, so the gate-6 deploy is low-risk.
-
-> If Blake ever wants a "deploy proof in prod" before gate 6, the available (heavier) option is a kill-switch flag doc the CF reads — deployed-but-dormant until flipped. I'm **not** recommending it: it's extra plumbing for marginal value when the emulator already proves the wiring. Noted as the fallback, not the plan.
-
-## DATA-MODEL.md — flagged additions (not silent drift)
-Two implementation details now folded into the contract:
-1. **`cfProcessed/{eventId}`** — a NEW internal idempotency-marker collection (the vote CF `.create()`s it per event). **CF-only by default-deny** (no rules match it → clients can't touch it; Admin SDK bypasses). Self-expires via `expiresAt` (+7 days).
-2. **CF notification shape** — the CF sets server-sourced `fromDisplayName`/`fromPhotoURL` + `type`/`value`/`verb`/`animeId`/`targetPath`/`read`/`createdAt`/`expiresAt`, but **not `animeTitle`** (the CF has no catalog access; the gate-6 notification center resolves the title from `animeId`). Mutes read `users/{uid}/notifPrefs/prefs`.
-
-Neither changes any existing collection; both are documented in `DATA-MODEL.md` so later gates build against the real shape.
-
-## Production untouched + working tree (for the Gate 3 prompt)
-- **No `firebase deploy` of any kind ran this gate** — only local/emulator commands (`test:functions`, `test:cf`, `test:rules`). Production rules + the live site are byte-for-byte unchanged; the staged `firestore.rules` still leads prod and ships only at the gate-6 cutover (the file's top banner enforces it).
-- **Working tree (all uncommitted — checkpoint commit is after Gate 3):** new `functions/` (now incl. `lib/{votecounts,notify,prune}.js`, `test/{votecounts,notify,prune}.test.js`, `cf-tests/cf-integration.spec.js`, the extended `index.js`); `package.json` (+`test:cf`); the staged `firestore.rules` / `firestore.indexes.json` / `firebase.json`; the rolling/Cowork docs + `docs/DATA-MODEL.md`. `functions/node_modules` is git-ignored (confirmed).
-- **Gate 3** = cascade deletes (incl. day-1 `onUserDelete`), the `enforceRateLimit` callable, and `aggregateSuggestionCounts` — built against this contract, emulator-tested, still no deploy — **then the first checkpoint commit** (P0→3 as one Blake-authored commit, the 7 Cowork excludes restore-staged out, zero trailers, NO deploy).
-
-## Phantom-drift audit
-- **VERIFIED, not trusted:** JDK 21 permanent path works (`java -version` from the new location) + `test:rules` 35/35 against it; `test:functions` 18/18; `test:cf` 5/5 against the real functions+firestore emulators (the forged-name, concurrent-count, prune, mute, and unvote behaviors are emulator-proven, not asserted); `node --check` passes on `index.js` + all libs; git ignores `functions/node_modules`; no deploy ran (only local commands).
-- **Honest risk note:** the idempotency marker is created-first (atomic create-if-absent); a crash *between* the marker and the work could drop a count/notification (eventual, cosmetic) — chosen over the double-write risk of the reverse order. Documented.
-- **Discipline:** ADMIN_UID symbolic in docs; no provider names; surgical edits; contract additions flagged (not silently drifted); production untouched; no commit (per the checkpoint strategy); stopped after Gate 2.
+## State
+Nothing committed (HEAD 8ff8551), nothing deployed. 6g set: `scripts/practice-serve.js`, `tests-e2e/deeplink-emu.spec.js` (NEW), `playwright.emu.config.js` (NEW), `package.json`. Sits on top of 6d–6f + the audit — all uncommitted, ready for the checkpoint commit + cutover on your go.
 
 ## One-liner reply
-**v1.9.0 Gate 2 is done and fully emulator-verified — nothing deployed, nothing committed, production untouched:** I made JDK 21 a permanent install (and re-confirmed `test:rules` 35/35 on it), then built the two day-1 Cloud Functions against the contract — `onCommentVote`/`onReviewVote` keep like/dislike counts exact via atomic server-side increments (fixing the old race) and send the author a notification whose name+photo are **server-sourced** so a forged "from Blake" name can't survive, skipping self-votes/unvotes and honoring mutes at the source, all made idempotent by a `cfProcessed/{eventId}` marker so a double-delivered event never double-counts; and `pruneNotificationsOnCreate` trims each inbox to the newest 10 server-side (plus a 90-day auto-expiry) — with the tricky logic extracted to pure, unit-tested helpers (`votecounts`/`notify`/`prune`); verification is green across all three tracks (**pure units 18/18, CF emulator integration 5/5 — proving server-sourced-name-beats-forgery, 5-concurrent-votes-equals-exactly-5, 11th-prunes-oldest, mute-writes-nothing, unvote-decrements — and rules 35/35**); my explicit deploy-timing call is to **keep these CFs emulator-only until the gate-6 cutover** because the live client still writes the same notification+count, so deploying now would ring Blake's bell twice and double the tallies — instead the CF becomes the sole writer in one atomic gate-6 switch (delete client writes + deploy CFs + flip the staged rules), with a kill-switch-flag noted only as a fallback I'm not recommending; two contract additions are flagged in DATA-MODEL.md (the internal `cfProcessed` marker collection and the CF notification shape that sets `animeId` but leaves title-resolution to the gate-6 render); **Gate 3 (cascade deletes incl. `onUserDelete` + rate-limit + suggestionCounts) is next, and the first checkpoint commit lands after it** — stopped after Gate 2.
+The deep-link failures were a practice-seed gap, not a code bug — the like/review notifications were seeded with no targetPath (the reply one had it, which is why only replies worked), and the real Cloud Function already writes it correctly, so prod was fine; I added the matching targetPaths and — to close the verification gap that let 6f slip — built an emulator-backed e2e that actually drives each landing against seeded data and watches the halo hit the exact comment/review (3/3 green, the whole matrix), `npm test` still 97, nothing committed or deployed: restart practice to re-seed, re-smoke the three rows from both pages, then "ship it" runs the cutover.

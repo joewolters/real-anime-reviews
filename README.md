@@ -1,5 +1,25 @@
 # Real Anime Reviews
 
+## ⚡ READ-FIRST
+
+- **What this doc is:** the project's human-facing overview — what the site is, the tech stack, the file layout, and how to run it locally. It is NOT operational instructions for Code (those live in `CLAUDE.md`).
+- **When to open it (and spend the tokens):** you need the **project structure / file map** (which file does what), the **tech stack** (vanilla HTML/CSS/JS + Firebase), or the **local-dev quick start** (Live Server, ports, Firebase authorized domains).
+- **Otherwise skip it.** For rules, gotchas, deploys, or schema, go straight to `CLAUDE.md`, `docs/DEPLOYMENT.md`, or `docs/ARCHITECTURE.md` instead.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+
+- **What this is** — open if you need the one-paragraph pitch of what the site does and who it's for.
+- **Tech stack** — open if you need to confirm what's used (vanilla HTML/CSS/JS, Firebase Auth/Firestore/Storage/Hosting, Namecheap DNS).
+- **Project structure** — open if you need the file/folder map and what each file is responsible for.
+- **Quick start (local dev)** — open if you need to clone and run the site locally (Live Server, port `5500`, Firebase authorized domains).
+- **About me** — open if you need background on Blake and the project's origin story.
+- **Design philosophy** — open if you need the visual-identity north star (*Call of the Night* atmosphere) before making design decisions.
+- **Credits** — open if you need to know who else contributed.
+- **Contact** — open if you need Blake's contact channel (Instagram).
+- **More docs** — open if you need pointers to CHANGELOG / ROADMAP / ARCHITECTURE / DEPLOYMENT.
+
 > A real working site for strangers looking for anime recommendations from an actual normal person.
 
 **Live at:** [realanimereviews.com](https://realanimereviews.com) &nbsp;·&nbsp; **Firebase fallback:** [real-anime-reviews.web.app](https://real-anime-reviews.web.app)

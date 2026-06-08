@@ -8,6 +8,16 @@ All notable changes to Real Anime Reviews, newest first. Versions follow [SemVer
 
 For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
+## ⚡ READ-FIRST
+- This is the FULL version history, newest-first — a DEEP-REFERENCE archive (~870 lines), NOT onboarding reading. For the CURRENT ship's state read `docs/CODE-HANDOFF.md`; for what's next read `ROADMAP.md` + `docs/NEXT.md`.
+- **Open this only to read a specific past version** — search for its `## vX.Y.Z` heading. Do NOT read top-to-bottom.
+- This file + git = the authoritative shipped record; the site's runtime "Update Log" widget mirrors it (project rule #6).
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+- **The version entries (`## vX.Y.Z — TIER (date)`, newest first)** — search the exact version you need; each is a self-contained per-ship record.
+
 ---
 
 <!-- author: Code | date: 2026-06-06 -->

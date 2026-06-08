@@ -39,15 +39,18 @@ header h1{
   font-size: 0.95rem;
 }
 
-/* Right side becomes centered + search becomes full width */
+/* Right side becomes centered + search becomes full width (gate 6d: the rail stacks —
+   search on top, the two circular tokens centered below). */
 .nav-links{
   width: 100%;
+  flex-direction: column;
   align-items: stretch;
+  gap: 10px;
 }
 
-.nav-topline{
+.header-tokens{
   justify-content: center;
-  gap: 10px;
+  gap: 16px;
 }
 
 /* iPhone: prevent tap-zoom by making inputs 16px */

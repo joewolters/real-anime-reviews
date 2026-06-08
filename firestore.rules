@@ -127,12 +127,17 @@ service cloud.firestore {
         && (!('photoURL' in request.resource.data) || request.resource.data.photoURL is string || request.resource.data.photoURL == null)
         && createdNow()
         && request.resource.data.likesCount == 0
-        && request.resource.data.dislikesCount == 0;
-      // owner may edit text only. H1: there is NO branch that writes
-      // likesCount/dislikesCount — those are Cloud-Function-owned now.
-      allow update: if isSignedIn()
-        && resource.data.uid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']);
+        && request.resource.data.dislikesCount == 0
+        && (!('pinned' in request.resource.data) || request.resource.data.pinned == false)
+        && (!exists(/databases/$(database)/documents/commentsMeta/$(anime))
+            || get(/databases/$(database)/documents/commentsMeta/$(anime)).data.get('locked', false) != true);
+      // owner may edit text only (H1: counts are CF-owned). Admins may also flip
+      // the `pinned` flag (gate-4 mod tool) and nothing else.
+      allow update: if (isSignedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']))
+        || (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned']));
       // owner OR admin (the day-1 mod tool) may delete.
       allow delete: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
 
@@ -154,7 +159,9 @@ service cloud.firestore {
           && request.resource.data.displayName is string
           && createdNow()
           && request.resource.data.likesCount == 0
-          && request.resource.data.dislikesCount == 0;
+          && request.resource.data.dislikesCount == 0
+          && (!exists(/databases/$(database)/documents/commentsMeta/$(anime))
+              || get(/databases/$(database)/documents/commentsMeta/$(anime)).data.get('locked', false) != true);
         allow update: if isSignedIn()
           && resource.data.uid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']);
@@ -166,6 +173,16 @@ service cloud.firestore {
           allow delete: if isOwner(voterUid);
         }
       }
+    }
+
+    // =========================================================================
+    // commentsMeta/{key} — admin thread-level controls (gate 4: a `locked` flag
+    // that disables the composer for an anime's comments). Public read so the UI
+    // reflects the lock; admin-only write.
+    // =========================================================================
+    match /commentsMeta/{key} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     // =========================================================================

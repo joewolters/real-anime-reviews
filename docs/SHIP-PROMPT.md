@@ -1,26 +1,19 @@
-<!-- author: Cowork | date: 2026-06-06 -->
-# v1.9.0 — GATE 3: cascade + rate-limit + suggestionCounts, then the FIRST CHECKPOINT COMMIT (APPLY — emulator finish line, NO deploy)
+<!-- author: Cowork | date: 2026-06-08 -->
+# v1.9.0 — THE CUTOVER (PRODUCTION DEPLOY) — Blake's go-signal GIVEN
 
-> Gate 2 closed green (18/18 units · 5/5 CF integration · 35/35 rules; CFs emulator-only until the gate-6 atomic cutover — your call, approved). Build gate 3 against `docs/DATA-MODEL.md`, then commit the P0→3 checkpoint.
+> **Blake's go-signal, verbatim, in chat 2026-06-08:** *"push it anyway. log for a quick fix in the following update."* (Said after his 6g re-smoke: comment-reply + comment-like deep-links pass from both pages; the review-like deep-link still misses — LOGGED in NEXT.md as the first post-cutover quick fix, shipping with this known cosmetic bug at Blake's explicit call.)
+>
+> This is the irreversible step. Execute `docs/CUTOVER-RUNBOOK.md` exactly. Blake doesn't open a terminal — you run every command.
 
-## 1 — Cascade deletes
-1. **`reviews/items` cascade** — on review delete, remove its `threads` + all `votes` (this orphan exists in production TODAY; the CF closes it at cutover).
-2. **`forum/{tid}` cascade** — thread removal cleans its `posts` (+ their votes if any).
-3. **`onUserDelete` — DAY-1 per Blake's locked answer.** Account deletion wipes: all authored content (comments/reviews/posts/threads), the user's **foreign `votes/{uid}` docs** (the collection-group sweep from your study, M6/L5), their notifications/saves/profile, and **tombstones every `conversations` they're in**. This is the function that makes the privacy page's deletion promise true — be thorough.
+## Run the runbook, in its locked order
+1. **Checkpoint commit #2** — the entire v1.9.0 working tree (gates 4→6g + the same-day consistency-audit fixes incl. the `firebase.json docs/**` leak fix), authored **Blake Wolters <196413457+joewolters@users.noreply.github.com>**, **zero trailers**, the Cowork-managed excludes restore-staged out. Push.
+2. **Pre-deploy gates:** `npm test` (97 floor) green; re-run `test:rules` / `test:functions` / `test:cf` (49/21/15) green on a clean emulator boot; `bump-version` to 1.9.0 across all targets + `--check`. Do NOT proceed if any floor fails.
+3. **Deploy in the runbook's order — `hosting → firestore (rules+indexes) → functions`** — the order that makes double-count corruption impossible. Verify each step before the next (the runbook's curl checks + the `docs/`/`scripts/`/`functions/`/`firestore.rules` 404 leak checks + a real prod vote→count→notification test).
+4. **Per-step rollback armed** — if any step fails its verify, STOP and roll back that step per the runbook; report rather than push through.
 
-## 2 — Rate limiting
-Implement per your own gate-0 §5 plan — **detect-and-undo `onCreate` trigger first** (doesn't change the client write path), the callable pre-block stays the documented escalation if abuse appears. If you've since changed your mind on that ordering, say so in the report with reasoning — your call, named explicitly.
+## Verify live (report these back as a table)
+`window.APP_VERSION === "1.9.0"` · homepage + account + a modal's comments/reviews 200 · the Lantern renders + a real notification flows · vote→count is CF-owned (no client double-write) · `realanimereviews.com/docs/NEXT.md` now **404** (leak scrubbed) · `/scripts/practice-serve.js` 404 · every staged rule live (a hostile write denied in prod). 
 
-## 3 — `aggregateSuggestionCounts`
-On each `suggestions` create: increment the count-only `suggestionCounts/{anilistId}` doc (+ snapshot title/cover/format/year per the contract). Idempotent like gate 2 (`cfProcessed` marker).
+## Report (SHIP-OUTPUT.md): commit hash · bump confirmation · per-step deploy+verify table · the live-verification table · anything that needed a rollback · confirm the review-deep-link known-bug is the only carried item. Then Cowork closes the ship + updates HANDOFF.
 
-## 4 — Verify (emulator)
-No orphans after each cascade · `onUserDelete` leaves ZERO trace of the user (assert the foreign-votes sweep + convo tombstones specifically) · flood gets detected-and-undone · rollup count exact under concurrent suggestions · all three existing tracks still green. Report all counts.
-
-## 5 — FIRST CHECKPOINT COMMIT (after everything above is green)
-One Blake-authored commit of the P0→3 working tree (`Blake Wolters <196413457+joewolters@users.noreply.github.com>`, **zero trailers**), your established excludes pattern for the Cowork-managed rolling docs, push to origin. **NO deploy of any kind** — this is a git save-point only; production stays byte-for-byte unchanged. Confirm `npm test` (the 84 floor) still passes pre-commit per project rule #7 — server-only changes shouldn't move it, but prove it.
-
-## Report back (SHIP-OUTPUT.md)
-Plain-English function descriptions (Blake reads this) · test counts all tracks · the rate-limit ordering call · commit hash + what's in it + push confirmation · production-untouched confirmation · working-tree state for gate 4 (comments overhaul — the first VISITOR-FACING gate; flag anything it should know).
-
-House rules apply. Stop after the checkpoint commit.
+⚠️ If ANY pre-deploy floor fails or a deploy step won't verify, do NOT force it — stop and report; Blake's "push it" covers a clean runbook execution, not pushing through a red gate.

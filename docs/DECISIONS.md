@@ -1,6 +1,31 @@
 <!-- author: Code | date: 2026-05-09 -->
 # Decision Log
 
+## ⚡ READ-FIRST
+
+- **What this doc is:** the WHY behind non-obvious project choices — a *reference*, not session reading. A fresh Code does NOT read this top-to-bottom at startup.
+- **When to open it:** only when a change risks contradicting a past decision. Open if you're about to (a) undo/revert something that looks "wrong" but may be deliberate, (b) touch Mode 1 / Mode 2 boundaries, image curation, Excel-vs-JS data flow, or the deploy ladder, or (c) someone asks "why is it done this way?"
+- **Default action:** skip this doc, do the task. Come back here only when you hit one of those triggers, then jump straight to the relevant section below.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+
+- **2026-05-11 · When you touch a pipeline's plumbing, re-run the pipeline at the commit you're shipping (lessons from Bug 10)** — open if you need the verification standard for editing Mode 1 plumbing helpers (`runCmd`, `runShipSequence`, etc.).
+- **2026-05-09 · Repo went public** — open if you need to know the repo is world-readable and why credential-handling discipline matters.
+- **2026-05-09 · Version bumping became scripted** — open if you need how/why version strings are bumped via `scripts/bump-version.js`.
+- **2026-05-09 · Image curation: hybrid (AniList default + manual override)** — open if you need who can change cover images and the Mode 1 vs Mode 2 rules.
+- **2026-04-30 · Phase C (Playwright tests) shipped before Phase A (Excel sync)** — open if you need why tests must precede any AI-write capability.
+- **2026-04-30 · Suggestion box folded into v1.6.3 (Mode 1) instead of standalone** — open if you need where the suggestion box lives in the roadmap.
+- **2026-04-30 · Anime font and @mentions deferred (still on roadmap, lower priority)** — open if you need the status of the anime-font and @mentions features.
+- **2026-04-30 · Mode 1 became an upgrade arc, not a single ship** — open if you need how Mode 1 sub-features are scoped across versions.
+- **2026-04-30 · Mode 2 constrained to PATCH-tier changes** — open if you need what Mode 2 may and may not ship autonomously.
+- **2026-04-30 · Mode 1 and Mode 2 are separate AI systems** — open if you need why the two modes must not be conflated.
+- **2026-04-30 · Excel is canonical for anime data** — open if you need the source-of-truth and Excel→JS data-flow rule.
+- **(Original architecture decisions — undated, predate the formal doc system)** — open if you need the foundational choices (vanilla stack, no monetization, no i18n, no aggregator scraping, deploy ladder, "show don't do", commit granularity, quote conventions).
+
+---
+
 > **What this is:** the WHY behind project choices that aren't self-evident from the code. Future-Blake and future-AIs both forget the why fast; this preserves it so we don't re-litigate decisions or accidentally undo them while making "improvements."
 >
 > **What this is NOT:** a status report (use `CHANGELOG.md`). A plan (use `ROADMAP.md`). Operational rules (use `CLAUDE.md`).

@@ -13,12 +13,14 @@ import {
 import {
   doc, setDoc, collection, onSnapshot, deleteDoc,
   query, orderBy, where, limit, collectionGroup,
-  updateDoc, serverTimestamp
+  serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js';
+
+import { initLantern } from './lantern.js';
 
 
 const $  = (sel) => document.querySelector(sel);
@@ -75,190 +77,24 @@ let unsubWatch = null;
 const activityListEl = document.getElementById('activity-list');
 const activityEmptyEl = document.getElementById('activity-empty');
 
-// ===== Notifications dropdown (account page UI shell) =====
-const notifBtn  = document.getElementById('notif-btn');
-const notifMenu = document.getElementById('notif-menu');
-const notifDot  = document.getElementById('notif-dot');
+// ===== Notifications: the Lantern center =====
+// The full Lantern notification center now lives in lantern.js (an ES module the
+// account page imports). It owns #notif-btn / #notif-dot, subscribes to auth on
+// its own, and renders the same center / gold-vs-purple gating as the index page.
+// The old account-page dropdown shell (renderNotifShell / renderNotifications /
+// updateNotifDot / markVisibleNotifsRead / toggleNotifMenu) was removed here so it
+// can't fight the Lantern for #notif-btn. initLantern() is called once below.
+// (NOTE: bare import — lantern.js is NOT cache-busted by ?v= like the other JS. Fine
+// for the cutover since it's a brand-new file, but a POST-CUTOVER item: version-bust
+// it so future v1.9.x deploys that change lantern.js refresh for visitors.)
+initLantern();
 
-let unsubNotifs = null;
-let lastNotifs  = [];
-
-
-let notifOpen = false;
-
-function renderNotifShell() {
-  if (!notifMenu) return;
-  notifMenu.innerHTML = `
-    <div class="notif-head">
-      <div class="notif-title">Notifications</div>
-      <div class="notif-sub">No notifications yet.</div>
-    </div>
-    <div class="notif-divider"></div>
-    <div class="notif-list">
-      <div class="notif-empty">
-        <div class="notif-line">No notifications yet.</div>
-      </div>
-    </div>
-  `;
-}
-
+// HTML-escape used by the saved-row renderers below (favorites/watchlist/AniList).
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (m) => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
 }
-
-function timeAgoMs(ms) {
-  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-  if (s < 60) return 'just now';
-  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24); return `${d}d ago`;
-}
-
-function renderNotifications(notifs) {
-  if (!notifMenu) return;
-
-  const unreadCount = (notifs || []).filter(n => n.read !== true).length;
-  const subline = unreadCount ? `${unreadCount} unread` : `All caught up`;
-
-  const rows = (notifs || []).map((n) => {
-    const name = n.fromDisplayName || 'Someone';
-    const verb = (n.value === -1) ? 'disliked' : 'liked';
-    const what = (n.type === 'review_vote') ? 'your review' : 'your comment';
-    const title = n.animeTitle || n.animeId || 'an anime';
-
-    const ms = n.createdAt?.toMillis ? n.createdAt.toMillis()
-      : (typeof n.createdAt === 'number' ? n.createdAt : Date.now());
-
-    const unread = (n.read !== true); // missing read => treat as unread
-    const avatar = n.fromPhotoURL
-      ? `<img src="${esc(n.fromPhotoURL)}" alt="">`
-      : `<span>${esc(String(name).trim().slice(0,1).toUpperCase() || '?')}</span>`;
-
-    return `
-      <div class="notif-row" data-id="${esc(n.id)}" data-animeid="${esc(n.animeId)}" data-unread="${unread ? '1' : '0'}">
-        <div class="notif-avatar">${avatar}</div>
-        <div class="notif-text">
-          <div class="notif-line">${esc(name)} ${esc(verb)} ${esc(what)}</div>
-          <div class="notif-sub">${esc(title)} · <span class="notif-meta">${esc(timeAgoMs(ms))}</span></div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  const empty = `
-    <div class="notif-empty">
-      <div class="notif-line">No notifications yet.</div>
-    </div>
-  `;
-
-  notifMenu.innerHTML = `
-    <div class="notif-head">
-      <div class="notif-title">Notifications</div>
-      <div class="notif-sub">${esc(subline)}</div>
-    </div>
-    <div class="notif-divider"></div>
-    <div class="notif-list">
-      ${rows || empty}
-    </div>
-  `;
-}
-
-
-function updateNotifDot(notifs) {
-  if (!notifDot) return;
-  const hasUnread = (notifs || []).some(n => n.read !== true);
-  notifDot.hidden = !hasUnread;
-}
-
-async function markVisibleNotifsRead() {
-  if (!auth.currentUser) return;
-  const uid = auth.currentUser.uid;
-
-  const unreadIds = (lastNotifs || [])
-    .filter(n => n.read !== true)
-    .map(n => n.id);
-
-  if (!unreadIds.length) return;
-
-  await Promise.all(unreadIds.map((id) =>
-    updateDoc(doc(db, 'users', uid, 'notifications', id), {
-      read: true,
-      readAt: serverTimestamp()
-    }).catch(() => {})
-  ));
-}
-
-function subscribeNotifications(user) {
-  if (unsubNotifs) { try { unsubNotifs(); } catch(_) {} unsubNotifs = null; }
-  lastNotifs = [];
-  renderNotifications([]);
-  updateNotifDot([]);
-
-  if (!user) return;
-
-  const q = query(
-    collection(db, 'users', user.uid, 'notifications'),
-    orderBy('createdAt', 'desc'),
-    limit(25)
-  );
-
-  unsubNotifs = onSnapshot(q, (snap) => {
-    lastNotifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderNotifications(lastNotifs);
-    updateNotifDot(lastNotifs);
-  }, (err) => {
-    console.warn('Notifications listen failed:', err);
-  });
-}
-
-// clicking a notif opens the anime on home page
-notifMenu?.addEventListener('click', async (e) => {
-  const row = e.target.closest('.notif-row');
-  if (!row) return;
-
-  const animeId = row.dataset.animeid;
-  if (animeId) location.href = `index.html#open=${encodeURIComponent(animeId)}`;
-});
-
-
-
-function closeNotifMenu() {
-  if (!notifMenu || !notifBtn) return;
-  notifOpen = false;
-  notifMenu.hidden = true;
-  notifBtn.setAttribute('aria-expanded', 'false');
-}
-
-function toggleNotifMenu() {
-  if (!notifMenu || !notifBtn) return;
-  if (!auth.currentUser) return; // if somehow not signed in
-  notifOpen = !notifOpen;
-  notifMenu.hidden = !notifOpen;
-  notifBtn.setAttribute('aria-expanded', String(notifOpen));
-  if (notifOpen) markVisibleNotifsRead();
-}
-
-renderNotifShell();
-closeNotifMenu();
-
-notifBtn?.addEventListener('click', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  toggleNotifMenu();
-});
-
-document.addEventListener('click', (e) => {
-  if (!notifOpen) return;
-  if (notifBtn?.contains(e.target)) return;
-  if (notifMenu?.contains(e.target)) return;
-  closeNotifMenu();
-});
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeNotifMenu();
-});
 
 
 let unsubActivity = null;
@@ -849,6 +685,6 @@ onAuthStateChanged(auth, (user) => {
   if (headerSignoutBtn) headerSignoutBtn.style.display = '';
   subscribeSavedLists(user);
   subscribeActivity(user);
-  subscribeNotifications(user);
+  // Notifications (Lantern) subscribe to auth on their own inside initLantern().
 });
 

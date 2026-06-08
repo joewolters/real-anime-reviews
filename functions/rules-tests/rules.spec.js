@@ -75,6 +75,51 @@ test('vote: HOSTILE vote written for another uid is DENIED', async () => {
     { value: 1, updatedAt: serverTimestamp() }));
 });
 
+// ---------------- REPLY VOTES (depth-1 reply vote pills, gate 4b) ----------------
+test('reply vote: happy own vote', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'comments/demon-slayer/items/c1/replies/r1/votes/alice'),
+    { value: 1, uid: 'alice', updatedAt: serverTimestamp() }));
+});
+test('reply vote: HOSTILE vote written for another uid is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'comments/demon-slayer/items/c1/replies/r1/votes/bob'),
+    { value: 1, uid: 'bob', updatedAt: serverTimestamp() }));
+});
+test('reply vote: HOSTILE out-of-range value is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'comments/demon-slayer/items/c1/replies/r1/votes/alice'),
+    { value: 5, uid: 'alice', updatedAt: serverTimestamp() }));
+});
+
+// ---------------- REVIEW + THREAD VOTES (gate 5 vote-model migration) ----------------
+test('review vote: happy own vote (new model — client writes only its vote doc)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'reviews/demon-slayer/items/bob/votes/alice'),
+    { value: 1, uid: 'alice', updatedAt: serverTimestamp() }));
+});
+test('review: HOSTILE direct likesCount inflation (H1) is DENIED — counts are CF-owned', async () => {
+  await seed((db) => setDoc(doc(db, 'reviews/demon-slayer/items/bob'),
+    { uid: 'bob', title: 'T', body: 'b', rating: 8, displayName: 'B', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), likesCount: 0, dislikesCount: 0 }));
+  // not even the review OWNER may write the count directly anymore:
+  await assertFails(updateDoc(doc(as('bob'), 'reviews/demon-slayer/items/bob'), { likesCount: 999999 }));
+  await assertFails(updateDoc(doc(as('alice'), 'reviews/demon-slayer/items/bob'), { likesCount: 999999 }));
+});
+test('thread vote: happy own vote', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'reviews/demon-slayer/items/bob/threads/t1/votes/alice'),
+    { value: -1, uid: 'alice', updatedAt: serverTimestamp() }));
+});
+test('thread vote: HOSTILE vote written for another uid is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'reviews/demon-slayer/items/bob/threads/t1/votes/mallory'),
+    { value: 1, uid: 'mallory', updatedAt: serverTimestamp() }));
+});
+
+// ---------------- OFFICIAL (Blake's-rating agreement) VOTES (gate 6 migration) ----------------
+test('official vote: happy own vote (new model)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'official/demon-slayer/votes/alice'),
+    { value: 1, uid: 'alice', updatedAt: serverTimestamp() }));
+});
+test('official: HOSTILE direct aggregate count write is DENIED (CF-owned)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'official/demon-slayer'),
+    { likesCount: 999999, dislikesCount: 0 }));
+});
+
 // ---------------- NOTIFICATIONS (H3) ----------------
 test('notification: HOSTILE client create into another user\'s bell is DENIED (H3)', async () => {
   await assertFails(setDoc(doc(as('mallory'), 'users/victim/notifications/n1'),
@@ -210,4 +255,37 @@ test('suggestion: happy create with own submitterUid (Q2)', async () => {
 test('suggestion: HOSTILE forged submitterUid is DENIED', async () => {
   await assertFails(setDoc(doc(as('alice'), 'suggestions/s3'),
     { title: 'Bleach', status: 'new', submittedAt: serverTimestamp(), submitterUid: 'bob' }));
+});
+
+// ---------------- GATE 4: comment pin (admin) + thread lock ----------------
+test('comment: HOSTILE self-pin at create is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'comments/demon-slayer/items/cp'),
+    { uid: 'alice', text: 'pin me', displayName: 'A', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0, pinned: true }));
+});
+test('comment: admin may pin a comment', async () => {
+  await seed((db) => setDoc(doc(db, 'comments/demon-slayer/items/c1'),
+    { uid: 'alice', text: 'hi', displayName: 'A', createdAt: Timestamp.now(), likesCount: 0, dislikesCount: 0, pinned: false }));
+  await assertSucceeds(updateDoc(doc(as(ADMIN), 'comments/demon-slayer/items/c1'), { pinned: true }));
+});
+test('comment: HOSTILE non-admin pinning is DENIED', async () => {
+  await seed((db) => setDoc(doc(db, 'comments/demon-slayer/items/c1'),
+    { uid: 'alice', text: 'hi', displayName: 'A', createdAt: Timestamp.now(), likesCount: 0, dislikesCount: 0, pinned: false }));
+  await assertFails(updateDoc(doc(as('alice'), 'comments/demon-slayer/items/c1'), { pinned: true }));
+});
+test('commentsMeta: admin may lock a thread; public reads it; non-admin cannot write', async () => {
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'commentsMeta/demon-slayer'), { locked: true }));
+  await assertSucceeds(getDoc(doc(anon(), 'commentsMeta/demon-slayer')));
+  await assertFails(setDoc(doc(as('alice'), 'commentsMeta/demon-slayer'), { locked: false }));
+});
+test('a LOCKED thread blocks comment + reply create server-side; unlocked allows', async () => {
+  await seed((db) => setDoc(doc(db, 'commentsMeta/locked-anime'), { locked: true }));
+  await assertFails(setDoc(doc(as('alice'), 'comments/locked-anime/items/c1'),
+    { uid: 'alice', text: 'sneak', displayName: 'A', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  await seed((db) => setDoc(doc(db, 'comments/locked-anime/items/parent'),
+    { uid: 'bob', text: 'hi', displayName: 'B', createdAt: Timestamp.now(), likesCount: 0, dislikesCount: 0 }));
+  await assertFails(setDoc(doc(as('alice'), 'comments/locked-anime/items/parent/replies/r1'),
+    { uid: 'alice', text: 'sneak reply', displayName: 'A', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  // an open thread (no commentsMeta doc) still allows posting
+  await assertSucceeds(setDoc(doc(as('alice'), 'comments/open-anime/items/c1'),
+    { uid: 'alice', text: 'hello', displayName: 'A', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
 });

@@ -1,6 +1,24 @@
 <!-- author: Code | date: 2026-06-06 -->
 # Architecture
 
+## ⚡ READ-FIRST
+
+- **What this doc is:** the verified map of how LIVE Real Anime Reviews fits together — static site → `animeData.js` → AniList GraphQL → Firebase (Firestore/Auth/Storage), plus the new `functions/` Cloud Functions surface.
+- **Do NOT read this top-to-bottom at session start** — it is deep reference. The one-line shape is in `CLAUDE.md`; come here only for a specific lookup.
+- **Open it when:** you're touching the data flow / `npm run sync` pipeline, the Firestore data model or `firestore.rules`, the `script.js` modal/places/discovery subsystems, Cloud Functions, or chasing one of the known quirks (e.g. `window.animeData` undefined, `.secondary-layer` not an id).
+- **For the v1.9.0 forward-looking data model** (forum, DMs, profiles, reworked notifications) read **[`docs/DATA-MODEL.md`](DATA-MODEL.md)** instead — not here.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+
+- **Data flow** — open if you need how Excel → `animeData.js` → site → AniList/Firestore wire together, or how `npm run sync` works.
+- **File structure (top of `Current Version/`)** — open if you need what a given file/folder is for.
+- **Code organization** — open if you need the `script.js`/`account.js`/`firebase.js` subsystem breakdown.
+- **Firestore data model (LIVE today — verified from `firestore.rules`)** — open if you need the live collection shapes, rules, or security/index caveats.
+- **Cloud Functions (NEW in v1.9.0 — first-ever server surface)** — open if you need the `functions/` scaffold, test tracks, or why CF exists.
+- **Notable quirks and lessons** — open if you hit a surprising bug and want the known gotcha + fix.
+
 How the pieces of Real Anime Reviews fit together. The high-level shape: a **static site** (no production server) reads from a hand-maintained anime database (`animeData.js`), enriches it live from **AniList** (GraphQL), renders the UI, and talks to **Firebase** (Firestore + Auth + Storage) for everything user-generated. Deployed via **Firebase Hosting**.
 
 > **Ground-truth note (2026-06-06, v1.8.4 LIVE):** this doc was rewritten to the *verified* current state at the v1.9.0 gate-0 study (the prior version had drifted — it described a pre-v1.7.4 single-IIFE `script.js` and omitted `suggestions`, the secondary/tertiary modal, the constellation veil, and the real notification rules). The **v1.9.0 Community Overhaul** then extends the data model substantially — that forward-looking contract lives in **[`docs/DATA-MODEL.md`](DATA-MODEL.md)**, not here. This doc describes what is LIVE today.

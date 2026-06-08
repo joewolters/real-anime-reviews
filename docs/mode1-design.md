@@ -1,6 +1,26 @@
 <!-- author: Code | date: 2026-05-10 -->
 # Mode 1 Baseline Design (v1.6.0 + v1.6.1)
 
+## ⚡ READ-FIRST
+
+- **What this doc is:** the design spec for Mode 1 — the admin "Add New Anime" form and the local "Submit & Ship" Express server (`npm run mode1`) that runs the ship pipeline and deploys.
+- **When to open it (and only then):** you're touching the new-anime form (`admin/new-anime.*`, `admin-fab.*`) or the local server (`scripts/mode1-server.js`); you need the exact `/api/submit` pipeline order, the SSE/deploy-confirm flow, or the admin UID gate.
+- **Also open it if:** you're working on the v1.6.x upgrade arc (live preview, More Information panel, suggestion box) or need the Mode 1 safety guarantees (test-gate, Excel backup, localhost-only).
+- Otherwise this is a deep reference — do NOT read it at session start.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+
+- **1 · The user-facing flow** — open if you need the local vs remote (server vs paste) behavior and the step-by-step Submit & Ship sequence.
+- **2 · File layout** — open if you need exactly which files make up the form, FAB, and server.
+- **3 · Admin UID gate** — open if you need how admin access is gated and why the UID is safe to expose.
+- **4 · Mode 1 server pipeline (`/api/submit`)** — open if you need the exact ordered steps the server runs and where it stops on failure.
+- **5 · Visual language** — open if you need the form/FAB styling conventions (gradients, fonts, scrollbars).
+- **6 · Project rule #9 — hybrid image curation** — open if you need the cover-image step (AniList default, override, 2:3 warning).
+- **7 · The "two-step → one-step" upgrade arc** — open if you need the v1.6.0→v1.6.x roadmap and what each version adds.
+- **8 · Safety baked in** — open if you need the guardrails (test-gate, deploy confirm, Excel backup, localhost-only).
+
 > Architecture for the admin "Add New Anime" form and the local "Submit & Ship" server. Phase B begins here.
 
 ---

@@ -175,28 +175,28 @@
       <!-- /.header-left -->
 
       <nav class="nav-links">
-  <!-- top line (right side) -->
-  <div class="nav-topline">
-  <button type="button" id="notif-btn" class="as-link notif-btn" aria-label="Notifications" aria-expanded="false">
-    <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-  <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.1-1.6-5.6-4.5-6.3V4c0-.8-.7-1.5-1.5-1.5S10.5 3.2 10.5 4v.7C7.6 5.4 6 7.9 6 11v5l-2 2v1h16v-1l-2-2z"/>
-</svg>
-
-    <span id="notif-dot" class="notif-dot" hidden></span>
-  </button>
-
-  <button type="button" id="auth-open" class="as-link">My Account</button>
-</div>
-
-<div id="notif-menu" class="notif-menu" hidden aria-label="Notifications dropdown"></div>
-
-
-  <!-- search bar below -->
-  <form id="search-form" class="search-wrap" role="search" autocomplete="off" novalidate>
-    <input id="site-search" type="search" placeholder="Search anime…" aria-label="Search anime" />
-    <button type="submit" class="search-btn" aria-label="Search">Search</button>
-  </form>
-</nav>
+        <!-- gate 6d: ONE composed rail — search to the LEFT, then two equal circular
+             tokens (the Lantern + the account head). -->
+        <form id="search-form" class="search-wrap" role="search" autocomplete="off" novalidate>
+          <input id="site-search" type="search" placeholder="Search anime…" aria-label="Search anime" />
+          <button type="submit" class="search-btn" aria-label="Search">Search</button>
+        </form>
+        <div class="header-tokens">
+          <button type="button" id="notif-btn" class="notif-btn" aria-label="Notifications" aria-expanded="false">
+            <svg class="lantern-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path class="lantern-body" d="M9 3h6M10 3v2.2M14 3v2.2M7.5 9.4a4.5 4.5 0 0 1 9 0v6.6a1.4 1.4 0 0 1-1.4 1.4H8.9A1.4 1.4 0 0 1 7.5 16zM10 20h4"/>
+              <path class="lantern-flame" d="M12 8.4c1.6 1 2.4 2.2 2.4 3.6a2.4 2.4 0 1 1-4.8 0c0-1 .5-1.9 1.2-2.7.3.5.7.8 1.2.9-.2-.6-.2-1.2 0-1.8z"/>
+            </svg>
+            <span id="notif-dot" class="notif-dot" hidden></span>
+          </button>
+          <button type="button" id="auth-open" class="account-token" aria-label="Sign in">
+            <svg class="account-silhouette" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="8.2" r="3.6"></circle>
+              <path d="M5.5 19.6a6.5 6.5 0 0 1 13 0"></path>
+            </svg>
+          </button>
+        </div>
+      </nav>
 
 
 
@@ -660,8 +660,7 @@
       <p class="footer-text">
         Hey people I'm Blake and this has been a pet project of mine for a couple months now and I'm super happy that it's finally out. 
         This orignally started off as a place where I would "just leave my reviews" for my friends/family to look at so they know which 
-        anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I was praying for chatGPT to
-        practically vibe code the entire website for me. All that aside I'm SUPER happy with how this turned out. If any information is 
+        anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I'd practically vibe-coded the entire website — with coding help from Claude. All that aside I'm SUPER happy with how this turned out. If any information is 
         wrong feel free to reach out to me via Instagram. I plan to continue updating this little site and I hope to see y'all around. 
       </p>
 

@@ -1,5 +1,27 @@
 # Deployment
 
+## ⚡ READ-FIRST
+
+- **What this is:** the deploy playbook — how a change goes local → preview → production, plus rollback and failure fixes.
+- **Don't read this at session start.** It's a reference; opening it cold burns context you'll need for the work.
+- **Open it when** you're actually shipping: running a `firebase deploy`, setting up a preview channel, or touching Cloud Functions.
+- **Open it when** production breaks (rollback) or a deploy throws an error you don't recognize (failures section).
+- **Hard rule it encodes:** once Cloud Functions exist (v1.9.0+), NEVER run a bare `firebase deploy` — hosting and functions ship with separate `--only` verbs.
+
+> ⛔ DEEP REFERENCE BELOW — do NOT read top-to-bottom. Open a section ONLY if you're stuck on that specific thing.
+
+### Jump-to (only if stuck)
+
+- **The deploy ladder** — open if you need the local → preview → production sequence and when to skip stages.
+- **Local dev (VS Code + Live Server)** — open if you need to run the site locally or the pre-deploy test checklist.
+- **Preview channels (staging URLs)** — open if you need to deploy a temporary staging URL or manage channels.
+- **Production deploy** — open if you need the exact production deploy command and pre-flight project/account checks.
+- **Cloud Functions (v1.9.0+) — the first server surface** — open if you're deploying functions, Blaze billing, or running CF tests/emulators.
+- **Custom domain (Namecheap → Firebase)** — open if you need DNS records or the domain stopped resolving.
+- **Social previews (Open Graph + Twitter Card)** — open if you need OG/Twitter meta tags or a preview image isn't showing.
+- **Rollback strategy** — open if production is broken and you need to revert fast.
+- **Common deploy failures and fixes** — open if a deploy or the live site is throwing a specific error.
+
 How to take changes from your laptop to https://realanimereviews.com — safely.
 
 ## The deploy ladder

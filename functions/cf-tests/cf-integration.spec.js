@@ -129,3 +129,99 @@ test('unvote (delete) decrements the count back to 0', async () => {
   });
   assert.ok(back, 'count should return to 0 after the unvote');
 });
+
+// 6) reply vote (gate 4b) -> the REPLY's own count increments + a server-sourced
+//    notification to the REPLY author (kind:reply reuses comment_vote; verb=reply)
+test('reply vote -> reply count increments + server-sourced notification to the reply author', async () => {
+  await db.doc('comments/ar/items/c1').set({ uid: 'cauthor', text: 'parent', displayName: 'C', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
+  await db.doc('comments/ar/items/c1/replies/r1').set({ uid: 'rauthor', text: 'a reply', displayName: 'R', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
+  await db.doc('profiles/voter1').set({ displayName: 'Voter One', photoURL: null });
+  // forged name on the vote doc must be ignored (server sources it from profiles)
+  await db.doc('comments/ar/items/c1/replies/r1/votes/voter1').set({ value: 1, updatedAt: FV.serverTimestamp(), fromDisplayName: 'FORGED' });
+
+  const notif = await waitFor(async () => {
+    const s = await db.collection('users/rauthor/notifications').get();
+    return s.empty ? null : s.docs[0].data();
+  });
+  assert.ok(notif, 'the reply author should get a notification');
+  assert.equal(notif.fromDisplayName, 'Voter One', 'name must come from the profile, not the forged field');
+  assert.equal(notif.type, 'comment_vote', 'a reply vote reuses the comment_vote type');
+  assert.equal(notif.value, 1);
+  assert.equal(notif.verb, 'liked your reply');
+
+  const reply = await waitFor(async () => {
+    const d = await db.doc('comments/ar/items/c1/replies/r1').get();
+    return d.data().likesCount === 1 ? d.data() : null;
+  });
+  assert.equal(reply.likesCount, 1, "the reply's own count (not the parent comment's) increments");
+
+  // the parent comment's count must NOT move (the reply vote is scoped to the reply)
+  const parent = await db.doc('comments/ar/items/c1').get();
+  assert.equal(parent.data().likesCount, 0, "the parent comment's count must stay untouched");
+});
+
+// 7) review vote (gate 5 migration) -> review count + server-sourced notification
+test('review vote -> review count increments + server-sourced notification to the review author', async () => {
+  await db.doc('reviews/rv/items/author1').set({ uid: 'author1', title: 'T', body: 'b', rating: 8, displayName: 'A', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
+  await db.doc('profiles/voter1').set({ displayName: 'Voter One', photoURL: null });
+  await db.doc('reviews/rv/items/author1/votes/voter1').set({ value: 1, updatedAt: FV.serverTimestamp() });
+
+  const notif = await waitFor(async () => {
+    const s = await db.collection('users/author1/notifications').get();
+    return s.empty ? null : s.docs[0].data();
+  });
+  assert.ok(notif, 'the review author should get a notification');
+  assert.equal(notif.fromDisplayName, 'Voter One');
+  assert.equal(notif.type, 'review_vote');
+  assert.equal(notif.verb, 'found your review helpful'); // gate-6 verb lock
+
+  const review = await waitFor(async () => {
+    const d = await db.doc('reviews/rv/items/author1').get();
+    return d.data().likesCount === 1 ? d.data() : null;
+  });
+  assert.equal(review.likesCount, 1);
+});
+
+// 8) thread (review-discussion) vote -> count increments but NO notification (counts-only)
+test('thread vote -> thread count increments and writes NO notification', async () => {
+  await db.doc('reviews/rv2/items/rauthor').set({ uid: 'rauthor', title: 'T', body: 'b', rating: 7, displayName: 'R', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
+  await db.doc('reviews/rv2/items/rauthor/threads/t1').set({ uid: 'tauthor', text: 'discussion', displayName: 'T', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
+  await db.doc('reviews/rv2/items/rauthor/threads/t1/votes/voter1').set({ value: 1, updatedAt: FV.serverTimestamp() });
+
+  const thread = await waitFor(async () => {
+    const d = await db.doc('reviews/rv2/items/rauthor/threads/t1').get();
+    return d.data().likesCount === 1 ? d.data() : null;
+  });
+  assert.ok(thread, 'thread count should reach 1');
+  assert.equal(thread.likesCount, 1);
+
+  await sleep(2000);
+  const s = await db.collection('users/tauthor/notifications').get();
+  assert.equal(s.size, 0, 'thread votes are counts-only — no notification');
+});
+
+// 9) official (Blake's-rating agreement) vote -> aggregate count increments, no notification
+test('official vote -> aggregate count increments (counts-only, gate 6 migration)', async () => {
+  await db.doc('official/ov/votes/voter1').set({ value: 1, updatedAt: FV.serverTimestamp() });
+  const agg = await waitFor(async () => {
+    const d = await db.doc('official/ov').get();
+    return d.exists && d.data().likesCount === 1 ? d.data() : null;
+  });
+  assert.ok(agg, 'official aggregate likesCount should reach 1');
+  assert.equal(agg.likesCount, 1);
+});
+
+// 10) a "Not helpful" review vote increments the count but writes NO notification (gate-6 lock)
+test('review NOT-helpful vote -> dislikes count moves but NO notification', async () => {
+  await db.doc('reviews/nh/items/author1').set({ uid: 'author1', title: 'T', body: 'b', rating: 8, displayName: 'A', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
+  await db.doc('profiles/voter1').set({ displayName: 'Voter One' });
+  await db.doc('reviews/nh/items/author1/votes/voter1').set({ value: -1, updatedAt: FV.serverTimestamp() });
+  const review = await waitFor(async () => {
+    const d = await db.doc('reviews/nh/items/author1').get();
+    return d.data().dislikesCount === 1 ? d.data() : null;
+  });
+  assert.equal(review.dislikesCount, 1);
+  await sleep(2000);
+  const s = await db.collection('users/author1/notifications').get();
+  assert.equal(s.size, 0, 'a Not-helpful (value -1) review vote must NOT notify');
+});
