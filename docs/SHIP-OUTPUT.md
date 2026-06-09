@@ -7,7 +7,7 @@ Mode **ULTRAMAX**. The UX mandate ("stop looking like social-media-in-training �
 - **`912b48b`** — mega-batch 1/3: Part A image/UX fixes + Part B live-in-box composer
 - **`c368982`** — mega-batch 2/3: public profiles (gates 15-16)
 - **`3587d10`** — mega-batch 3/3: account redo + the Message-Blake inbox (gates 17-18)
-- *(the post-review fixes ride on top, un-committed — commit them on your word, or I fold them into a 4th checkpoint.)*
+- **`31c50c7`** — the adversarial-review fixes (the HIGH + 2 MED + DM-rules hygiene below), all tracks re-proven green after.
 
 ## PART A — image/UX fixes
 1. **The "looks like a period" inline image — ROOT CAUSE found:** the seed was a literal **1×1-pixel** PNG. The resolver was always correct (proved with a real-pixel e2e: it decodes + renders inline). Fixed the seed to real **480×270** images **and** added a display floor (`min 96×64`) so no tiny upload can ever vanish into punctuation again.
