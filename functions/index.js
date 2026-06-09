@@ -723,3 +723,63 @@ exports.onForumThreadRemoved = onDocumentWritten('forum/{threadId}', async (even
   });
   await Promise.all(tasks);
 });
+
+// =============================================================================
+// v1.10.0 GATE 18 — onDmMessageCreate (the Message-Blake admin floor DM ping).
+// Admin-floor only by RULES (kind=='admin', Blake always a party); this CF is
+// participant-agnostic — it reads the conversation's participants and pings
+// whoever ISN'T the sender — so it serves peer DMs later unchanged.
+// Two CF-owned writes (the rules deny both to clients):
+//   (1) the recipient's notification (type 'dm' — the Lantern renders it purple
+//       client-side), sender identity SERVER-sourced like the vote pings;
+//   (2) an unread mirror on the conversation: unread_{recipientUid} increment +
+//       lastMessageAt, FLAT keys (no dotted nested-map field paths), so the
+//       client can badge the conversation without trusting client writes. The
+//       mirror bumps even when the recipient muted 'dm' (a badge isn't a ping).
+//       NO lastMessageText — content stays in the messages, never the metadata.
+// =============================================================================
+exports.onDmMessageCreate = onDocumentCreated(
+  'conversations/{convId}/messages/{msgId}',
+  async (event) => {
+    if (await alreadyProcessed(event.id)) return;
+    const msg = event.data && typeof event.data.data === 'function' ? event.data.data() : null;
+    const senderUid = msg ? msg.senderUid : null;
+    if (!senderUid) return;
+
+    const convId = event.params.convId;
+    const convRef = db.doc('conversations/' + convId);
+    const convSnap = await convRef.get();
+    if (!convSnap.exists) return; // message under a vanished conversation
+    const participants = Array.isArray(convSnap.data().participants) ? convSnap.data().participants : [];
+    if (!participants.includes(senderUid)) return; // defensive: sender must be a party
+    const recipient = participants.find((u) => u !== senderUid);
+    if (!recipient) return;
+
+    // (2) CF-owned unread mirror — unconditional (mute silences the ping below,
+    // not the badge). Flat 'unread_' + uid key; merge so nothing else moves.
+    await convRef.set(
+      { ['unread_' + recipient]: FieldValue.increment(1), lastMessageAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    ).catch(() => {}); // conversation may have been deleted mid-flight
+
+    // mute-at-source: a muted 'dm' type writes NO notification doc at all.
+    const prefsSnap = await db.doc('users/' + recipient + '/notifPrefs/prefs').get();
+    if (prefsSnap.exists && isMuted(prefsSnap.data(), 'dm')) return;
+
+    // (1) the Lantern ping — sender identity SERVER-sourced (NEVER the message's
+    // own client fields), same notification shape as the vote pings.
+    const ident = await senderIdentity(senderUid);
+    await db.collection('users/' + recipient + '/notifications').add({
+      toUid: recipient,
+      fromUid: senderUid,
+      fromDisplayName: ident.name,
+      fromPhotoURL: ident.photo,
+      type: 'dm',
+      verb: 'sent you a message',
+      targetPath: 'conversations/' + convId,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + NOTIF_TTL_DAYS * DAY_MS),
+    });
+  }
+);

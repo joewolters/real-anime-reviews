@@ -4753,19 +4753,25 @@ postBtn.addEventListener('click', async (e) => {
 
 
 
-    // v1.9.1 — premium composer: B/I/🔗 toolbar, Ctrl/⌘+B/I, live inline preview,
-    // Enter to post (Shift+Enter = newline). XSS-safe (renderMarkdownInline preview).
-    // Image overhaul: the shared picker mounts under the composer; the toolbar 📷
-    // inserts [img:N] at the caret.
+    // mega-batch Part B — the LIVE-IN-BOX composer (no preview panel): bold/
+    // italic/links/spoilers/[img:N] chips render live in the input; the hidden
+    // textarea stays the model + submit source, so the post path is untouched.
     let commentPicker = null;
+    let commentLive = null;
     if (input && input.parentNode) {
+      commentLive = window.RarLive ? window.RarLive.mount(input, {
+        mode: 'inline', submit: 'enter',
+        onSubmit: () => postBtn.click(),
+        onImage: () => { if (commentPicker) commentPicker.toolbarInsert(); },
+      }) : null;
       const media = document.createElement('div');
       media.className = 'hub-reply-media';
       input.parentNode.appendChild(media);
-      commentPicker = hubCreateImagePicker(media, { textarea: input });
-    }
-    if (window.RarComposer) {
-      window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click(), onImage: commentPicker ? () => commentPicker.toolbarInsert() : undefined });
+      commentPicker = hubCreateImagePicker(media, {
+        textarea: input,
+        insertText: commentLive ? commentLive.insertText : null,
+        pasteTarget: commentLive ? commentLive.editorEl : null,
+      });
     }
 
     // Thread lock (commentsMeta/{s}.locked) — admins lock a thread; when locked
@@ -5096,7 +5102,18 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const listUl = host.querySelector('.replies-list');
     const input = host.querySelector('.reply-input');
     const postBtn = host.querySelector('.reply-post');
-    const replyPicker = hubCreateImagePicker(host.querySelector('.hub-reply-media'), { textarea: input });   // image overhaul
+    // Part B — live-in-box (mount BEFORE the picker so it gets the editor surface)
+    let replyPicker = null;
+    const replyLive = window.RarLive ? window.RarLive.mount(input, {
+      mode: 'inline', submit: 'enter',
+      onSubmit: () => postBtn.click(),
+      onImage: () => { if (replyPicker) replyPicker.toolbarInsert(); },
+    }) : null;
+    replyPicker = hubCreateImagePicker(host.querySelector('.hub-reply-media'), {
+      textarea: input,
+      insertText: replyLive ? replyLive.insertText : null,
+      pasteTarget: replyLive ? replyLive.editorEl : null,
+    });
 
     const authed = !!auth.currentUser;
     if (!authed) { input.readOnly = true; input.placeholder = 'Sign in to reply'; }
@@ -5186,10 +5203,6 @@ function openInlineCommentEditor(editBtn, itemRef) {
       }
     });
 
-    // v1.9.1 — same premium composer on the reply box (inline preview + Enter to post).
-    if (window.RarComposer) {
-      window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click(), onImage: () => replyPicker.toolbarInsert() });
-    }
   }
 
   // v1.10.0 gate 4 — deterministic report id: one reporter reporting the SAME target
@@ -5698,22 +5711,32 @@ function openInlineCommentEditor(editBtn, itemRef) {
   function hubCreateImagePicker(media, opts) {
     opts = opts || {};
     const ta = opts.textarea || null;
+    // mega-batch A4 — opts.coverSlot: a DEDICATED "Add a cover" affordance
+    // (Blake: reviews need a specific thumbnail space, not just inline images).
+    // The cover is a normal picked image (counts in the ≤4, rides imageRefs,
+    // sweeps with the doc) that is auto-🖼-starred on pick.
     media.innerHTML = `<button type="button" class="hub-nt-image-btn">📷 Add an image</button>
+      ${opts.coverSlot ? '<button type="button" class="hub-nt-image-btn hub-img-cover-btn">🖼 Add a cover</button>' : ''}
       <input type="file" class="hub-img-file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
       <span class="hub-img-note" role="status"></span>
       <div class="hub-img-thumbs"></div>`;
     const btn = media.querySelector('.hub-nt-image-btn');
+    const coverBtn = media.querySelector('.hub-img-cover-btn');
     const fileEl = media.querySelector('.hub-img-file');
     const noteEl = media.querySelector('.hub-img-note');
     const thumbsEl = media.querySelector('.hub-img-thumbs');
     let picked = [];
-    let thumbIdx = -1;            // which picked image is the thread thumbnail
+    let thumbIdx = -1;            // which picked image is the thumbnail/cover
     let pendingInsert = false;    // toolbar-📷 flow: insert tokens for the next added files
+    let pendingCover = false;     // coverSlot flow: auto-star the next added file
     const note = (m) => { noteEl.textContent = m || ''; };
 
     const insertTokenAt = (i) => { // i = 0-based picked index → [img:i+1]
-      if (!ta) return;
       const tok = '[img:' + (i + 1) + ']';
+      // live-in-box composers (Part B) hand us their caret-aware inserter —
+      // the editor inserts the chip at the caret and syncs the model itself.
+      if (typeof opts.insertText === 'function') { opts.insertText(tok); return; }
+      if (!ta) return;
       const s = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
       const e = ta.selectionEnd != null ? ta.selectionEnd : s;
       ta.value = ta.value.slice(0, s) + tok + ta.value.slice(e);
@@ -5749,10 +5772,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
           ins.addEventListener('click', () => insertTokenAt(i));
           w.appendChild(ins);
         }
-        if (opts.allowThumb) {
+        if (opts.allowThumb || opts.coverSlot) {
           const st = document.createElement('button'); st.type = 'button';
           st.className = 'hub-img-thumb-star' + (thumbIdx === i ? ' is-thumb' : '');
-          st.textContent = '🖼'; st.title = thumbIdx === i ? 'This is the thread thumbnail' : 'Use as the thread thumbnail';
+          const word = opts.coverSlot ? 'cover' : 'thread thumbnail';
+          st.textContent = '🖼'; st.title = thumbIdx === i ? ('This is the ' + word) : ('Use as the ' + word);
           st.setAttribute('aria-label', st.title);
           st.addEventListener('click', () => { thumbIdx = (thumbIdx === i ? -1 : i); paint(); });
           w.appendChild(st);
@@ -5816,24 +5840,30 @@ function openInlineCommentEditor(editBtn, itemRef) {
         if (await inRegistry(hex)) { note('You’ve already posted this exact image — something new instead?'); continue; }
         picked.push(f);
         pickedHashes.push(hex);
+        if (pendingCover) { thumbIdx = picked.length - 1; pendingCover = false; }   // A4 — the dedicated cover pick
         if (withInsert) insertTokenAt(picked.length - 1);
       }
+      pendingCover = false;
       paint();
     };
 
-    btn.addEventListener('click', async () => { if (await gatesOk()) { pendingInsert = false; fileEl.click(); } });
+    btn.addEventListener('click', async () => { if (await gatesOk()) { pendingInsert = false; pendingCover = false; fileEl.click(); } });
+    if (coverBtn) coverBtn.addEventListener('click', async () => { if (await gatesOk()) { pendingInsert = false; pendingCover = true; fileEl.click(); } });
     fileEl.addEventListener('change', async () => { const ins = pendingInsert; pendingInsert = false; const fl = Array.from(fileEl.files || []); fileEl.value = ''; await addFiles(fl, ins); });
-    if (ta) {
+    // image paste/drag-drop binds to the LIVE editor surface when one exists
+    // (the textarea is hidden under RarLive), else the textarea itself.
+    const intake = opts.pasteTarget || ta;
+    if (intake) {
       // paste a screenshot straight into the composer (power-scalers live on this)
-      ta.addEventListener('paste', async (e) => {
+      intake.addEventListener('paste', async (e) => {
         const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter((f) => HUB_IMG_TYPES.indexOf(f.type) !== -1);
         if (!files.length) return;
         e.preventDefault();
         if (await gatesOk()) await addFiles(files, true);
       });
-      // …or drop one on the textarea
-      ta.addEventListener('dragover', (e) => { e.preventDefault(); });
-      ta.addEventListener('drop', async (e) => {
+      // …or drop one on the composer
+      intake.addEventListener('dragover', (e) => { e.preventDefault(); });
+      intake.addEventListener('drop', async (e) => {
         const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []).filter((f) => HUB_IMG_TYPES.indexOf(f.type) !== -1);
         if (!files.length) return;
         e.preventDefault();
@@ -5925,13 +5955,19 @@ function openInlineCommentEditor(editBtn, itemRef) {
     // picture on its card like the anime-cover threads do. The anime cover wins
     // when both exist; the thumb hydrates via getDownloadURL (data-imgref).
     const ownThumb = (!t.removed && !cover) ? hubSafeImageRef(t.thumbImage) : '';
-    const thumb = cover
+    const thumbImg = cover
       ? `<img class="hub-card-thumb" src="${escapeHtml(cover)}" alt="" loading="lazy">`
       : (ownThumb ? `<img class="hub-card-thumb" data-imgref="${escapeHtml(ownThumb)}" alt="" loading="lazy">` : '');
+    // mega-batch A3 — the topic/anime pill sits in ONE place on every card:
+    // overlaid on the artwork when a thumb exists, in the head row when not —
+    // so thumbed and text-only threads read uniformly.
+    const thumb = thumbImg
+      ? `<span class="hub-card-thumbwrap">${thumbImg}<span class="hub-card-tag-overlay">${chip}</span></span>`
+      : '';
     const title = t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)');
     return `<li class="hub-card${t.pinned ? ' is-pinned' : ''}${(cover || ownThumb) ? ' has-thumb' : ''}" data-thread-id="${escapeHtml(t.id)}" tabindex="0" role="button">
       ${thumb}<div class="hub-card-main">
-      <div class="hub-card-head">${pin}${chip}${lock}<span class="hub-card-time">${escapeHtml(relTimeHub(t.lastPostAt || t.createdAt))}</span></div>
+      <div class="hub-card-head">${pin}${thumb ? '' : chip}${lock}<span class="hub-card-time">${escapeHtml(relTimeHub(t.lastPostAt || t.createdAt))}</span></div>
       <h3 class="hub-card-title">${title}</h3>
       <div class="hub-card-by">${escapeHtml(authorName || 'Member')}</div></div>
     </li>`;
@@ -6379,7 +6415,12 @@ function openInlineCommentEditor(editBtn, itemRef) {
       const bodyHtml = t.removed ? '<em>[removed by a moderator]</em>'
         : (window.renderMarkdown ? window.renderMarkdown(t.body || '') : escapeHtml(t.body || ''));
       const cover = hubSafeCover(t.coverImage);   // gate 8d — attached-anime cover (not gold)
-      const coverHtml = cover ? `<img class="hub-thread-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">` : '';
+      // mega-batch A2 — the user-chosen thumbnail shows in the thread VIEW too
+      // (card ↔ thread consistency); the anime cover still wins when both exist.
+      const ownThumb = (!cover && !t.removed) ? hubSafeImageRef(t.thumbImage) : '';
+      const coverHtml = cover
+        ? `<img class="hub-thread-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">`
+        : (ownThumb ? `<img class="hub-thread-cover" data-imgref="${escapeHtml(ownThumb)}" alt="" loading="lazy">` : '');
       bodyEl.innerHTML = `${coverHtml}${verdict}
         <article class="hub-thread">
           <div class="hub-thread-head"><span class="hub-tag-chip">${escapeHtml((t.tag && t.tag.indexOf('anime:al:') === 0 && typeof t.animeTitle === 'string' && t.animeTitle) ? t.animeTitle : tagLabel(t.tag))}</span>
@@ -6502,7 +6543,18 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const input = host.querySelector('.hub-reply-input');
     const postBtn = host.querySelector('.hub-reply-post');
     const counter = host.querySelector('.hub-reply-count');
-    const picker = hubCreateImagePicker(host.querySelector('.hub-reply-media'), { textarea: input });   // gate 13 + inline tokens
+    // Part B — live-in-box (mount before the picker; the editor is the surface)
+    let picker = null;
+    const hubReplyLive = window.RarLive ? window.RarLive.mount(input, {
+      mode: 'inline', submit: 'enter',
+      onSubmit: () => postBtn.click(),
+      onImage: () => { if (picker) picker.toolbarInsert(); },
+    }) : null;
+    picker = hubCreateImagePicker(host.querySelector('.hub-reply-media'), {
+      textarea: input,
+      insertText: hubReplyLive ? hubReplyLive.insertText : null,
+      pasteTarget: hubReplyLive ? hubReplyLive.editorEl : null,
+    });   // gate 13 + inline tokens
     // upper bound too: [img:N] token inserts bypass maxlength, and an over-cap
     // body would burn the uploads before the rules denied the doc (review, INFO)
     const sync = () => { const n = input.value.trim().length; counter.textContent = String(input.value.length); postBtn.disabled = !(auth.currentUser && n > 0 && input.value.length <= 4000); };
@@ -6539,7 +6591,6 @@ function openInlineCommentEditor(editBtn, itemRef) {
         postBtn.textContent = 'Reply';
       } catch (err) { alert('Could not post your reply: ' + (err && err.message || err)); postBtn.disabled = false; postBtn.textContent = 'Reply'; }
     });
-    if (window.RarComposer) window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click(), onImage: () => picker.toolbarInsert() });
   }
 
   // ---- New-thread composer (gate 8c item 4/5/6) — a branded TOPIC PICKER (chips +
@@ -6607,7 +6658,18 @@ function openInlineCommentEditor(editBtn, itemRef) {
     let selectedTopic = 'general';     // the dropdown topic
     let attached = null;               // { tag, title, cover, is44 } when an anime is attached
     let searchTimer = null, inflight = null;
-    const picker = hubCreateImagePicker(overlay.querySelector('.hub-nt-media'), { textarea: bodyEl, allowThumb: true });   // gate 13 + inline tokens + the card thumbnail
+    // Part B — live-in-box on the thread body (mount before the picker)
+    let picker = null;
+    const ntLive = window.RarLive ? window.RarLive.mount(bodyEl, {
+      mode: 'block', submit: 'mod',
+      onSubmit: () => overlay.querySelector('.hub-nt-create').click(),
+      onImage: () => { if (picker) picker.toolbarInsert(); },
+    }) : null;
+    picker = hubCreateImagePicker(overlay.querySelector('.hub-nt-media'), {
+      textarea: bodyEl, allowThumb: true,
+      insertText: ntLive ? ntLive.insertText : null,
+      pasteTarget: ntLive ? ntLive.editorEl : null,
+    });   // gate 13 + inline tokens + the card thumbnail
 
     // ---- the branded topic dropdown (Part C) ----
     function setTopic(tag) {
@@ -6687,8 +6749,6 @@ function openInlineCommentEditor(editBtn, itemRef) {
       if (s) { const a = animeBySlug(s); if (a) { attached = { tag: 'anime:' + s, title: a.Title, cover: hubSafeCover(a.image ? 'assets/' + a.image : ''), is44: true }; renderChosen(); } }
       else if (FORUM_TOPICS.some(([k]) => k === presetTag)) setTopic(presetTag);
     }
-    // item 5 — the full review-composer treatment on the body (Ctrl/⌘+Enter + hint + B/I/🔗)
-    if (window.RarComposer) window.RarComposer.enhance(bodyEl, { inline: false, submit: 'mod', onSubmit: () => overlay.querySelector('.hub-nt-create').click(), onImage: () => picker.toolbarInsert() });
 
     overlay.querySelector('.hub-nt-create').addEventListener('click', async () => {
       const title = overlay.querySelector('.hub-nt-input').value.trim();
@@ -7270,20 +7330,33 @@ function subscribeReviews(anime) {
       `;
 
       // image overhaul — reviews carry images: [img:N] slots resolve inline in
-      // the body, the rest trail as a gallery before the action row.
+      // the body, the rest trail as a gallery before the action row. A4: the
+      // dedicated COVER (thumbImage) leads the collapsed row header instead of
+      // repeating in the gallery.
+      const rvCover = hubSafeImageRef(d.thumbImage);
+      if (rvCover) {
+        const toggleBtn = li.querySelector('.row-toggle');
+        const avatarEl = toggleBtn && toggleBtn.querySelector('.row-avatar');
+        if (toggleBtn) {
+          const cv = document.createElement('img');
+          cv.className = 'row-cover'; cv.alt = ''; cv.loading = 'lazy';
+          cv.setAttribute('data-imgref', rvCover);
+          toggleBtn.insertBefore(cv, avatarEl ? avatarEl.nextSibling : toggleBtn.firstChild);
+        }
+      }
       if (Array.isArray(d.imageRefs) && d.imageRefs.length) {
         const rowBody = li.querySelector('.row-body');
         const rvOpts = { docPath: 'reviews/' + s + '/items/' + docSnap.id, authorUid: d.uid || '' };
         const usedInline = resolveImageSlots(rowBody, d.imageRefs, rvOpts);
-        const rest = d.imageRefs.filter((x) => !usedInline.has(x));
+        const rest = d.imageRefs.filter((x) => !usedInline.has(x) && x !== rvCover);
         if (rest.length && rowBody) {
           const gal = document.createElement('div');
           gal.className = 'hub-post-gallery';
           gal.innerHTML = hubImagesHtml(rest, rvOpts);
           rowBody.insertAdjacentElement('afterend', gal);
         }
-        hubHydrateImages(li);
       }
+      if (rvCover || (Array.isArray(d.imageRefs) && d.imageRefs.length)) hubHydrateImages(li);
 
       // toggle open/close (preserve open state across live re-renders)
       const toggle = li.querySelector('.row-toggle');
@@ -7540,9 +7613,10 @@ function subscribeReviews(anime) {
       });
       syncThreadComposer();
 
-      // v1.9.1 — premium composer on the review discussion box too (inline preview + Enter to post).
-      if (window.RarComposer && threadInput) {
-        window.RarComposer.enhance(threadInput, { inline: true, submit: 'enter', onSubmit: () => threadPost && threadPost.click() });
+      // Part B — live-in-box on the review-discussion box too (image-less by
+      // Blake's blessing — no 📷 here, the rest of the vocabulary lives).
+      if (window.RarLive && threadInput) {
+        window.RarLive.mount(threadInput, { mode: 'inline', submit: 'enter', onSubmit: () => threadPost && threadPost.click() });
       }
 
       let posting = false;
@@ -7865,6 +7939,9 @@ if (purl) data.photoURL = purl;
         pubBtn.textContent = 'Uploading…';
         data.imageRefs = await hubUploadImages(rvFiles, auth.currentUser.uid, animeTok,
           (i, n) => { pubBtn.textContent = 'Uploading ' + i + '/' + n + '…'; });
+        // mega-batch A4 — the dedicated review COVER (the 🖼-starred pick)
+        const cvi = reviewPicker.thumbIndex();
+        if (cvi >= 0) data.thumbImage = data.imageRefs[cvi];
       }
       // ONE-PER-USER: write to doc id = uid (upserts only their slot)
       try {
@@ -7884,24 +7961,28 @@ if (purl) data.photoURL = purl;
     }
   });
 
-  // v1.9.1 — premium review composer: B/I/🔗 toolbar, Ctrl/⌘+B/I, a live FULL-markdown
-  // preview (headers + lists, exactly how the review will render), and Ctrl/⌘+Enter to
-  // publish (Enter = newline) so a multi-paragraph review is never truncated. Only fires
-  // when the form already validates, so no native validation bubbles appear.
-  // Image overhaul: the shared picker mounts under the body field; the toolbar 📷
-  // inserts [img:N] at the caret ("as part of a title or in the review itself").
+  // mega-batch Part B — the review body is a LIVE-IN-BOX block editor (## section
+  // lines + lists style live, Obsidian-lite; no preview panel). Ctrl/⌘+Enter
+  // publishes. The picker (A4: with the dedicated Cover slot) rides the editor.
   let reviewPicker = null;
+  let reviewLive = null;
   if (bodyEl && bodyEl.parentNode) {
+    reviewLive = window.RarLive ? window.RarLive.mount(bodyEl, {
+      mode: 'block', submit: 'mod',
+      onSubmit: () => {
+        if (pubBtn.disabled) return;
+        if (typeof form.requestSubmit === 'function') form.requestSubmit(); else pubBtn.click();
+      },
+      onImage: () => { if (reviewPicker) reviewPicker.toolbarInsert(); },
+    }) : null;
     const media = document.createElement('div');
     media.className = 'hub-reply-media';
     bodyEl.parentNode.insertBefore(media, bodyEl.nextSibling);
-    reviewPicker = hubCreateImagePicker(media, { textarea: bodyEl });
-  }
-  if (window.RarComposer) {
-    window.RarComposer.enhance(bodyEl, { inline: false, submit: 'mod', onSubmit: () => {
-      if (pubBtn.disabled) return;
-      if (typeof form.requestSubmit === 'function') form.requestSubmit(); else pubBtn.click();
-    }, onImage: reviewPicker ? () => reviewPicker.toolbarInsert() : undefined });
+    reviewPicker = hubCreateImagePicker(media, {
+      textarea: bodyEl, coverSlot: true,
+      insertText: reviewLive ? reviewLive.insertText : null,
+      pasteTarget: reviewLive ? reviewLive.editorEl : null,
+    });   // A4 — dedicated review cover
   }
 
   // Author actions already work; doc id will be the uid now.

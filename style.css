@@ -9088,11 +9088,30 @@ html.rar-welcome-pending::before {
 .hub-img-thumb-x:hover { border-color: #ff7d7d; color: #ff9d9d; }
 .hub-reply-media { margin: 6px 0 2px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 
+/* mega-batch A4 — the review COVER leads the collapsed row (purple, never gold) */
+.row-toggle .row-cover { width: 48px; height: 34px; object-fit: cover; border-radius: 7px;
+  border: 1px solid rgba(187, 134, 252, 0.35); margin-right: 8px; flex: 0 0 auto; }
+
+/* mega-batch A3 — the card thumb grows into a left rail with the topic pill
+   OVERLAID on the art (uniform pill position across thumbed + text cards). */
+.hub-card-thumbwrap { position: relative; flex: 0 0 auto; display: inline-flex; }
+.hub-card-thumbwrap .hub-card-thumb { width: 84px; height: 84px; object-fit: cover; border-radius: 10px; border: 1px solid rgba(187, 134, 252, 0.3); }
+.hub-card-tag-overlay { position: absolute; top: 5px; left: 5px; max-width: calc(100% - 10px); }
+.hub-card-tag-overlay .hub-tag-chip, .hub-card-tag-overlay .hub-anime-chip {
+  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: rgba(12, 4, 28, 0.85); border: 1px solid rgba(187, 134, 252, 0.5);
+  font-size: 0.6rem; padding: 2px 7px; border-radius: 999px;
+}
+
 /* gate 13/14 — rendered post/thread images: lazy, capped, purple-edged; every
    image carries the ⚑ Report chip (admins also see 🗑 atomic-remove). */
 .hub-post-images { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 4px; }
 .hub-img-wrap { position: relative; margin: 0; display: inline-flex; }
-.hub-post-img { max-width: min(100%, 340px); max-height: 300px; object-fit: contain; border-radius: 10px;
+.hub-post-img { max-width: min(100%, 340px); max-height: 300px;
+  /* mega-batch A1 — a sane FLOOR too: a tiny upload (the 1×1-pixel class)
+     must still read as an image, never as a period in the prose. */
+  min-width: 96px; min-height: 64px;
+  object-fit: contain; border-radius: 10px;
   border: 1px solid rgba(187, 134, 252, 0.35); background: rgba(20, 6, 44, 0.5); opacity: 0; transition: opacity .25s ease; }
 .hub-post-img.is-loaded { opacity: 1; }
 .hub-img-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; opacity: 0; transition: opacity .15s ease; }
@@ -9207,6 +9226,49 @@ html.rar-welcome-pending::before {
   outline: 2px solid rgba(187, 134, 252, 0.85);
   outline-offset: 2px;
 }
+
+/* =============================================================================
+   PART B — the LIVE-IN-BOX composer (.rar-live). The UX mandate: a clean,
+   modern editor — formatting renders where you type, no preview panel. The
+   original textarea hides underneath as the markdown model + submit source.
+   PURPLE vocabulary; reduced-motion safe (no animation at all).
+   ========================================================================== */
+.rar-live-model { display: none !important; }
+.rar-live {
+  width: 100%; min-height: 64px; max-height: 46vh; overflow-y: auto;
+  background: rgba(30, 10, 60, 0.6); color: #fff;
+  border: 1px solid rgba(187, 134, 252, 0.45); border-radius: 10px;
+  padding: 10px 12px; font: 400 0.95rem 'Montserrat', sans-serif; line-height: 1.5;
+  outline: none; cursor: text; white-space: pre-wrap; word-break: break-word;
+}
+.rar-live:focus, .rar-live:focus-within {
+  border-color: rgba(187, 134, 252, 0.7);
+  box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.25), 0 0 18px rgba(185, 0, 255, 0.25);
+}
+.rar-live:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(217, 201, 255, 0.45); pointer-events: none; display: block;
+}
+.rar-live.is-off { opacity: 0.6; cursor: default; background: rgba(30, 10, 60, 0.35); }
+.rar-live a { color: #cbb0ff; text-decoration: underline; pointer-events: none; } /* an input, not a page */
+.rar-live code { background: rgba(187, 134, 252, 0.14); border-radius: 4px; padding: 0 4px; }
+.rar-live .rar-live-spoiler {
+  background: rgba(187, 134, 252, 0.12); border: 1px dashed rgba(187, 134, 252, 0.55);
+  border-radius: 5px; padding: 0 5px;
+}
+.rar-live .rar-live-img {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(20, 6, 44, 0.85); border: 1px solid rgba(187, 134, 252, 0.55);
+  border-radius: 7px; padding: 1px 8px; font-size: 0.78rem; color: #cbb0ff;
+  user-select: none;
+}
+.rar-live--block { min-height: 130px; }
+.rar-live--block .rar-live-line.is-h1, .rar-live--block .rar-live-line.is-h2 {
+  font-family: 'Bebas Neue', sans-serif; font-size: 1.25rem; letter-spacing: 0.03em; color: #e9ddff; margin-top: 4px;
+}
+.rar-live--block .rar-live-line.is-h3 { font-weight: 700; color: #e9ddff; }
+.rar-live--block .rar-live-line.is-li { padding-left: 14px; }
+.rar-live-toolbar { margin-bottom: 6px; }
 
 /* 8d fix #4 — the admin pin button wears its state: pinned = the gold pick
    (gold is allowed here: this is Blake's OWN control marking HIS pick). */

@@ -11,6 +11,11 @@
 // ⚠️ MUST STAY IN SYNC WITH firestore.rules:
 //   • CURRENT_RULES_VERSION === rulesVersion() (currently 1).
 //   • ADMIN_UID === isAdmin()'s hardcoded literal.
+//   • profiles/{uid}.isBanned — applySetBanState mirrors the ban state onto the
+//     PUBLIC profile doc (both ways: ban -> true, unban -> false) so gate-16
+//     profile tombstones have a world-readable signal (moderationGate is owner/
+//     admin-read-only). The rules must keep isBanned OUT of the owner-writable
+//     profile key set — only this CF write (which bypasses rules) may set it.
 // A drift here silently breaks the gate (consent never satisfies, or a ban never
 // reads). The cf-tests cross-check both against the live rules.
 // =============================================================================
@@ -41,8 +46,10 @@ async function applyAcceptRules(db, FieldValue, uid, version) {
 
 // setBanState — admin-only. Writes the rules-truth: `banned/{uid}` (the audit doc,
 // whose CREATE triggers onBanCascade) + `moderationGate.banned` (the read-hot field
-// the gate checks). A custom auth claim rides along as durability (best-effort —
-// the doc gate is primary, so a claim failure is harmless). Unban reverses all.
+// the gate checks) + the PUBLIC `profiles/{uid}.isBanned` mirror (gate-16 profile
+// tombstones read it; see the sync warning above). A custom auth claim rides along
+// as durability (best-effort — the doc gate is primary, so a claim failure is
+// harmless). Unban reverses all.
 async function applySetBanState(db, FieldValue, setClaim, callerUid, targetUid, banned, reason) {
   if (callerUid !== ADMIN_UID) throw coded('permission-denied', 'Admins only.');
   if (!targetUid || typeof targetUid !== 'string') throw coded('invalid-argument', 'A target uid is required.');
@@ -55,9 +62,11 @@ async function applySetBanState(db, FieldValue, setClaim, callerUid, targetUid, 
       { merge: true }
     );
     await db.doc('moderationGate/' + targetUid).set({ banned: true }, { merge: true });
+    await db.doc('profiles/' + targetUid).set({ isBanned: true }, { merge: true });
   } else {
     await db.doc('banned/' + targetUid).delete();
     await db.doc('moderationGate/' + targetUid).set({ banned: false }, { merge: true });
+    await db.doc('profiles/' + targetUid).set({ isBanned: false }, { merge: true });
   }
   // Belt-and-suspenders: a future-minted token self-denies even on a missed doc
   // read. Best-effort (no auth emulator in test:cf; doc gate is the real one).

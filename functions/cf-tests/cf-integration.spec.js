@@ -225,3 +225,62 @@ test('review NOT-helpful vote -> dislikes count moves but NO notification', asyn
   const s = await db.collection('users/author1/notifications').get();
   assert.equal(s.size, 0, 'a Not-helpful (value -1) review vote must NOT notify');
 });
+
+// =============================================================================
+// GATE 18 — onDmMessageCreate: a DM message pings the recipient's Lantern
+// (type 'dm', server-sourced sender) + bumps the CF-owned unread_{uid} mirror
+// on the conversation. Admin-floor shaped here (kind:'admin', Blake a party)
+// to match the rules, but the CF itself is participant-agnostic.
+// =============================================================================
+const { ADMIN_UID } = require('../lib/moderation');
+
+// 11) DM message -> recipient notification (dm type, server-sourced name) + unread mirror
+test('DM message -> recipient gets a dm notification + the conversation unread mirror increments', async () => {
+  await db.doc('conversations/dmconv1').set({ participants: ['dmA', ADMIN_UID], kind: 'admin', state: 'open', createdAt: TS.now() });
+  await db.doc('profiles/dmA').set({ displayName: 'DM Sender', photoURL: null });
+  // the message even carries a FORGED name — the CF must source identity server-side:
+  await db.collection('conversations/dmconv1/messages').add({ senderUid: 'dmA', text: 'hello', createdAt: FV.serverTimestamp(), fromDisplayName: 'FORGED Blake' });
+
+  const notif = await waitFor(async () => {
+    const s = await db.collection('users/' + ADMIN_UID + '/notifications').get();
+    return s.docs.map((d) => d.data()).find((n) => n.type === 'dm' && n.fromUid === 'dmA') || null;
+  });
+  assert.ok(notif, 'the recipient (admin) should get a dm notification');
+  assert.equal(notif.toUid, ADMIN_UID);
+  assert.equal(notif.fromUid, 'dmA');
+  assert.equal(notif.fromDisplayName, 'DM Sender', 'name must come from the profile, not the forged message field');
+  assert.equal(notif.type, 'dm');
+  assert.equal(notif.verb, 'sent you a message');
+  assert.equal(notif.targetPath, 'conversations/dmconv1');
+  assert.equal(notif.read, false);
+
+  const conv = await waitFor(async () => {
+    const d = await db.doc('conversations/dmconv1').get();
+    const unread = d.exists ? d.data()['unread_' + ADMIN_UID] : null;
+    return typeof unread === 'number' && unread >= 1 ? d.data() : null;
+  });
+  assert.ok(conv, 'unread_{recipient} on the conversation should reach >= 1');
+  assert.ok(conv.lastMessageAt, 'lastMessageAt should be stamped');
+  assert.equal(conv.lastMessageText, undefined, 'NO raw message preview in conversation metadata');
+});
+
+// 12) muted recipient -> the unread mirror still bumps, but NO dm notification doc lands
+test('muted dm recipient -> unread mirror increments but NO notification is written', async () => {
+  await db.doc('users/dmB/notifPrefs/prefs').set({ muted: { dm: true } });
+  await db.doc('conversations/dmconv2').set({ participants: [ADMIN_UID, 'dmB'], kind: 'admin', state: 'open', createdAt: TS.now() });
+  await db.collection('conversations/dmconv2/messages').add({ senderUid: ADMIN_UID, text: 'hi', createdAt: FV.serverTimestamp() });
+
+  // the badge mirror moves (mute silences the ping, not the badge)...
+  const conv = await waitFor(async () => {
+    const d = await db.doc('conversations/dmconv2').get();
+    const unread = d.exists ? d.data().unread_dmB : null;
+    return typeof unread === 'number' && unread >= 1 ? true : null;
+  });
+  assert.ok(conv, 'unread_dmB should increment even when the recipient muted dm');
+
+  // ...but no dm notification was written.
+  await sleep(2500);
+  const s = await db.collection('users/dmB/notifications').get();
+  const dmNotifs = s.docs.map((d) => d.data()).filter((n) => n.type === 'dm');
+  assert.equal(dmNotifs.length, 0, 'a muted dm recipient must get NO dm notification');
+});

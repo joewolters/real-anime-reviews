@@ -216,12 +216,17 @@ async function seed() {
   // (functions/index.js) — the trigger listens there.
   try {
     const bucket = admin.storage().bucket('real-anime-reviews.firebasestorage.app');
-    // a real 1×1 purple PNG (valid magic bytes, so a manual re-process also passes)
-    const seedPng = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADgQF/e5IkGQAAAABJRU5ErkJggg==', 'base64');
+    // REAL, VISIBLE seed images (mega-batch A1: the old seed was a 1×1 PNG —
+    // it rendered as a single pixel, "looks like a period". The resolver was
+    // always fine; the seed was invisible). sharp lives in the CF workspace.
+    const _sharpPath = path.join(__dirname, '..', 'functions', 'node_modules', 'sharp');
+    const sharp = require(fs.existsSync(_sharpPath) ? _sharpPath : 'sharp');
+    const seedImage = (r, g, b) => sharp({
+      create: { width: 480, height: 270, channels: 3, background: { r, g, b } },
+    }).png().toBuffer();
     // (1) an INLINE image on the th-opm reply — the [img:1] token sits mid-prose
     const imgPath = 'uploads/prac-mika/p0/seed-img1';
-    await bucket.file(imgPath).save(seedPng, {
+    await bucket.file(imgPath).save(await seedImage(98, 44, 178), {
       resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
     });
     await db.doc('forum/th-opm/posts/p0').set({
@@ -230,11 +235,11 @@ async function seed() {
     }, { merge: true });
     // (2) a user-chosen THUMBNAIL on the text-only th-new thread (its author's prefix)
     const thumbPath = 'uploads/prac-aki/th-new/seed-thumb1';
-    await bucket.file(thumbPath).save(seedPng, {
+    await bucket.file(thumbPath).save(await seedImage(44, 70, 178), {
       resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
     });
     await db.doc('forum/th-new').set({ imageRefs: [thumbPath], thumbImage: thumbPath }, { merge: true });
-    console.log('✓ Seeded practice images: inline on th-opm/p0 + a card thumbnail on th-new.');
+    console.log('✓ Seeded practice images (REAL 480x270): inline on th-opm/p0 + a card thumbnail on th-new.');
   } catch (e) { console.warn('storage seed skipped:', e.message); }
 
   // seed a full notification inbox for MIKA so Blake can smoke the Lantern (every

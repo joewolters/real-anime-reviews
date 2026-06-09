@@ -555,6 +555,16 @@ test('overhaul: review create with OWN-prefix imageRefs; foreign DENIED; owner m
   await assertSucceeds(updateDoc(doc(as('alice'), 'reviews/al:101922/items/alice'),
     { imageRefs: [], updatedAt: serverTimestamp() }));
 });
+test('mega-A4: review COVER (thumbImage) — own-prefix happy; foreign-prefix HOSTILE DENIED', async () => {
+  await assertSucceeds(setDoc(doc(as('bob'), 'reviews/one-punch-man/items/bob'),
+    { uid: 'bob', title: 'T', body: 'b', rating: 9, displayName: 'B', createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(), likesCount: 0, dislikesCount: 0,
+      imageRefs: ['uploads/bob/rev-one-punch-man/c1'], thumbImage: 'uploads/bob/rev-one-punch-man/c1' }));
+  await assertFails(setDoc(doc(as('carol'), 'reviews/one-punch-man/items/carol'),
+    { uid: 'carol', title: 'T', body: 'b', rating: 9, displayName: 'C', createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(), likesCount: 0, dislikesCount: 0,
+      thumbImage: 'uploads/bob/rev-one-punch-man/c1' }));
+});
 test('overhaul: thread thumbImage — own-prefix happy; foreign-prefix HOSTILE DENIED', async () => {
   await assertSucceeds(setDoc(doc(as('alice'), 'forum/tThumb1'),
     thread({ imageRefs: ['uploads/alice/tThumb1/a'], thumbImage: 'uploads/alice/tThumb1/a' })));

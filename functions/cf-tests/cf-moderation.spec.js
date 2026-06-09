@@ -133,7 +133,21 @@ test('onBanCascade redacts authored content (removed:true + emptied) and locks c
   assert.ok(done, 'all authored content redacted, the DM locked, cascadeCursor done');
 });
 
-// 7) onBanCascade is idempotent — re-running over already-redacted content is a safe no-op.
+// 7) setBanState mirrors the PUBLIC ban signal onto profiles/{uid}.isBanned —
+//    gate-16 profile tombstones read it (moderationGate is owner/admin-read-only;
+//    profiles is world-readable). Mirrors BOTH ways: ban -> true, unban -> false.
+test('setBanState mirrors profiles/{uid}.isBanned (ban -> true, unban -> false)', async () => {
+  await db.doc('profiles/mirrored').set({ displayName: 'Mirrored', photoURL: null });
+  await moderation.applySetBanState(db, FV, null, ADMIN, 'mirrored', true, null);
+  assert.equal((await db.doc('profiles/mirrored').get()).data().isBanned, true, 'ban mirrors isBanned:true onto the public profile');
+  assert.equal((await db.doc('profiles/mirrored').get()).data().displayName, 'Mirrored', 'merge write — the rest of the profile survives');
+  // let the cascade settle before unbanning (same discipline as the unban test above).
+  await waitFor(async () => { const d = await db.doc('banned/mirrored').get(); return d.exists && d.data().cascadeCursor === 'done' ? true : null; });
+  await moderation.applySetBanState(db, FV, null, ADMIN, 'mirrored', false, null);
+  assert.equal((await db.doc('profiles/mirrored').get()).data().isBanned, false, 'unban mirrors isBanned:false (both ways)');
+});
+
+// 8) onBanCascade is idempotent — re-running over already-redacted content is a safe no-op.
 test('onBanCascade is idempotent (a re-run does not error and leaves content redacted)', async () => {
   const U = 'idem';
   await db.doc('comments/a/items/cI').set({ uid: U, text: 'x', displayName: 'I', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });

@@ -290,12 +290,14 @@ service cloud.firestore {
         && request.resource.data.likesCount == 0
         && request.resource.data.dislikesCount == 0
         && imageRefsOk()   // image overhaul — reviews carry ≤4 own-prefix images
+        && thumbImageOk()  // mega-batch A4 — the dedicated review COVER
         && gateOk();
       // owner edits content only — H1: no count branch.
       allow update: if isOwner(uid)
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'rating', 'updatedAt', 'displayName', 'photoURL', 'imageRefs'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'rating', 'updatedAt', 'displayName', 'photoURL', 'imageRefs', 'thumbImage'])
         && imageRefsOk()
+        && thumbImageOk()
         && gateOk();
       allow delete: if isOwner(uid) || isAdmin();
 
