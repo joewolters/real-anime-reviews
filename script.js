@@ -4322,7 +4322,7 @@ function positionFeaturedDrop() {
     const d = Math.floor(h / 24); return `${d}d ago`;
   }
 
-  function commentItemEl({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0, pinned = false, showReplies = true }) {
+  function commentItemEl({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0, pinned = false, showReplies = true, imageRefs = null, imageDocPath = '' }) {
   const li = document.createElement('li'); li.className = 'comment-item';
   if (pinned) li.classList.add('is-pinned');
   li.dataset.cid = id;
@@ -4357,6 +4357,22 @@ function positionFeaturedDrop() {
 
   bubble.appendChild(meta);
   bubble.appendChild(p);
+
+  // image overhaul — comments carry images now: [img:N] slots resolve inline,
+  // the rest trail as a gallery. Callers that pass no imageRefs/imageDocPath
+  // (review-discussion rows, optimistic pendings) render exactly as before.
+  if (Array.isArray(imageRefs) && imageRefs.length && imageDocPath) {
+    const imgOpts = { docPath: imageDocPath, authorUid: uid || '' };
+    const usedInline = resolveImageSlots(p, imageRefs, imgOpts);
+    const rest = imageRefs.filter((x) => !usedInline.has(x));
+    if (rest.length) {
+      const gal = document.createElement('div');
+      gal.className = 'hub-post-gallery';
+      gal.innerHTML = hubImagesHtml(rest, imgOpts);
+      bubble.appendChild(gal);
+    }
+    hubHydrateImages(bubble);
+  }
 
   // lazy reply panel host (mounted on first toggle)
   const repliesHost = document.createElement('div');
@@ -4533,7 +4549,9 @@ sortEl?.addEventListener('change', onSortChange);
         createdAt: d.createdAt,
         likesCount,
         dislikesCount,
-        pinned
+        pinned,
+        imageRefs: d.imageRefs,                                   // image overhaul
+        imageDocPath: 'comments/' + s + '/items/' + docSnap.id,
       });
 
       // live author profile subscription
@@ -4697,12 +4715,27 @@ postBtn.addEventListener('click', async (e) => {
       dislikesCount: 0
     };
 
-    await addDoc(itemsRef, payload);
+    // image overhaul — comments carry images: upload under the PRE-generated
+    // comment id, then the doc lands with imageRefs (rules pin own-prefix).
+    const cFiles = commentPicker ? commentPicker.files() : [];
+    const cref = doc(itemsRef);
+    if (cFiles.length) {
+      postBtn.textContent = 'Uploading…';
+      payload.imageRefs = await hubUploadImages(cFiles, u.uid, cref.id,
+        (i, n) => { postBtn.textContent = 'Uploading ' + i + '/' + n + '…'; });
+    }
+    try {
+      await setDoc(cref, payload);
+    } catch (createErr) {
+      if (payload.imageRefs) for (const pth of payload.imageRefs) { try { await deleteObject(storRef(storage, pth)); } catch (_) {} }
+      throw createErr;
+    }
 
     // only mark cooldown AFTER success
     markPostedNow();
 
     input.value = '';
+    if (commentPicker) commentPicker.clear();
     // a programmatic clear fires no 'input' event, so the RarComposer preview
     // would keep showing the just-posted text (Blake's 8d-batch fix #1)
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -4712,6 +4745,7 @@ postBtn.addEventListener('click', async (e) => {
   } finally {
     posting = false;
     postBtn.disabled = false;
+    postBtn.textContent = 'Post';
     syncAuthUI(auth.currentUser);
   }
 });
@@ -4721,8 +4755,17 @@ postBtn.addEventListener('click', async (e) => {
 
     // v1.9.1 — premium composer: B/I/🔗 toolbar, Ctrl/⌘+B/I, live inline preview,
     // Enter to post (Shift+Enter = newline). XSS-safe (renderMarkdownInline preview).
+    // Image overhaul: the shared picker mounts under the composer; the toolbar 📷
+    // inserts [img:N] at the caret.
+    let commentPicker = null;
+    if (input && input.parentNode) {
+      const media = document.createElement('div');
+      media.className = 'hub-reply-media';
+      input.parentNode.appendChild(media);
+      commentPicker = hubCreateImagePicker(media, { textarea: input });
+    }
     if (window.RarComposer) {
-      window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click() });
+      window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click(), onImage: commentPicker ? () => commentPicker.toolbarInsert() : undefined });
     }
 
     // Thread lock (commentsMeta/{s}.locked) — admins lock a thread; when locked
@@ -4965,7 +5008,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
   }
 
   // ---------- COMMENT REPLIES (depth-1) ----------
-  function buildReplyItem({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0 }) {
+  function buildReplyItem({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0, imageRefs = null, imageDocPath = '' }) {
     const li = document.createElement('li'); li.className = 'reply-item';
     li.dataset.rid = id || '';
     li.dataset.uid = uid || '';
@@ -4981,6 +5024,19 @@ function openInlineCommentEditor(editBtn, itemRef) {
     meta.appendChild(nameEl); meta.appendChild(sep); meta.appendChild(t);
     const p = document.createElement('p'); p.className = 'reply-body';
     p.innerHTML = (window.renderMarkdownInline ? window.renderMarkdownInline(text || '') : escapeHtml(text || ''));
+    // image overhaul — replies carry inline images too (same machinery; rows
+    // with no refs render exactly as before).
+    let replyGal = null;
+    if (Array.isArray(imageRefs) && imageRefs.length && imageDocPath) {
+      const imgOpts = { docPath: imageDocPath, authorUid: uid || '' };
+      const usedInline = resolveImageSlots(p, imageRefs, imgOpts);
+      const rest = imageRefs.filter((x) => !usedInline.has(x));
+      if (rest.length) {
+        replyGal = document.createElement('div');
+        replyGal.className = 'hub-post-gallery';
+        replyGal.innerHTML = hubImagesHtml(rest, imgOpts);
+      }
+    }
     // vote pills — same NEW model as comments (client writes ONLY its own vote
     // doc; the onReplyVote CF owns the counts). Purple, never gold. Distinct
     // reply-like/reply-dislike actions so the comment click handler can't hijack
@@ -4996,8 +5052,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
       </button>
     `;
     foot.appendChild(votes);
-    body.appendChild(meta); body.appendChild(p); body.appendChild(foot);
+    body.appendChild(meta); body.appendChild(p);
+    if (replyGal) body.appendChild(replyGal);
+    body.appendChild(foot);
     li.appendChild(avatar); li.appendChild(body);
+    if (Array.isArray(imageRefs) && imageRefs.length) hubHydrateImages(body);
     setVoteUI(li, 0);
     return li;
   }
@@ -5030,12 +5089,14 @@ function openInlineCommentEditor(editBtn, itemRef) {
       <ul class="replies-list"></ul>
       <div class="reply-composer">
         <textarea class="reply-input" maxlength="500" placeholder="Write a reply…"></textarea>
+        <div class="hub-reply-media"></div>
         <button type="button" class="action-btn reply-post" disabled>Reply</button>
       </div>
     `;
     const listUl = host.querySelector('.replies-list');
     const input = host.querySelector('.reply-input');
     const postBtn = host.querySelector('.reply-post');
+    const replyPicker = hubCreateImagePicker(host.querySelector('.hub-reply-media'), { textarea: input });   // image overhaul
 
     const authed = !!auth.currentUser;
     if (!authed) { input.readOnly = true; input.placeholder = 'Sign in to reply'; }
@@ -5063,7 +5124,9 @@ function openInlineCommentEditor(editBtn, itemRef) {
           id: r.id, uid: d.uid, displayName: d.displayName || 'User',
           photoURL: d.photoURL || null, text: d.text || '', createdAt: d.createdAt,
           likesCount: (typeof d.likesCount === 'number') ? d.likesCount : 0,
-          dislikesCount: (typeof d.dislikesCount === 'number') ? d.dislikesCount : 0
+          dislikesCount: (typeof d.dislikesCount === 'number') ? d.dislikesCount : 0,
+          imageRefs: d.imageRefs,                                                       // image overhaul
+          imageDocPath: 'comments/' + s + '/items/' + cid + '/replies/' + r.id,
         });
         listUl.appendChild(replyLi);
         // live vote state for the current user (mirrors the comment vote sub)
@@ -5090,7 +5153,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       if (!(await ensureCanParticipate())) return;  // v1.10.0 gate 3 — consent before first reply
       postBtn.disabled = true;
       try {
-        await addDoc(collection(db, 'comments', s, 'items', cid, 'replies'), {
+        const rPayload = {
           uid: u.uid,
           displayName: u.displayName || (u.email ? u.email.split('@')[0] : 'User'),
           photoURL: u.photoURL || null,
@@ -5098,19 +5161,34 @@ function openInlineCommentEditor(editBtn, itemRef) {
           createdAt: serverTimestamp(),
           likesCount: 0,
           dislikesCount: 0
-        });
+        };
+        // image overhaul — reply images upload under the PRE-generated reply id
+        const rFiles = replyPicker.files();
+        const rref = doc(collection(db, 'comments', s, 'items', cid, 'replies'));
+        if (rFiles.length) {
+          rPayload.imageRefs = await hubUploadImages(rFiles, u.uid, rref.id,
+            (i, n) => { postBtn.textContent = 'Uploading ' + i + '/' + n + '…'; });
+        }
+        try {
+          await setDoc(rref, rPayload);
+        } catch (createErr) {
+          if (rPayload.imageRefs) for (const pth of rPayload.imageRefs) { try { await deleteObject(storRef(storage, pth)); } catch (_) {} }
+          throw createErr;
+        }
         input.value = '';
+        replyPicker.clear();
         input.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview too (8d fix #1)
       } catch (err) {
         alert('Failed to reply: ' + err.message);
       } finally {
         postBtn.disabled = false;
+        postBtn.textContent = 'Reply';
       }
     });
 
     // v1.9.1 — same premium composer on the reply box (inline preview + Enter to post).
     if (window.RarComposer) {
-      window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click() });
+      window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click(), onImage: () => replyPicker.toolbarInsert() });
     }
   }
 
@@ -5489,17 +5567,118 @@ function openInlineCommentEditor(editBtn, itemRef) {
   }
   window.hubImagesHtml = hubImagesHtml; // heart/XSS spec hook: hostile refs render NOTHING
   // src hydration is async (getDownloadURL knows about the emulator + tokens);
-  // a dangling pointer (already-removed object) just drops its figure.
+  // a dangling pointer (already-removed object) just drops its figure. Covers
+  // post figures AND list-card thumbnails (any img carrying data-imgref).
   function hubHydrateImages(rootEl) {
     if (!rootEl) return;
-    rootEl.querySelectorAll('img.hub-post-img[data-imgref]:not([src])').forEach((img) => {
+    rootEl.querySelectorAll('img[data-imgref]:not([src])').forEach((img) => {
       const p = hubSafeImageRef(img.getAttribute('data-imgref'));
-      if (!p) { const w = img.closest('.hub-img-wrap'); if (w) w.remove(); return; }
+      if (!p) { const w = img.closest('.hub-img-wrap'); if (w) w.remove(); else img.remove(); return; }
       getDownloadURL(storRef(storage, p))
         .then((url) => { img.src = url; img.classList.add('is-loaded'); })
-        .catch(() => { const w = img.closest('.hub-img-wrap'); if (w) w.remove(); });
+        .catch(() => { const w = img.closest('.hub-img-wrap'); if (w) w.remove(); else img.remove(); });
     });
   }
+
+  // ===========================================================================
+  // IMAGE OVERHAUL — inline placement. markdown.js renders [img:N] as an empty
+  // .rar-img-slot; THIS swaps each slot for the doc's Nth imageRef figure (so
+  // the body text never carries a path — nothing to inject). Each ref renders
+  // ONCE (first slot wins; duplicate tokens drop); refs no slot referenced stay
+  // for the trailing gallery, so attach-only posts and every pre-overhaul doc
+  // render exactly as before. Returns the Set of refs used inline.
+  // ===========================================================================
+  function resolveImageSlots(rootEl, refs, opts) {
+    const used = new Set();
+    if (!rootEl) return used;
+    const list = Array.isArray(refs) ? refs : [];
+    rootEl.querySelectorAll('.rar-img-slot[data-img-slot]').forEach((slot) => {
+      const n = parseInt(slot.getAttribute('data-img-slot'), 10);
+      const p = hubSafeImageRef(list[n - 1]);
+      if (!p || used.has(p)) { slot.remove(); return; }
+      used.add(p);
+      const holder = document.createElement('div');
+      holder.innerHTML = hubImagesHtml([p], opts);
+      const figs = holder.firstElementChild;            // .hub-post-images
+      if (figs) { figs.classList.add('is-inline'); slot.replaceWith(figs); }
+      else slot.remove();
+    });
+    return used;
+  }
+  window.resolveImageSlots = resolveImageSlots; // spec hook
+
+  // The branded LIGHTBOX (overhaul item 2) — full-view overlay for any rendered
+  // post image; tall/wide images fit the viewport (never cut off). src comes
+  // ONLY from an already-hydrated <img> (SDK-derived URL), never doc data.
+  function openImageLightbox(src) {
+    if (typeof src !== 'string' || !/^https?:\/\//.test(src)) return;
+    document.querySelectorAll('.rar-lightbox').forEach((n) => n.remove());
+    const overlay = document.createElement('div');
+    overlay.className = 'rar-lightbox';
+    overlay.innerHTML = `<button type="button" class="rar-lightbox-close" aria-label="Close">&times;</button>
+      <img class="rar-lightbox-img" alt="" decoding="async">`;
+    overlay.querySelector('.rar-lightbox-img').src = src;
+    document.body.appendChild(overlay);
+    const prevFocus = document.activeElement;
+    const close = () => {
+      document.removeEventListener('keydown', onKey, true);
+      try { overlay.remove(); } catch (_) {}
+      if (prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch (_) {} }
+    };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    overlay.addEventListener('click', (e) => { if (e.target !== overlay.querySelector('.rar-lightbox-img')) close(); });
+    overlay.querySelector('.rar-lightbox-close').addEventListener('click', close);
+    document.addEventListener('keydown', onKey, true);
+    overlay.querySelector('.rar-lightbox-close').focus();
+  }
+  // one delegated opener: any hydrated post image, on every surface. Card
+  // thumbnails (.hub-card-thumb) deliberately NOT included — cards navigate.
+  document.addEventListener('click', (e) => {
+    const img = e.target && e.target.closest ? e.target.closest('img.hub-post-img.is-loaded') : null;
+    if (!img) return;
+    e.preventDefault(); e.stopPropagation();
+    openImageLightbox(img.currentSrc || img.src);
+  }, true);
+
+  // ⚑ Report / 🗑 Remove — ONE document-level handler for every surface.
+  // (Adversarial review, HIGH: these used to live only in the hub drawer's
+  // delegation, leaving the buttons INERT on comments/replies/reviews — 3 of
+  // the 5 image surfaces couldn't report. The buttons' data attributes are
+  // self-contained, so no surface context is needed here.) Capture-phase so a
+  // surrounding card/post click handler never swallows or doubles the action.
+  document.addEventListener('click', async (e) => {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const imgFlag = t.closest('[data-img-report]');
+    if (imgFlag) {
+      e.preventDefault(); e.stopPropagation();
+      openReportModal({
+        targetType: 'image', targetPath: imgFlag.dataset.imgDoc || '',
+        targetUid: imgFlag.dataset.imgAuthor || '', imagePath: imgFlag.dataset.imgReport,
+        snapshotText: '[image] ' + (imgFlag.dataset.imgReport || ''),
+      });
+      return;
+    }
+    const imgRm = t.closest('[data-img-remove]');
+    if (imgRm) {
+      e.preventDefault(); e.stopPropagation();
+      if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
+      // two-click arm (branded confirm, no native dialog — same vibe as take-down)
+      if (!imgRm.classList.contains('is-armed')) {
+        imgRm.classList.add('is-armed'); imgRm.textContent = '🗑?';
+        imgRm.title = 'Click again — removes the image from Storage AND the post, for good';
+        setTimeout(() => { imgRm.classList.remove('is-armed'); imgRm.textContent = '🗑'; }, 2600);
+        return;
+      }
+      imgRm.disabled = true;
+      try {
+        // ATOMIC remove (gate 14): the callable deletes the Storage object FIRST,
+        // then redacts the pointer — never the Firestore-only trap.
+        await httpsCallable(functions, 'adminRemoveImage')({ docPath: imgRm.dataset.imgDoc || '', imagePath: imgRm.dataset.imgRemove });
+        const wrap = imgRm.closest('.hub-img-wrap'); if (wrap) wrap.remove();
+      } catch (err) { imgRm.disabled = false; alert('Could not remove the image: ' + (err && err.message || err)); }
+    }
+  }, true);
   // the uploadsEnabled kill-switch (commentsMeta/uploads — admin one-write off
   // switch, storage.rules reads the same doc). Missing doc = enabled.
   async function hubUploadsEnabled() {
@@ -5508,9 +5687,17 @@ function openInlineCommentEditor(editBtn, itemRef) {
       return !(s.exists() && s.data() && s.data().uploadsEnabled === false);
     } catch (_e) { return true; }
   }
-  // shared picker for the two forum composers (new-thread + reply). Browser-side
-  // checks are UX only — storage.rules + the pipeline CF are the real fences.
-  function hubCreateImagePicker(media) {
+  // shared picker for EVERY image-capable composer (thread / forum reply /
+  // comment / comment-reply / review). Browser-side checks are UX only —
+  // storage.rules + the pipeline CF are the real fences.
+  //   opts.textarea  — enables insert-at-cursor: the toolbar 📷 + each thumb's
+  //                    ↳ button drop a [img:N] token at the caret (N = 1-based
+  //                    position in the picked list = the imageRefs index).
+  //   opts.allowThumb— thread composer only: each thumb gets a 🖼 star; the
+  //                    starred image becomes the thread's list-card thumbnail.
+  function hubCreateImagePicker(media, opts) {
+    opts = opts || {};
+    const ta = opts.textarea || null;
     media.innerHTML = `<button type="button" class="hub-nt-image-btn">📷 Add an image</button>
       <input type="file" class="hub-img-file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
       <span class="hub-img-note" role="status"></span>
@@ -5520,7 +5707,33 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const noteEl = media.querySelector('.hub-img-note');
     const thumbsEl = media.querySelector('.hub-img-thumbs');
     let picked = [];
+    let thumbIdx = -1;            // which picked image is the thread thumbnail
+    let pendingInsert = false;    // toolbar-📷 flow: insert tokens for the next added files
     const note = (m) => { noteEl.textContent = m || ''; };
+
+    const insertTokenAt = (i) => { // i = 0-based picked index → [img:i+1]
+      if (!ta) return;
+      const tok = '[img:' + (i + 1) + ']';
+      const s = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+      const e = ta.selectionEnd != null ? ta.selectionEnd : s;
+      ta.value = ta.value.slice(0, s) + tok + ta.value.slice(e);
+      const ns = s + tok.length;
+      try { ta.setSelectionRange(ns, ns); ta.focus(); } catch (_) {}
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    // removing picked image K renumbers the body's tokens: [img:K] drops,
+    // [img:>K] decrements — so tokens always track the imageRefs order.
+    const renumberAfterRemove = (k) => { // k = 0-based removed index
+      if (!ta) return;
+      ta.value = ta.value.replace(/\[img:([1-4])\]/g, (m, d) => {
+        const n = parseInt(d, 10);
+        if (n === k + 1) return '';
+        if (n > k + 1) return '[img:' + (n - 1) + ']';
+        return m;
+      });
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
     const paint = () => {
       thumbsEl.innerHTML = '';
       picked.forEach((f, i) => {
@@ -5528,34 +5741,115 @@ function openInlineCommentEditor(editBtn, itemRef) {
         const img = document.createElement('img'); img.alt = '';
         img.src = URL.createObjectURL(f);
         img.onload = () => { try { URL.revokeObjectURL(img.src); } catch (_) {} };
+        w.appendChild(img);
+        if (ta) {
+          const ins = document.createElement('button'); ins.type = 'button'; ins.className = 'hub-img-thumb-ins';
+          ins.textContent = '↳'; ins.title = 'Insert this image at the cursor';
+          ins.setAttribute('aria-label', 'Insert this image at the cursor');
+          ins.addEventListener('click', () => insertTokenAt(i));
+          w.appendChild(ins);
+        }
+        if (opts.allowThumb) {
+          const st = document.createElement('button'); st.type = 'button';
+          st.className = 'hub-img-thumb-star' + (thumbIdx === i ? ' is-thumb' : '');
+          st.textContent = '🖼'; st.title = thumbIdx === i ? 'This is the thread thumbnail' : 'Use as the thread thumbnail';
+          st.setAttribute('aria-label', st.title);
+          st.addEventListener('click', () => { thumbIdx = (thumbIdx === i ? -1 : i); paint(); });
+          w.appendChild(st);
+        }
         const x = document.createElement('button'); x.type = 'button'; x.className = 'hub-img-thumb-x'; x.textContent = '×';
         x.setAttribute('aria-label', 'Remove this image');
-        x.addEventListener('click', () => { picked.splice(i, 1); paint(); });
-        w.appendChild(img); w.appendChild(x); thumbsEl.appendChild(w);
+        x.addEventListener('click', () => {
+          picked.splice(i, 1);
+          pickedHashes.splice(i, 1);
+          if (thumbIdx === i) thumbIdx = -1; else if (thumbIdx > i) thumbIdx--;
+          renumberAfterRemove(i);
+          paint();
+        });
+        w.appendChild(x);
+        thumbsEl.appendChild(w);
       });
       btn.textContent = picked.length ? `📷 Add another (${picked.length}/${HUB_IMG_MAX})` : '📷 Add an image';
     };
-    btn.addEventListener('click', async () => {
+
+    const gatesOk = async () => {
       note('');
-      const u = auth.currentUser; if (!u) { openAuth('signin'); return; }
-      if (!(await hubUploadsEnabled())) { note('Image uploads are switched off right now — words still work.'); return; }
-      if (!u.emailVerified) { note('Verify your email to post images — check your inbox for the link, then reload.'); return; }
-      if (picked.length >= HUB_IMG_MAX) { note('Four images max per post.'); return; }
-      fileEl.click();
-    });
-    fileEl.addEventListener('change', () => {
+      const u = auth.currentUser; if (!u) { openAuth('signin'); return false; }
+      if (!(await hubUploadsEnabled())) { note('Image uploads are switched off right now — words still work.'); return false; }
+      if (!u.emailVerified) { note('Verify your email to post images — check your inbox for the link, then reload.'); return false; }
+      if (picked.length >= HUB_IMG_MAX) { note('Four images max per post.'); return false; }
+      return true;
+    };
+    // dedupe PRE-CHECK (UX only — the pipeline CF is the fence): same-bytes,
+    // same-user → reject before the upload burns. Checks BOTH the registry AND
+    // the current picked list (same image twice in ONE post would otherwise
+    // land both refs and the CF would delete the twin — a dangling pointer).
+    // A registry hash pointing at an object the user already deleted does NOT
+    // block (mirrors the CF self-heal).
+    let pickedHashes = [];   // parallel to `picked`
+    const fileSha = async (f) => {
+      try {
+        if (!(window.crypto && crypto.subtle)) return null;
+        const digest = await crypto.subtle.digest('SHA-256', await f.arrayBuffer());
+        return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+      } catch (_e) { return null; }
+    };
+    const inRegistry = async (hex) => {
+      try {
+        const u = auth.currentUser; if (!u || !hex) return false;
+        const snap = await getDoc(doc(db, 'uploadHashes', u.uid + '__' + hex));
+        if (!snap.exists()) return false;
+        const oldPath = hubSafeImageRef(snap.data() && snap.data().path);
+        if (!oldPath) return true;
+        try { await getDownloadURL(storRef(storage, oldPath)); return true; }  // old object live → duplicate
+        catch (_g) { return false; }                                           // stale hash → allow (CF re-points)
+      } catch (_e) { return false; }
+    };
+    const addFiles = async (files, withInsert) => {
       note('');
-      const incoming = Array.from(fileEl.files || []);
-      for (const f of incoming) {
+      for (const f of Array.from(files || [])) {
         if (picked.length >= HUB_IMG_MAX) { note('Four images max per post.'); break; }
         if (HUB_IMG_TYPES.indexOf(f.type) === -1) { note('JPEG, PNG, WebP or GIF only (no SVG).'); continue; }
         if (f.size > HUB_IMG_MAX_BYTES) { note('Each image must be 5MB or less.'); continue; }
+        const hex = await fileSha(f);
+        if (hex && pickedHashes.indexOf(hex) !== -1) { note('That image is already attached to this post.'); continue; }
+        if (await inRegistry(hex)) { note('You’ve already posted this exact image — something new instead?'); continue; }
         picked.push(f);
+        pickedHashes.push(hex);
+        if (withInsert) insertTokenAt(picked.length - 1);
       }
-      fileEl.value = '';
       paint();
-    });
-    return { files: () => picked.slice(), count: () => picked.length, note, clear: () => { picked = []; note(''); paint(); } };
+    };
+
+    btn.addEventListener('click', async () => { if (await gatesOk()) { pendingInsert = false; fileEl.click(); } });
+    fileEl.addEventListener('change', async () => { const ins = pendingInsert; pendingInsert = false; const fl = Array.from(fileEl.files || []); fileEl.value = ''; await addFiles(fl, ins); });
+    if (ta) {
+      // paste a screenshot straight into the composer (power-scalers live on this)
+      ta.addEventListener('paste', async (e) => {
+        const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter((f) => HUB_IMG_TYPES.indexOf(f.type) !== -1);
+        if (!files.length) return;
+        e.preventDefault();
+        if (await gatesOk()) await addFiles(files, true);
+      });
+      // …or drop one on the textarea
+      ta.addEventListener('dragover', (e) => { e.preventDefault(); });
+      ta.addEventListener('drop', async (e) => {
+        const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []).filter((f) => HUB_IMG_TYPES.indexOf(f.type) !== -1);
+        if (!files.length) return;
+        e.preventDefault();
+        if (await gatesOk()) await addFiles(files, true);
+      });
+    }
+
+    return {
+      files: () => picked.slice(),
+      count: () => picked.length,
+      thumbIndex: () => thumbIdx,
+      note,
+      clear: () => { picked = []; pickedHashes = []; thumbIdx = -1; note(''); paint(); },
+      // the RarComposer toolbar 📷 routes here: open the dialog, token on add
+      toolbarInsert: async () => { if (await gatesOk()) { pendingInsert = true; fileEl.click(); } },
+    };
   }
   // ===========================================================================
   // v1.10.0 GATE 11 — ||spoiler|| reveal (the markdown.js token renders a
@@ -5627,9 +5921,15 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const chip = animeName
       ? `<span class="hub-anime-chip">${escapeHtml(animeName)}</span>`
       : `<span class="hub-tag-chip">${escapeHtml(tagLabel(t.tag))}</span>`;
-    const thumb = cover ? `<img class="hub-card-thumb" src="${escapeHtml(cover)}" alt="" loading="lazy">` : '';
+    // overhaul item 8 — the user-chosen THREAD THUMBNAIL: a text thread gets a
+    // picture on its card like the anime-cover threads do. The anime cover wins
+    // when both exist; the thumb hydrates via getDownloadURL (data-imgref).
+    const ownThumb = (!t.removed && !cover) ? hubSafeImageRef(t.thumbImage) : '';
+    const thumb = cover
+      ? `<img class="hub-card-thumb" src="${escapeHtml(cover)}" alt="" loading="lazy">`
+      : (ownThumb ? `<img class="hub-card-thumb" data-imgref="${escapeHtml(ownThumb)}" alt="" loading="lazy">` : '');
     const title = t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)');
-    return `<li class="hub-card${t.pinned ? ' is-pinned' : ''}${cover ? ' has-thumb' : ''}" data-thread-id="${escapeHtml(t.id)}" tabindex="0" role="button">
+    return `<li class="hub-card${t.pinned ? ' is-pinned' : ''}${(cover || ownThumb) ? ' has-thumb' : ''}" data-thread-id="${escapeHtml(t.id)}" tabindex="0" role="button">
       ${thumb}<div class="hub-card-main">
       <div class="hub-card-head">${pin}${chip}${lock}<span class="hub-card-time">${escapeHtml(relTimeHub(t.lastPostAt || t.createdAt))}</span></div>
       <h3 class="hub-card-title">${title}</h3>
@@ -5724,7 +6024,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       ${byline}
       <div class="hub-post-body">${replyingTo}
         <div class="hub-post-text">${bodyHtml}</div>
-        ${imagesHtml}
+        <div class="hub-post-gallery">${imagesHtml}</div>
         ${foot}
         ${childWrap}
       </div></li>`;
@@ -5959,6 +6259,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       ${shelf}
       ${rising}
       ${cards}`;
+    hubHydrateImages(host);   // overhaul item 8 — user-chosen card thumbnails
     host.scrollTop = 0;
   }
 
@@ -6087,13 +6388,23 @@ function openInlineCommentEditor(editBtn, itemRef) {
           <h2 class="hub-thread-title">${t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)')}</h2>
           <div class="hub-thread-by">${escapeHtml(name)}</div>
           <div class="hub-thread-text">${bodyHtml}</div>
-          ${t.removed ? '' : hubImagesHtml(t.imageRefs, { docPath: 'forum/' + tid, authorUid: t.authorUid || '' })}
+          <div class="hub-op-gallery"></div>
           ${adminBar}
         </article>
         <h3 class="hub-replies-h">Replies</h3>
         ${hubThreadSortBar()}
         <ul class="hub-posts" id="hub-posts"><li class="hub-post-empty hub-loading">Loading the conversation…</li></ul>
         <div class="hub-reply" id="hub-reply"></div>`;
+      // overhaul item 5 — inline placement: [img:N] slots in the body resolve to
+      // the thread's own imageRefs; whatever isn't placed inline falls through
+      // to the trailing gallery (pre-overhaul threads render exactly as before).
+      if (!t.removed) {
+        const opOpts = { docPath: 'forum/' + tid, authorUid: t.authorUid || '' };
+        const usedInline = resolveImageSlots(bodyEl.querySelector('.hub-thread-text'), t.imageRefs, opOpts);
+        const rest = Array.isArray(t.imageRefs) ? t.imageRefs.filter((p) => !usedInline.has(p)) : [];
+        const gal = bodyEl.querySelector('.hub-op-gallery');
+        if (gal && rest.length) gal.innerHTML = hubImagesHtml(rest, opOpts);
+      }
       hubHydrateImages(bodyEl);   // gate 13 — async getDownloadURL srcs
       mountReplyComposer(tid, !!t.locked);
       if (hubRepaintPosts) hubRepaintPosts();   // re-paint posts into the fresh #hub-posts
@@ -6144,6 +6455,25 @@ function openInlineCommentEditor(editBtn, itemRef) {
       postsEl.innerHTML = roots.length
         ? roots.map((p) => renderNode(p, 0)).join('')
         : `<li class="hub-post-empty">${HUB_EMPTY_REPLIES}</li>`;
+      // overhaul item 5 — per-post inline placement: resolve each post's
+      // [img:N] slots against ITS OWN imageRefs (:scope so a parent never
+      // touches a nested child's text), then drop inline-used figures from
+      // that post's trailing gallery so nothing renders twice.
+      const postById = new Map(lastPosts.map((p) => [p.id, p]));
+      postsEl.querySelectorAll('.hub-post[data-post-id]').forEach((li) => {
+        const p = postById.get(li.getAttribute('data-post-id'));
+        if (!p || !Array.isArray(p.imageRefs) || !p.imageRefs.length) return;
+        const textEl = li.querySelector(':scope > .hub-post-body > .hub-post-text');
+        const opts = { docPath: 'forum/' + tid + '/posts/' + p.id, authorUid: p.authorUid || '' };
+        const usedInline = resolveImageSlots(textEl, p.imageRefs, opts);
+        if (usedInline.size) {
+          const gal = li.querySelector(':scope > .hub-post-body > .hub-post-gallery');
+          if (gal) gal.querySelectorAll('.hub-img-wrap').forEach((w) => {
+            const flag = w.querySelector('[data-img-report]');
+            if (flag && usedInline.has(flag.getAttribute('data-img-report'))) w.remove();
+          });
+        }
+      });
       hubHydrateImages(postsEl);   // gate 13 — async getDownloadURL srcs
     };
     hubRepaintPosts = paintPosts;
@@ -6172,8 +6502,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const input = host.querySelector('.hub-reply-input');
     const postBtn = host.querySelector('.hub-reply-post');
     const counter = host.querySelector('.hub-reply-count');
-    const picker = hubCreateImagePicker(host.querySelector('.hub-reply-media'));   // gate 13
-    const sync = () => { const n = input.value.trim().length; counter.textContent = String(input.value.length); postBtn.disabled = !(auth.currentUser && n > 0); };
+    const picker = hubCreateImagePicker(host.querySelector('.hub-reply-media'), { textarea: input });   // gate 13 + inline tokens
+    // upper bound too: [img:N] token inserts bypass maxlength, and an over-cap
+    // body would burn the uploads before the rules denied the doc (review, INFO)
+    const sync = () => { const n = input.value.trim().length; counter.textContent = String(input.value.length); postBtn.disabled = !(auth.currentUser && n > 0 && input.value.length <= 4000); };
     input.addEventListener('input', sync); sync();
     // restore an in-flight reply target if the thread doc re-snapshotted mid-reply
     if (hubReplyParent) setReplyTarget(hubReplyParent.id, hubReplyParent.name);
@@ -6207,7 +6539,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         postBtn.textContent = 'Reply';
       } catch (err) { alert('Could not post your reply: ' + (err && err.message || err)); postBtn.disabled = false; postBtn.textContent = 'Reply'; }
     });
-    if (window.RarComposer) window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click() });
+    if (window.RarComposer) window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click(), onImage: () => picker.toolbarInsert() });
   }
 
   // ---- New-thread composer (gate 8c item 4/5/6) — a branded TOPIC PICKER (chips +
@@ -6275,7 +6607,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     let selectedTopic = 'general';     // the dropdown topic
     let attached = null;               // { tag, title, cover, is44 } when an anime is attached
     let searchTimer = null, inflight = null;
-    const picker = hubCreateImagePicker(overlay.querySelector('.hub-nt-media'));   // gate 13
+    const picker = hubCreateImagePicker(overlay.querySelector('.hub-nt-media'), { textarea: bodyEl, allowThumb: true });   // gate 13 + inline tokens + the card thumbnail
 
     // ---- the branded topic dropdown (Part C) ----
     function setTopic(tag) {
@@ -6356,7 +6688,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       else if (FORUM_TOPICS.some(([k]) => k === presetTag)) setTopic(presetTag);
     }
     // item 5 — the full review-composer treatment on the body (Ctrl/⌘+Enter + hint + B/I/🔗)
-    if (window.RarComposer) window.RarComposer.enhance(bodyEl, { inline: false, submit: 'mod', onSubmit: () => overlay.querySelector('.hub-nt-create').click() });
+    if (window.RarComposer) window.RarComposer.enhance(bodyEl, { inline: false, submit: 'mod', onSubmit: () => overlay.querySelector('.hub-nt-create').click(), onImage: () => picker.toolbarInsert() });
 
     overlay.querySelector('.hub-nt-create').addEventListener('click', async () => {
       const title = overlay.querySelector('.hub-nt-input').value.trim();
@@ -6380,6 +6712,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
         if (files.length) {
           docData.imageRefs = await hubUploadImages(files, auth.currentUser.uid, tref.id,
             (i, n) => { createBtn.textContent = 'Uploading ' + i + '/' + n + '…'; });
+          // overhaul item 8 — the card thumbnail: the 🖼-starred image, else the
+          // first (an image thread always gets a card picture, like OPM's cover).
+          const ti = picker.thumbIndex();
+          docData.thumbImage = docData.imageRefs[ti >= 0 ? ti : 0];
         }
         try {
           await setDoc(tref, docData);
@@ -6482,33 +6818,6 @@ function openInlineCommentEditor(editBtn, itemRef) {
       if (!(await ensureCanParticipate())) return;
       try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { removed: true, body: '' }); hubConfirmDel.delete(pid); hubEditing.delete(pid); }
       catch (err) { alert('Could not take it down: ' + (err && err.message || err)); }
-      return;
-    }
-    // ---- gate 14 — per-image actions (the Report affordance every rendered image must carry) ----
-    const imgFlag = t.closest('[data-img-report]'); if (imgFlag) {
-      openReportModal({
-        targetType: 'image', targetPath: imgFlag.dataset.imgDoc || '',
-        targetUid: imgFlag.dataset.imgAuthor || '', imagePath: imgFlag.dataset.imgReport,
-        snapshotText: '[image] ' + (imgFlag.dataset.imgReport || ''),
-      });
-      return;
-    }
-    const imgRm = t.closest('[data-img-remove]'); if (imgRm) {
-      if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
-      // two-click arm (branded confirm, no native dialog — same vibe as take-down)
-      if (!imgRm.classList.contains('is-armed')) {
-        imgRm.classList.add('is-armed'); imgRm.textContent = '🗑?';
-        imgRm.title = 'Click again — removes the image from Storage AND the post, for good';
-        setTimeout(() => { imgRm.classList.remove('is-armed'); imgRm.textContent = '🗑'; }, 2600);
-        return;
-      }
-      imgRm.disabled = true;
-      try {
-        // ATOMIC remove (gate 14): the callable deletes the Storage object FIRST,
-        // then redacts the Firestore pointer — never the Firestore-only trap.
-        await httpsCallable(functions, 'adminRemoveImage')({ docPath: imgRm.dataset.imgDoc || '', imagePath: imgRm.dataset.imgRemove });
-        const wrap = imgRm.closest('.hub-img-wrap'); if (wrap) wrap.remove();
-      } catch (err) { imgRm.disabled = false; alert('Could not remove the image: ' + (err && err.message || err)); }
       return;
     }
     const adminBtn = t.closest('[data-hub-admin]'); if (adminBtn && hubThreadId) { await hubAdminAction(adminBtn.dataset.hubAdmin); return; }
@@ -6959,6 +7268,22 @@ function subscribeReviews(anime) {
             ` : ''}
           </div>
       `;
+
+      // image overhaul — reviews carry images: [img:N] slots resolve inline in
+      // the body, the rest trail as a gallery before the action row.
+      if (Array.isArray(d.imageRefs) && d.imageRefs.length) {
+        const rowBody = li.querySelector('.row-body');
+        const rvOpts = { docPath: 'reviews/' + s + '/items/' + docSnap.id, authorUid: d.uid || '' };
+        const usedInline = resolveImageSlots(rowBody, d.imageRefs, rvOpts);
+        const rest = d.imageRefs.filter((x) => !usedInline.has(x));
+        if (rest.length && rowBody) {
+          const gal = document.createElement('div');
+          gal.className = 'hub-post-gallery';
+          gal.innerHTML = hubImagesHtml(rest, rvOpts);
+          rowBody.insertAdjacentElement('afterend', gal);
+        }
+        hubHydrateImages(li);
+      }
 
       // toggle open/close (preserve open state across live re-renders)
       const toggle = li.querySelector('.row-toggle');
@@ -7529,13 +7854,32 @@ if (purl) data.photoURL = purl;
 
     pubBtn.disabled = true;
     try {
+      // image overhaul — review images: the review's doc id is FIXED (the uid),
+      // so the Storage docId segment is a sanitized per-anime token instead
+      // (deterministic per review; ':' in al:<id> keys is not a legal segment
+      // char). The delete cascade sweeps exact refs, so the token shape only
+      // has to be stable + own-prefixed.
+      const rvFiles = reviewPicker ? reviewPicker.files() : [];
+      if (rvFiles.length) {
+        const animeTok = ('rev-' + String(s).replace(/[^A-Za-z0-9_-]/g, '-')).slice(0, 100);
+        pubBtn.textContent = 'Uploading…';
+        data.imageRefs = await hubUploadImages(rvFiles, auth.currentUser.uid, animeTok,
+          (i, n) => { pubBtn.textContent = 'Uploading ' + i + '/' + n + '…'; });
+      }
       // ONE-PER-USER: write to doc id = uid (upserts only their slot)
-      await setDoc(doc(db, 'reviews', s, 'items', auth.currentUser.uid), data);
+      try {
+        await setDoc(doc(db, 'reviews', s, 'items', auth.currentUser.uid), data);
+      } catch (createErr) {
+        if (data.imageRefs) for (const pth of data.imageRefs) { try { await deleteObject(storRef(storage, pth)); } catch (_) {} }
+        throw createErr;
+      }
       titleEl.value = ''; rateEl.value = ''; bodyEl.value = '';
+      if (reviewPicker) reviewPicker.clear();
       bodyEl.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview NOW, not on the snapshot round-trip (8d fix #1)
     } catch (err) {
       alert('Failed to publish: ' + err.message);
     } finally {
+      pubBtn.textContent = 'Publish';
       sync();
     }
   });
@@ -7544,11 +7888,20 @@ if (purl) data.photoURL = purl;
   // preview (headers + lists, exactly how the review will render), and Ctrl/⌘+Enter to
   // publish (Enter = newline) so a multi-paragraph review is never truncated. Only fires
   // when the form already validates, so no native validation bubbles appear.
+  // Image overhaul: the shared picker mounts under the body field; the toolbar 📷
+  // inserts [img:N] at the caret ("as part of a title or in the review itself").
+  let reviewPicker = null;
+  if (bodyEl && bodyEl.parentNode) {
+    const media = document.createElement('div');
+    media.className = 'hub-reply-media';
+    bodyEl.parentNode.insertBefore(media, bodyEl.nextSibling);
+    reviewPicker = hubCreateImagePicker(media, { textarea: bodyEl });
+  }
   if (window.RarComposer) {
     window.RarComposer.enhance(bodyEl, { inline: false, submit: 'mod', onSubmit: () => {
       if (pubBtn.disabled) return;
       if (typeof form.requestSubmit === 'function') form.requestSubmit(); else pubBtn.click();
-    } });
+    }, onImage: reviewPicker ? () => reviewPicker.toolbarInsert() : undefined });
   }
 
   // Author actions already work; doc id will be the uid now.

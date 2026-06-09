@@ -514,6 +514,72 @@ test('imageRefs: ADMIN may strip a (foreign-author) ref during moderation', asyn
   await assertSucceeds(updateDoc(doc(as(ADMIN), 'forum/tImg9/posts/p1'), { imageRefs: [] }));
 });
 
+// -------- IMAGE OVERHAUL — imageRefs on comments / replies / reviews + the
+// thread thumbnail + the dedupe registry (rules parity with forum posts) --------
+test('overhaul: comment + reply create with OWN-prefix imageRefs; foreign prefix DENIED', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'comments/demon-slayer/items/ci1'),
+    { uid: 'alice', text: 'see panel', displayName: 'A', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0,
+      imageRefs: ['uploads/alice/ci1/a'] }));
+  await assertFails(setDoc(doc(as('alice'), 'comments/demon-slayer/items/ci2'),
+    { uid: 'alice', text: 'x', displayName: 'A', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0,
+      imageRefs: ['uploads/bob/x/y'] }));
+  await assertSucceeds(setDoc(doc(as('bob'), 'comments/demon-slayer/items/ci1/replies/ri1'),
+    { uid: 'bob', text: 'counter-panel', displayName: 'B', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0,
+      imageRefs: ['uploads/bob/ri1/a'] }));
+  await assertFails(setDoc(doc(as('bob'), 'comments/demon-slayer/items/ci1/replies/ri2'),
+    { uid: 'bob', text: 'x', displayName: 'B', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0,
+      imageRefs: ['uploads/alice/ci1/a'] }));
+});
+test('overhaul: UPDATE cannot mint a foreign ref or >4 refs on comments/reviews (merged-array net)', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'comments/demon-slayer/items/cu1'),
+      { uid: 'alice', text: 'hi', displayName: 'A', createdAt: Timestamp.now(), likesCount: 0, dislikesCount: 0,
+        imageRefs: ['uploads/alice/cu1/a'] });
+    await setDoc(doc(db, 'reviews/al:101922/items/carol'),
+      { uid: 'carol', title: 'T', body: 'b', rating: 8, displayName: 'C', createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(), likesCount: 0, dislikesCount: 0 });
+  });
+  await assertFails(updateDoc(doc(as('alice'), 'comments/demon-slayer/items/cu1'),
+    { imageRefs: ['uploads/bob/x/y'] }));                                       // foreign mint on update
+  await assertFails(updateDoc(doc(as('carol'), 'reviews/al:101922/items/carol'),
+    { imageRefs: ['uploads/carol/r/1', 'uploads/carol/r/2', 'uploads/carol/r/3', 'uploads/carol/r/4', 'uploads/carol/r/5'],
+      updatedAt: serverTimestamp() }));                                          // >4 on update
+});
+test('overhaul: review create with OWN-prefix imageRefs; foreign DENIED; owner may strip on edit', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'reviews/al:101922/items/alice'),
+    { uid: 'alice', title: 'T', body: 'b [img:1]', rating: 8, displayName: 'A', createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(), likesCount: 0, dislikesCount: 0, imageRefs: ['uploads/alice/rev-al-101922/a'] }));
+  await assertFails(setDoc(doc(as('bob'), 'reviews/al:101922/items/bob'),
+    { uid: 'bob', title: 'T', body: 'b', rating: 7, displayName: 'B', createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(), likesCount: 0, dislikesCount: 0, imageRefs: ['uploads/alice/rev-al-101922/a'] }));
+  await assertSucceeds(updateDoc(doc(as('alice'), 'reviews/al:101922/items/alice'),
+    { imageRefs: [], updatedAt: serverTimestamp() }));
+});
+test('overhaul: thread thumbImage — own-prefix happy; foreign-prefix HOSTILE DENIED', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tThumb1'),
+    thread({ imageRefs: ['uploads/alice/tThumb1/a'], thumbImage: 'uploads/alice/tThumb1/a' })));
+  await assertFails(setDoc(doc(as('alice'), 'forum/tThumb2'),
+    thread({ thumbImage: 'uploads/bob/x/y' })));
+  await assertFails(setDoc(doc(as('alice'), 'forum/tThumb3'),
+    thread({ thumbImage: 'https://evil.example/x.png' })));
+});
+test('overhaul: ADMIN pin toggle on a thumbed thread still works (shape-only regression)', async () => {
+  await seed((db) => setDoc(doc(db, 'forum/tThumb4'), {
+    authorUid: 'alice', title: 'Hi', body: 'h', tag: 'general',
+    createdAt: Timestamp.now(), lastPostAt: Timestamp.now(),
+    postCount: 0, reportCount: 0, pinned: false, locked: false, removed: false,
+    thumbImage: 'uploads/alice/tThumb4/a', imageRefs: ['uploads/alice/tThumb4/a'],
+  }));
+  // the merged doc carries ALICE's prefix — the admin branch must not trip on it
+  await assertSucceeds(updateDoc(doc(as(ADMIN), 'forum/tThumb4'), { pinned: true }));
+});
+test('overhaul: uploadHashes — owner reads own entry; foreign read + any client write DENIED', async () => {
+  await seed((db) => setDoc(doc(db, 'uploadHashes/alice__abc123'), { uid: 'alice', hash: 'abc123', path: 'uploads/alice/t/a' }));
+  await assertSucceeds(getDoc(doc(as('alice'), 'uploadHashes/alice__abc123')));
+  await assertFails(getDoc(doc(as('mallory'), 'uploadHashes/alice__abc123')));
+  await assertFails(setDoc(doc(as('alice'), 'uploadHashes/alice__zzz'), { uid: 'alice', hash: 'zzz', path: 'x' }));
+});
+
 // ---------------- GATE 14 — the 'image' report target ----------------
 test('report: happy image report (targetType image + pinned imagePath shape)', async () => {
   await assertSucceeds(setDoc(doc(as('alice'), 'reports/r-img-1'), {

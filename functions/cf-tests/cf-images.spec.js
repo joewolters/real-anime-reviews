@@ -9,6 +9,9 @@
 //   • soft-remove (removed:true) sweeps the doc's images out of Storage
 //   • onUserDelete sweeps the user's whole uploads/ prefix
 //   • adminRemoveImage core: Storage object gone AND pointer redacted
+//   • per-user dedupe: same bytes twice from one uid -> the duplicate is
+//     deleted; a different uid survives; a stale hash doc self-heals
+//   • comment/review hard-delete sweeps the doc's exact imageRefs objects
 // =============================================================================
 
 const { test, before } = require('node:test');
@@ -197,4 +200,83 @@ test('adminRemoveImage core (against the live emulators): object gone AND pointe
   const snap = await db.doc('forum/' + tid + '/posts/' + pid).get();
   assert.deepEqual(snap.data().imageRefs, ['uploads/author2/' + pid + '/keep'],
     'only the removed pointer leaves the doc');
+});
+
+// =============================================================================
+// IMAGE-EXPERIENCE OVERHAUL — appended: per-user dedupe (+ the self-heal path)
+// and the exact-path comment/review delete sweeps. Same harness, unique
+// uids/paths; the dedupe trio intentionally shares uid dd1 across (a) and (c)
+// because the self-heal scenario IS "the same user re-uploads the same bytes"
+// (--test-concurrency=1 keeps the order deterministic).
+// =============================================================================
+
+const { sha256Hex, hashDocId } = require('../lib/imagehash');
+
+// A tiny REAL 1x1 PNG (the scripts/practice-serve.js fixture) — valid magic
+// bytes, sharp-parseable, so the full pipeline runs on it. Pipeline-active
+// uploads below OMIT cfProcessed metadata on purpose.
+const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADgQF/e5IkGQAAAABJRU5ErkJggg==',
+  'base64');
+
+const cfProcessed = async (path) => {
+  const [m] = await bucket.file(path).getMetadata().catch(() => [null]);
+  return !!(m && m.metadata && m.metadata.cfProcessed === 'true');
+};
+
+test('dedupe: the SAME bytes twice from ONE user — duplicate deleted, original survives', async () => {
+  const a = 'uploads/dd1/docA/img1';
+  const b = 'uploads/dd1/docB/img1';
+  await bucket.file(a).save(TINY_PNG, { resumable: false, metadata: { contentType: 'image/png' } });
+  await waitFor(() => cfProcessed(a)); // original processed -> hash registered
+  await bucket.file(b).save(TINY_PNG, { resumable: false, metadata: { contentType: 'image/png' } });
+  await waitFor(async () => !(await exists(b)));
+  assert.equal(await exists(a), true, 'the original must survive the dedupe');
+});
+
+test('dedupe is PER-USER: the same bytes from a DIFFERENT user survive', async () => {
+  const p = 'uploads/dd2/docA/img1';
+  await bucket.file(p).save(TINY_PNG, { resumable: false, metadata: { contentType: 'image/png' } });
+  await waitFor(() => cfProcessed(p));
+  assert.equal(await exists(p), true);
+});
+
+test('dedupe SELF-HEAL: original deleted -> the same user CAN re-upload the same bytes', async () => {
+  const a = 'uploads/dd1/docA/img1'; // registered by the dedupe test above
+  const c = 'uploads/dd1/docC/img1';
+  await bucket.file(a).delete({ ignoreNotFound: true }); // the user deleted their original
+  await bucket.file(c).save(TINY_PNG, { resumable: false, metadata: { contentType: 'image/png' } });
+  await waitFor(() => cfProcessed(c)); // NOT blocked by the stale hash doc
+  const reg = await db.doc('uploadHashes/' + hashDocId('dd1', sha256Hex(TINY_PNG))).get();
+  assert.equal(reg.exists && reg.data().path, c, 'the registry repoints at the new object');
+});
+
+test('sweep: hard-deleting a COMMENT removes its exact imageRefs objects', async () => {
+  const uid = 'cdel1';
+  const path = 'uploads/' + uid + '/cdoc1/p1';
+  await bucket.file(path).save(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), {
+    resumable: false, metadata: { contentType: 'image/jpeg', metadata: { cfProcessed: 'true' } },
+  });
+  await db.doc('comments/one-punch-man/items/cdoc1').set({
+    uid, text: 'look at this', createdAt: admin.firestore.Timestamp.now(),
+    likesCount: 0, dislikesCount: 0, imageRefs: [path],
+  });
+  await sleep(400); // let the create (and its rate-limit CF) settle
+  await db.doc('comments/one-punch-man/items/cdoc1').delete();
+  await waitFor(async () => !(await exists(path)));
+});
+
+test('sweep: hard-deleting a REVIEW removes its exact imageRefs objects', async () => {
+  const uid = 'rdel1';
+  const path = 'uploads/' + uid + '/rdoc1/p1';
+  await bucket.file(path).save(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), {
+    resumable: false, metadata: { contentType: 'image/jpeg', metadata: { cfProcessed: 'true' } },
+  });
+  await db.doc('reviews/al:101922/items/' + uid).set({
+    uid, text: 'great season', rating: 8, createdAt: admin.firestore.Timestamp.now(),
+    imageRefs: [path],
+  });
+  await sleep(400);
+  await db.doc('reviews/al:101922/items/' + uid).delete();
+  await waitFor(async () => !(await exists(path)));
 });

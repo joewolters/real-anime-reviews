@@ -516,3 +516,25 @@
    reported content at a glance, never click pills to review a report. */
 .report-block-content .rar-spoiler { color: inherit; background: rgba(187, 134, 252, 0.1); cursor: text; }
 .report-block-content .rar-spoiler > * { visibility: visible; }
+
+/* image overhaul item 7 — the uploads KILL-SWITCH, properly branded: a labeled
+   pill with a live state lamp, not a raw button. ON = quiet purple; OFF = the
+   incident state, unmissable but calm. */
+.uploads-killswitch { margin-left: auto; display: flex; align-items: center; }
+#uploads-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(20, 6, 44, 0.7);
+  border: 1px solid rgba(187, 134, 252, 0.5);
+  color: #d9c9ff; font: 700 0.78rem 'Montserrat', sans-serif; letter-spacing: 0.02em;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+#uploads-toggle::before {
+  content: ''; width: 9px; height: 9px; border-radius: 50%;
+  background: #9be39b; box-shadow: 0 0 8px rgba(120, 220, 120, 0.7);
+}
+#uploads-toggle:hover { border-color: rgba(187, 134, 252, 0.9); box-shadow: 0 0 12px rgba(185, 0, 255, 0.2); }
+#uploads-toggle:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+#uploads-toggle.danger { border-color: rgba(255, 125, 125, 0.65); color: #ffd2d2; }
+#uploads-toggle.danger::before { background: #ff7d7d; box-shadow: 0 0 8px rgba(255, 100, 100, 0.8); }
+@media (prefers-reduced-motion: reduce) { #uploads-toggle { transition: none; } }

@@ -209,21 +209,32 @@ async function seed() {
     await db.doc('forum/' + v.tid + '/posts/' + v.pid + '/votes/' + v.voter).set({ uid: v.voter, value: v.value, updatedAt: TS.fromMillis(nowMs - 3600000) });
   }
 
-  // gates 12-14 — seed one IMAGE on a Tavern reply so Blake can smoke render +
-  // report + admin atomic-remove without uploading first. cfProcessed metadata
-  // keeps the pipeline CF from re-encoding the seed. Bucket name MUST be the
-  // pinned UPLOADS_BUCKET (functions/index.js) — the trigger listens there.
+  // gates 12-14 + the image overhaul — seed images so Blake smokes render /
+  // INLINE placement / the card thumbnail / report / atomic-remove without
+  // uploading first. cfProcessed metadata keeps the pipeline CF from
+  // re-encoding seeds. Bucket name MUST be the pinned UPLOADS_BUCKET
+  // (functions/index.js) — the trigger listens there.
   try {
     const bucket = admin.storage().bucket('real-anime-reviews.firebasestorage.app');
     // a real 1×1 purple PNG (valid magic bytes, so a manual re-process also passes)
     const seedPng = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADgQF/e5IkGQAAAABJRU5ErkJggg==', 'base64');
+    // (1) an INLINE image on the th-opm reply — the [img:1] token sits mid-prose
     const imgPath = 'uploads/prac-mika/p0/seed-img1';
     await bucket.file(imgPath).save(seedPng, {
       resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
     });
-    await db.doc('forum/th-opm/posts/p0').set({ imageRefs: [imgPath] }, { merge: true });
-    console.log('✓ Seeded a practice image on th-opm/p0 (report it, admin-remove it).');
+    await db.doc('forum/th-opm/posts/p0').set({
+      body: 'The animation spike in the big fight still goes hard — exhibit A: [img:1] — frame-perfect.',
+      imageRefs: [imgPath],
+    }, { merge: true });
+    // (2) a user-chosen THUMBNAIL on the text-only th-new thread (its author's prefix)
+    const thumbPath = 'uploads/prac-aki/th-new/seed-thumb1';
+    await bucket.file(thumbPath).save(seedPng, {
+      resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
+    });
+    await db.doc('forum/th-new').set({ imageRefs: [thumbPath], thumbImage: thumbPath }, { merge: true });
+    console.log('✓ Seeded practice images: inline on th-opm/p0 + a card thumbnail on th-new.');
   } catch (e) { console.warn('storage seed skipped:', e.message); }
 
   // seed a full notification inbox for MIKA so Blake can smoke the Lantern (every

@@ -27,4 +27,28 @@ test.describe('v1.10.0 gates 12-14 — forum image renders for real (emulator-se
     // the one mandatory mitigation: a Report affordance sits on the image.
     await expect(page.locator('[data-img-report]').first()).toBeVisible();
   });
+
+  test('overhaul: the seeded [img:1] token renders INLINE in the prose, and th-new shows a card thumbnail', async ({ page }) => {
+    // (1) inline placement — the seed's p0 body carries "[img:1]" mid-sentence,
+    // so the figure must live INSIDE .hub-post-text (not the trailing gallery).
+    await page.goto('/index.html?emu=1#forum=th-opm');
+    const inlineImg = page.locator('.hub-post-text .hub-post-img').first();
+    await expect(inlineImg).toBeVisible({ timeout: 25000 });
+    await expect
+      .poll(() => inlineImg.evaluate((el) => el.naturalWidth), { timeout: 20000, intervals: [200] })
+      .toBeGreaterThan(0);
+    // (2) the lightbox: clicking the loaded inline image opens the full view.
+    await inlineImg.click();
+    await expect(page.locator('.rar-lightbox-img')).toBeVisible({ timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.rar-lightbox')).toHaveCount(0);
+    // (3) the user-chosen thumbnail on the text thread's tavern card.
+    await page.goto('/index.html?emu=1#community');
+    await page.evaluate(() => { const b = document.getElementById('community-btn'); if (b) b.click(); });
+    const card = page.locator('.hub-card[data-thread-id="th-new"] .hub-card-thumb');
+    await expect(card).toBeVisible({ timeout: 25000 });
+    await expect
+      .poll(() => card.evaluate((el) => el.naturalWidth), { timeout: 20000, intervals: [200] })
+      .toBeGreaterThan(0);
+  });
 });

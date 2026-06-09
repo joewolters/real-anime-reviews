@@ -17,13 +17,25 @@ const { parseUploadPath } = require('./imagecheck');
 
 function coded(code, message) { const e = new Error(message); e.code = code; return e; }
 
-// docPath: the forum thread or post doc holding the pointer.
-const DOC_PATH_RX = /^forum\/[A-Za-z0-9_-]{1,100}(\/posts\/[A-Za-z0-9_-]{1,100})?$/;
+// docPath: any content doc that can hold an imageRefs pointer —
+//   forum/{threadId} | forum/{threadId}/posts/{postId}
+//   reviews/{anime}/items/{uid}
+//   comments/{anime}/items/{cid} | comments/{anime}/items/{cid}/replies/{rid}
+// The anime segment allows ':' (per-season keys like al:101922); uid/cid/rid
+// use the Firestore-id class. Fully anchored — no traversal, no subcollections
+// beyond the listed shapes.
+const DOC_PATH_RX = new RegExp(
+  '^(?:'
+  + 'forum\\/[A-Za-z0-9_-]{1,100}(?:\\/posts\\/[A-Za-z0-9_-]{1,100})?'
+  + '|reviews\\/[A-Za-z0-9:_-]{1,100}\\/items\\/[A-Za-z0-9_-]{1,128}'
+  + '|comments\\/[A-Za-z0-9:_-]{1,100}\\/items\\/[A-Za-z0-9_-]{1,128}(?:\\/replies\\/[A-Za-z0-9_-]{1,128})?'
+  + ')$'
+);
 
 async function applyAdminRemoveImage(db, bucket, FieldValue, callerUid, docPath, imagePath) {
   if (callerUid !== ADMIN_UID) throw coded('permission-denied', 'Admins only.');
   if (typeof docPath !== 'string' || !DOC_PATH_RX.test(docPath)) {
-    throw coded('invalid-argument', 'docPath must be a forum thread or post path.');
+    throw coded('invalid-argument', 'docPath must be a forum/review/comment content path.');
   }
   if (!parseUploadPath(imagePath)) {
     throw coded('invalid-argument', 'imagePath must be an uploads/{uid}/{docId}/{imageId} path.');
@@ -44,10 +56,15 @@ async function applyAdminRemoveImage(db, bucket, FieldValue, callerUid, docPath,
   // 1) Storage first — the world-readable artifact goes away NOW.
   await bucket.file(imagePath).delete({ ignoreNotFound: true });
 
-  // 2) Then the pointer. A concurrent redaction is fine (arrayRemove is a no-op
-  // if it's already gone) — the object is deleted either way.
+  // 2) Then the pointer(s). A concurrent redaction is fine (arrayRemove is a
+  // no-op if it's already gone) — the object is deleted either way. If the
+  // removed image was ALSO the thread's card thumbnail, drop that pointer too
+  // (a dangling thumbImage fires a doomed getDownloadURL on every list render).
   try {
-    await db.doc(docPath).update({ imageRefs: FieldValue.arrayRemove(imagePath) });
+    const upd = { imageRefs: FieldValue.arrayRemove(imagePath) };
+    const data = snap.data() || {};
+    if (data.thumbImage === imagePath) upd.thumbImage = FieldValue.delete();
+    await db.doc(docPath).update(upd);
   } catch (_e) { /* pointer already stripped — the image is gone either way */ }
 
   return { ok: true, imagePath };

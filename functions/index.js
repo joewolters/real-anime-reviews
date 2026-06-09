@@ -45,6 +45,7 @@ const moderation = require('./lib/moderation'); // v1.10.0 gate 2 — ban + cons
 const { sniffImageType, contentTypeMatches, parseUploadPath } = require('./lib/imagecheck'); // gate 13
 const { capDecision } = require('./lib/uploadcap');   // gate 13 — per-user bucket-fill cap
 const images = require('./lib/images');               // gate 14 — admin atomic image removal
+const { sha256Hex, hashDocId } = require('./lib/imagehash'); // image overhaul — per-user dedupe
 
 setGlobalOptions({
   region: 'us-central1',
@@ -346,12 +347,48 @@ exports.pruneNotificationsOnCreate = onDocumentCreated(
 // a no-op), so they skip the eventId marker; the increment CFs keep it.
 // =============================================================================
 
+// sweepImageRefs (image overhaul) — exact-path Storage sweep for a hard-deleted
+// comment/reply/review doc. Comments + reviews carry the author on `uid` (NOT
+// authorUid like forum docs) and their image pointers on `imageRefs`. Each entry
+// must (a) parse as a pipeline-owned uploads path AND (b) belong to the doc's
+// own author (defense in depth — a forged ref can never aim the sweep at
+// another user's object). Best-effort: a missing object or failed delete no-ops.
+function sweepImageRefs(d) {
+  if (!d || !d.uid || !Array.isArray(d.imageRefs) || !d.imageRefs.length) return Promise.resolve();
+  return Promise.all(d.imageRefs.map((entry) => {
+    const parsed = parseUploadPath(entry);
+    if (!parsed || parsed.uid !== d.uid) return null;
+    return uploadsBucket().file(entry).delete({ ignoreNotFound: true }).catch(() => {});
+  }));
+}
+
 // onReviewDelete — a community review's reply `threads` + all `votes` are
 // orphaned when the review is deleted (Firestore doesn't cascade — this orphan
-// exists in production TODAY). recursiveDelete cleans the subtree.
+// exists in production TODAY). recursiveDelete cleans the subtree. Image
+// overhaul: the review's own uploaded images leave Storage with it (the doc id
+// IS the author uid; the doc data also carries uid).
 exports.onReviewDelete = onDocumentDeleted(
   'reviews/{anime}/items/{uid}',
-  (event) => db.recursiveDelete(db.doc('reviews/' + event.params.anime + '/items/' + event.params.uid))
+  async (event) => {
+    const d = event.data ? event.data.data() : null;
+    await Promise.all([
+      db.recursiveDelete(db.doc('reviews/' + event.params.anime + '/items/' + event.params.uid)),
+      sweepImageRefs(d),
+    ]);
+  }
+);
+
+// onCommentDeleted / onCommentReplyDeleted (image overhaul) — comments and
+// their replies HARD-delete (no removed-transition watchers needed; the ban
+// cascade's whole-prefix sweep covers redaction). The deleted snapshot's
+// imageRefs are swept by exact path.
+exports.onCommentDeleted = onDocumentDeleted(
+  'comments/{anime}/items/{cid}',
+  (event) => sweepImageRefs(event.data ? event.data.data() : null)
+);
+exports.onCommentReplyDeleted = onDocumentDeleted(
+  'comments/{anime}/items/{cid}/replies/{rid}',
+  (event) => sweepImageRefs(event.data ? event.data.data() : null)
 );
 
 // onForumThreadDelete — a hard-deleted hub thread's `posts` (+ their votes) are
@@ -532,6 +569,8 @@ exports.onBanCascade = onDocumentCreated('banned/{uid}', async (event) => {
 //   (2) per-uid count/byte cap (list the prefix — the only cross-object truth);
 //   (3) magic-byte re-validate (a spoofed contentType / SVG / HTML payload is
 //       DELETED — storage.rules trusts client metadata, this doesn't);
+//   (3b) per-USER dedupe via the uploadHashes registry (same exact bytes from
+//        the same uid twice -> the new object is deleted; see lib/imagehash.js);
 //   (4) sharp re-encode — strips EXIF/GPS/metadata (rotate() first so the EXIF
 //       orientation is baked in before the tag is dropped). Unparseable input
 //       is DELETED (fail closed: what we can't verify doesn't get published).
@@ -562,6 +601,43 @@ exports.processUploadedImage = onObjectFinalized(
     if (!sniffed || !contentTypeMatches(sniffed, obj.contentType)) {
       await file.delete({ ignoreNotFound: true });
       return;
+    }
+
+    // (3b) PER-USER dedupe — Blake's "no 2 same images" anti-spam rule, scoped
+    // per user (the same panel from two DIFFERENT users stays legal). Hash the
+    // ORIGINAL bytes (the re-encode below isn't byte-stable; the raw upload is)
+    // and consult the uploadHashes registry.
+    const hash = sha256Hex(buf);
+    const hashRef = db.doc('uploadHashes/' + hashDocId(parsed.uid, hash));
+    const hashSnap = await hashRef.get();
+    if (hashSnap.exists && hashSnap.data().path !== obj.name) {
+      const [oldExists] = await bucket.file(hashSnap.data().path).exists();
+      if (oldExists) {
+        // the registered original is still live -> this upload is a DUPLICATE.
+        await file.delete({ ignoreNotFound: true });
+        return;
+      }
+      // SELF-HEAL: hash docs are never cascade-swept, so a stale doc (the user
+      // deleted the original / a cascade swept it) must not permanently block a
+      // legitimate re-upload — repoint the registry at the new object and go on.
+      await hashRef.set({ path: obj.name, at: FieldValue.serverTimestamp() }, { merge: true });
+    } else if (!hashSnap.exists) {
+      // CLAIM the hash atomically — .create() fails if a RACING twin upload of
+      // the same bytes registered first (the plain read-then-set raced: both
+      // saw !exists, both published — adversarial review, LOW). The loser
+      // deletes its own object, so "no 2 same images" holds even under a
+      // deliberate simultaneous double upload.
+      try {
+        await hashRef.create({ uid: parsed.uid, hash, path: obj.name, at: FieldValue.serverTimestamp() });
+      } catch (_conflict) {
+        const again = await hashRef.get();
+        const winnerPath = again.exists ? again.data().path : null;
+        if (winnerPath && winnerPath !== obj.name) {
+          const [winnerLive] = await bucket.file(winnerPath).exists();
+          if (winnerLive) { await file.delete({ ignoreNotFound: true }); return; }
+          await hashRef.set({ path: obj.name, at: FieldValue.serverTimestamp() }, { merge: true });
+        }
+      }
     }
 
     // (4) re-encode (animated gif/webp preserved; 30MP input ceiling guards
@@ -631,9 +707,13 @@ exports.onForumThreadRemoved = onDocumentWritten('forum/{threadId}', async (even
   if (await alreadyProcessed(event.id)) return;
   const threadId = event.params.threadId;
   const tasks = [];
-  // (1) the OP's own images + pointer
+  // (1) the OP's own images + pointers (thumbImage too — a dangling thumb
+  // would fire a doomed getDownloadURL on every list render)
   if (a.authorUid) tasks.push(uploadsBucket().deleteFiles({ prefix: 'uploads/' + a.authorUid + '/' + threadId + '/' }).catch(() => {}));
-  if (Array.isArray(a.imageRefs) && a.imageRefs.length) tasks.push(event.data.after.ref.update({ imageRefs: FieldValue.delete() }).catch(() => {}));
+  const opUpd = {};
+  if (Array.isArray(a.imageRefs) && a.imageRefs.length) opUpd.imageRefs = FieldValue.delete();
+  if (a.thumbImage) opUpd.thumbImage = FieldValue.delete();
+  if (Object.keys(opUpd).length) tasks.push(event.data.after.ref.update(opUpd).catch(() => {}));
   // (2) EVERY reply's images (each under its own uploader's prefix + the post id)
   const posts = await db.collection('forum/' + threadId + '/posts').get();
   posts.forEach((d) => {

@@ -71,12 +71,15 @@ service firebase.storage {
       allow read, write: if false;
     }
 
-    // uploads/{uid}/{docId}/{imageId} — docId is the forum thread or post id the
-    // image belongs to (the client pre-generates the doc id, uploads, then
-    // creates the doc whose imageRefs entries firestore.rules pins to this
-    // exact uploads/{uid}/ prefix). Forum surfaces ONLY — no DM/comment/review
-    // image paths exist, by design (gate-0 §3d: no image DMs, ever, without
-    // their own threat model).
+    // uploads/{uid}/{docId}/{imageId} — docId is the content doc the image
+    // belongs to (the client pre-generates the id, uploads, then creates the
+    // doc whose imageRefs entries firestore.rules pins to this exact
+    // uploads/{uid}/ prefix). PRODUCERS (image overhaul): forum threads+posts
+    // (auto-id docId), comments + comment replies (auto-id), and community
+    // reviews (docId = 'rev-' + sanitized anime key — the review doc id is the
+    // fixed uid, so its folder token is per-anime instead). The shape is
+    // surface-agnostic on purpose: every public composer rides the SAME gates
+    // below. NO image DMs, ever, without their own threat model (gate-0 §3d).
     match /uploads/{uid}/{docId}/{imageId} {
       // Public single-object read (the site renders these); list stays denied.
       allow get: if true;

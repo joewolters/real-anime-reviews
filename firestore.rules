@@ -108,6 +108,20 @@ service cloud.firestore {
       return !('imageRefs' in request.resource.data)
         || (request.resource.data.imageRefs is list && request.resource.data.imageRefs.size() <= 4);
     }
+    // Image overhaul — the thread's user-chosen card THUMBNAIL: one own-prefix
+    // Storage path. Owner branches pin to the caller's prefix; the ADMIN branch
+    // uses the shape-only variant (the merged doc carries the AUTHOR's path —
+    // an admin pin/lock toggle must not trip on someone else's prefix).
+    function thumbImageOk() {
+      return !('thumbImage' in request.resource.data)
+        || (request.resource.data.thumbImage is string
+            && request.resource.data.thumbImage.matches('uploads/' + request.auth.uid + '/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_-]{1,120}'));
+    }
+    function thumbImageShapeOk() {
+      return !('thumbImage' in request.resource.data)
+        || (request.resource.data.thumbImage is string
+            && request.resource.data.thumbImage.matches('uploads/[A-Za-z0-9_-]{1,128}/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_-]{1,120}'));
+    }
 
     // Profile field validation (shared by create + update). M1 reserved-name
     // denylist; M2 photoURL constrained to known-good origins.
@@ -193,12 +207,14 @@ service cloud.firestore {
         && (!('pinned' in request.resource.data) || request.resource.data.pinned == false)
         && (!exists(/databases/$(database)/documents/commentsMeta/$(anime))
             || get(/databases/$(database)/documents/commentsMeta/$(anime)).data.get('locked', false) != true)
+        && imageRefsOk()   // image overhaul — comments carry ≤4 own-prefix images
         && gateOk();
       // owner may edit text only (H1: counts are CF-owned). Admins may also flip
       // the `pinned` flag (gate-4 mod tool) and nothing else.
       allow update: if (isSignedIn()
           && resource.data.uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName', 'imageRefs'])
+          && imageRefsOk()
           && gateOk())
         || (isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned']));
@@ -226,10 +242,12 @@ service cloud.firestore {
           && request.resource.data.dislikesCount == 0
           && (!exists(/databases/$(database)/documents/commentsMeta/$(anime))
               || get(/databases/$(database)/documents/commentsMeta/$(anime)).data.get('locked', false) != true)
+          && imageRefsOk()   // image overhaul
           && gateOk();
         allow update: if isSignedIn()
           && resource.data.uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName', 'imageRefs'])
+          && imageRefsOk()
           && gateOk();
         allow delete: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
         match /votes/{voterUid} {
@@ -271,11 +289,13 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.likesCount == 0
         && request.resource.data.dislikesCount == 0
+        && imageRefsOk()   // image overhaul — reviews carry ≤4 own-prefix images
         && gateOk();
       // owner edits content only — H1: no count branch.
       allow update: if isOwner(uid)
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'rating', 'updatedAt', 'displayName', 'photoURL'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'rating', 'updatedAt', 'displayName', 'photoURL', 'imageRefs'])
+        && imageRefsOk()
         && gateOk();
       allow delete: if isOwner(uid) || isAdmin();
 
@@ -361,23 +381,27 @@ service cloud.firestore {
         && (!('coverImage' in request.resource.data) || (request.resource.data.coverImage is string && request.resource.data.coverImage.size() <= 400))
         && (!('animeTitle' in request.resource.data) || (request.resource.data.animeTitle is string && request.resource.data.animeTitle.size() <= 200))
         && imageRefsOk()   // gate 13 — ≤4 own-prefix Storage paths
+        && thumbImageOk()  // overhaul item 8 — the user-chosen card thumbnail
         && gateOk();
-      // owner edit (body + may attach/strip own images)
+      // owner edit (body + may attach/strip own images + re-pick the thumbnail)
       allow update: if ( isSignedIn() && resource.data.authorUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt', 'imageRefs'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt', 'imageRefs', 'thumbImage'])
           && imageRefsOk()
+          && thumbImageOk()
           && gateOk() )
         || // owner soft-delete (H5: must redact; may strip refs in the same write)
         ( isSignedIn() && resource.data.authorUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'title', 'editedAt', 'imageRefs'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'title', 'editedAt', 'imageRefs', 'thumbImage'])
           && request.resource.data.removed == true
           && request.resource.data.body == '' && request.resource.data.title == ''
           && imageRefsOk()
+          && thumbImageOk()
           && gateOk() )
         || // admin mod tools (pin / lock / remove / strip-image). H5: if removed, body+title redacted.
         ( isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned', 'locked', 'removed', 'body', 'title', 'editedAt', 'imageRefs'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned', 'locked', 'removed', 'body', 'title', 'editedAt', 'imageRefs', 'thumbImage'])
           && imageRefsShapeOk()
+          && thumbImageShapeOk()
           && (request.resource.data.removed == false || (request.resource.data.body == '' && request.resource.data.title == '')) );
       // counters (postCount/lastPostAt/reportCount/hotScore) have NO client
       // branch -> CF-only. delete is CF-only (soft-delete + cascade).
@@ -582,6 +606,18 @@ service cloud.firestore {
     }
     match /rulesConsent/{uid} {
       allow get: if isOwner(uid) || isAdmin();
+      allow list, create, update, delete: if false;
+    }
+
+    // =========================================================================
+    // uploadHashes/{uid__hash} — the image-dedupe registry (image overhaul).
+    // CF-ONLY write (processUploadedImage maintains it). The OWNER may read
+    // their own entry so the picker can say "you've already uploaded this
+    // exact image" BEFORE burning an upload; list stays denied (no probing
+    // other users' hashes — a hash oracle would leak who uploaded what).
+    // =========================================================================
+    match /uploadHashes/{id} {
+      allow get: if isSignedIn() && resource.data.uid == request.auth.uid;
       allow list, create, update, delete: if false;
     }
   }

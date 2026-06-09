@@ -1,34 +1,41 @@
 <!-- author: Cowork | date: 2026-06-09 -->
-# v1.10.0 — BATCH: checkpoint commit (11-14) → the IMAGE EXPERIENCE overhaul. APPLY all, NO deploy. ONE smoke at the end.
+# v1.10.0 — MEGA-BATCH: image/UX fixes + LIVE-IN-BOX composer rebuild + Profiles (15-16) + Account redo + Message-Blake DM (17-18)
 
-> The image tier shipped + passed smoke (image renders, upload works). Blake now wants images to become a full **experience** — inline placement, thumbnails, a lightbox, images in reviews, dedupe — across the whole community. **Mode ULTRAMAX, go wide. Blake: "let code go nuts and think of all possibilities especially user ability."** Still image-security-sensitive → the gate-12/13/14 protections (locked storage, magic-byte, EXIF, caps, email-verify, kill-switch, report, atomic-remove, cascade) REMAIN INVIOLATE and extend to every new surface. Full adversarial review mandatory. STAGED — no deploy.
+> Blake chose ONE thorough mega-batch ("finish this stuff + prepare the next gates, thorough — fable 5 to work through"). Build it ALL, checkpoint-commit at each gate boundary, **5-agent adversarial review** (the composer rebuild is a contenteditable XSS surface — review it hard), then a SECTIONED smoke. Everything STAGED — no deploy. Take the time you need.
 
-## ⭐ STANDING DIRECTIVE
-Every interactive element at full brand parity by default. No native/unstyled control reaches smoke. Cohesion across surfaces is a requirement this batch (Blake item 9).
+## ⭐ THE UX MANDATE (Blake, 2026-06-09 — the spine of this batch)
+*"im tired of this site looking like a social media site in training. I want code to SHOW me what it can do to make a smooth UI/UX experience. Everything should be clean and the essentials."* → This is a **show-what-you-can-do** mandate. Every surface you touch this batch should read **clean, professional, intentional — not "in training."** Essentials only, no clutter. Full creative latitude on the polish. Protect-the-heart holds throughout (purple community, count-free, gold only on Blake's surfaces).
 
-## STEP 0 — checkpoint commit gates 11-14
-Commit the current working tree (gates 11-14, the image tier) as a Blake-authored, zero-trailer, excludes-held-out save-point BEFORE remodeling the image code. STAGED — NO deploy. (Protects the work before the overhaul.)
+## GitHub: keep pushing publicly (Blake's call, 2026-06-09)
+Blake confirmed the **public repo is fine** ("taking it back, public github is fine"). **Push each checkpoint commit to the public repo** as before — no secrets in the tree, no CI/auto-deploy, staged rules deny all writes, so public WIP is acceptable to him. Just keep the work backed up off-machine.
 
-## THE OVERHAUL — Blake's items (his words = spec) + full latitude
-1. ✅ image renders on the OPM thread (no change).
-2. **Lightbox / full-view.** *"once you click in the image is cut off. Maybe it goes to the side of the modal for full view? Or for tall images make it smaller."* → clicking any image opens a **branded lightbox** (full-view overlay, tall images scaled to fit the viewport, never cut off; Esc/click-out closes; reduced-motion safe). Applies to every image surface.
-3. **Admin control UI.** *"as admin UI for picking/pinning/locking needs to be updated."* → the in-thread admin controls (📌 Pin to Rising / Lock / Remove) get a proper branded treatment (they read unfinished now).
-4. ✅ upload looks fine (no change).
-5. **Inline image PLACEMENT in threads + dedupe.** *"I want users to have the ability to choose where their image goes in their thread. Because power scalers love to showcase where exactly in the manga their argument exists. code can propose and implement. No 2 same images can be uploaded to prevent spam but unique ones can."*
-   - The thread body becomes a **mixed text+image composition** — the user inserts images at chosen positions in their description (propose the mechanism: an "insert image here" in the RarComposer that drops an image token into the body, rendered inline via `markdown.js` resolving to a scheme-gated `getDownloadURL`; the imageRefs still pin to the caller's `uploads/{uid}/` prefix). Order preserved.
-   - **Dedupe:** no two **identical** images (content-hash in the `onObjectFinalized` CF — reject/dedupe a duplicate upload; unique images fine). Propose the scope (per-user / per-thread / global) and the user-facing message.
-6. **Images in community reviews.** *"Images should also be able to exist in community reviews. As part of a title or in the review itself."* → extend the upload + inline-placement to the **community review composer** (the review body can carry inline images). Same storage rules/pipeline/report/remove (reviews are a public surface like posts — the "posts-only, no DMs" rule becomes "public surfaces: posts + reviews, no DMs"). Update storage/firestore rules to cover review-attached images.
-7. **Kill-switch UI.** *"Kill switch needs clean UI."* → the `admin/reports.html` 🖼 Image uploads toggle gets a clean branded design (it's a raw-ish control now).
-8. **Thread thumbnail + inline images everywhere.** *"When I started a thread I couldn't choose a thumbnail to go with it. So on the tavern page it just looks like text. it should get the same treatment as the OPM thumbnail."*
-   - **Thread thumbnail:** starting a thread lets the user **choose a thumbnail** (distinct from the attached-anime cover) that shows on the **tavern list card** — so a text thread can have a picture like the OPM cover thread does.
-   - **Inline images in comments/replies too:** *"Comments should also be able to put images in their response, not just attach or both."* → the comment/reply composers get the same inline-image insertion (not just an attachment).
-   - To be crystal clear (Blake's own summary): **uploading a thread = choose a thumbnail + place images in the description in any order; comments can place images inline in their response.**
-9. **Cohesion + intuitiveness.** *"Code needs to make sure it all fits, makes sense, has intuitive AI, and fits the theme."* → one consistent image vocabulary across threads / replies / comments / reviews (same insert affordance, same lightbox, same report, same brand). It should feel like ONE designed system, not bolted-on per surface.
+## PART A — image/UX fixes (Blake's smoke)
+1. **Inline reply image not rendering.** *"Mikas reply doesn't have any image visible to me. It just looks like a period."* → the `[img:N]` token in a reply/comment isn't resolving to the image (renders as stray punctuation). Fix inline-image rendering on the reply + comment surfaces (verify the seed token matches a real imageRef; fix the resolver path).
+2. **Thumbnail visible on card but not in thread.** *"the seasonal binge does have a purple card thumbnail. However I can't see it when clicking into the thread."* → if a thread has a chosen thumbnail, it should also appear in the thread VIEW (header/body), not just the list card. Make card ↔ thread-view image presentation consistent.
+3. **Topic tag over the image.** *"The tags 'General' and so forth should be on top of the image to keep a clean look across threads both with and without thumbnails."* → the topic pill sits consistently in the same place (overlaying the thumbnail when present) so thread cards look uniform with OR without a thumbnail.
+4. **Community-review thumbnail slot.** *"community reviews can't seem to add an image as a thumbnail option either. There should be a dedicated space to upload a thumbnail specifically."* → the review composer gets a **dedicated thumbnail upload slot** (distinct from inline body images), shown on the review card/header.
 
-## Go-all-out mandate (Blake: "let code go nuts, especially user ability")
-Beyond the list: think about what users want to DO with images in an anime community (panel-by-panel power-scaling arguments, side-by-side comparisons, reaction images, spoiler-blurred images via the gate-11 `||spoiler||` hook, alt-text for a11y, etc.). Propose + build the tasteful set; mark anything big as PITCH. Protect-the-heart holds throughout (images are purple surfaces, count-free, no gold).
+## PART B — the LIVE-IN-BOX composer rebuild (Blake confirmed: true rich editor)
+*"Maybe get rid of the preview window entirely across the entire website for USERS (NOT MY ADMIN WINDOWS FOR ANIME STUFF) and have the review update live in their typing box."*
+- **Rebuild the USER composers** (comment · reply · Tavern thread · Tavern reply · community review) as **true live in-box rich editors**: bold/italic/links/images/spoilers render **live as you type, IN the input** — NO separate PREVIEW panel. The B/I/🔗/👁/📷 toolbar acts on the live content.
+- ⚠️ **Admin/anime composers stay EXACTLY as they are** (the new-anime form, section-editor, edit page — Blake's admin windows are explicitly excluded).
+- **Technical:** a `contenteditable` editor is the path. ⚠️ **contenteditable is an XSS minefield** — sanitize on input (paste especially: strip all but the allowed inline formatting), store as the SAME markdown/`[img:N]` model the renderer already uses (so nothing downstream changes), and round-trip losslessly. The `[img:N]` images render as actual thumbnails inline in the editor; spoilers render as live pills. Keep Ctrl/⌘+B/I, Ctrl/⌘+Enter to post, paste-an-image, the 4000/2000 caps, and XSS safety. Reduced-motion safe.
+- **The clean bar:** the composer should look like a polished modern editor (think a clean Discord/Notion-class input), not a textarea + a panel. Essentials only.
 
-## Verify
-ALL tracks green + new specs (lightbox, inline-image render/order, thumbnail, review images, dedupe-hash, the extended storage/firestore rules). **5-agent adversarial review** — focus the security lenses on: the inline-image token (can it inject? can it reference someone else's upload? is the src always SDK-derived?), the dedupe hash (no bypass / no DoS), review-image rules parity with posts, the lightbox (no SSRF/scheme escape), and the heart. Walk every surface yourself with the Storage emulator. Then Blake's ONE numbered smoke.
+## PART C — Gates 15-16: FULL public profile pages (Blake's upgrade — full pages, not mini-card)
+- **`profiles/{uid}` dual-write + reads** (gate 15): account writes `profiles/{uid}`; author-name reads across the site go **profiles-first with a `users` fallback** (the fallback makes the migration safe — names never break).
+- **Full routed profile page** (gate 16): every author name across the site links to their profile — **avatar, display name, member-since, bio**, and **their public activity** (their threads / comments / reviews). Clean, premium, branded (the UX mandate applies hard here — this is a brand-new public surface).
+- **Privacy:** public profile + **private saves** (watchlist/favorites stay private). No opt-out machinery this pass (matches the live rules).
+- **Heart invariants (bake as specs):** a community profile carries **NO gold token + NO count node** (no karma/post-count leaderboard); **Blake's name → his Den** (his identity IS the site); **banned → a "suspended" tombstone**, **deleted → a graceful "former member"** (no dead clicks). Bio renders escape-first via `markdown.js`.
 
-## Report (lean): the checkpoint hash · per-item · the inline-image mechanism + dedupe scope you chose · the go-all-out additions · adversarial findings+fixes · test counts · Blake's numbered smoke (uploads need the Storage emulator). NO deploy.
+## PART D — Gates 17-18: account redo + the Message-Blake DM (makes the Inbox real)
+- **Account redesign** (gate 17): `account.html` full premium pass (the UX mandate), the tabs evolved, and the **watchlist/favorites cover-art fix** (some rows render art-less — root-cause it in a real browser; the `al:<id>` routing + `#open=`/`#secondary=` split stay intact).
+- **The Inbox tab + Message-Blake DM** (gate 18, admin-floor only — **peer DMs stay BANKED**): a 5th **Inbox** tab; a visitor can **message Blake**; Blake replies from an admin drawer; the suggestion-reply channel folds in. Uses the live `conversations`/`messages` schema (CF-written creates, admin-floor only — Blake is always a party, zero stranger-to-stranger surface). DM unread surfaces in the Lantern as `type:'dm'` (**purple, never gold**). The locked "People" folder shows "peer DMs coming."
+
+## Verify + checkpoints
+- Checkpoint-commit at each gate boundary (after Part A+B, after Part C, after Part D) — Blake-authored, zero trailers, excludes held out, **pushed** (repo now private). `git add` any new public assets.
+- ALL tracks green at each stage + new specs (inline-image render, the contenteditable round-trip + paste-sanitization XSS, profile heart invariants + name fallback, the DM admin-floor rules, cover-art heal).
+- **5-agent adversarial review** — lenses: **contenteditable/paste XSS** (the big one), profile privacy + the name-fallback, DM admin-floor enforcement (no peer leak), image rendering, and the heart across all new surfaces.
+- Walk everything yourself in practice (Storage emulator up). Then Blake's SECTIONED smoke (A / B / C / D — state which sign-ins + what he should see per section).
+
+## Report (lean per section): the 3 checkpoint hashes · Part A-D per-item · the contenteditable approach + how paste is sanitized · the profile privacy/heart model · the DM admin-floor model · adversarial findings+fixes · test counts · Blake's SECTIONED smoke. NO deploy.

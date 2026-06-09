@@ -28,6 +28,12 @@
       // text still gets bold/italic/code/links applied by the passes below.
       // Content may not contain a pipe (a v1 simplification, documented).
       .replace(/\|\|([^|\n]+)\|\|/g, '<span class="rar-spoiler" data-spoiler role="button" tabindex="0" aria-label="Spoiler — click to reveal" title="Spoiler — click to reveal">$1</span>')
+      // v1.10.0 image overhaul — [img:N] (N 1-4) emits an EMPTY placeholder slot.
+      // markdown.js knows nothing about Storage: the consumer (script.js
+      // resolveImageSlots) swaps the slot for the doc's Nth imageRef figure —
+      // so the body text never carries a path/URL (nothing to inject) and a
+      // token with no matching ref simply renders nothing.
+      .replace(/\[img:([1-4])\]/g, '<span class="rar-img-slot" data-img-slot="$1" hidden></span>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       // v1.7.5 (gate 3) — AniList bios use __double-underscore__ for bold. Run it
       // after the ** pass and before the single-* italic pass. _single-underscore_

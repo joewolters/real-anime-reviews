@@ -57,6 +57,9 @@
   //   opts.submit   — 'enter' → Enter posts, Shift+Enter = newline (short composers)
   //                 — 'mod'   → Ctrl/⌘+Enter posts, Enter = newline (the long review composer)
   //   opts.onSubmit — invoked when the submit binding fires (routes to the existing post path).
+  //   opts.onImage  — (image overhaul) when provided, the toolbar grows a 📷
+  //                   button that calls it (the composer's picker decides what
+  //                   "insert an image here" means). Absent → no button.
   // Returns { updatePreview, toolbar, preview } or null if it couldn't attach.
   function enhance(textarea, opts) {
     if (!textarea || textarea.dataset.rarComposer === '1') return null;
@@ -76,6 +79,12 @@
     const holder = document.createElement('div');
     holder.innerHTML = TOOLBAR_HTML;
     const toolbar = holder.firstElementChild;
+    if (typeof opts.onImage === 'function') {
+      const imgBtn = document.createElement('button');
+      imgBtn.type = 'button'; imgBtn.className = 'ct-btn'; imgBtn.dataset.md = 'image';
+      imgBtn.title = 'Insert an image here'; imgBtn.textContent = '📷';
+      toolbar.appendChild(imgBtn);
+    }
     parent.insertBefore(toolbar, textarea);
 
     // live styled preview (below the textarea)
@@ -106,6 +115,7 @@
       else if (kind === 'italic') wrap(textarea, '*', '*', 'italic text');
       else if (kind === 'link') wrap(textarea, '[', '](https://)', 'link text');
       else if (kind === 'spoiler') wrap(textarea, '||', '||', 'spoiler');   // gate 11
+      else if (kind === 'image' && typeof opts.onImage === 'function') { opts.onImage(textarea); return; } // the picker fires input itself
       fireInput(textarea);
     }
 

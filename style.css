@@ -9240,3 +9240,81 @@ html.rar-welcome-pending::before {
   cursor: text;
   user-select: text;
 }
+
+/* =============================================================================
+   IMAGE OVERHAUL — one image vocabulary across threads/replies/comments/reviews.
+   PURPLE only; count-free; the same figure + ⚑ + lightbox everywhere.
+   ========================================================================== */
+/* inline-placed figures sit in the prose flow, slightly tighter than a gallery */
+.hub-post-images.is-inline { margin: 8px 0; }
+.hub-post-gallery:empty { display: none; }
+.hub-op-gallery { margin: 4px 0 10px; }
+.hub-op-gallery:empty { display: none; }
+/* comments/replies/reviews reuse the same figure classes — size sanely there */
+.comment-item .hub-post-img, .reply-item .hub-post-img { max-width: min(100%, 280px); max-height: 240px; }
+.review-row .hub-post-img { max-width: min(100%, 340px); max-height: 300px; }
+
+/* picker v2 — per-thumb insert (↳) + thumbnail star (🖼) */
+.hub-img-thumb-ins, .hub-img-thumb-star {
+  position: absolute; bottom: -8px; width: 20px; height: 20px; border-radius: 6px;
+  background: rgba(30, 10, 60, 0.95); border: 1px solid rgba(187, 134, 252, 0.6);
+  color: #cbb0ff; font-size: 0.68rem; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.hub-img-thumb-ins { left: -7px; }
+.hub-img-thumb-star { right: 16px; }
+.hub-img-thumb-ins:hover, .hub-img-thumb-star:hover { border-color: rgba(187, 134, 252, 0.95); color: #fff; }
+.hub-img-thumb-star.is-thumb { border-color: rgba(187, 134, 252, 0.95); background: rgba(187, 134, 252, 0.3); color: #fff; }
+.hub-img-thumb-ins:focus-visible, .hub-img-thumb-star:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 1px; }
+
+/* the LIGHTBOX — full-view overlay; tall/wide images fit, never cut off */
+.rar-lightbox {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(8, 2, 20, 0.93);
+  display: flex; align-items: center; justify-content: center;
+  cursor: zoom-out;
+}
+.rar-lightbox-img {
+  max-width: 94vw; max-height: 92vh; object-fit: contain;
+  border-radius: 12px; border: 1px solid rgba(187, 134, 252, 0.35);
+  box-shadow: 0 0 40px rgba(185, 0, 255, 0.25);
+  cursor: default;
+}
+.rar-lightbox-close {
+  position: absolute; top: 14px; right: 18px; width: 40px; height: 40px;
+  border-radius: 10px; background: rgba(30, 10, 60, 0.9);
+  border: 1px solid rgba(187, 134, 252, 0.55); color: #fff; font-size: 1.4rem;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.rar-lightbox-close:hover { border-color: rgba(187, 134, 252, 0.95); box-shadow: 0 0 12px rgba(185, 0, 255, 0.3); }
+.rar-lightbox-close:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+.hub-post-img.is-loaded { cursor: zoom-in; }
+
+/* item 3 — the in-thread ADMIN BAR, properly branded (it read unfinished):
+   a quiet labeled tray instead of three floating buttons. Purple ghosts;
+   the pinned state keeps its gold (Blake's own control). */
+.hub-admin-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin: 12px 0 4px; padding: 9px 12px;
+  background: rgba(20, 6, 44, 0.55);
+  border: 1px solid rgba(187, 134, 252, 0.28); border-radius: 11px;
+}
+.hub-admin-bar::before {
+  content: 'MOD 管理';
+  font: 700 0.66rem 'Montserrat', sans-serif; letter-spacing: 0.08em;
+  color: rgba(203, 176, 255, 0.75); margin-right: 2px;
+}
+.hub-admin-bar .hub-admin {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(187, 134, 252, 0.45); border-radius: 9px;
+  color: #d9c9ff; font: 700 0.76rem 'Montserrat', sans-serif; padding: 6px 11px;
+  cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease;
+}
+.hub-admin-bar .hub-admin:hover { border-color: rgba(187, 134, 252, 0.85); box-shadow: 0 0 10px rgba(185, 0, 255, 0.18); }
+.hub-admin-bar .hub-admin:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+.hub-admin-bar .hub-admin.danger { border-color: rgba(255, 125, 125, 0.5); color: #ffb4b4; }
+.hub-admin-bar .hub-admin.danger:hover { border-color: rgba(255, 125, 125, 0.85); box-shadow: 0 0 10px rgba(255, 80, 80, 0.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-admin-bar .hub-admin { transition: none; }
+}
