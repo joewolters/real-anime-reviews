@@ -1826,7 +1826,7 @@ function openNotifTarget(targetPath, animeId) {
     // half is live); DMs land in gate 18 (cleanly stubbed, never a dead click).
     const fm = /^forum\/([^/]+)/.exec(t.path || '');
     if (fm && typeof window.openHubThread === 'function') { window.openHubThread(fm[1]); return; }
-    if (/^conversations\//.test(t.path || '')) { alert('Direct messages are coming soon.'); return; }
+    if (/^conversations\//.test(t.path || '')) { location.href = 'account#inbox'; return; }   // gate 18 — the Inbox is real now
     try { window.location.hash = '#' + t.path; } catch (_) {}
     return;
   }

@@ -43,6 +43,11 @@ const ADMIN_MENU_ITEMS = [
     jp: '通報',
     href: 'admin/reports.html',
   },
+  {
+    label: 'Inbox',
+    jp: '受信箱',
+    href: 'admin/inbox.html',
+  },
   // Future entries land here:
   // { label: 'Site Health', jp: '監視', href: 'admin/health.html' },
   // { label: 'Audit', jp: '監査', href: 'admin/audit.html' },

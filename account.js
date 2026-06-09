@@ -47,7 +47,7 @@ const statusEl  = $('#profile-status');
 const errEl     = $('#profile-error');
 
 // --- Tabs ---
-const tabs = ['profile','watchlist','favorites','activity'];
+const tabs = ['profile','watchlist','favorites','activity','inbox'];   // gate 18 — Inbox is the 5th place
 function activateTab(name){
   $$('.side-link').forEach(btn => {
     const on = btn.dataset.tab === name;
@@ -62,7 +62,8 @@ function activateTab(name){
 $$('.side-link').forEach(btn => {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 });
-activateTab('profile'); // default
+// deep-link: #inbox lands on the Inbox tab (the Lantern's dm pings route here)
+activateTab(location.hash === '#inbox' ? 'inbox' : 'profile');
 
 // ===== Favorites + Watchlist UI =====
 const favListEl = document.getElementById('favoritesList');
@@ -453,13 +454,17 @@ function subscribeSavedLists(user) {
       snap.forEach((d) => {
         const data = d.data() || {};
         const ts = data.updatedAt || data.savedAt || data.createdAt || null;
+        // mega-batch D (cover-art ROOT CAUSE): legacy al:<id> saves missing the
+        // type/aniListId FIELDS fell into the art-less catalog branch and never
+        // qualified for the backfill — but both values live in the DOC ID.
+        const isAl = /^al:\d+$/.test(d.id);
         items.push({
           animeId: d.id,
           title: data.title || data.animeTitle || d.id,
           ms: toMillis(ts),
           // v1.7.5 (gate 2) — non-catalog (AniList) saves carry a snapshot.
-          type: data.type || 'catalog',
-          aniListId: data.aniListId || null,
+          type: data.type || (isAl ? 'anilist' : 'catalog'),
+          aniListId: data.aniListId || (isAl ? Number(d.id.slice(3)) : null),
           coverImage: data.coverImage || '',
           format: data.format || '',
           year: data.year || null
@@ -478,13 +483,14 @@ function subscribeSavedLists(user) {
       snap.forEach((d) => {
         const data = d.data() || {};
         const ts = data.updatedAt || data.savedAt || data.createdAt || null;
+        const isAl = /^al:\d+$/.test(d.id);   // mega-batch D — same root-cause heal as favorites
         items.push({
           animeId: d.id,
           title: data.title || data.animeTitle || d.id,
           ms: toMillis(ts),
           // v1.7.5 (gate 2) — non-catalog (AniList) saves carry a snapshot.
-          type: data.type || 'catalog',
-          aniListId: data.aniListId || null,
+          type: data.type || (isAl ? 'anilist' : 'catalog'),
+          aniListId: data.aniListId || (isAl ? Number(d.id.slice(3)) : null),
           coverImage: data.coverImage || '',
           format: data.format || '',
           year: data.year || null
@@ -698,6 +704,140 @@ onAuthStateChanged(auth, (user) => {
   if (headerSignoutBtn) headerSignoutBtn.style.display = '';
   subscribeSavedLists(user);
   subscribeActivity(user);
+  initInbox(user);   // gate 18 — the Message-Blake DM
   // Notifications (Lantern) subscribe to auth on their own inside initLantern().
 });
+
+// =============================================================================
+// GATE 18 — the INBOX (admin-floor DM: "Message Blake"). Peer DMs stay BANKED —
+// the People folder is a locked promise, not a surface. The conversation is
+// CLIENT-created under the live rules (kind 'admin', Blake always a party,
+// state 'open'); messages are plain text (escape-rendered, no markdown — a DM
+// is a letter, not a post). Unread = conversation.lastMessageAt newer than my
+// reads/{uid}.lastReadAt (the rules-legal read receipt; the CF's unread_
+// counter is server telemetry, not trusted client state).
+// =============================================================================
+const RAR_ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
+function escText(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+function initInbox(user) {
+  const homeEl = document.getElementById('inbox-home');
+  const threadEl = document.getElementById('inbox-thread');
+  const listEl = document.getElementById('inbox-list');
+  const msgsEl = document.getElementById('inbox-messages');
+  const inputEl = document.getElementById('inbox-input');
+  const sendBtn = document.getElementById('inbox-send');
+  const backBtn = document.getElementById('inbox-back');
+  const blakeBtn = document.getElementById('inbox-message-blake');
+  const dotEl = document.getElementById('inbox-dot');
+  if (!homeEl || !threadEl) return;
+
+  const isBlake = user.uid === RAR_ADMIN_UID;
+  if (isBlake && blakeBtn) blakeBtn.closest('.inbox-blake-card').hidden = true;   // Blake sees the list, not himself
+
+  let convos = [];
+  let myReads = {};            // convId -> lastReadAt ms
+  let openConvId = null;
+  let unsubMsgs = null;
+  const ms = (t) => (t && t.toMillis ? t.toMillis() : 0);
+
+  // my conversations, newest activity first (the index exists)
+  const cq = query(collection(db, 'conversations'),
+    where('participants', 'array-contains', user.uid), orderBy('lastMessageAt', 'desc'), limit(30));
+  onSnapshot(cq, async (snap) => {
+    convos = [];
+    snap.forEach((d) => convos.push({ id: d.id, ...(d.data() || {}) }));
+    // read receipts (one get per convo — N≤30, account-page only)
+    await Promise.all(convos.map(async (c) => {
+      try { const r = await getDoc(doc(db, 'conversations', c.id, 'reads', user.uid)); myReads[c.id] = r.exists() ? ms(r.data().lastReadAt) : 0; }
+      catch (_) { myReads[c.id] = 0; }
+    }));
+    paintList();
+  }, () => {});
+
+  function isUnread(c) { return ms(c.lastMessageAt) > (myReads[c.id] || 0); }
+  function paintList() {
+    if (!listEl) return;
+    listEl.innerHTML = convos.length ? convos.map((c) => `
+      <li class="inbox-row${isUnread(c) ? ' is-unread' : ''}" data-conv="${escText(c.id)}" role="button" tabindex="0">
+        <span class="inbox-row-who">${isBlake ? '✉ A member' : '🏮 Blake'}</span>
+        <span class="inbox-row-state">${c.state === 'locked' ? '🔒' : ''}${isUnread(c) ? '<span class="inbox-row-dot" aria-label="Unread"></span>' : ''}</span>
+      </li>`).join('') : '<li class="inbox-empty muted">No conversations yet.</li>';
+    if (dotEl) dotEl.hidden = !convos.some(isUnread);
+  }
+
+  async function openConv(convId) {
+    openConvId = convId;
+    homeEl.hidden = true; threadEl.hidden = false;
+    msgsEl.innerHTML = '<p class="muted">Opening…</p>';
+    if (unsubMsgs) { try { unsubMsgs(); } catch (_) {} }
+    const mq = query(collection(db, 'conversations', convId, 'messages'), orderBy('createdAt', 'asc'), limit(200));
+    unsubMsgs = onSnapshot(mq, (snap) => {
+      const rows = [];
+      snap.forEach((d) => {
+        const m = d.data() || {};
+        const mine = m.senderUid === user.uid;
+        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}">${escText(m.text || '')}</div>`);
+      });
+      msgsEl.innerHTML = rows.length ? rows.join('') : '<p class="muted">Say hello — this goes straight to Blake.</p>';
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+      // read receipt (rules-legal: reads/{uid} is owner-writable for participants)
+      setDoc(doc(db, 'conversations', convId, 'reads', user.uid), { lastReadAt: serverTimestamp() }, { merge: true })
+        .then(() => { myReads[convId] = Date.now(); paintList(); }).catch(() => {});
+    }, () => { msgsEl.innerHTML = '<p class="muted">Couldn\'t open this conversation.</p>'; });
+    const c = convos.find((x) => x.id === convId);
+    const locked = c && c.state !== 'open';
+    inputEl.readOnly = !!locked;
+    inputEl.placeholder = locked ? 'This conversation is closed.' : (isBlake ? 'Reply as Blake…' : 'Write to Blake…');
+    sendBtn.disabled = true;
+  }
+  function closeConv() {
+    openConvId = null;
+    if (unsubMsgs) { try { unsubMsgs(); } catch (_) {} unsubMsgs = null; }
+    threadEl.hidden = true; homeEl.hidden = false;
+  }
+
+  inputEl.addEventListener('input', () => {
+    const v = inputEl.value.trim();
+    sendBtn.disabled = !(v.length > 0 && v.length <= 2000 && !inputEl.readOnly);
+  });
+  sendBtn.addEventListener('click', async () => {
+    const text = inputEl.value.trim();
+    if (!text || !openConvId) return;
+    sendBtn.disabled = true;
+    try {
+      await addDoc(collection(db, 'conversations', openConvId, 'messages'), {
+        senderUid: user.uid, text, createdAt: serverTimestamp(),
+      });
+      inputEl.value = '';
+    } catch (err) { alert('Could not send: ' + (err && err.message || err)); }
+  });
+  backBtn.addEventListener('click', closeConv);
+  listEl.addEventListener('click', (e) => {
+    const row = e.target.closest('[data-conv]');
+    if (row) openConv(row.getAttribute('data-conv'));
+  });
+  listEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const row = e.target.closest('[data-conv]');
+    if (row) { e.preventDefault(); openConv(row.getAttribute('data-conv')); }
+  });
+
+  if (blakeBtn) blakeBtn.addEventListener('click', async () => {
+    // one floor-conversation per member: reuse mine if it exists
+    const mine = convos.find((c) => c.kind === 'admin' && (c.participants || []).indexOf(RAR_ADMIN_UID) !== -1);
+    if (mine) { openConv(mine.id); return; }
+    blakeBtn.disabled = true;
+    try {
+      const ref = await addDoc(collection(db, 'conversations'), {
+        participants: [user.uid, RAR_ADMIN_UID],
+        kind: 'admin', state: 'open',
+        createdAt: serverTimestamp(), lastMessageAt: serverTimestamp(),
+      });
+      openConv(ref.id);
+    } catch (err) {
+      alert('Could not start the conversation: ' + (err && err.message || err));
+    } finally { blakeBtn.disabled = false; }
+  });
+}
 

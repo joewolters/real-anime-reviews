@@ -33,6 +33,13 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+// Attribute-safe escape (gate 18 — clone of reports.js's discipline). escapeHtml
+// above encodes & < > but NOT quotes, and the submitterUid lands inside a
+// double-quoted HTML attribute — so quotes MUST be encoded too.
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function truncate(s, max = 120) {
   if (!s) return '';
   return s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s;
@@ -130,7 +137,17 @@ function renderRow(snap, index) {
     ? ` data-anilist-id="${escapeHtml(String(data.anilistId))}"`
     : '';
 
-  return `<li class="${rowClass}" style="--i: ${index}" data-doc-id="${escapeHtml(id)}" data-title="${escapeHtml(data.title)}"${anilistIdAttr}>
+  // gate 18 — a row carrying a (rules-verified == submitter's own) submitterUid
+  // gets a Reply button → the admin Inbox's ?to= suggestion-reply channel.
+  const submitterUid = data.submitterUid ? String(data.submitterUid) : '';
+  const submitterAttr = submitterUid
+    ? ` data-submitter-uid="${escapeAttr(submitterUid)}"`
+    : '';
+  const replyHtml = submitterUid
+    ? `<button data-action="reply" class="secondary" title="Message this member in the Inbox">Reply</button>`
+    : '';
+
+  return `<li class="${rowClass}" style="--i: ${index}" data-doc-id="${escapeHtml(id)}" data-title="${escapeHtml(data.title)}"${anilistIdAttr}${submitterAttr}>
     ${coverHtml}
     <div class="row-body">
       <h3 class="title">${escapeHtml(data.title)}</h3>
@@ -145,6 +162,7 @@ function renderRow(snap, index) {
     <div class="actions">
       <button data-action="add" class="admin-primary">Add this anime</button>
       <button data-action="reviewed" class="secondary">Mark reviewed</button>
+      ${replyHtml}
       <button data-action="delete" class="danger">Delete</button>
     </div>
   </li>`;
@@ -281,6 +299,14 @@ function wireListClicks() {
       const anilistId = row.dataset.anilistId;
       const idQuery = anilistId ? `&anilistId=${encodeURIComponent(anilistId)}` : '';
       window.location.href = `/admin/new-anime?suggest=${encodeURIComponent(title)}${idQuery}`;
+      return;
+    }
+
+    if (action === 'reply') {
+      // gate 18 — suggestion-reply DM: hand the submitter's uid to the Inbox,
+      // which finds-or-creates the kind-'admin' conversation and opens it.
+      const submitterUid = row.dataset.submitterUid;
+      if (submitterUid) window.location.href = 'inbox.html?to=' + encodeURIComponent(submitterUid);
       return;
     }
 

@@ -45,6 +45,9 @@ test.describe('v1.9.0 gate 4 — comments overhaul (static surface)', () => {
     const sort = page.locator('select[id^="comments-sort-"]').first();
     await expect(sort).toBeVisible();
     await expect(sort.locator('option[value="top"]')).toHaveCount(1);
-    await expect(page.locator('textarea[id^="composer-input-"]').first()).toBeVisible();
+    // mega-batch Part B: the textarea became the HIDDEN model under the
+    // live-in-box editor — the visible composer is the .rar-live editor.
+    await expect(page.locator('textarea[id^="composer-input-"]').first()).toBeAttached();
+    await expect(page.locator('.sheet--left .composer-body .rar-live').first()).toBeVisible();
   });
 });

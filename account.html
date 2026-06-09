@@ -94,6 +94,7 @@
           <li><button data-tab="watchlist" class="side-link"          role="tab" aria-selected="false">Watchlist</button></li>
           <li><button data-tab="favorites" class="side-link"          role="tab" aria-selected="false">Favorites</button></li>
           <li><button data-tab="activity"  class="side-link"          role="tab" aria-selected="false">My Activity</button></li>
+          <li><button data-tab="inbox"     class="side-link"          role="tab" aria-selected="false">Inbox <span id="inbox-dot" class="inbox-dot" hidden aria-label="Unread"></span></button></li>
         </ul>
       </aside>
 
@@ -197,6 +198,33 @@
   <p id="activity-empty" class="muted saved-empty">Loading...</p>
   <ul id="activity-list" class="saved-list activity-list" aria-label="Recent activity"></ul>
 </article>
+
+        <!-- INBOX — gate 18: the Message-Blake DM (admin-floor only) -->
+        <article class="account-card is-tab" id="tab-inbox" hidden>
+          <h3 class="card-title">Inbox <span class="jp-mini">受信箱</span></h3>
+
+          <div id="inbox-home">
+            <div class="inbox-blake-card">
+              <div class="inbox-blake-head">🏮 <b>Message Blake</b></div>
+              <p class="muted">Got a question, a request, or just a take you want to land directly? This goes straight to me — I read everything myself.</p>
+              <button type="button" id="inbox-message-blake" class="btn">Message Blake</button>
+            </div>
+            <ul id="inbox-list" class="inbox-list" aria-label="Conversations"></ul>
+            <div class="inbox-people-locked">
+              <div class="inbox-people-head">👥 People</div>
+              <p class="muted">Messaging other members is coming — the safety net gets built first.</p>
+            </div>
+          </div>
+
+          <div id="inbox-thread" hidden>
+            <button type="button" id="inbox-back" class="action-btn">← Inbox</button>
+            <div id="inbox-messages" class="inbox-messages" aria-live="polite"></div>
+            <div class="inbox-composer">
+              <textarea id="inbox-input" maxlength="2000" placeholder="Write to Blake…"></textarea>
+              <button type="button" id="inbox-send" class="btn" disabled>Send</button>
+            </div>
+          </div>
+        </article>
 
       </section>
     </div>
