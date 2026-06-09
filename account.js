@@ -755,7 +755,10 @@ function initInbox(user) {
     paintList();
   }, () => {});
 
-  function isUnread(c) { return ms(c.lastMessageAt) > (myReads[c.id] || 0); }
+  // unread = a NEWER message I haven't read AND it wasn't mine (adversarial
+  // review, MED: my own send bumped lastMessageAt and could flag my own row
+  // unread in the send-then-leave window). lastSenderUid is CF-owned.
+  function isUnread(c) { return c.lastSenderUid !== user.uid && ms(c.lastMessageAt) > (myReads[c.id] || 0); }
   function paintList() {
     if (!listEl) return;
     listEl.innerHTML = convos.length ? convos.map((c) => `
@@ -783,7 +786,13 @@ function initInbox(user) {
       msgsEl.scrollTop = msgsEl.scrollHeight;
       // read receipt (rules-legal: reads/{uid} is owner-writable for participants)
       setDoc(doc(db, 'conversations', convId, 'reads', user.uid), { lastReadAt: serverTimestamp() }, { merge: true })
-        .then(() => { myReads[convId] = Date.now(); paintList(); }).catch(() => {});
+        .then(() => {
+          // clamp to the server lastMessageAt (not the client clock) so skew
+          // can't leave a just-read thread showing unread (review, MED).
+          const c = convos.find((x) => x.id === convId);
+          myReads[convId] = Math.max(myReads[convId] || 0, c ? ms(c.lastMessageAt) : 0, Date.now());
+          paintList();
+        }).catch(() => {});
     }, () => { msgsEl.innerHTML = '<p class="muted">Couldn\'t open this conversation.</p>'; });
     const c = convos.find((x) => x.id === convId);
     const locked = c && c.state !== 'open';

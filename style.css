@@ -9171,6 +9171,11 @@ html.rar-welcome-pending::before {
    OVERLAID on the art (uniform pill position across thumbed + text cards). */
 .hub-card-thumbwrap { position: relative; flex: 0 0 auto; display: inline-flex; }
 .hub-card-thumbwrap .hub-card-thumb { width: 84px; height: 84px; object-fit: cover; border-radius: 10px; border: 1px solid rgba(187, 134, 252, 0.3); }
+/* when the card has a (loaded) thumbnail, the tag rides the art — hide the
+   head-row copy. If the thumb later fails to hydrate, hubHydrateImages drops
+   `has-thumb` and the head chip reappears (no chip floating over nothing). */
+.hub-card.has-thumb .hub-card-head > .hub-tag-chip,
+.hub-card.has-thumb .hub-card-head > .hub-anime-chip { display: none; }
 .hub-card-tag-overlay { position: absolute; top: 5px; left: 5px; max-width: calc(100% - 10px); }
 .hub-card-tag-overlay .hub-tag-chip, .hub-card-tag-overlay .hub-anime-chip {
   display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

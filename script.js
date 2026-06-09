@@ -4568,8 +4568,9 @@ sortEl?.addEventListener('change', onSortChange);
 
           const av = li.querySelector('.avatar');
           if (av) {
-            if (u.photoURL) {
-              av.innerHTML = `<img src="${escapeHtml(u.photoURL)}" alt="">`;
+            const safe = safeAvatar(u.photoURL);
+            if (safe) {
+              av.innerHTML = `<img src="${escapeHtml(safe)}" alt="">`;
             } else {
               const initial = (u.username || d.displayName || '?').toString().trim().charAt(0).toUpperCase() || '?';
               av.textContent = initial;
@@ -5586,12 +5587,21 @@ function openInlineCommentEditor(editBtn, itemRef) {
   // post figures AND list-card thumbnails (any img carrying data-imgref).
   function hubHydrateImages(rootEl) {
     if (!rootEl) return;
+    // a card thumb that fails to load must drop its `has-thumb` framing so the
+    // overlaid tag chip doesn't float over an empty wrap (review, LOW).
+    const dropImg = (img) => {
+      const w = img.closest('.hub-img-wrap'); if (w) { w.remove(); return; }
+      const card = img.closest('.hub-card.has-thumb');
+      const wrap = img.closest('.hub-card-thumbwrap');
+      if (card && wrap) { card.classList.remove('has-thumb'); wrap.remove(); return; }
+      img.remove();
+    };
     rootEl.querySelectorAll('img[data-imgref]:not([src])').forEach((img) => {
       const p = hubSafeImageRef(img.getAttribute('data-imgref'));
-      if (!p) { const w = img.closest('.hub-img-wrap'); if (w) w.remove(); else img.remove(); return; }
+      if (!p) { dropImg(img); return; }
       getDownloadURL(storRef(storage, p))
         .then((url) => { img.src = url; img.classList.add('is-loaded'); })
-        .catch(() => { const w = img.closest('.hub-img-wrap'); if (w) w.remove(); else img.remove(); });
+        .catch(() => dropImg(img));
     });
   }
 
@@ -5664,6 +5674,14 @@ function openInlineCommentEditor(editBtn, itemRef) {
   // reviews. HEART: count-free, zero gold, Blake's name goes HOME to his Den
   // (his identity IS the site); banned → suspended; gone → former member.
   // ===========================================================================
+  // Avatar photoURL ORIGIN GATE (adversarial review, MED): the users/ fallback
+  // doc has NO photoURL field validation in the rules (unlike profiles/), so an
+  // author could point their avatar at an arbitrary origin and IP-beacon every
+  // viewer. Mirror the rules' profiles allowlist here before any <img src>.
+  function safeAvatar(u) {
+    return (typeof u === 'string'
+      && /^https:\/\/(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)\//.test(u)) ? u : '';
+  }
   function authorLiveSub(uid, cb) {
     let userUnsub = null;
     const pUnsub = onSnapshot(doc(db, 'profiles', uid), (ps) => {
@@ -5695,8 +5713,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
   function profileHeaderHtml(p) {
     const name = escapeHtml(p.name || 'Member');
     const initial = (p.name || '?').toString().trim().charAt(0).toUpperCase() || '?';
-    const avatar = (typeof p.photo === 'string' && /^https:\/\//.test(p.photo))
-      ? `<img src="${escapeHtml(p.photo)}" alt="">` : escapeHtml(initial);
+    const safePhoto = safeAvatar(p.photo);
+    const avatar = safePhoto ? `<img src="${escapeHtml(safePhoto)}" alt="">` : escapeHtml(initial);
     const since = p.sinceMs ? `<div class="profile-since">here since ${new Date(p.sinceMs).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</div>` : '';
     const bio = p.bio ? `<div class="profile-bio">${window.renderMarkdownInline ? window.renderMarkdownInline(String(p.bio)) : escapeHtml(String(p.bio))}</div>` : '';
     return `<div class="profile-head">
@@ -5772,7 +5790,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       tEl.innerHTML = rows.length ? rows.join('') : '<li class="profile-empty">No threads yet.</li>';
     } catch (_e) { const tEl = bodyEl.querySelector('[data-profile-threads]'); if (tEl) tEl.innerHTML = '<li class="profile-empty">No threads yet.</li>'; }
     try {
-      const rq = query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(24));
+      const rq = query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(40));
       const rsnap = await getDocs(rq);
       const rEl = bodyEl.querySelector('[data-profile-reviews]');
       const rows = [];
@@ -5793,10 +5811,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
       if (tg) {
         const p = tg.getAttribute('data-open-target');
         closeProfilePage();
-        try {
-          const t = (typeof parseNotifTarget === 'function') ? parseNotifTarget(p) : null;
-          if (t && typeof openNotifTarget === 'function') openNotifTarget(t);
-        } catch (_) {}
+        // openNotifTarget takes the STRING path and parses internally — handing
+        // it the parsed OBJECT threw-and-swallowed, making every review a dead
+        // click (adversarial review, HIGH).
+        try { if (typeof openNotifTarget === 'function') openNotifTarget(p); } catch (_) {}
       }
     });
   }
@@ -6129,7 +6147,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const title = t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)');
     return `<li class="hub-card${t.pinned ? ' is-pinned' : ''}${(cover || ownThumb) ? ' has-thumb' : ''}" data-thread-id="${escapeHtml(t.id)}" tabindex="0" role="button">
       ${thumb}<div class="hub-card-main">
-      <div class="hub-card-head">${pin}${thumb ? '' : chip}${lock}<span class="hub-card-time">${escapeHtml(relTimeHub(t.lastPostAt || t.createdAt))}</span></div>
+      <div class="hub-card-head">${pin}${chip}${lock}<span class="hub-card-time">${escapeHtml(relTimeHub(t.lastPostAt || t.createdAt))}</span></div>
       <h3 class="hub-card-title">${title}</h3>
       <div class="hub-card-by"><span class="rar-name-link" data-profile-uid="${escapeHtml(t.authorUid || '')}" role="link" tabindex="0">${escapeHtml(authorName || 'Member')}</span></div></div>
     </li>`;
@@ -7706,8 +7724,9 @@ function subscribeReviews(anime) {
 
                 const av = item.querySelector('.avatar');
                 if (av) {
-                  if (u.photoURL) {
-                    av.innerHTML = `<img src="${escapeHtml(u.photoURL)}" alt="">`;
+                  const safe = safeAvatar(u.photoURL);
+                  if (safe) {
+                    av.innerHTML = `<img src="${escapeHtml(safe)}" alt="">`;
                   } else {
                     const initial = (u.username || td.displayName || '?').toString().trim().charAt(0).toUpperCase() || '?';
                     av.textContent = initial;
@@ -7918,7 +7937,8 @@ function subscribeReviews(anime) {
 
           const av = li.querySelector('.row-avatar');
           if (av) {
-            if (u.photoURL) av.innerHTML = `<img src="${escapeHtml(u.photoURL)}" alt="">`;
+            const safe = safeAvatar(u.photoURL);
+            if (safe) av.innerHTML = `<img src="${escapeHtml(safe)}" alt="">`;
             else av.textContent = (u.username || d.displayName || '?').toString().trim().charAt(0).toUpperCase() || '?';
           }
         });

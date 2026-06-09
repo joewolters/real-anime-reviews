@@ -469,13 +469,16 @@ service cloud.firestore {
             || request.resource.data.participants[1] == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1')
         && createdNow()
         && request.resource.data.state == 'open'
-        && (!('lastMessageText' in request.resource.data) || request.resource.data.lastMessageText.size() <= 140)
         && gateOk();
-      // a participant maintains the summary; lock is admin-only.
-      allow update: if ( isSignedIn() && request.auth.uid in resource.data.participants
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'lastMessageText', 'lastSenderUid', 'unread'])
-          && gateOk() )
-        || ( isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']) );
+      // The conversation SUMMARY (lastMessageAt / lastSenderUid / unread_*) is
+      // CF-OWNED (onDmMessageCreate, Admin SDK). The adversarial review showed
+      // the old participant-writable summary branch let a member forge
+      // lastMessageAt (sort/unread spoof) and write an unbounded lastMessageText
+      // (contradicting the no-raw-preview design) — and NO client ever wrote it
+      // (the client derives unread from reads/{uid} + treats the CF mirror as
+      // untrusted). So the only client UPDATE is the admin LOCK toggle.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']);
       allow delete: if false; // CF cascade (onUserDelete / admin)
 
       match /messages/{msgId} {

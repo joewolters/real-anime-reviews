@@ -72,7 +72,9 @@ function counterpartOf(c) {
   return parts.find((u) => u !== ADMIN_UID) || null;
 }
 
-function isUnread(c) { return ms(c.lastMessageAt) > (myReads[c.id] || 0); }
+// unread = a newer message I haven't read AND it wasn't MINE (Blake's own reply
+// must not flag his own row — adversarial review, MED). lastSenderUid is CF-owned.
+function isUnread(c) { return c.lastSenderUid !== ADMIN_UID && ms(c.lastMessageAt) > (myReads[c.id] || 0); }
 
 // Resolve a counterpart's display name: profiles/{uid} with users/{uid} fallback.
 // Both reads are public per the rules; results are escaped at render time.

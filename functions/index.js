@@ -755,10 +755,13 @@ exports.onDmMessageCreate = onDocumentCreated(
     const recipient = participants.find((u) => u !== senderUid);
     if (!recipient) return;
 
-    // (2) CF-owned unread mirror — unconditional (mute silences the ping below,
-    // not the badge). Flat 'unread_' + uid key; merge so nothing else moves.
+    // (2) CF-owned conversation summary — unconditional (mute silences the ping
+    // below, not the badge). Flat 'unread_' + uid key; lastSenderUid lets the
+    // client skip self-authored messages when computing the unread badge (no
+    // raw lastMessageText — content stays in the messages). merge so nothing
+    // else moves. The client treats this whole summary as untrusted telemetry.
     await convRef.set(
-      { ['unread_' + recipient]: FieldValue.increment(1), lastMessageAt: FieldValue.serverTimestamp() },
+      { ['unread_' + recipient]: FieldValue.increment(1), lastMessageAt: FieldValue.serverTimestamp(), lastSenderUid: senderUid },
       { merge: true }
     ).catch(() => {}); // conversation may have been deleted mid-flight
 
@@ -767,7 +770,10 @@ exports.onDmMessageCreate = onDocumentCreated(
     if (prefsSnap.exists && isMuted(prefsSnap.data(), 'dm')) return;
 
     // (1) the Lantern ping — sender identity SERVER-sourced (NEVER the message's
-    // own client fields), same notification shape as the vote pings.
+    // own client fields), same notification shape as the vote pings. NOTE: today
+    // every 'dm' is admin-floor, so fromUid is always Blake → the Lantern renders
+    // it GOLD (notifIsBlake), which is heart-correct (a message FROM Blake is a
+    // Blake surface). A future PEER 'dm' (fromUid != Blake) renders PURPLE.
     const ident = await senderIdentity(senderUid);
     await db.collection('users/' + recipient + '/notifications').add({
       toUid: recipient,
