@@ -19,8 +19,8 @@ async function openFirstModal(page) {
 test.describe('v1.9.1b — composer redesign + polish', () => {
   test('signed-out modal: toolbars are injected but HIDDEN, comments have NO hint, "My review" chip hidden', async ({ page }) => {
     await openFirstModal(page);
-    // toolbar structure is injected (3 buttons exist in the DOM)…
-    await expect(page.locator('.review-composer .ct-btn')).toHaveCount(3);
+    // toolbar structure is injected (4 buttons: B / I / 🔗 / 👁-spoiler, gate 11)…
+    await expect(page.locator('.review-composer .ct-btn')).toHaveCount(4);
     // …but hidden while signed out (read-only composer)
     await expect(page.locator('.review-composer .composer-toolbar')).toBeHidden();
     await expect(page.locator('.sheet--left .composer-body .composer-toolbar').first()).toBeHidden();

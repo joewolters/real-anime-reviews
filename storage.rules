@@ -1,0 +1,114 @@
+rules_version = '2';
+
+// =============================================================================
+// ⚠️⚠️  v1.10.0 STAGED STORAGE RULES — NOT YET DEPLOYED TO PRODUCTION  ⚠️⚠️
+// -----------------------------------------------------------------------------
+// Gate 12: the Storage greenfield. These rules lock the bucket BEFORE any client
+// upload code exists (the gitignore↔firebase.json mirror discipline applied to
+// Storage: a bucket provisioned without locked rules is the leak-equivalent).
+// DO NOT deploy until the v1.10.0 cutover (deploys with hosting→firestore→
+// storage→functions on Blake's explicit go). Emulator-green is gate 12's finish
+// line: `npm run test:rules` (firestore+storage emulators).
+//
+// Threat model (gate-0 study §3d): images are world-readable from finalize until
+// removed, so EVERY write is gated hard —
+//   • owner-only path:        uploads/{uid}/... with request.auth.uid == uid
+//   • size ≤ 5MB, contentType image/(jpeg|png|webp|gif) — SVG EXCLUDED
+//     (script-bearing). The CF re-validates magic bytes server-side (gate 13);
+//     these rules are the first fence, not the only one.
+//   • email-verified          (Blake's chosen pre-publish friction)
+//   • moderationGate cross-read — same ban+consent spine as firestore.rules:
+//     the doc must EXIST with consentVersion >= 1 and banned != true.
+//     ⚠️ Mirrors rulesVersion()==1 in firestore.rules — bump BOTH together.
+//     ⚠️ Uses .get('banned', false): acceptRules mints {consentVersion} with NO
+//     banned field; a bare .banned access errors on the missing key and would
+//     silently deny every consented user.
+//   • uploadsEnabled kill-switch — commentsMeta/uploads {uploadsEnabled:false}
+//     (admin-writable in firestore.rules) blocks ALL uploads in one admin write,
+//     no redeploy. Missing doc = enabled (fail-open so the cutover doesn't
+//     require seeding it; Blake writes it only to kill).
+//   • list is NEVER allowed (no enumeration of the bucket or a user's uploads).
+//   • objects are immutable from the client (update: false) — the gate-13 CF
+//     re-encodes via the Admin SDK, which bypasses these rules.
+// =============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() { return request.auth != null; }
+    // ADMIN_UID — mirrors firestore.rules isAdmin() (same migrate-to-claim note).
+    function isAdmin() { return isSignedIn() && request.auth.uid == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'; }
+
+    // The ban+consent spine, cross-read from Firestore (same semantics as
+    // firestore.rules gateOk(): doc must exist, consented to version >= 1,
+    // not banned). Admin bypasses.
+    // NOTE: Storage rules' cross-service firestore.get().data does NOT support
+    // the firestore-rules `.get(key, default)` map method (it raises a null-value
+    // error). Use the documented direct-field pattern + an `in` guard for any
+    // field that may be absent (consentVersion is always minted by acceptRules;
+    // `banned` may be absent on a fresh consent doc).
+    function modGatePath() { return /databases/(default)/documents/moderationGate/$(request.auth.uid); }
+    function modGate() { return firestore.get(modGatePath()).data; }
+    function gateOk() {
+      return isAdmin()
+        || (firestore.exists(modGatePath())
+            && ('consentVersion' in modGate()) && modGate().consentVersion >= 1
+            && (!('banned' in modGate()) || modGate().banned != true));
+    }
+
+    // Kill-switch: commentsMeta/uploads {uploadsEnabled: bool}. Absent = enabled.
+    function uploadsKillPath() { return /databases/(default)/documents/commentsMeta/uploads; }
+    function uploadsEnabled() {
+      return !firestore.exists(uploadsKillPath())
+        || !('uploadsEnabled' in firestore.get(uploadsKillPath()).data)
+        || firestore.get(uploadsKillPath()).data.uploadsEnabled == true;
+    }
+
+    function emailVerified() { return request.auth.token.email_verified == true; }
+
+    // Default-deny EVERYTHING. Only the uploads/ match below opens anything.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // uploads/{uid}/{docId}/{imageId} — docId is the forum thread or post id the
+    // image belongs to (the client pre-generates the doc id, uploads, then
+    // creates the doc whose imageRefs entries firestore.rules pins to this
+    // exact uploads/{uid}/ prefix). Forum surfaces ONLY — no DM/comment/review
+    // image paths exist, by design (gate-0 §3d: no image DMs, ever, without
+    // their own threat model).
+    match /uploads/{uid}/{docId}/{imageId} {
+      // Public single-object read (the site renders these); list stays denied.
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && resource == null   // create ONLY when absent — an overwrite of an
+                              // existing object routes here too (the emulator
+                              // treats overwrite as create), and re-opening a
+                              // CF-processed object is exactly what we forbid;
+                              // a legit "replace" uploads a fresh random path.
+        && request.auth.uid == uid
+        && uploadsEnabled()
+        && emailVerified()
+        && gateOk()
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|gif)')
+        // sane path segments — no dots, slashes already impossible per-segment,
+        // keeps object names un-clever (the CF treats the path as data).
+        && docId.matches('[A-Za-z0-9_-]{1,100}')
+        && imageId.matches('[A-Za-z0-9_-]{1,120}');
+
+      // Immutable from the client: replacing an image = delete + fresh upload
+      // (a client overwrite of a CF-processed object would re-open the
+      // validation window). The gate-13 CF writes via Admin SDK regardless.
+      allow update: if false;
+
+      // Owner may clean up their own objects; admin may pull anything
+      // (the atomic-remove callable uses the Admin SDK, but a direct admin
+      // delete from the console/UI should never be rules-blocked).
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+    }
+  }
+}

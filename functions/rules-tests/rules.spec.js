@@ -459,3 +459,78 @@ test('gate: a banned user is ALSO denied replies, review-threads, forum posts, a
   await assertFails(setDoc(doc(as('badguy2'), 'forum/tparent/posts/p1/votes/badguy2'),
     { value: 1, uid: 'badguy2', updatedAt: serverTimestamp() }));
 });
+
+// ---------------- GATE 13/14 — forum image attachments (imageRefs) ----------------
+// Storage-side enforcement lives in storage.spec.js; THESE prove the Firestore
+// pointer side: ≤4 refs, every entry pinned to the caller's own uploads/ prefix.
+const post = (over = {}) => ({
+  authorUid: 'alice', body: 'a post', createdAt: serverTimestamp(),
+  likesCount: 0, reportCount: 0, removed: false, ...over,
+});
+const seedThread = (id = 'tImg') => seed((db) => setDoc(doc(db, 'forum/' + id), {
+  authorUid: 'alice', title: 'Hi', body: 'h', tag: 'general',
+  createdAt: Timestamp.now(), lastPostAt: Timestamp.now(),
+  postCount: 0, reportCount: 0, pinned: false, locked: false, removed: false,
+}));
+
+test('imageRefs: happy thread create with own-prefix refs (≤4)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tImg1'),
+    thread({ imageRefs: ['uploads/alice/tImg1/a1', 'uploads/alice/tImg1/a2'] })));
+});
+test('imageRefs: HOSTILE thread create pointing at ANOTHER user\'s upload is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'forum/tImg2'),
+    thread({ imageRefs: ['uploads/bob/t/x'] })));
+});
+test('imageRefs: HOSTILE >4 refs is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'forum/tImg3'),
+    thread({ imageRefs: ['uploads/alice/t/1', 'uploads/alice/t/2', 'uploads/alice/t/3', 'uploads/alice/t/4', 'uploads/alice/t/5'] })));
+});
+test('imageRefs: HOSTILE non-uploads / clever paths are DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'forum/tImg4'), thread({ imageRefs: ['https://evil.example/x.png'] })));
+  await assertFails(setDoc(doc(as('alice'), 'forum/tImg5'), thread({ imageRefs: ['uploads/alice/../escape/x'] })));
+  await assertFails(setDoc(doc(as('alice'), 'forum/tImg6'), thread({ imageRefs: [42] })));
+});
+test('imageRefs: happy post create with own-prefix ref; HOSTILE other-prefix DENIED', async () => {
+  await seedThread('tImg7');
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tImg7/posts/p1'), post({ imageRefs: ['uploads/alice/p1/img'] })));
+  await assertFails(setDoc(doc(as('bob'), 'forum/tImg7/posts/p2'),
+    post({ authorUid: 'bob', imageRefs: ['uploads/alice/p1/img'] })));
+});
+test('imageRefs: owner may STRIP refs on edit; may NOT mint a foreign ref on edit', async () => {
+  await seedThread('tImg8');
+  await seed((db) => setDoc(doc(db, 'forum/tImg8/posts/p1'), {
+    authorUid: 'alice', body: 'b', createdAt: Timestamp.now(),
+    likesCount: 0, reportCount: 0, removed: false, imageRefs: ['uploads/alice/p1/img'],
+  }));
+  await assertFails(updateDoc(doc(as('alice'), 'forum/tImg8/posts/p1'), { imageRefs: ['uploads/bob/p/x'] }));
+  await assertSucceeds(updateDoc(doc(as('alice'), 'forum/tImg8/posts/p1'), { imageRefs: [] }));
+});
+test('imageRefs: ADMIN may strip a (foreign-author) ref during moderation', async () => {
+  await seedThread('tImg9');
+  await seed((db) => setDoc(doc(db, 'forum/tImg9/posts/p1'), {
+    authorUid: 'alice', body: 'b', createdAt: Timestamp.now(),
+    likesCount: 0, reportCount: 0, removed: false, imageRefs: ['uploads/alice/p1/img'],
+  }));
+  await assertSucceeds(updateDoc(doc(as(ADMIN), 'forum/tImg9/posts/p1'), { imageRefs: [] }));
+});
+
+// ---------------- GATE 14 — the 'image' report target ----------------
+test('report: happy image report (targetType image + pinned imagePath shape)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'reports/r-img-1'), {
+    reporterUid: 'alice', reason: 'other', status: 'new',
+    targetType: 'image', targetPath: 'forum/t1/posts/p1',
+    imagePath: 'uploads/bob/p1/img1', createdAt: serverTimestamp(),
+  }));
+});
+test('report: HOSTILE image report with a malformed imagePath is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'reports/r-img-2'), {
+    reporterUid: 'alice', reason: 'other', status: 'new',
+    targetType: 'image', targetPath: 'forum/t1/posts/p1',
+    imagePath: 'https://evil.example/x', createdAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(as('alice'), 'reports/r-img-3'), {
+    reporterUid: 'alice', reason: 'other', status: 'new',
+    targetType: 'image', targetPath: 'forum/t1/posts/p1',
+    imagePath: 'uploads/x/../../secrets', createdAt: serverTimestamp(),
+  }));
+});

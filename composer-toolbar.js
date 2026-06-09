@@ -48,6 +48,7 @@
       '<button type="button" class="ct-btn" data-md="bold" title="Bold (' + MOD + '+B)"><strong>B</strong></button>' +
       '<button type="button" class="ct-btn" data-md="italic" title="Italic (' + MOD + '+I)"><em>I</em></button>' +
       '<button type="button" class="ct-btn" data-md="link" title="Link">🔗</button>' +
+      '<button type="button" class="ct-btn" data-md="spoiler" title="Spoiler — hidden until clicked">👁</button>' +
     '</div>';
 
   // enhance(textarea, opts)
@@ -104,6 +105,7 @@
       if (kind === 'bold') wrap(textarea, '**', '**', 'bold text');
       else if (kind === 'italic') wrap(textarea, '*', '*', 'italic text');
       else if (kind === 'link') wrap(textarea, '[', '](https://)', 'link text');
+      else if (kind === 'spoiler') wrap(textarea, '||', '||', 'spoiler');   // gate 11
       fireInput(textarea);
     }
 

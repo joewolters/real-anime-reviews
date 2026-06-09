@@ -8,7 +8,9 @@
 //
 // ALL input is HTML-escaped FIRST, then a small subset is applied: # / ## / ###
 // headers (→ h4/h5/h6, beneath a section's h3), - / * lists, **bold**, *italic*,
-// `code`, and [text](http(s) link). No raw HTML survives → XSS-safe even for
+// `code`, [text](http(s) link), and ||spoiler|| (v1.10.0 gate 11 — a click-to-
+// reveal span; the reveal listener lives in script.js, the admin queue
+// auto-reveals via CSS). No raw HTML survives → XSS-safe even for
 // visitor-fetched markdown files.
 (function (root) {
   'use strict';
@@ -21,6 +23,11 @@
 
   function renderMarkdownInline(t) {
     return escapeHtml(t)
+      // v1.10.0 gate 11 — ||spoiler||: hidden until clicked (the span is the
+      // button; reveal wiring is the consumer's job). Runs FIRST so the inner
+      // text still gets bold/italic/code/links applied by the passes below.
+      // Content may not contain a pipe (a v1 simplification, documented).
+      .replace(/\|\|([^|\n]+)\|\|/g, '<span class="rar-spoiler" data-spoiler role="button" tabindex="0" aria-label="Spoiler — click to reveal" title="Spoiler — click to reveal">$1</span>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       // v1.7.5 (gate 3) — AniList bios use __double-underscore__ for bold. Run it
       // after the ** pass and before the single-* italic pass. _single-underscore_

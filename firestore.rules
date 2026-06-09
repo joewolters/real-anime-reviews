@@ -80,6 +80,35 @@ service cloud.firestore {
         && request.time > resource.data.updatedAt + duration.value(2, 's')
         && gateOk();
     }
+    // === v1.10.0 GATES 12-14 — forum image attachments (forum surfaces ONLY).
+    // imageRefs is an OPTIONAL list of ≤4 Storage paths, each pinned to the
+    // CALLER's own uploads/{uid}/ prefix — a post can never point at someone
+    // else's upload. Rules can't loop, so 4 slots check individually (a slot
+    // index past the list's size passes vacuously).
+    function imageRefSlotOk(i) {
+      return request.resource.data.imageRefs.size() <= i
+        || (request.resource.data.imageRefs[i] is string
+            && request.resource.data.imageRefs[i].matches('uploads/' + request.auth.uid + '/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_-]{1,120}'));
+    }
+    function imageRefsOk() {
+      return !('imageRefs' in request.resource.data)
+        || (request.resource.data.imageRefs is list
+            && request.resource.data.imageRefs.size() <= 4
+            && imageRefSlotOk(0) && imageRefSlotOk(1) && imageRefSlotOk(2) && imageRefSlotOk(3));
+    }
+    // Admin moderation branch: the admin redacts image pointers as part of a
+    // takedown. The atomic image-removal goes through the adminRemoveImage
+    // CALLABLE (Admin SDK, bypasses these rules, binds imagePath→doc), so this
+    // direct-write branch only ever needs to pass the SHAPE check (≤4, list) —
+    // it is gated on isAdmin() (trusted operator), and entries belong to the
+    // AUTHOR's prefix (not the admin's), so a per-slot own-prefix pin can't
+    // apply here. Note: shape-only — it does NOT enforce subset-of-existing;
+    // the trusted-admin gate is what bounds it.
+    function imageRefsShapeOk() {
+      return !('imageRefs' in request.resource.data)
+        || (request.resource.data.imageRefs is list && request.resource.data.imageRefs.size() <= 4);
+    }
+
     // Profile field validation (shared by create + update). M1 reserved-name
     // denylist; M2 photoURL constrained to known-good origins.
     function profileFieldsOk() {
@@ -331,20 +360,24 @@ service cloud.firestore {
         // gate 8d — optional attached-anime cover + title (validated: string + capped)
         && (!('coverImage' in request.resource.data) || (request.resource.data.coverImage is string && request.resource.data.coverImage.size() <= 400))
         && (!('animeTitle' in request.resource.data) || (request.resource.data.animeTitle is string && request.resource.data.animeTitle.size() <= 200))
+        && imageRefsOk()   // gate 13 — ≤4 own-prefix Storage paths
         && gateOk();
-      // owner edit (body only)
+      // owner edit (body + may attach/strip own images)
       allow update: if ( isSignedIn() && resource.data.authorUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt', 'imageRefs'])
+          && imageRefsOk()
           && gateOk() )
-        || // owner soft-delete (H5: must redact)
+        || // owner soft-delete (H5: must redact; may strip refs in the same write)
         ( isSignedIn() && resource.data.authorUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'title', 'editedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'title', 'editedAt', 'imageRefs'])
           && request.resource.data.removed == true
           && request.resource.data.body == '' && request.resource.data.title == ''
+          && imageRefsOk()
           && gateOk() )
-        || // admin mod tools (pin / lock / remove). H5: if removed, body+title redacted.
+        || // admin mod tools (pin / lock / remove / strip-image). H5: if removed, body+title redacted.
         ( isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned', 'locked', 'removed', 'body', 'title', 'editedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned', 'locked', 'removed', 'body', 'title', 'editedAt', 'imageRefs'])
+          && imageRefsShapeOk()
           && (request.resource.data.removed == false || (request.resource.data.body == '' && request.resource.data.title == '')) );
       // counters (postCount/lastPostAt/reportCount/hotScore) have NO client
       // branch -> CF-only. delete is CF-only (soft-delete + cascade).
@@ -363,16 +396,20 @@ service cloud.firestore {
           && request.resource.data.removed == false
           // parent must exist and not be locked (one get() per reply — cheap vs abuse)
           && get(/databases/$(database)/documents/forum/$(threadId)).data.locked == false
+          && imageRefsOk()   // gate 13 — ≤4 own-prefix Storage paths
           && gateOk();
         allow update: if ( isSignedIn() && resource.data.authorUid == request.auth.uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt', 'imageRefs'])
+            && imageRefsOk()
             && gateOk() )
           || ( isSignedIn() && resource.data.authorUid == request.auth.uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt', 'imageRefs'])
             && request.resource.data.removed == true && request.resource.data.body == ''
+            && imageRefsOk()
             && gateOk() )
           || ( isAdmin()
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt', 'blakePick'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt', 'blakePick', 'imageRefs'])
+            && imageRefsShapeOk()
             && (request.resource.data.removed == false || request.resource.data.body == '') );   // gate 8c — admin-only "Blake's pick" gold marker (owner branches above CANNOT set it)
         allow delete: if false;
         match /votes/{voterUid} {
@@ -474,13 +511,18 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow get, list, update, delete: if isAdmin();
       allow create: if isSignedIn()
-        && request.resource.data.keys().hasOnly(['reporterUid', 'reason', 'note', 'status', 'targetType', 'targetPath', 'targetUid', 'targetAnimeId', 'snapshotText', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['reporterUid', 'reason', 'note', 'status', 'targetType', 'targetPath', 'targetUid', 'targetAnimeId', 'snapshotText', 'imagePath', 'createdAt'])
         && request.resource.data.reporterUid == request.auth.uid
         && request.resource.data.reason in ['spam', 'harassment', 'offtopic', 'other']
         && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 500))
         && request.resource.data.status == 'new'
-        && request.resource.data.targetType in ['review', 'comment', 'reply', 'thread', 'forum', 'post', 'dm']
+        // gate 14 — 'image': targetPath = the forum doc holding the pointer,
+        // imagePath = the uploads/... Storage object (shape-pinned below).
+        && request.resource.data.targetType in ['review', 'comment', 'reply', 'thread', 'forum', 'post', 'dm', 'image']
         && request.resource.data.targetPath is string
+        && (!('imagePath' in request.resource.data)
+            || (request.resource.data.imagePath is string
+                && request.resource.data.imagePath.matches('uploads/[A-Za-z0-9_-]{1,128}/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_-]{1,120}')))
         && (!('snapshotText' in request.resource.data) || (request.resource.data.snapshotText is string && request.resource.data.snapshotText.size() <= 500))
         && createdNow()
         && reportGateOk();

@@ -511,3 +511,8 @@
   .sk-block::after { animation: none !important; background: rgba(187, 134, 252, 0.12); }
   .report-row.removing { transition: none !important; }
 }
+
+/* gate 11 — spoilers AUTO-REVEAL in the moderation queue: Blake must see the
+   reported content at a glance, never click pills to review a report. */
+.report-block-content .rar-spoiler { color: inherit; background: rgba(187, 134, 252, 0.1); cursor: text; }
+.report-block-content .rar-spoiler > * { visibility: visible; }

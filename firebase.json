@@ -18,7 +18,8 @@
       "functions/**",
       "scripts/**",
       "firestore.rules",
-      "firestore.indexes.json"
+      "firestore.indexes.json",
+      "storage.rules"
     ],
     "cleanUrls": true,
     "trailingSlash": false,
@@ -31,6 +32,9 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "functions": {
     "source": "functions",
     "runtime": "nodejs22",
@@ -40,6 +44,7 @@
     "functions": { "port": 5001 },
     "firestore": { "port": 8080 },
     "auth": { "port": 9099 },
+    "storage": { "port": 9199 },
     "ui": { "enabled": true, "port": 4000 },
     "singleProjectMode": true
   }

@@ -30,6 +30,7 @@ const PORTS = [
   { port: 8080, who: 'the Firestore emulator' },
   { port: 9099, who: 'the Auth emulator' },
   { port: 5001, who: 'the Functions emulator' },
+  { port: 9199, who: 'the Storage emulator' },   // gate 12 — image uploads
 ];
 const FUNCTIONS_DIR = path.join(__dirname, '..', 'functions');
 
@@ -108,7 +109,7 @@ function loud(title, body) {
 }
 
 function launchFirebase() {
-  const EXEC = ['emulators:exec', '--only', 'auth,firestore,functions',
+  const EXEC = ['emulators:exec', '--only', 'auth,firestore,functions,storage',
     '--project', 'real-anime-reviews', 'node scripts/practice-serve.js'];
   const fbjs = resolveFirebaseJs();
   const started = Date.now();
@@ -121,7 +122,7 @@ function launchFirebase() {
     // wrapper (shell:true required). Still wrapped by the exit handler below, so
     // even this path can never die silently.
     console.error('  (could not resolve the Firebase CLI as a JS entry -- using the shell wrapper)');
-    const line = 'firebase emulators:exec --only auth,firestore,functions --project real-anime-reviews "node scripts/practice-serve.js"';
+    const line = 'firebase emulators:exec --only auth,firestore,functions,storage --project real-anime-reviews "node scripts/practice-serve.js"';
     child = spawn(line, { cwd: ROOT, shell: true, stdio: 'inherit' });
   }
   child.on('error', (err) => {

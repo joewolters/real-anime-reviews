@@ -15,11 +15,12 @@
 //
 // Author: Code | v1.10.0 gate 4 — admin reports queue.
 
-import { auth, db, functions } from '../firebase.js';
+import { auth, db, functions, storage } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, query, orderBy, getDocs, getDoc, doc, updateDoc, deleteDoc, serverTimestamp }
+import { collection, query, orderBy, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
+import { ref as storRef, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js'; // gate 14 — image-report previews
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 
@@ -52,7 +53,9 @@ function shortUid(uid) { return uid ? (String(uid).slice(0, 6) + '…') : '—';
 // (gate 5); dm viewing lands in gate 18.
 function viewHref(targetType, targetPath) {
   if (!targetPath) return null;
-  if (targetType === 'forum' || targetType === 'post') {
+  // 'image' rides the forum deep-link too — targetPath is the forum doc holding
+  // the pointer, so View opens the thread the image sits in.
+  if (targetType === 'forum' || targetType === 'post' || targetType === 'image') {
     const tid = String(targetPath).split('/')[1];   // forum/{tid}[/posts/{pid}]
     return tid ? '../index.html#forum=' + encodeURIComponent(tid) : null;
   }
@@ -127,6 +130,7 @@ function renderRow(g, index) {
       data-target-path="${escapeAttr(g.targetPath)}"
       data-target-uid="${escapeAttr(g.targetUid)}"
       data-report-ids="${escapeAttr((g.ids || []).join(','))}"
+      data-image-path="${escapeAttr(g.imagePath || '')}"
       data-target-type="${escapeAttr(g.targetType)}">
     <div class="row-body">
       <div class="report-head">
@@ -185,6 +189,21 @@ async function renderQueue(rows) {
     const content = li.querySelector('.report-live .live-content');
     if (content) content.innerHTML = res.html;
     if (block) block.dataset.live = res.state;
+    // gate 14 — an image report also previews the reported OBJECT itself
+    // (shape-pinned path -> getDownloadURL; a dead pointer shows as removed).
+    if (content && g.targetType === 'image' && /^uploads\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,100}\/[A-Za-z0-9_-]{1,120}$/.test(g.imagePath || '')) {
+      try {
+        const url = await getDownloadURL(storRef(storage, g.imagePath));
+        const img = document.createElement('img');
+        img.src = url; img.alt = 'Reported image'; img.loading = 'lazy';
+        img.style.cssText = 'display:block;max-width:220px;max-height:160px;margin-top:8px;border-radius:8px;border:1px solid rgba(187,134,252,.4);';
+        content.appendChild(img);
+      } catch (_e) {
+        const gone = document.createElement('em');
+        gone.textContent = ' (the image object is already gone from Storage)';
+        content.appendChild(gone);
+      }
+    }
   }));
 }
 
@@ -293,12 +312,25 @@ function wireClicks() {
     if (action === 'remove') {
       const ok = await confirmModal({
         glyph: '🗑️', kicker: 'REMOVE CONTENT', kickerJp: '削除',
-        body: `Permanently delete this ${targetType || 'content'}? This can't be undone.`,
+        body: targetType === 'image'
+          ? 'Remove this image for good? It leaves Storage AND the post pointer together (the atomic remove).'
+          : `Permanently delete this ${targetType || 'content'}? This can't be undone.`,
         okLabel: 'Remove',
       });
       if (!ok) return;
       btn.disabled = true;
       try {
+        // gate 14 — IMAGE rows go through the adminRemoveImage callable: the
+        // Storage object is deleted FIRST, then the Firestore pointer (never
+        // the Firestore-only path — that's the legal trap).
+        if (targetType === 'image') {
+          const imagePath = row.dataset.imagePath;
+          if (!imagePath) throw new Error('No image path on this report.');
+          await httpsCallable(functions, 'adminRemoveImage')({ docPath: targetPath, imagePath });
+          await resolveReports(row);
+          collapseAndRemove(row);
+          return;
+        }
         // Per-type removal: comment/reply/review/thread are admin-deletable; forum
         // threads + posts are delete:false in the rules (soft-delete via the `removed`
         // flag + a CF cascade), so REDACT them instead; dm messages are immutable
@@ -370,6 +402,50 @@ async function loadQueue() {
   }
 }
 
+// ---- gate 12 — the uploadsEnabled KILL-SWITCH -------------------------------
+// One admin write to commentsMeta/uploads {uploadsEnabled:false} blocks EVERY
+// upload at the storage.rules layer (no redeploy); the site's pickers read the
+// same doc and go quiet. This toggle is that write.
+
+async function mountKillSwitch() {
+  const header = document.querySelector('.admin-header');
+  if (!header) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'uploads-killswitch';
+  wrap.innerHTML = '<button type="button" id="uploads-toggle" class="secondary" title="The Storage rules read this flag live — flipping it needs no deploy.">…</button>';
+  header.appendChild(wrap);
+  const btn = wrap.querySelector('#uploads-toggle');
+  let enabled = true;
+  const paint = () => {
+    btn.textContent = enabled ? '🖼 Image uploads: ON' : '🚫 Image uploads: OFF';
+    btn.classList.toggle('danger', !enabled);
+  };
+  try {
+    const s = await getDoc(doc(db, 'commentsMeta', 'uploads'));
+    enabled = !(s.exists() && s.data() && s.data().uploadsEnabled === false);
+  } catch (_e) { /* default ON */ }
+  paint();
+  btn.addEventListener('click', async () => {
+    const flipTo = !enabled;
+    const ok = await confirmModal({
+      glyph: flipTo ? '🖼' : '🚫',
+      kicker: flipTo ? 'ENABLE UPLOADS' : 'KILL UPLOADS', kickerJp: flipTo ? '許可' : '停止',
+      body: flipTo
+        ? 'Turn image uploads back on for everyone?'
+        : 'Shut off ALL image uploads right now? (Existing images stay up — remove those per-report.)',
+      okLabel: flipTo ? 'Turn on' : 'Shut off',
+    });
+    if (!ok) return;
+    btn.disabled = true;
+    try {
+      await setDoc(doc(db, 'commentsMeta', 'uploads'), { uploadsEnabled: flipTo }, { merge: true });
+      enabled = flipTo;
+      paint();
+    } catch (err) { alert('Could not flip the switch: ' + (err && err.message ? err.message : err)); }
+    btn.disabled = false;
+  });
+}
+
 // ---- Auth gate + init ------------------------------------------------------
 
 onAuthStateChanged(auth, (user) => {
@@ -381,5 +457,6 @@ onAuthStateChanged(auth, (user) => {
   $('admin-main').hidden = false;
   renderSkeleton();
   wireClicks();
+  mountKillSwitch();   // gate 12 — the uploadsEnabled toggle
   loadQueue();
 });

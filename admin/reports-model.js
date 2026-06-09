@@ -50,7 +50,9 @@
     const groups = new Map();
     (reports || []).forEach((r) => {
       if (!r) return;
-      const key = r.targetPath || ('__id:' + (r.id || ''));   // fall back to id if no path
+      // gate 14 — an IMAGE report keys on doc+image so reporting a post and
+      // reporting its image stay separate rows (different admin actions).
+      const key = (r.targetPath || ('__id:' + (r.id || ''))) + (r.imagePath ? ('~img~' + r.imagePath) : '');
       let g = groups.get(key);
       if (!g) {
         g = {
@@ -58,6 +60,7 @@
           targetType: r.targetType || '',
           targetUid: r.targetUid || '',
           targetAnimeId: r.targetAnimeId || '',
+          imagePath: r.imagePath || '',
           reportCount: 0,
           reporters: [],
           reasons: [],

@@ -1,39 +1,34 @@
 <!-- author: Cowork | date: 2026-06-09 -->
-# v1.10.0 — BATCH: Tavern polish (8d) + anime-attach-with-covers + Gate 9 (hotScore/Rising) + Gate 10 (mod polish + CHECKPOINT COMMIT). APPLY all, NO deploy. ONE smoke at the end.
+# v1.10.0 — BATCH: checkpoint commit (11-14) → the IMAGE EXPERIENCE overhaul. APPLY all, NO deploy. ONE smoke at the end.
 
-> **Cadence (Blake): batch the polish + the next couple gates into one ULTRAMAX run — "code is allowed to take as much time as it needs."** Build straight through, self-verify hard + adversarial review, then ONE milestone smoke. Everything STAGED — no deploy. The gate-10 checkpoint commit lands at the end.
+> The image tier shipped + passed smoke (image renders, upload works). Blake now wants images to become a full **experience** — inline placement, thumbnails, a lightbox, images in reviews, dedupe — across the whole community. **Mode ULTRAMAX, go wide. Blake: "let code go nuts and think of all possibilities especially user ability."** Still image-security-sensitive → the gate-12/13/14 protections (locked storage, magic-byte, EXIF, caps, email-verify, kill-switch, report, atomic-remove, cascade) REMAIN INVIOLATE and extend to every new surface. Full adversarial review mandatory. STAGED — no deploy.
 
 ## ⭐ STANDING DIRECTIVE
-Every interactive element at full brand parity by default — branded, hover states, purple-not-gold, **legible AT REST** (heading text must match plain white body text, not a dimmer "stylized" tone). No native/unstyled control reaches smoke.
+Every interactive element at full brand parity by default. No native/unstyled control reaches smoke. Cohesion across surfaces is a requirement this batch (Blake item 9).
 
-## PART A — Tavern polish (Blake's 8c re-smoke, his words)
-1. **Backdrop over-blurred — REVERT.** *"The tavern backdrop is WAY too blurred now. Restore the blur to what it was before."* The `tavern-blur.webp` overshot — go back to the lighter shade-blur from 8b (the sharp `tavern.png` + dark gradient, or a much gentler pre-blur). Cozy, not soupy.
-2. **Nav rename → "The Tavern"** (WITH "The") in the nav headers on BOTH index.html + account.html (8c set it to "Tavern").
-3. **Heading legibility — STILL too dim.** *"The Tavern letters still aren't bright enough. Same with community. Like they look dimmed compared to all other white text."* → make "The Tavern" title + the "Community" kicker render at the SAME brightness as the site's normal white text. Stop dimming them; the text-shadow can stay for contrast but the fill must be full-bright.
-4. (Second-level slide-out = good, no change.)
+## STEP 0 — checkpoint commit gates 11-14
+Commit the current working tree (gates 11-14, the image tier) as a Blake-authored, zero-trailer, excludes-held-out save-point BEFORE remodeling the image code. STAGED — NO deploy. (Protects the work before the overhaul.)
 
-## PART B — anime-attach with cover art (reshapes "About a title", Blake's idea)
-*"if the user is basing it on an anime they should have that same anime search function thats given to them when requesting an anime for me to watch. That way it gives the thread/forum a nice picture to go with the topic."*
-- The new-thread **"attach an anime"** flow uses the **full AniList search** (the suggest.js/request-an-anime search — debounced, covers, AbortController), NOT just Blake's 44.
-- ⚠️ **Blake's reviewed-anime quick-pick must NOT go away** (his note): *"Make sure my thing for choosing one of my reviewed anime doesn't go away for a thread. Just if they want to specifically look for an anime I haven't reviewed that option is available."* → keep a quick path to his 44 AND allow searching any anime. Unify cleanly: his 44 surface marked/gold in the search; any other anime is also findable.
-- The attached anime gives the thread a **cover image** (the AniList cover) shown on the thread card + thread view.
-- **Heart:** if the attached anime is one of Blake's 44 → the thread gets his **gold verdict rail** (as now). If it's NOT reviewed → just the cover, no verdict (heart-safe; his reviews stay the only gold). A non-catalog anime tags as `anime:al:<id>` (additive rules — Code already uses the `al:<id>` discriminator); keep `anime:<slug>` for the 44.
-- (User-uploaded thread images are gates 12-14 — the `📷` placeholder stays; this is the cover-art step toward it.)
+## THE OVERHAUL — Blake's items (his words = spec) + full latitude
+1. ✅ image renders on the OPM thread (no change).
+2. **Lightbox / full-view.** *"once you click in the image is cut off. Maybe it goes to the side of the modal for full view? Or for tall images make it smaller."* → clicking any image opens a **branded lightbox** (full-view overlay, tall images scaled to fit the viewport, never cut off; Esc/click-out closes; reduced-motion safe). Applies to every image surface.
+3. **Admin control UI.** *"as admin UI for picking/pinning/locking needs to be updated."* → the in-thread admin controls (📌 Pin to Rising / Lock / Remove) get a proper branded treatment (they read unfinished now).
+4. ✅ upload looks fine (no change).
+5. **Inline image PLACEMENT in threads + dedupe.** *"I want users to have the ability to choose where their image goes in their thread. Because power scalers love to showcase where exactly in the manga their argument exists. code can propose and implement. No 2 same images can be uploaded to prevent spam but unique ones can."*
+   - The thread body becomes a **mixed text+image composition** — the user inserts images at chosen positions in their description (propose the mechanism: an "insert image here" in the RarComposer that drops an image token into the body, rendered inline via `markdown.js` resolving to a scheme-gated `getDownloadURL`; the imageRefs still pin to the caller's `uploads/{uid}/` prefix). Order preserved.
+   - **Dedupe:** no two **identical** images (content-hash in the `onObjectFinalized` CF — reject/dedupe a duplicate upload; unique images fine). Propose the scope (per-user / per-thread / global) and the user-facing message.
+6. **Images in community reviews.** *"Images should also be able to exist in community reviews. As part of a title or in the review itself."* → extend the upload + inline-placement to the **community review composer** (the review body can carry inline images). Same storage rules/pipeline/report/remove (reviews are a public surface like posts — the "posts-only, no DMs" rule becomes "public surfaces: posts + reviews, no DMs"). Update storage/firestore rules to cover review-attached images.
+7. **Kill-switch UI.** *"Kill switch needs clean UI."* → the `admin/reports.html` 🖼 Image uploads toggle gets a clean branded design (it's a raw-ish control now).
+8. **Thread thumbnail + inline images everywhere.** *"When I started a thread I couldn't choose a thumbnail to go with it. So on the tavern page it just looks like text. it should get the same treatment as the OPM thumbnail."*
+   - **Thread thumbnail:** starting a thread lets the user **choose a thumbnail** (distinct from the attached-anime cover) that shows on the **tavern list card** — so a text thread can have a picture like the OPM cover thread does.
+   - **Inline images in comments/replies too:** *"Comments should also be able to put images in their response, not just attach or both."* → the comment/reply composers get the same inline-image insertion (not just an attachment).
+   - To be crystal clear (Blake's own summary): **uploading a thread = choose a thumbnail + place images in the description in any order; comments can place images inline in their response.**
+9. **Cohesion + intuitiveness.** *"Code needs to make sure it all fits, makes sense, has intuitive AI, and fits the theme."* → one consistent image vocabulary across threads / replies / comments / reviews (same insert affordance, same lightbox, same report, same brand). It should feel like ONE designed system, not bolted-on per surface.
 
-## PART C — topic expansion + dropdown (Blake: "I meant for code to add more topics, going wide")
-- **Propose a full, expansive anime-discussion topic set** (e.g. General · Recommendations · Hot Takes · Episode Discussion · Theories · Animation · Music/OST · News · Manga · Cosplay · Off-topic — your call, go wide and tasteful).
-- Because the list is now long, **the topic picker becomes a branded DROPDOWN** (Blake: *"there should also be a drop down menu for these"*) — not a wrapping chip row. Branded (not a raw `<select>`), searchable/scrollable, with the "attach an anime" as its own clear slot separate from the topic.
-- New topics = additive `forum` tag-enum widening + tests.
-
-## PART D — Gate 9: hotScore + the Rising rail (study idea #7)
-- **`recomputeHotScore` CF** (binding the live `handleVoteWrite` template) — `(up−down+0.5·postCount)/(ageHours+2)^1.5` on each thread; drives the **Hot** sort properly (replace the interim `lastActivityAt` proxy).
-- **A "Rising" rail** with **slot 1 permanently Blake's gold pick** (his pinned anime-tagged thread / verdict) — community velocity literally tops out beneath Blake. Propose placement (top of the Tavern Hot view, or a homepage teaser). Heart: slot-1 gold, the rest purple + count-free.
-
-## PART E — Gate 10: final mod polish + the CHECKPOINT COMMIT
-- Pin/lock/remove→tombstone + the Blake's-Reviews shelf already shipped (gate 8) — verify they're solid, fill any gaps (e.g. a locked-thread visible state, a removed-thread tombstone in the list).
-- **Then the gate-10 CHECKPOINT COMMIT** — gates 5→10 working tree, Blake-authored, zero trailers, the 7 Cowork excludes restored out. ⚠️ **`git add` the two public assets** `assets/tavern.png` + `assets/tavern-blur.webp` (or whichever pre-blur survives Part A). STAGED — NO deploy.
+## Go-all-out mandate (Blake: "let code go nuts, especially user ability")
+Beyond the list: think about what users want to DO with images in an anime community (panel-by-panel power-scaling arguments, side-by-side comparisons, reaction images, spoiler-blurred images via the gate-11 `||spoiler||` hook, alt-text for a11y, etc.). Propose + build the tasteful set; mark anything big as PITCH. Protect-the-heart holds throughout (images are purple surfaces, count-free, no gold).
 
 ## Verify
-All tracks green (npm test current+ with updated specs; the new tag-enum + anime-attach + hotScore + Rising-rail heart specs; run `test:rules` if practice frees 8080, else note the expected count). **4-agent adversarial review** across the batch (XSS on the AniList-search results + thread covers, the heart specs on the Rising rail + covers, the hotScore CF idempotency, the new tag rules). Walk everything yourself. Then Blake's ONE numbered smoke.
+ALL tracks green + new specs (lightbox, inline-image render/order, thumbnail, review images, dedupe-hash, the extended storage/firestore rules). **5-agent adversarial review** — focus the security lenses on: the inline-image token (can it inject? can it reference someone else's upload? is the src always SDK-derived?), the dedupe hash (no bypass / no DoS), review-image rules parity with posts, the lightbox (no SSRF/scheme escape), and the heart. Walk every surface yourself with the Storage emulator. Then Blake's ONE numbered smoke.
 
-## Report (lean): Part A/B/C per-item · the topic set you chose · the anime-attach UX · Part D hotScore+Rising · Part E gaps-filled + the **commit hash** + the asset adds · adversarial findings · test counts · Blake's numbered smoke. NO deploy.
+## Report (lean): the checkpoint hash · per-item · the inline-image mechanism + dedupe scope you chose · the go-all-out additions · adversarial findings+fixes · test counts · Blake's numbered smoke (uploads need the Storage emulator). NO deploy.

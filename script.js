@@ -7,6 +7,7 @@ import {
   where, limit, getCountFromServer, getDoc
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
+import { ref as storRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js'; // v1.10.0 gate 13 — forum image uploads
 import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -16,7 +17,7 @@ import {
   signOut
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 
-import { auth, db, functions } from './firebase.js';
+import { auth, db, functions, storage } from './firebase.js';
 
 // Wrap in IIFE to avoid leaking globals
 (() => {
@@ -4702,6 +4703,9 @@ postBtn.addEventListener('click', async (e) => {
     markPostedNow();
 
     input.value = '';
+    // a programmatic clear fires no 'input' event, so the RarComposer preview
+    // would keep showing the just-posted text (Blake's 8d-batch fix #1)
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   } catch (err) {
     pending.remove();
     alert('Failed to post: ' + err.message);
@@ -5096,6 +5100,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
           dislikesCount: 0
         });
         input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview too (8d fix #1)
       } catch (err) {
         alert('Failed to reply: ' + err.message);
       } finally {
@@ -5120,7 +5125,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
   window.reportDocId = reportDocId;
 
   // ---------- REPORT MODAL (branded — no native dialogs) ----------
-  function openReportModal({ targetType, targetPath, targetUid, targetAnimeId, snapshotText }) {
+  function openReportModal({ targetType, targetPath, targetUid, targetAnimeId, snapshotText, imagePath }) {
     if (!auth.currentUser) { openAuth('signin'); return; }
     document.querySelectorAll('.rar-report-overlay').forEach((n) => n.remove());
 
@@ -5177,10 +5182,12 @@ function openInlineCommentEditor(editBtn, itemRef) {
         createdAt: serverTimestamp()
       };
       if (note) payload.note = note;
+      if (imagePath) payload.imagePath = imagePath;   // gate 14 — an image report pins the exact Storage object
       try {
         // setDoc with the deterministic id (not addDoc) so a repeat report of the same
-        // target by the same user can't create a second doc (gate-4 dupe-id).
-        await setDoc(doc(db, 'reports', reportDocId(u.uid, payload.targetPath)), payload);
+        // target by the same user can't create a second doc (gate-4 dupe-id). An image
+        // report keys on doc+image so reporting a post AND its image stay distinct.
+        await setDoc(doc(db, 'reports', reportDocId(u.uid, payload.targetPath + (payload.imagePath ? '~' + payload.imagePath : ''))), payload);
         overlay.querySelector('.rar-report-modal').innerHTML =
           '<h3 class="rar-report-title">Got it — thanks.</h3><p class="rar-report-sub">On it — I\'ll take a look.</p><div class="rar-report-actions"><button type="button" class="action-btn rar-report-cancel">Close</button></div>';
         overlay.querySelector('.rar-report-cancel').addEventListener('click', close);
@@ -5451,6 +5458,146 @@ function openInlineCommentEditor(editBtn, itemRef) {
   // a safe cover URL is an https AniList CDN url OR a local asset path (the 44's own image).
   function hubSafeCover(u) { return (typeof u === 'string' && /^(https:\/\/|assets\/)/.test(u)) ? u : ''; }
 
+  // ===========================================================================
+  // v1.10.0 GATES 13-14 — forum image attachments (PURPLE surface, never gold).
+  // imageRefs hold Storage PATHS (uploads/{uid}/{docId}/{imageId}); the path is
+  // the only thing trusted from the doc — it must match the strict shape below
+  // before it touches the DOM or the Storage SDK, and the rendered URL comes
+  // from getDownloadURL (never string-built from doc data). Every rendered
+  // image carries a Report affordance; admins also get the atomic remove.
+  // ===========================================================================
+  const HUB_IMG_MAX = 4;
+  const HUB_IMG_MAX_BYTES = 5 * 1024 * 1024;
+  const HUB_IMG_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  function hubSafeImageRef(p) {
+    return (typeof p === 'string' && /^uploads\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,100}\/[A-Za-z0-9_-]{1,120}$/.test(p)) ? p : '';
+  }
+  function hubImagesHtml(refs, opts) {
+    opts = opts || {};
+    const list = Array.isArray(refs) ? refs.map(hubSafeImageRef).filter(Boolean).slice(0, HUB_IMG_MAX) : [];
+    if (!list.length) return '';
+    const isAdmin = (typeof window !== 'undefined' && window.__rarIsAdmin === true);
+    const docPath = escapeHtml(opts.docPath || '');
+    const author = escapeHtml(opts.authorUid || '');
+    return '<div class="hub-post-images">' + list.map((p) => `<figure class="hub-img-wrap">
+        <img class="hub-post-img" data-imgref="${escapeHtml(p)}" alt="" loading="lazy" decoding="async">
+        <span class="hub-img-actions">
+          <button type="button" class="hub-img-flag" data-img-report="${escapeHtml(p)}" data-img-doc="${docPath}" data-img-author="${author}" title="Report this image" aria-label="Report this image">⚑</button>
+          ${isAdmin ? `<button type="button" class="hub-img-remove" data-img-remove="${escapeHtml(p)}" data-img-doc="${docPath}" title="Remove this image" aria-label="Remove this image">🗑</button>` : ''}
+        </span>
+      </figure>`).join('') + '</div>';
+  }
+  window.hubImagesHtml = hubImagesHtml; // heart/XSS spec hook: hostile refs render NOTHING
+  // src hydration is async (getDownloadURL knows about the emulator + tokens);
+  // a dangling pointer (already-removed object) just drops its figure.
+  function hubHydrateImages(rootEl) {
+    if (!rootEl) return;
+    rootEl.querySelectorAll('img.hub-post-img[data-imgref]:not([src])').forEach((img) => {
+      const p = hubSafeImageRef(img.getAttribute('data-imgref'));
+      if (!p) { const w = img.closest('.hub-img-wrap'); if (w) w.remove(); return; }
+      getDownloadURL(storRef(storage, p))
+        .then((url) => { img.src = url; img.classList.add('is-loaded'); })
+        .catch(() => { const w = img.closest('.hub-img-wrap'); if (w) w.remove(); });
+    });
+  }
+  // the uploadsEnabled kill-switch (commentsMeta/uploads — admin one-write off
+  // switch, storage.rules reads the same doc). Missing doc = enabled.
+  async function hubUploadsEnabled() {
+    try {
+      const s = await getDoc(doc(db, 'commentsMeta', 'uploads'));
+      return !(s.exists() && s.data() && s.data().uploadsEnabled === false);
+    } catch (_e) { return true; }
+  }
+  // shared picker for the two forum composers (new-thread + reply). Browser-side
+  // checks are UX only — storage.rules + the pipeline CF are the real fences.
+  function hubCreateImagePicker(media) {
+    media.innerHTML = `<button type="button" class="hub-nt-image-btn">📷 Add an image</button>
+      <input type="file" class="hub-img-file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+      <span class="hub-img-note" role="status"></span>
+      <div class="hub-img-thumbs"></div>`;
+    const btn = media.querySelector('.hub-nt-image-btn');
+    const fileEl = media.querySelector('.hub-img-file');
+    const noteEl = media.querySelector('.hub-img-note');
+    const thumbsEl = media.querySelector('.hub-img-thumbs');
+    let picked = [];
+    const note = (m) => { noteEl.textContent = m || ''; };
+    const paint = () => {
+      thumbsEl.innerHTML = '';
+      picked.forEach((f, i) => {
+        const w = document.createElement('span'); w.className = 'hub-img-thumb';
+        const img = document.createElement('img'); img.alt = '';
+        img.src = URL.createObjectURL(f);
+        img.onload = () => { try { URL.revokeObjectURL(img.src); } catch (_) {} };
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'hub-img-thumb-x'; x.textContent = '×';
+        x.setAttribute('aria-label', 'Remove this image');
+        x.addEventListener('click', () => { picked.splice(i, 1); paint(); });
+        w.appendChild(img); w.appendChild(x); thumbsEl.appendChild(w);
+      });
+      btn.textContent = picked.length ? `📷 Add another (${picked.length}/${HUB_IMG_MAX})` : '📷 Add an image';
+    };
+    btn.addEventListener('click', async () => {
+      note('');
+      const u = auth.currentUser; if (!u) { openAuth('signin'); return; }
+      if (!(await hubUploadsEnabled())) { note('Image uploads are switched off right now — words still work.'); return; }
+      if (!u.emailVerified) { note('Verify your email to post images — check your inbox for the link, then reload.'); return; }
+      if (picked.length >= HUB_IMG_MAX) { note('Four images max per post.'); return; }
+      fileEl.click();
+    });
+    fileEl.addEventListener('change', () => {
+      note('');
+      const incoming = Array.from(fileEl.files || []);
+      for (const f of incoming) {
+        if (picked.length >= HUB_IMG_MAX) { note('Four images max per post.'); break; }
+        if (HUB_IMG_TYPES.indexOf(f.type) === -1) { note('JPEG, PNG, WebP or GIF only (no SVG).'); continue; }
+        if (f.size > HUB_IMG_MAX_BYTES) { note('Each image must be 5MB or less.'); continue; }
+        picked.push(f);
+      }
+      fileEl.value = '';
+      paint();
+    });
+    return { files: () => picked.slice(), count: () => picked.length, note, clear: () => { picked = []; note(''); paint(); } };
+  }
+  // ===========================================================================
+  // v1.10.0 GATE 11 — ||spoiler|| reveal (the markdown.js token renders a
+  // .rar-spoiler span everywhere: comments, replies, reviews, posts). One
+  // CAPTURE-phase listener so revealing a spoiler inside a clickable card/post
+  // never also triggers the card's own navigation. Keyboard: Enter/Space.
+  // The admin reports queue auto-reveals via CSS instead (Blake must see
+  // reported content without clicking every pill).
+  // ===========================================================================
+  document.addEventListener('click', (e) => {
+    const sp = e.target && e.target.closest ? e.target.closest('.rar-spoiler') : null;
+    if (!sp || sp.classList.contains('is-revealed')) return;
+    e.preventDefault(); e.stopPropagation();
+    sp.classList.add('is-revealed');
+    sp.setAttribute('aria-label', 'Spoiler — revealed');
+    sp.removeAttribute('title');
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const sp = e.target;
+    if (!sp || !sp.classList || !sp.classList.contains('rar-spoiler') || sp.classList.contains('is-revealed')) return;
+    e.preventDefault();
+    sp.classList.add('is-revealed');
+    sp.setAttribute('aria-label', 'Spoiler — revealed');
+    sp.removeAttribute('title');
+  });
+
+  // upload the picked files under a PRE-GENERATED doc id (the doc is created
+  // AFTER the uploads so imageRefs validate at create — rules pin each entry to
+  // the caller's own uploads/ prefix).
+  async function hubUploadImages(files, uid, docId, onProgress) {
+    const paths = [];
+    for (let i = 0; i < files.length; i++) {
+      if (onProgress) onProgress(i + 1, files.length);
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 10) + i;
+      const path = 'uploads/' + uid + '/' + docId + '/' + id;
+      await uploadBytes(storRef(storage, path), files[i], { contentType: files[i].type });
+      paths.push(path);
+    }
+    return paths;
+  }
+
   function relTimeHub(ts) {
     const ms = _ms(ts); if (!ms) return '';
     const h = (Date.now() - ms) / 36e5;
@@ -5546,6 +5693,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
     }
 
     const bodyHtml = window.renderMarkdownInline ? window.renderMarkdownInline(p.body || '') : escapeHtml(p.body || '');
+    // gate 13 — attached images (paths scheme-gated in hubImagesHtml; src hydrated async)
+    const imagesHtml = hubImagesHtml(p.imageRefs, {
+      docPath: (typeof hubThreadId === 'string' && hubThreadId) ? 'forum/' + hubThreadId + '/posts/' + (p.id || '') : '',
+      authorUid: p.authorUid || '',
+    });
 
     // the ⋯ overflow menu — secondary actions tucked away for a clean foot (item 7 vibe).
     const menu = opts.menuOpen ? `<div class="hub-post-menu" role="menu">
@@ -5572,6 +5724,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       ${byline}
       <div class="hub-post-body">${replyingTo}
         <div class="hub-post-text">${bodyHtml}</div>
+        ${imagesHtml}
         ${foot}
         ${childWrap}
       </div></li>`;
@@ -5793,7 +5946,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       ? '<ul class="hub-cards">' + sorted.map((t) => hubThreadCardHtml(t, _hubProfileCache.get(t.authorUid))).join('') + '</ul>'
       : `<div class="hub-empty"><div class="hub-empty-glyph" aria-hidden="true">🏮</div>
            <p class="hub-empty-lead">Quiet in here — for now.</p>
-           <p class="hub-empty-sub">This is the back room of my house. Pull up a chair, start the first thread, and we&rsquo;ll see who wanders in.</p></div>`;
+           <p class="hub-empty-sub">Make a post to start the conversation!</p></div>`;
     host.innerHTML = `
       <header class="hub-header hub-header--tavern">
         <div class="hub-kicker">COMMUNITY <span class="jp-mini">交流</span></div>
@@ -5915,8 +6068,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
       const name = await hubProfileName(t.authorUid);
       const isAdmin = (typeof window !== 'undefined' && window.__rarIsAdmin === true);
       const verdict = verdictRailHtml(t.tag);
+      // 8d fix #4 — the pin IS the Rising slot-1 gold pick; say so on the button
+      // (pinned thread → gold "Blake's pick" atop the Rising rail, hubRisingThreads).
       const adminBar = isAdmin ? `<div class="hub-admin-bar">
-          <button type="button" class="action-btn hub-admin" data-hub-admin="pin">${t.pinned ? 'Unpin' : 'Pin'}</button>
+          <button type="button" class="action-btn hub-admin${t.pinned ? ' is-pinned' : ''}" data-hub-admin="pin">${t.pinned ? '📌 Pinned to Rising — unpin' : '📌 Pin to Rising'}</button>
           <button type="button" class="action-btn hub-admin" data-hub-admin="lock">${t.locked ? 'Unlock' : 'Lock'}</button>
           <button type="button" class="action-btn hub-admin danger" data-hub-admin="remove">Remove</button>
         </div>` : '';
@@ -5932,12 +6087,14 @@ function openInlineCommentEditor(editBtn, itemRef) {
           <h2 class="hub-thread-title">${t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)')}</h2>
           <div class="hub-thread-by">${escapeHtml(name)}</div>
           <div class="hub-thread-text">${bodyHtml}</div>
+          ${t.removed ? '' : hubImagesHtml(t.imageRefs, { docPath: 'forum/' + tid, authorUid: t.authorUid || '' })}
           ${adminBar}
         </article>
         <h3 class="hub-replies-h">Replies</h3>
         ${hubThreadSortBar()}
         <ul class="hub-posts" id="hub-posts"><li class="hub-post-empty hub-loading">Loading the conversation…</li></ul>
         <div class="hub-reply" id="hub-reply"></div>`;
+      hubHydrateImages(bodyEl);   // gate 13 — async getDownloadURL srcs
       mountReplyComposer(tid, !!t.locked);
       if (hubRepaintPosts) hubRepaintPosts();   // re-paint posts into the fresh #hub-posts
     }, () => {});
@@ -5987,6 +6144,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       postsEl.innerHTML = roots.length
         ? roots.map((p) => renderNode(p, 0)).join('')
         : `<li class="hub-post-empty">${HUB_EMPTY_REPLIES}</li>`;
+      hubHydrateImages(postsEl);   // gate 13 — async getDownloadURL srcs
     };
     hubRepaintPosts = paintPosts;
 
@@ -6007,12 +6165,14 @@ function openInlineCommentEditor(editBtn, itemRef) {
     host.innerHTML = `<div class="hub-replyto-banner" hidden><span class="hub-replyto-text"></span><button type="button" class="hub-replyto-cancel" data-replyto-cancel aria-label="Cancel reply">&times;</button></div>
       <div class="comment-composer">
         <textarea class="hub-reply-input" placeholder="${HUB_REPLY_PLACEHOLDER}" maxlength="4000"></textarea>
+        <div class="hub-reply-media"></div>
         <div class="composer-actions"><span class="char-count"><span class="hub-reply-count">0</span>/4000</span>
           <button type="button" class="btn hub-reply-post" disabled>Reply</button></div>
       </div>`;
     const input = host.querySelector('.hub-reply-input');
     const postBtn = host.querySelector('.hub-reply-post');
     const counter = host.querySelector('.hub-reply-count');
+    const picker = hubCreateImagePicker(host.querySelector('.hub-reply-media'));   // gate 13
     const sync = () => { const n = input.value.trim().length; counter.textContent = String(input.value.length); postBtn.disabled = !(auth.currentUser && n > 0); };
     input.addEventListener('input', sync); sync();
     // restore an in-flight reply target if the thread doc re-snapshotted mid-reply
@@ -6027,9 +6187,25 @@ function openInlineCommentEditor(editBtn, itemRef) {
         // reply-to-reply (item 6): parentId is write-once at create; the edit/delete
         // rules use hasOnly() and would reject it, so it is NEVER touched again.
         if (hubReplyParent && hubReplyParent.id) docData.parentId = hubReplyParent.id;
-        await addDoc(collection(db, 'forum', tid, 'posts'), docData);
-        input.value = ''; clearReplyTarget(); sync();
-      } catch (err) { alert('Could not post your reply: ' + (err && err.message || err)); postBtn.disabled = false; }
+        // gate 13 — images upload under the PRE-generated post id, doc lands after
+        // (imageRefs must exist at create for the rules' own-prefix pin).
+        const files = picker.files();
+        const pref = doc(collection(db, 'forum', tid, 'posts'));
+        if (files.length) {
+          docData.imageRefs = await hubUploadImages(files, u.uid, pref.id,
+            (i, n) => { postBtn.textContent = 'Uploading ' + i + '/' + n + '…'; });
+        }
+        try {
+          await setDoc(pref, docData);
+        } catch (createErr) {
+          // the doc was denied — don't strand world-readable orphans
+          if (docData.imageRefs) for (const p of docData.imageRefs) { try { await deleteObject(storRef(storage, p)); } catch (_) {} }
+          throw createErr;
+        }
+        input.value = ''; picker.clear(); clearReplyTarget(); sync();
+        input.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview too (8d fix #1)
+        postBtn.textContent = 'Reply';
+      } catch (err) { alert('Could not post your reply: ' + (err && err.message || err)); postBtn.disabled = false; postBtn.textContent = 'Reply'; }
     });
     if (window.RarComposer) window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click() });
   }
@@ -6063,11 +6239,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
             </div>
           </div>
           <textarea class="hub-nt-body" maxlength="4000" placeholder="Say what you think…"></textarea>
-          <!-- gate 13 image hook: the upload control mounts in .hub-nt-media when Storage lands -->
-          <div class="hub-nt-media">
-            <button type="button" class="hub-nt-image-btn" disabled aria-disabled="true" title="Image uploads arrive soon">📷 Add an image</button>
-            <span class="hub-nt-image-soon">coming soon</span>
-          </div>
+          <div class="hub-nt-media"></div><!-- gate 13 — the live image picker mounts here -->
+
           <p class="hub-nt-error" role="alert"></p>
           <div class="hub-nt-actions">
             <button type="button" class="action-btn hub-nt-cancel">Cancel</button>
@@ -6102,6 +6275,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     let selectedTopic = 'general';     // the dropdown topic
     let attached = null;               // { tag, title, cover, is44 } when an anime is attached
     let searchTimer = null, inflight = null;
+    const picker = hubCreateImagePicker(overlay.querySelector('.hub-nt-media'));   // gate 13
 
     // ---- the branded topic dropdown (Part C) ----
     function setTopic(tag) {
@@ -6199,10 +6373,24 @@ function openInlineCommentEditor(editBtn, itemRef) {
           postCount: 0, reportCount: 0, hotScore: 0, pinned: false, locked: false, removed: false,
         };
         if (attached) { docData.animeTitle = String(attached.title).slice(0, 200); if (attached.cover) docData.coverImage = attached.cover; }
-        const ref = await addDoc(collection(db, 'forum'), docData);
+        // gate 13 — images upload under the PRE-generated thread id; the doc
+        // lands after so imageRefs validate at create (own-prefix pinned).
+        const files = picker.files();
+        const tref = doc(collection(db, 'forum'));
+        if (files.length) {
+          docData.imageRefs = await hubUploadImages(files, auth.currentUser.uid, tref.id,
+            (i, n) => { createBtn.textContent = 'Uploading ' + i + '/' + n + '…'; });
+        }
+        try {
+          await setDoc(tref, docData);
+        } catch (createErr) {
+          // the doc was denied — don't strand world-readable orphans
+          if (docData.imageRefs) for (const p of docData.imageRefs) { try { await deleteObject(storRef(storage, p)); } catch (_) {} }
+          throw createErr;
+        }
         close();
-        openThreadById(ref.id);
-      } catch (err) { createBtn.disabled = false; errEl.textContent = 'Could not post: ' + (err && err.message || err); }
+        openThreadById(tref.id);
+      } catch (err) { createBtn.disabled = false; createBtn.textContent = 'Post thread'; errEl.textContent = 'Could not post: ' + (err && err.message || err); }
     });
   }
 
@@ -6294,6 +6482,33 @@ function openInlineCommentEditor(editBtn, itemRef) {
       if (!(await ensureCanParticipate())) return;
       try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { removed: true, body: '' }); hubConfirmDel.delete(pid); hubEditing.delete(pid); }
       catch (err) { alert('Could not take it down: ' + (err && err.message || err)); }
+      return;
+    }
+    // ---- gate 14 — per-image actions (the Report affordance every rendered image must carry) ----
+    const imgFlag = t.closest('[data-img-report]'); if (imgFlag) {
+      openReportModal({
+        targetType: 'image', targetPath: imgFlag.dataset.imgDoc || '',
+        targetUid: imgFlag.dataset.imgAuthor || '', imagePath: imgFlag.dataset.imgReport,
+        snapshotText: '[image] ' + (imgFlag.dataset.imgReport || ''),
+      });
+      return;
+    }
+    const imgRm = t.closest('[data-img-remove]'); if (imgRm) {
+      if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
+      // two-click arm (branded confirm, no native dialog — same vibe as take-down)
+      if (!imgRm.classList.contains('is-armed')) {
+        imgRm.classList.add('is-armed'); imgRm.textContent = '🗑?';
+        imgRm.title = 'Click again — removes the image from Storage AND the post, for good';
+        setTimeout(() => { imgRm.classList.remove('is-armed'); imgRm.textContent = '🗑'; }, 2600);
+        return;
+      }
+      imgRm.disabled = true;
+      try {
+        // ATOMIC remove (gate 14): the callable deletes the Storage object FIRST,
+        // then redacts the Firestore pointer — never the Firestore-only trap.
+        await httpsCallable(functions, 'adminRemoveImage')({ docPath: imgRm.dataset.imgDoc || '', imagePath: imgRm.dataset.imgRemove });
+        const wrap = imgRm.closest('.hub-img-wrap'); if (wrap) wrap.remove();
+      } catch (err) { imgRm.disabled = false; alert('Could not remove the image: ' + (err && err.message || err)); }
       return;
     }
     const adminBtn = t.closest('[data-hub-admin]'); if (adminBtn && hubThreadId) { await hubAdminAction(adminBtn.dataset.hubAdmin); return; }
@@ -7058,6 +7273,7 @@ function subscribeReviews(anime) {
           await addDoc(itemsRef, payload);
           markPostedNow();
           threadInput.value = '';
+          threadInput.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview too (8d fix #1)
         } catch (err) {
           pending.remove();
           alert('Failed to post: ' + err.message);
@@ -7316,6 +7532,7 @@ if (purl) data.photoURL = purl;
       // ONE-PER-USER: write to doc id = uid (upserts only their slot)
       await setDoc(doc(db, 'reviews', s, 'items', auth.currentUser.uid), data);
       titleEl.value = ''; rateEl.value = ''; bodyEl.value = '';
+      bodyEl.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview NOW, not on the snapshot round-trip (8d fix #1)
     } catch (err) {
       alert('Failed to publish: ' + err.message);
     } finally {

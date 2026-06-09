@@ -29,8 +29,11 @@
 const { setGlobalOptions } = require('firebase-functions');
 const { onRequest, onCall, HttpsError } = require('firebase-functions/https');
 const { onDocumentWritten, onDocumentCreated, onDocumentDeleted } = require('firebase-functions/firestore');
+const { onObjectFinalized } = require('firebase-functions/storage'); // v1.10.0 gate 13 — image pipeline
 const admin = require('firebase-admin');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
+const sharp = require('sharp'); // gate 13 — EXIF-strip re-encode
 
 const { pingPayload } = require('./lib/ping');
 const { voteCountDeltas } = require('./lib/votecounts');
@@ -39,6 +42,9 @@ const { shouldNotify, isMuted } = require('./lib/notify');
 const { notifsToPrune } = require('./lib/prune');
 const { rateDecision } = require('./lib/ratelimit');
 const moderation = require('./lib/moderation'); // v1.10.0 gate 2 — ban + consent cores
+const { sniffImageType, contentTypeMatches, parseUploadPath } = require('./lib/imagecheck'); // gate 13
+const { capDecision } = require('./lib/uploadcap');   // gate 13 — per-user bucket-fill cap
+const images = require('./lib/images');               // gate 14 — admin atomic image removal
 
 setGlobalOptions({
   region: 'us-central1',
@@ -54,6 +60,16 @@ const MARKER_TTL_DAYS = 7;      // idempotency markers self-expire
 const DAY_MS = 86400000;
 const RATE_WINDOW_MS = 60000;   // 60s rolling window for the detect-and-undo limiter
 const RATE_LIMIT = 5;           // max content creates per window per user
+
+// ---- v1.10.0 gates 12-14 — image uploads ----
+// ONE bucket name everywhere (trigger registration, sweeps, client, tests):
+// the project's default bucket. Pinning the literal keeps the emulator (whose
+// synthesized default-bucket name has drifted across CLI versions) and prod on
+// the same trigger — the storage emulator routes events by bucket NAME.
+const UPLOADS_BUCKET = 'real-anime-reviews.firebasestorage.app';
+const MAX_UPLOAD_FILES_PER_USER = 60;                 // ≤4 per post; 60 total ≈ 15 image-posts
+const MAX_UPLOAD_BYTES_PER_USER = 100 * 1024 * 1024;  // 100MB per user across all uploads
+const uploadsBucket = () => getStorage().bucket(UPLOADS_BUCKET);
 
 // -----------------------------------------------------------------------------
 // ping — no-op health check (the only function deployed live as of gate 2).
@@ -340,11 +356,27 @@ exports.onReviewDelete = onDocumentDeleted(
 
 // onForumThreadDelete — a hard-deleted hub thread's `posts` (+ their votes) are
 // orphaned. Threads are normally SOFT-deleted; this fires on a real hard delete
-// (e.g. from onUserDelete). recursiveDelete cleans the subtree.
-exports.onForumThreadDelete = onDocumentDeleted(
-  'forum/{threadId}',
-  (event) => db.recursiveDelete(db.doc('forum/' + event.params.threadId))
-);
+// (e.g. from onUserDelete). recursiveDelete cleans the subtree. Gate 14: the
+// thread's own uploaded images leave Storage too (posts' images are wiped by
+// onForumPostDelete as recursiveDelete removes each post doc).
+exports.onForumThreadDelete = onDocumentDeleted('forum/{threadId}', async (event) => {
+  const d = event.data ? event.data.data() : null;
+  const tasks = [db.recursiveDelete(db.doc('forum/' + event.params.threadId))];
+  if (d && d.authorUid) {
+    tasks.push(uploadsBucket().deleteFiles({ prefix: 'uploads/' + d.authorUid + '/' + event.params.threadId + '/' }).catch(() => {}));
+  }
+  await Promise.all(tasks);
+});
+
+// onForumPostDelete (gate 14) — fires on any post hard delete, INCLUDING the
+// recursiveDelete cascades above/in onUserDelete: the post's images leave
+// Storage with the doc.
+exports.onForumPostDelete = onDocumentDeleted('forum/{threadId}/posts/{postId}', async (event) => {
+  const d = event.data ? event.data.data() : null;
+  if (d && d.authorUid) {
+    await uploadsBucket().deleteFiles({ prefix: 'uploads/' + d.authorUid + '/' + event.params.postId + '/' }).catch(() => {});
+  }
+});
 
 // onUserDelete — DAY-1 account deletion (Blake's locked answer). Deleting the
 // users/{uid} doc fans out a full wipe so the privacy page's deletion promise is
@@ -380,6 +412,10 @@ exports.onUserDelete = onDocumentDeleted('users/{uid}', async (event) => {
   // + public profile.
   tasks.push(db.recursiveDelete(db.doc('users/' + uid)));
   tasks.push(db.doc('profiles/' + uid).delete());
+
+  // gate 14 — EVERY image they ever uploaded leaves Storage ("ZERO trace" now
+  // spans the bucket, not just Firestore).
+  tasks.push(uploadsBucket().deleteFiles({ prefix: 'uploads/' + uid + '/' }).catch(() => {}));
 
   // tombstone DMs they're in (don't half-delete the other party's thread).
   const convos = await db.collection('conversations').where('participants', 'array-contains', uid).get();
@@ -478,4 +514,132 @@ exports.setBanState = onCall(async (request) => {
 exports.onBanCascade = onDocumentCreated('banned/{uid}', async (event) => {
   if (await alreadyProcessed(event.id)) return;
   await moderation.runBanCascade(db, FieldValue, event.params.uid);
+  // gate 14 — a banned user's images actually leave Storage (the redaction
+  // above empties their docs; this empties their bucket prefix).
+  await uploadsBucket().deleteFiles({ prefix: 'uploads/' + event.params.uid + '/' }).catch(() => {});
+});
+
+// =============================================================================
+// v1.10.0 GATES 13-14 — the IMAGE PIPELINE (STAGED, deploys at the cutover).
+// storage.rules is the first fence (owner path, ≤5MB, image/* no-SVG, email-
+// verified, ban+consent cross-read, kill-switch). THIS is the second:
+// server-side magic-byte truth, EXIF strip, and the per-user bucket-fill cap
+// rules can't do. Forum surfaces only — no other upload path exists.
+// =============================================================================
+
+// processUploadedImage — onObjectFinalized for uploads/{uid}/{docId}/{imageId}:
+//   (1) skip our own re-upload (cfProcessed metadata — breaks the finalize loop);
+//   (2) per-uid count/byte cap (list the prefix — the only cross-object truth);
+//   (3) magic-byte re-validate (a spoofed contentType / SVG / HTML payload is
+//       DELETED — storage.rules trusts client metadata, this doesn't);
+//   (4) sharp re-encode — strips EXIF/GPS/metadata (rotate() first so the EXIF
+//       orientation is baked in before the tag is dropped). Unparseable input
+//       is DELETED (fail closed: what we can't verify doesn't get published).
+exports.processUploadedImage = onObjectFinalized(
+  { bucket: UPLOADS_BUCKET, memory: '512MiB' },
+  async (event) => {
+    const obj = event.data;
+    const parsed = parseUploadPath(obj.name);
+    if (!parsed) return; // not a pipeline-owned path (rules deny these anyway)
+    if (obj.metadata && obj.metadata.cfProcessed === 'true') return; // our own write
+    if (await alreadyProcessed(event.id)) return;
+
+    const bucket = getStorage().bucket(obj.bucket); // the event's own bucket
+    const file = bucket.file(obj.name);
+
+    // (2) cap BEFORE the expensive download. The listing includes this object.
+    const [files] = await bucket.getFiles({ prefix: 'uploads/' + parsed.uid + '/' });
+    const totalBytes = files.reduce((s, f) => s + Number((f.metadata && f.metadata.size) || 0), 0);
+    const dec = capDecision({
+      fileCount: files.length, totalBytes,
+      maxFiles: MAX_UPLOAD_FILES_PER_USER, maxBytes: MAX_UPLOAD_BYTES_PER_USER,
+    });
+    if (dec.over) { await file.delete({ ignoreNotFound: true }); return; }
+
+    // (3) magic bytes vs declared contentType
+    const [buf] = await file.download();
+    const sniffed = sniffImageType(buf);
+    if (!sniffed || !contentTypeMatches(sniffed, obj.contentType)) {
+      await file.delete({ ignoreNotFound: true });
+      return;
+    }
+
+    // (4) re-encode (animated gif/webp preserved; 30MP input ceiling guards
+    // against decompression bombs — over it, sharp throws -> delete).
+    let out;
+    try {
+      const s = sharp(buf, { animated: sniffed === 'gif' || sniffed === 'webp', limitInputPixels: 30e6 }).rotate();
+      out = sniffed === 'jpeg' ? await s.jpeg({ quality: 88 }).toBuffer()
+          : sniffed === 'png'  ? await s.png().toBuffer()
+          : sniffed === 'webp' ? await s.webp().toBuffer()
+          :                      await s.gif().toBuffer();
+    } catch (_e) {
+      await file.delete({ ignoreNotFound: true });
+      return;
+    }
+    await file.save(out, {
+      resumable: false,
+      metadata: { contentType: obj.contentType, metadata: { cfProcessed: 'true' } },
+    });
+  }
+);
+
+// adminRemoveImage (callable, admin-only) — the gate-14 ATOMIC remove: Storage
+// object first (the world-readable exposure), Firestore pointer second. Core in
+// lib/images.js (cf-tests drive it directly, like the moderation cores).
+exports.adminRemoveImage = onCall(async (request) => {
+  try {
+    return await images.applyAdminRemoveImage(
+      db, uploadsBucket(), FieldValue,
+      request.auth && request.auth.uid,
+      request.data && request.data.docPath,
+      request.data && request.data.imagePath
+    );
+  } catch (e) { throw new HttpsError(e.code || 'internal', e.message || 'adminRemoveImage failed'); }
+});
+
+// Removed-transition watchers (gate 14) — a SOFT-removed thread/post (owner
+// self-delete, admin remove, or the ban cascade's redaction) takes its images
+// out of Storage and drops the pointer field. Only the false->true edge acts;
+// the hotScore CFs' frequent thread writes no-op here.
+async function handleRemovedTransition(event, prefixOf) {
+  const b = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const a = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  if (!a || !b) return;                                  // creates/deletes handled elsewhere
+  if (b.removed === true || a.removed !== true) return;  // not the removal edge
+  if (await alreadyProcessed(event.id)) return;
+  const uid = a.authorUid;
+  if (!uid) return;
+  await uploadsBucket().deleteFiles({ prefix: prefixOf(uid, event.params) }).catch(() => {});
+  if (Array.isArray(a.imageRefs) && a.imageRefs.length) {
+    await event.data.after.ref.update({ imageRefs: FieldValue.delete() }).catch(() => {});
+  }
+}
+exports.onForumPostRemoved = onDocumentWritten('forum/{threadId}/posts/{postId}',
+  (e) => handleRemovedTransition(e, (uid, p) => 'uploads/' + uid + '/' + p.postId + '/'));
+
+// A thread soft-remove (the ONLY moderator/owner takedown — hard delete is
+// rules-denied) must take down the WHOLE thread's images, not just the OP's:
+// each reply's images live under uploads/{REPLIER_uid}/{postId}/ (pinned to the
+// uploader, who is NOT the thread author), so the OP-prefix sweep alone leaves
+// abusive reply images live + world-readable. (Adversarial review, MED.)
+exports.onForumThreadRemoved = onDocumentWritten('forum/{threadId}', async (event) => {
+  const b = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const a = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  if (!a || !b) return;
+  if (b.removed === true || a.removed !== true) return; // not the removal edge
+  if (await alreadyProcessed(event.id)) return;
+  const threadId = event.params.threadId;
+  const tasks = [];
+  // (1) the OP's own images + pointer
+  if (a.authorUid) tasks.push(uploadsBucket().deleteFiles({ prefix: 'uploads/' + a.authorUid + '/' + threadId + '/' }).catch(() => {}));
+  if (Array.isArray(a.imageRefs) && a.imageRefs.length) tasks.push(event.data.after.ref.update({ imageRefs: FieldValue.delete() }).catch(() => {}));
+  // (2) EVERY reply's images (each under its own uploader's prefix + the post id)
+  const posts = await db.collection('forum/' + threadId + '/posts').get();
+  posts.forEach((d) => {
+    const p = d.data() || {};
+    if (p.authorUid) tasks.push(uploadsBucket().deleteFiles({ prefix: 'uploads/' + p.authorUid + '/' + d.id + '/' }).catch(() => {}));
+    if (Array.isArray(p.imageRefs) && p.imageRefs.length) tasks.push(d.ref.update({ imageRefs: FieldValue.delete() }).catch(() => {}));
+  });
+  await Promise.all(tasks);
 });

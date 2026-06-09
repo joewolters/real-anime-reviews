@@ -3,7 +3,7 @@
 // =============================================================================
 // PRACTICE MODE — Blake's gate-4 smoke sandbox.
 //   Run:  npm run practice
-//   (= firebase emulators:exec --only auth,firestore,functions "node scripts/practice-serve.js")
+//   (= firebase emulators:exec --only auth,firestore,functions,storage "node scripts/practice-serve.js")
 //
 // It seeds the LOCAL emulators with fake users + comments/replies, then serves
 // the real site on http://127.0.0.1:8765 . Blake opens
@@ -46,7 +46,9 @@ function loadAnime() {
 }
 
 async function ensureUser(uid, email, displayName) {
-  try { await auth.createUser({ uid, email, password: PRAC_PW, displayName }); }
+  // gate 12 — emailVerified:true so the practice accounts pass the storage.rules
+  // email-verified upload gate (Blake smokes uploads without a real inbox).
+  try { await auth.createUser({ uid, email, password: PRAC_PW, displayName, emailVerified: true }); }
   catch (e) { if (e.code !== 'auth/uid-already-exists' && e.code !== 'auth/email-already-exists') throw e; }
   await db.doc('users/' + uid).set({ username: displayName, photoURL: null }, { merge: true });
   await db.doc('profiles/' + uid).set({ uid, displayName, photoURL: null }, { merge: true });
@@ -206,6 +208,23 @@ async function seed() {
   for (const v of fvotes) {
     await db.doc('forum/' + v.tid + '/posts/' + v.pid + '/votes/' + v.voter).set({ uid: v.voter, value: v.value, updatedAt: TS.fromMillis(nowMs - 3600000) });
   }
+
+  // gates 12-14 — seed one IMAGE on a Tavern reply so Blake can smoke render +
+  // report + admin atomic-remove without uploading first. cfProcessed metadata
+  // keeps the pipeline CF from re-encoding the seed. Bucket name MUST be the
+  // pinned UPLOADS_BUCKET (functions/index.js) — the trigger listens there.
+  try {
+    const bucket = admin.storage().bucket('real-anime-reviews.firebasestorage.app');
+    // a real 1×1 purple PNG (valid magic bytes, so a manual re-process also passes)
+    const seedPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADgQF/e5IkGQAAAABJRU5ErkJggg==', 'base64');
+    const imgPath = 'uploads/prac-mika/p0/seed-img1';
+    await bucket.file(imgPath).save(seedPng, {
+      resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
+    });
+    await db.doc('forum/th-opm/posts/p0').set({ imageRefs: [imgPath] }, { merge: true });
+    console.log('✓ Seeded a practice image on th-opm/p0 (report it, admin-remove it).');
+  } catch (e) { console.warn('storage seed skipped:', e.message); }
 
   // seed a full notification inbox for MIKA so Blake can smoke the Lantern (every
   // type + a Blake-origin GOLD ping that sorts first + votes that roll up + a muted

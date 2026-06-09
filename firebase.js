@@ -5,6 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, connectAuthEmulator }      from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getFirestore, connectFirestoreEmulator } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getFunctions, connectFunctionsEmulator } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js";
+import { getStorage, connectStorageEmulator } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js"; // v1.10.0 gate 12 — forum image uploads
 
 // Paste YOUR config from the console:
 const firebaseConfig = {
@@ -25,6 +26,9 @@ const db   = getFirestore(app);
 // callable (community-rules consent). Region defaults to us-central1, matching
 // the deployed CFs (functions/index.js setGlobalOptions).
 const functions = getFunctions(app);
+// v1.10.0 gate 12 — Storage SDK for forum image uploads (uploads/{uid}/{docId}/
+// paths; storage.rules is the lock — staged, deploys at the cutover).
+const storage = getStorage(app);
 
 // ── GATE 4 practice mode ───────────────────────────────────────────────────
 // Opt-in ONLY: point the client SDK at the LOCAL Firebase emulators so Blake can
@@ -44,18 +48,20 @@ const functions = getFunctions(app);
     connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
     connectFirestoreEmulator(db, "127.0.0.1", 8080);
     connectFunctionsEmulator(functions, "127.0.0.1", 5001); // v1.10.0 gate 3 — acceptRules callable
+    connectStorageEmulator(storage, "127.0.0.1", 9199);     // v1.10.0 gate 12 — image uploads
     window.RAR_PRACTICE_MODE = true;
-    console.log("🔧 PRACTICE MODE — connected to local Firebase emulators (auth:9099, firestore:8080, functions:5001)");
+    console.log("🔧 PRACTICE MODE — connected to local Firebase emulators (auth:9099, firestore:8080, functions:5001, storage:9199)");
   } catch (e) {
     console.warn("practice-mode emulator connect skipped:", e && e.message);
   }
 })();
 
 // Export for script.js
-export { app, auth, db, functions };
+export { app, auth, db, functions, storage };
 
 window.auth = auth;
 window.db = db;
 window.functions = functions;
+window.rarStorage = storage; // gate 12 — script.js upload UI (window.storage would shadow nothing, but stay explicit)
 
 console.log("✅ Firebase initialized");
