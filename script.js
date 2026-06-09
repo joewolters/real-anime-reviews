@@ -160,6 +160,7 @@ function updateScrollLock() {
   // v1.8.4 gate 5 — real nav: the Den place button + the sliding "you are here" marker,
   // plus the two home hole-fill strips.
   const denBtn = document.getElementById("den-btn");
+  const communityBtn = document.getElementById("community-btn"); // v1.10.0 gate 6 — the Hub place
   const navPlaces = document.querySelector(".nav-places");
   const placeMarker = document.querySelector(".place-marker");
   const homeAiringBlock = document.getElementById("home-airing-block");
@@ -1819,7 +1820,15 @@ function openNotifTarget(targetPath, animeId) {
     openAnimeFromId(t.slug);
     return;
   }
-  if (t.kind === 'hash') { try { window.location.hash = '#' + t.path; } catch (_) {} return; }
+  if (t.kind === 'hash') {
+    // v1.10.0 gate 5 — forum/DM deep-link router. Open the Hub thread in-app (the forum
+    // half is live); DMs land in gate 18 (cleanly stubbed, never a dead click).
+    const fm = /^forum\/([^/]+)/.exec(t.path || '');
+    if (fm && typeof window.openHubThread === 'function') { window.openHubThread(fm[1]); return; }
+    if (/^conversations\//.test(t.path || '')) { alert('Direct messages are coming soon.'); return; }
+    try { window.location.hash = '#' + t.path; } catch (_) {}
+    return;
+  }
   if (animeId) openAnimeFromId(animeId);
 }
 
@@ -3532,7 +3541,7 @@ function wireForYouLens() {
 // helper lights exactly one (or none, for the View All tool view) + slides the gold
 // marker. Den is lit on first paint (home is default). reuses .inline-header-btn.is-active.
 function setActivePlace(activeBtn) {
-  [denBtn, foryouBtn, discoverBtn].forEach((b) => {
+  [denBtn, foryouBtn, discoverBtn, communityBtn].forEach((b) => {
     if (!b) return;
     const on = b === activeBtn;
     b.classList.toggle('is-active', on);
@@ -3543,9 +3552,10 @@ function setActivePlace(activeBtn) {
   // surface + View All's null route through it) flips data-surface on <html>; CSS
   // crossfades the per-surface veil density (~450ms). null (View All) = the 'tool' room.
   document.documentElement.dataset.surface =
-    activeBtn === denBtn      ? 'den'      :
-    activeBtn === foryouBtn   ? 'foryou'   :
-    activeBtn === discoverBtn ? 'discover' : 'tool';
+    activeBtn === denBtn       ? 'den'       :
+    activeBtn === foryouBtn    ? 'foryou'    :
+    activeBtn === discoverBtn  ? 'discover'  :
+    activeBtn === communityBtn ? 'hub'       : 'tool';
 }
 // Slide the gold ink-bar under the active place. Measured in a rAF (after the class +
 // any font swap settles). The static .place-btn.is-active::after underbar is the no-JS
@@ -5335,6 +5345,1025 @@ function openInlineCommentEditor(editBtn, itemRef) {
   // assert the branded render. The pure consentGateDecision above covers the logic.
   window.__rarOpenConsent = showConsentModal;
   window.__rarOpenSuspended = showSuspendedModal;
+
+  // ===========================================================================
+  // v1.10.0 GATES 6-8 — the Community Hub ("The Lantern Room").
+  // Community is the 4th nav place; tapping it flips data-surface='hub' (a cozy veil
+  // step between Den and Discover) and opens a LEFT-anchored full-height drawer over
+  // the still-lit Den (structural non-co-equality). The drawer reuses the secondary
+  // stack's drawer PATTERN ([hidden] symmetry, slide-in, backdrop, list<->detail
+  // history) without entangling the anime-coupled secondary element.
+  //
+  // Forum data is STAGED (rules deny writes until the cutover); this is the client.
+  // hotScore + the forum-post-vote CF land in GATE 9, so Hot/Top sort CLIENT-SIDE here
+  // and post-vote COUNTS stay as stored until that CF (the vote toggle still records
+  // the user's own vote). HEART: cards are PURPLE + COUNT-FREE; the ONE gold
+  // expression is the "From Blake's 44" shelf + an anime-tagged thread's verdict rail.
+  // ===========================================================================
+  const FORUM_TAGS = ['general', 'recommend', 'hottake', 'episode', 'theories', 'animation', 'music', 'news', 'manga', 'cosplay', 'blakes-44', 'offtopic'];
+  const TAG_LABEL = { general: 'General', recommend: 'Recs', hottake: 'Hot Takes', episode: 'Episode', theories: 'Theories', animation: 'Animation', music: 'Music', news: 'News', manga: 'Manga', cosplay: 'Cosplay', 'blakes-44': "Blake's Reviews", offtopic: 'Off-topic' };
+  // Topics offered in the new-thread DROPDOWN (gate 8d Part C — going wide). 'blakes-44'
+  // is a FILTER chip only (anime threads carry anime:<slug>/anime:al:<id>) — not a composer topic.
+  const FORUM_TOPICS = [['general', 'General'], ['recommend', 'Recommendations'], ['hottake', 'Hot Takes'], ['episode', 'Episode Discussion'], ['theories', 'Theories'], ['animation', 'Animation'], ['music', 'Music & OST'], ['news', 'News'], ['manga', 'Manga'], ['cosplay', 'Cosplay'], ['offtopic', 'Off-topic']];
+  let hubSort = 'hot';              // 'hot' | 'new' | 'top'
+  let hubTag = null;                // null = all; else a tag filter
+  let hubThreads = [];              // live forum threads (removed filtered out)
+  let hubUnsub = null;              // forum onSnapshot unsubscribe
+  let hubLayerEl = null;            // the drawer root
+  let hubView = 'list';            // 'list' | 'thread'
+  let hubThreadId = null;           // current open thread id (detail view)
+  let hubThreadUnsubs = [];         // thread-detail subscriptions
+  const _hubProfileCache = new Map();
+  // gate 8b "The Tavern" — deeper reply state (all memory-only; no schema):
+  let hubThreadAuthorUid = null;    // OP uid for the open thread (the "started this" tag)
+  let hubReplyParent = null;        // { id, name } when a reply targets a specific post
+  let hubRepaintPosts = null;       // re-render the open thread's posts (edit/collapse/confirm)
+  const hubCollapsed = new Set();    // collapsed post subtrees
+  const hubEditing = new Map();      // postId -> draft body (inline edit-own)
+  const hubConfirmDel = new Set();   // postId pending a branded delete-confirm
+  const _hubRawBody = new Map();     // postId -> raw markdown body (for the edit box)
+  const hubMyVotes = new Map();      // postId -> 1|-1 (this viewer's own thumb; UI-only, session-scoped, count-free)
+  const hubMenuOpen = new Set();      // gate 8c — postId whose ⋯ action menu is open
+  let hubThreadSort = 'old';          // gate 8c — within-thread reply order: 'old' | 'new' | 'top'
+  // The 👍/👎 thumb SVGs — the SAME geometry the v1.9.1 review votes use (down = up
+  // rotated 180deg in CSS). COUNT-FREE in the Tavern: no .vcount span (heart rule).
+  const HUB_THUMB_UP = '<svg class="vote-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1z"/></svg>';
+  const HUB_THUMB_DOWN = '<svg class="vote-ico vote-ico--down" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1z"/></svg>';
+  // Blake-voiced empty/placeholder copy (the back-room voice).
+  const HUB_EMPTY_REPLIES = 'No replies yet — be the first.';
+  const HUB_REPLY_PLACEHOLDER = 'Add a reply…';
+
+  // ---- PURE helpers (no I/O — exposed for the heart specs) -------------------
+  function _ms(ts) { return ts ? (ts.toMillis ? ts.toMillis() : (typeof ts === 'number' ? ts : (ts.seconds ? ts.seconds * 1000 : 0))) : 0; }
+
+  // hotScore is CF-owned (gate 9) and 0 until then; until it lands, "Hot" ranks by
+  // recent activity (lastPostAt, falling back to createdAt) with a postCount nudge.
+  function hubSortThreads(threads, sort) {
+    const list = (threads || []).slice();
+    const byNew = (a, b) => _ms(b.createdAt) - _ms(a.createdAt);
+    const byTop = (a, b) => ((b.postCount || 0) - (a.postCount || 0)) || (_ms(b.lastPostAt) - _ms(a.lastPostAt));
+    const byHot = (a, b) => {
+      const hs = (b.hotScore || 0) - (a.hotScore || 0);
+      if (hs) return hs;
+      return ((_ms(b.lastPostAt) || _ms(b.createdAt)) - (_ms(a.lastPostAt) || _ms(a.createdAt))) || ((b.postCount || 0) - (a.postCount || 0));
+    };
+    const cmp = sort === 'new' ? byNew : sort === 'top' ? byTop : byHot;
+    list.sort((a, b) => ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || cmp(a, b));
+    return list;
+  }
+  window.hubSortThreads = hubSortThreads;
+
+  // anime:<slug> tag -> slug, else null.
+  function hubAnimeSlugFromTag(tag) {
+    const m = /^anime:([a-z0-9-]{1,100})$/.exec(String(tag || ''));   // {1,100} mirrors the firestore.rules tag cap (long catalog slugs)
+    return m ? m[1] : null;
+  }
+  window.hubAnimeSlugFromTag = hubAnimeSlugFromTag;
+
+  function _animeData() {
+    if (typeof window !== 'undefined' && Array.isArray(window.animeData)) return window.animeData;
+    if (typeof window !== 'undefined' && Array.isArray(window.__ANIME_DATA__)) return window.__ANIME_DATA__;
+    if (typeof animeData !== 'undefined' && Array.isArray(animeData)) return animeData;
+    return [];
+  }
+  function blakes44() { return _animeData().filter((a) => a && a.Rating); }
+  window.hubBlakes44 = blakes44; // test hook + reuse
+  function animeBySlug(s) { return _animeData().find((a) => animeSlug(a) === s) || null; }
+  // gate 8d — match an AniList search result to one of Blake's 44 (by AniList id, incl.
+  // the per-season ids he watched) so a reviewed title can carry his gold verdict rail.
+  function blake44ByAniListId(id) {
+    const n = Number(id); if (!n) return null;
+    return blakes44().find((a) => {
+      if (Number(a.AniListId) === n) return true;
+      const w = a.WatchedAniListIds || a.KnownAniListIds;
+      return Array.isArray(w) && w.map(Number).indexOf(n) !== -1;
+    }) || null;
+  }
+  // gate 8d — the SAME live AniList search the "request an anime" page uses (covers, debounced).
+  const HUB_AL_QUERY = 'query ($search: String!) { Page(perPage: 8) { media(search: $search, type: ANIME, sort: SEARCH_MATCH) { id title { romaji english } coverImage { medium } format seasonYear } } }';
+  async function hubAniListSearch(query, signal) {
+    const res = await fetch('https://graphql.anilist.co', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ query: HUB_AL_QUERY, variables: { search: query } }), signal });
+    if (!res.ok) throw new Error('Search HTTP ' + res.status);
+    const body = await res.json();
+    if (body.errors && body.errors.length) throw new Error(body.errors[0].message);
+    return (body.data && body.data.Page && body.data.Page.media) || [];
+  }
+  // a safe cover URL is an https AniList CDN url OR a local asset path (the 44's own image).
+  function hubSafeCover(u) { return (typeof u === 'string' && /^(https:\/\/|assets\/)/.test(u)) ? u : ''; }
+
+  function relTimeHub(ts) {
+    const ms = _ms(ts); if (!ms) return '';
+    const h = (Date.now() - ms) / 36e5;
+    if (h < 1) return 'just now';
+    if (h < 24) return Math.floor(h) + 'h ago';
+    const d = new Date(ms);
+    return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(-2);
+  }
+  function tagLabel(tag) {
+    const s = hubAnimeSlugFromTag(tag);
+    if (s) { const a = animeBySlug(s); return a ? a.Title : s.replace(/-/g, ' '); }
+    return TAG_LABEL[tag] || tag || 'General';
+  }
+
+  // PURE: a thread CARD's HTML — quiet, PURPLE, COUNT-FREE (no post/vote/reply numbers;
+  // heart spec). Anime-tagged threads carry a cover chip (not gold — the gold lives in
+  // the verdict rail inside the thread + the "From Blake's 44" shelf). Exposed for tests.
+  function hubThreadCardHtml(t, authorName) {
+    const slug = hubAnimeSlugFromTag(t.tag);
+    const anime = slug ? animeBySlug(slug) : null;
+    const pin = t.pinned ? '<span class="hub-pin" aria-hidden="true">📌</span>' : '';
+    const lock = t.locked ? '<span class="hub-lock" title="Locked" aria-hidden="true">🔒</span>' : '';
+    // gate 8d — an attached-anime cover thumb (44 OR any AniList title). The chip uses
+    // the 44 title, else the stored animeTitle, else the topic label. Cover ≠ gold (heart).
+    const cover = hubSafeCover(t.coverImage);
+    const animeName = anime ? anime.Title : (typeof t.animeTitle === 'string' ? t.animeTitle : '');
+    const chip = animeName
+      ? `<span class="hub-anime-chip">${escapeHtml(animeName)}</span>`
+      : `<span class="hub-tag-chip">${escapeHtml(tagLabel(t.tag))}</span>`;
+    const thumb = cover ? `<img class="hub-card-thumb" src="${escapeHtml(cover)}" alt="" loading="lazy">` : '';
+    const title = t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)');
+    return `<li class="hub-card${t.pinned ? ' is-pinned' : ''}${cover ? ' has-thumb' : ''}" data-thread-id="${escapeHtml(t.id)}" tabindex="0" role="button">
+      ${thumb}<div class="hub-card-main">
+      <div class="hub-card-head">${pin}${chip}${lock}<span class="hub-card-time">${escapeHtml(relTimeHub(t.lastPostAt || t.createdAt))}</span></div>
+      <h3 class="hub-card-title">${title}</h3>
+      <div class="hub-card-by">${escapeHtml(authorName || 'Member')}</div></div>
+    </li>`;
+  }
+  window.hubThreadCardHtml = hubThreadCardHtml;
+
+  // PURE-ish: one reply NODE's HTML (the caller recurses + passes childHtml). The
+  // Tavern reply bar (gate 8b item 6): 👍/👎 thumbs (COUNT-FREE — no .vcount span),
+  // Report, Reply (reply-to-reply), Edit/Delete-own, a collapse toggle, an OP tag,
+  // relative time. PURPLE only — the heart rule holds: zero gold, zero count node.
+  // Visual indent clamps at 2 (vdepth) but logical depth is unlimited (data carries
+  // the real parentId). Exposed on window for the protect-the-heart spec.
+  function hubReplyHtml(p, opts) {
+    opts = opts || {};
+    const depth = Math.max(0, opts.depth || 0);
+    const vdepth = Math.min(depth, 2);                 // 2 visible indent levels, flat beyond
+    const id = escapeHtml(p.id);
+    const name = escapeHtml(opts.authorName || 'Member');
+    const author = escapeHtml(p.authorUid || '');
+    const time = escapeHtml(relTimeHub(p.createdAt));
+    const edited = p.editedAt ? ' <span class="hub-edited" title="Edited">· edited</span>' : '';
+    const opTag = opts.isOp ? ' <span class="hub-op-tag" title="Started this thread">OP</span>' : '';
+    const pick = !!p.blakePick;
+    const pickBadge = pick ? ' <span class="hub-pick-badge" title="Blake picked this reply">★ Blake&rsquo;s pick</span>' : '';
+    const pickCls = pick ? ' hub-post--pick' : '';
+    const collapsed = !!opts.collapsed;
+    const childHtml = opts.childHtml || '';
+    const childWrap = childHtml ? `<ul class="hub-childposts">${childHtml}</ul>` : '';
+    // depth-3 DECISION: keep 2 visible indents (mobile-honest on the narrow drawer);
+    // make deeper replies clear with an explicit "in reply to @name" tag, not a 3rd indent.
+    const replyingTo = (depth > 2 && opts.parentName) ? `<div class="hub-replying-to">↪ in reply to <b>${escapeHtml(opts.parentName)}</b></div>` : '';
+
+    // a removed post is a tombstone — its children survive beneath it.
+    if (p.removed === true) {
+      return `<li class="hub-post hub-post--removed depth-${vdepth}" data-post-id="${id}" data-depth="${depth}">
+        <div class="hub-post-body">${replyingTo}<div class="hub-post-text"><em>[taken down]</em></div>${childWrap}</div></li>`;
+    }
+
+    const byline = `<div class="hub-post-by">
+        <button type="button" class="hub-collapse" data-collapse="${id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '[+]' : '[–]'}</button>
+        <span class="hub-post-name">${name}</span>${opTag}${pickBadge}
+        <span class="hub-card-time">${time}${edited}</span>
+      </div>`;
+
+    // inline edit-own (draft survives snapshot repaints via hubEditing)
+    if (opts.editing) {
+      const draft = escapeHtml(opts.draft != null ? opts.draft : (p.body || ''));
+      return `<li class="hub-post depth-${vdepth}${pickCls}" data-post-id="${id}" data-depth="${depth}" data-author="${author}">
+        ${byline}
+        <div class="hub-post-body">${replyingTo}
+          <div class="hub-post-edit">
+            <textarea class="hub-edit-input" data-edit-input="${id}" maxlength="4000">${draft}</textarea>
+            <div class="hub-edit-actions">
+              <button type="button" class="hub-mini hub-edit-cancel" data-edit-cancel="${id}">Cancel</button>
+              <button type="button" class="hub-mini is-primary hub-edit-save" data-edit-save="${id}">Save</button>
+            </div>
+          </div>${childWrap}
+        </div></li>`;
+    }
+
+    const bodyHtml = window.renderMarkdownInline ? window.renderMarkdownInline(p.body || '') : escapeHtml(p.body || '');
+
+    // the ⋯ overflow menu — secondary actions tucked away for a clean foot (item 7 vibe).
+    const menu = opts.menuOpen ? `<div class="hub-post-menu" role="menu">
+        <button type="button" class="hub-menu-item" data-copy-link="${id}" role="menuitem">Copy link</button>
+        ${opts.isOwn ? `<button type="button" class="hub-menu-item" data-edit-post="${id}" role="menuitem">Edit</button>
+          <button type="button" class="hub-menu-item is-danger" data-del-post="${id}" role="menuitem">Delete</button>` : ''}
+        <button type="button" class="hub-menu-item" data-report-post="${id}" role="menuitem">Report</button>
+        ${opts.isAdmin ? `<button type="button" class="hub-menu-item is-gold" data-pick-post="${id}" role="menuitem">${pick ? 'Remove Blake&rsquo;s pick' : '★ Mark Blake&rsquo;s pick'}</button>` : ''}
+      </div>` : '';
+
+    // a quiet, branded delete-confirm row (no native dialog)
+    const foot = opts.confirmDel
+      ? `<div class="hub-post-foot hub-confirm"><span class="hub-confirm-q">Take this down?</span>
+           <button type="button" class="hub-mini hub-del-no" data-del-cancel="${id}">Keep it</button>
+           <button type="button" class="hub-mini is-danger hub-del-yes" data-del-confirm="${id}">Take down</button></div>`
+      : `<div class="hub-post-foot">
+          <button type="button" class="hub-vote up${opts.myVote === 1 ? ' active' : ''}" data-hub-vote="up" data-post-id="${id}" aria-label="Agree" title="Agree">${HUB_THUMB_UP}</button>
+          <button type="button" class="hub-vote down${opts.myVote === -1 ? ' active' : ''}" data-hub-vote="down" data-post-id="${id}" aria-label="Disagree" title="Disagree">${HUB_THUMB_DOWN}</button>
+          <button type="button" class="hub-mini hub-reply-to" data-reply-to="${id}">Reply</button>
+          <button type="button" class="hub-mini hub-menu-btn" data-menu="${id}" aria-haspopup="true" aria-expanded="${opts.menuOpen ? 'true' : 'false'}" aria-label="More actions">⋯</button>
+        </div>${menu}`;
+
+    return `<li class="hub-post depth-${vdepth}${collapsed ? ' is-collapsed' : ''}${pickCls}" data-post-id="${id}" data-depth="${depth}" data-author="${author}">
+      ${byline}
+      <div class="hub-post-body">${replyingTo}
+        <div class="hub-post-text">${bodyHtml}</div>
+        ${foot}
+        ${childWrap}
+      </div></li>`;
+  }
+  window.hubReplyHtml = hubReplyHtml; // heart spec: thumbs + report (in the ⋯ menu), never a count; gold ONLY when Blake-picked
+
+  // PURE: the gold "Blake's Reviews" shelf — the ONE concentrated gold expression on
+  // the Hub. A horizontal strip of his reviewed titles; tapping opens the DISCUSSION
+  // for that title (gate 8b item 6b — his verdict anchors the room, the conversation
+  // lives beneath it), NOT a dead-end review modal.
+  function hubBlakeShelfHtml() {
+    const picks = blakes44().slice(0, 12);
+    if (!picks.length) return '';
+    const chips = picks.map((a) => {
+      const rating = String(a.Rating || '').replace(/\s*\/\s*10\s*$/, '');
+      return `<button type="button" class="hub-shelf-chip" data-anime-slug="${escapeHtml(animeSlug(a))}">
+        <span class="hub-shelf-title">${escapeHtml(a.Title)}</span>
+        <span class="hub-shelf-rating">${escapeHtml(rating)}</span>
+      </button>`;
+    }).join('');
+    return `<section class="hub-shelf" aria-label="Blake's Reviews">
+      <div class="hub-shelf-kicker">BLAKE&rsquo;S REVIEWS <span class="jp-mini">十八番</span></div>
+      <div class="hub-shelf-row">${chips}</div>
+    </section>`;
+  }
+  window.hubBlakeShelfHtml = hubBlakeShelfHtml;
+
+  // gate 9 idea #7 — the "Rising" rail. Threads ranked by the CF's hotScore; slot 1 is
+  // permanently Blake's gold pick (a pinned thread), so community velocity tops out
+  // BENEATH him. COUNT-FREE: order conveys "rising", no hotScore number is ever shown.
+  function hubRisingThreads(threads) {
+    const live = (threads || hubThreads || []).filter((t) => t.removed !== true);
+    const pinned = live.filter((t) => t.pinned).sort((a, b) => (b.hotScore || 0) - (a.hotScore || 0));
+    const rest = live.filter((t) => !t.pinned).sort((a, b) => ((b.hotScore || 0) - (a.hotScore || 0)) || (_ms(b.lastPostAt) - _ms(a.lastPostAt)));
+    return pinned.concat(rest).slice(0, 5);
+  }
+  function hubRisingRailHtml(threads) {
+    const list = hubRisingThreads(threads);
+    if (list.length < 3) return '';   // need a few threads before anything is "rising"
+    const items = list.map((t, i) => {
+      const gold = i === 0 && !!t.pinned;   // slot 1 gold ONLY when it's Blake's pinned pick
+      return `<button type="button" class="hub-rising-item${gold ? ' is-blake' : ''}" data-thread-id="${escapeHtml(t.id)}">
+        ${gold ? '<span class="hub-rising-star" aria-hidden="true">★</span>' : '<span class="hub-rising-dot" aria-hidden="true"></span>'}
+        <span class="hub-rising-title">${escapeHtml(t.title || '(untitled)')}</span>
+        ${gold ? '<span class="hub-rising-tag">Blake&rsquo;s pick</span>' : ''}
+      </button>`;
+    }).join('');
+    return `<section class="hub-rising" aria-label="Rising in the Tavern">
+      <div class="hub-rising-kicker">RISING <span class="jp-mini">注目</span></div>
+      <div class="hub-rising-row">${items}</div>
+    </section>`;
+  }
+  window.hubRisingRailHtml = hubRisingRailHtml; // heart spec hook
+
+  // Owner/public display-name join (forum docs carry authorUid only).
+  async function hubProfileName(uid) {
+    if (!uid) return 'Member';
+    if (_hubProfileCache.has(uid)) return _hubProfileCache.get(uid);
+    let name = 'Member';
+    try {
+      const snap = await getDoc(doc(db, 'profiles', uid));
+      if (snap.exists()) { const d = snap.data() || {}; name = d.displayName || d.username || 'Member'; }
+    } catch (_e) { /* public read may be denied — graceful fallback */ }
+    _hubProfileCache.set(uid, name);
+    return name;
+  }
+
+  // ---- The Hub drawer — a TWO-PANEL modal stack (gate 8c item 9) --------------
+  // Level 1 = the thread LIST (.hub-sheet, always mounted). Level 2 = an open THREAD
+  // (.hub-thread-layer), a narrower panel that slides in OVER the list with the list
+  // dimmed/blurred behind it (mirroring the right-side secondary->tertiary stack) —
+  // the list stays visible, NOT replaced. Back = close level 2, the list is revealed.
+  function ensureHubEl() {
+    if (hubLayerEl) return hubLayerEl;
+    const layer = document.createElement('div');
+    layer.className = 'hub-layer';
+    layer.setAttribute('role', 'dialog');
+    layer.setAttribute('aria-modal', 'true');
+    layer.setAttribute('aria-label', 'Tavern');
+    layer.hidden = true;
+    layer.innerHTML =
+      '<div class="hub-backdrop"></div>' +
+      '<aside class="hub-sheet"><div class="hub-scroll"></div></aside>' +
+      '<div class="hub-thread-layer" hidden><div class="hub-thread-scrim"></div>' +
+        '<aside class="hub-thread-sheet"><div class="hub-thread-scroll"></div></aside></div>';
+    document.body.appendChild(layer);
+    layer.querySelector('.hub-backdrop').addEventListener('click', closeHubDrawer);
+    layer.querySelector('.hub-thread-scrim').addEventListener('click', closeThreadPanel);  // click the dimmed list to go back
+    layer.addEventListener('click', onHubClick);
+    layer.addEventListener('input', onHubInput);   // keep inline edit drafts across repaints
+    hubLayerEl = layer;
+    return layer;
+  }
+  function hubScroll() { return ensureHubEl().querySelector('.hub-scroll'); }              // level-1 (list)
+  function hubThreadScroll() { return ensureHubEl().querySelector('.hub-thread-scroll'); } // level-2 (thread)
+  function hubThreadLayer() { return ensureHubEl().querySelector('.hub-thread-layer'); }
+
+  // Slide the level-2 thread panel in over the (still-mounted) list.
+  function openThreadPanel() {
+    const tl = hubThreadLayer();
+    tl.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => tl.classList.add('active')));
+    hubView = 'thread';
+  }
+  // Close level 2 — reveal the list behind it; reset all per-thread state.
+  function closeThreadPanel() {
+    const tl = hubThreadLayer();
+    tl.classList.remove('active');
+    // guard against a fast back->reopen: only hide/clear if it wasn't re-activated.
+    setTimeout(() => { if (tl && !tl.classList.contains('active')) { tl.hidden = true; const s = tl.querySelector('.hub-thread-scroll'); if (s) s.innerHTML = ''; } }, 300);
+    teardownHubThread();
+    hubView = 'list'; hubThreadId = null; hubThreadAuthorUid = null;
+    hubReplyParent = null; hubRepaintPosts = null; hubThreadSort = 'old';
+    hubCollapsed.clear(); hubEditing.clear(); hubConfirmDel.clear(); _hubRawBody.clear(); hubMyVotes.clear(); hubMenuOpen.clear();
+    // refresh the revealed list so it reflects changes made while the thread was open
+    // (e.g. an admin-removed thread), preserving the scroll position the user left it at.
+    const before = hubScroll(); const keep = before ? before.scrollTop : 0;
+    renderHubList();
+    const after = hubScroll(); if (after) after.scrollTop = keep;
+  }
+
+  function onHubInput(e) {
+    const ta = e.target.closest && e.target.closest('[data-edit-input]');
+    if (ta) { hubEditing.set(ta.getAttribute('data-edit-input'), ta.value); }
+  }
+
+  // reply-to-reply target banner (lives in #hub-reply, survives posts-list repaints)
+  function setReplyTarget(id, name) {
+    hubReplyParent = id ? { id: id, name: name || 'them' } : null;
+    const host = document.getElementById('hub-reply');
+    if (!host) return;
+    const banner = host.querySelector('.hub-replyto-banner');
+    const txt = host.querySelector('.hub-replyto-text');
+    const input = host.querySelector('.hub-reply-input');
+    if (!banner || !txt) return;
+    if (id) { txt.textContent = 'Replying to ' + (name || 'them'); banner.hidden = false; if (input) { try { input.focus(); } catch (_) {} } }
+    else { banner.hidden = true; }
+  }
+  function clearReplyTarget() { setReplyTarget(null); }
+
+  function onHubKeydown(e) {
+    if (e.key !== 'Escape') return;
+    // A higher modal (new-thread / report / consent) owns Esc — do NOT also tear down the
+    // drawer behind it. onHubKeydown is registered before those overlays' own Esc handlers,
+    // so their stopPropagation can't suppress this sibling listener; bail explicitly.
+    if (document.querySelector('.hub-newthread-overlay, .rar-report-overlay, .rar-consent-overlay')) return;
+    e.stopPropagation();                 // don't let Esc bubble to the anime-modal (window) handler
+    if (hubMenuOpen.size) { hubMenuOpen.clear(); if (hubRepaintPosts) hubRepaintPosts(); return; }  // first Esc closes an open ⋯ menu
+    if (hubView === 'thread') closeThreadPanel(); else closeHubDrawer();   // then level 2, then the drawer
+  }
+
+  function openHubDrawer() {
+    const layer = ensureHubEl();
+    layer.hidden = false;
+    hubView = 'list';
+    requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('active')));
+    document.addEventListener('keydown', onHubKeydown);
+    document.documentElement.style.overflow = 'hidden';
+    subscribeForum();
+    renderHubList();
+  }
+  function closeHubDrawer() {
+    if (!hubLayerEl) return;
+    hubLayerEl.classList.remove('active');
+    const tl = hubLayerEl.querySelector('.hub-thread-layer');
+    if (tl) { tl.classList.remove('active'); tl.hidden = true; }   // tear down level 2 too
+    document.removeEventListener('keydown', onHubKeydown);
+    teardownHubThread();
+    hubView = 'list'; hubThreadId = null; hubThreadAuthorUid = null; hubReplyParent = null; hubRepaintPosts = null;
+    if (hubUnsub) { try { hubUnsub(); } catch (_) {} hubUnsub = null; }
+    setTimeout(() => { if (hubLayerEl) hubLayerEl.hidden = true; }, 300);
+    document.documentElement.style.overflow = '';
+    // Back to the lit Den (the backdrop) — the Hub was an overlay over it.
+    setActivePlace(denBtn);
+  }
+  function teardownHubThread() {
+    hubThreadUnsubs.forEach((u) => { try { u(); } catch (_) {} });
+    hubThreadUnsubs = [];
+  }
+
+  // The Community place: ensure the Den is the lit backdrop, flip to the hub veil,
+  // slide the drawer in.
+  function showCommunity() {
+    showHome();                       // mount the Den behind (it marks Den active)
+    setActivePlace(communityBtn);     // now light Community + flip data-surface -> 'hub'
+    openHubDrawer();
+  }
+  window.__rarShowCommunity = showCommunity; // test hook
+
+  // ---- Forum subscription ----------------------------------------------------
+  function subscribeForum() {
+    if (hubUnsub) return;
+    try {
+      const q = query(collection(db, 'forum'), orderBy('createdAt', 'desc'), limit(200));
+      hubUnsub = onSnapshot(q, async (snap) => {
+        const rows = [];
+        snap.forEach((d) => { const v = d.data() || {}; if (v.removed !== true) rows.push({ id: d.id, ...v }); });
+        hubThreads = rows;
+        // warm the author-name cache for the visible authors, then re-render
+        await Promise.all(rows.map((t) => hubProfileName(t.authorUid)));
+        if (hubView === 'list') renderHubList();
+      }, () => { if (hubView === 'list') renderHubList(); });
+    } catch (_e) { /* subscription failed (e.g. no emulator) — list shows empty */ }
+  }
+
+  // ---- List view -------------------------------------------------------------
+  function renderHubList() {
+    // Level 1 render only — the thread panel (level 2) is independent now; "back" is
+    // closeThreadPanel(), not a re-render here (the list stays as the user left it).
+    const host = hubScroll();
+    const sorted = hubSortThreads(hubThreads.filter((t) => !hubTag || (hubTag === 'blakes-44' ? !!hubAnimeSlugFromTag(t.tag) : t.tag === hubTag)), hubSort);
+    const tabs = [['hot', 'Hot', '注目'], ['new', 'New', '新着'], ['top', 'Top', '殿堂']]
+      .map(([k, en, jp]) => `<button type="button" class="hub-sort-tab${hubSort === k ? ' is-active' : ''}" data-sort="${k}">${en} <span class="jp-mini">${jp}</span></button>`).join('');
+    const chips = [['', 'All']].concat(FORUM_TAGS.map((t) => [t, TAG_LABEL[t]]))
+      .map(([k, label]) => `<button type="button" class="hub-chip${(hubTag || '') === k ? ' is-active' : ''}" data-tag="${escapeHtml(k)}">${escapeHtml(label)}</button>`).join('');
+    const shelf = (hubSort === 'hot' && !hubTag) ? hubBlakeShelfHtml() : '';
+    const rising = (hubSort === 'hot' && !hubTag) ? hubRisingRailHtml() : '';   // gate 9 Rising rail (Hot view only)
+    const cards = sorted.length
+      ? '<ul class="hub-cards">' + sorted.map((t) => hubThreadCardHtml(t, _hubProfileCache.get(t.authorUid))).join('') + '</ul>'
+      : `<div class="hub-empty"><div class="hub-empty-glyph" aria-hidden="true">🏮</div>
+           <p class="hub-empty-lead">Quiet in here — for now.</p>
+           <p class="hub-empty-sub">This is the back room of my house. Pull up a chair, start the first thread, and we&rsquo;ll see who wanders in.</p></div>`;
+    host.innerHTML = `
+      <header class="hub-header hub-header--tavern">
+        <div class="hub-kicker">COMMUNITY <span class="jp-mini">交流</span></div>
+        <button type="button" class="hub-close" aria-label="Close">&times;</button>
+        <h2 class="hub-title"><span class="hub-lantern" aria-hidden="true">🏮</span>The Tavern<span class="hub-lantern" aria-hidden="true">🏮</span></h2>
+        <button type="button" class="hub-new btn">New thread</button>
+      </header>
+      <div class="hub-sortrow">${tabs}</div>
+      <div class="hub-chiprow">${chips}</div>
+      ${shelf}
+      ${rising}
+      ${cards}`;
+    host.scrollTop = 0;
+  }
+
+  // ---- Thread detail view ----------------------------------------------------
+  function verdictRailHtml(tag) {
+    const slug = hubAnimeSlugFromTag(tag);
+    if (!slug) return '';
+    const a = animeBySlug(slug);
+    if (!a) return `<div class="hub-verdict hub-verdict--none">Not yet in the 44 — <button type="button" class="hub-suggest-link" data-suggest="${escapeHtml(slug)}">suggest it</button>.</div>`;
+    const rating = String(a.Rating || '').replace(/\s*\/\s*10\s*$/, '');
+    const quote = String(a.Review || a.Description || '').replace(/[#*_`>\[\]]/g, '').trim().slice(0, 160);
+    return `<div class="hub-verdict" data-anime-slug="${escapeHtml(animeSlug(a))}">
+      <div class="hub-verdict-kicker">BLAKE&rsquo;S VERDICT <span class="jp-mini">監修</span></div>
+      <div class="hub-verdict-row"><span class="hub-verdict-score">${escapeHtml(rating)}</span><span class="hub-verdict-max">/10</span>
+        <span class="hub-verdict-title">${escapeHtml(a.Title)}</span></div>
+      ${quote ? `<p class="hub-verdict-quote">${escapeHtml(quote)}…</p>` : ''}
+      <button type="button" class="hub-verdict-link" data-anime-slug="${escapeHtml(animeSlug(a))}">Read Blake&rsquo;s review →</button>
+    </div>`;
+  }
+  window.hubVerdictRailHtml = verdictRailHtml; // test hook (the gold-verdict blend)
+
+  function openThreadById(tid, pid) {
+    if (!tid) return;
+    if (!hubLayerEl || hubLayerEl.hidden) showCommunity();
+    hubView = 'thread'; hubThreadId = tid;
+    hubCollapsed.clear(); hubEditing.clear(); hubConfirmDel.clear(); _hubRawBody.clear(); hubMyVotes.clear(); hubMenuOpen.clear();
+    renderThreadDetail(tid);
+    // permalink to a specific reply (gate 8c) — poll for the <li> once posts render, then scroll+flash.
+    if (pid && typeof scrollHighlightNotif === 'function') {
+      scrollHighlightNotif(() => { const s = hubThreadScroll(); return s ? s.querySelector('[data-post-id="' + pid + '"]') : null; });
+    }
+  }
+  window.openHubThread = openThreadById; // for the gate-5 router (optional 2nd arg = reply id)
+
+  // gate 8b item 6b — the "Blake's Reviews" shelf leads to the CONVERSATION. Open the
+  // anime-tagged discussion thread (verdict rail anchored on top); if none exists yet,
+  // show the verdict rail + a Blake-voiced "start the thread" empty state.
+  function openAnimeConversation(slug) {
+    if (!slug) return;
+    if (!hubLayerEl || hubLayerEl.hidden) showCommunity();
+    const tag = 'anime:' + slug;
+    const matches = hubThreads.filter((t) => t.tag === tag && t.removed !== true);
+    if (matches.length) { hubView = 'thread'; hubThreadId = null; openThreadById(hubSortThreads(matches, 'hot')[0].id); return; }
+    renderAnimeIntro(slug);
+  }
+  window.openHubAnime = openAnimeConversation; // optional router hook
+
+  function renderAnimeIntro(slug) {
+    teardownHubThread();
+    hubThreadId = null; hubThreadAuthorUid = null;
+    openThreadPanel(); hubReplyParent = null; hubRepaintPosts = null;
+    const a = animeBySlug(slug);
+    const title = a ? escapeHtml(a.Title) : escapeHtml(String(slug).replace(/-/g, ' '));
+    const host = hubThreadScroll();
+    host.innerHTML = `${hubThreadHeaderHtml()}
+      <div class="hub-thread-body">
+        ${verdictRailHtml('anime:' + slug)}
+        <div class="hub-intro-empty">
+          <div class="hub-empty-glyph" aria-hidden="true">🏮</div>
+          <p class="hub-empty-lead">No one&rsquo;s started talking about ${title} yet.</p>
+          <p class="hub-empty-sub">That seems wrong. Kick it off and I&rsquo;ll see you in the comments.</p>
+          <button type="button" class="hub-new btn hub-intro-start" data-start-anime="${escapeHtml(slug)}">Start the thread</button>
+        </div>
+      </div>`;
+    host.scrollTop = 0;
+  }
+
+  // "Read Blake's review" exits the Tavern (closes the drawer) and opens his review
+  // over the lit Den — a deliberate step out of the back room into his front-page verdict.
+  function hubExitToReview(slug) {
+    const a = animeBySlug(slug); if (!a) return;
+    closeHubDrawer();
+    setTimeout(() => { if (typeof openModal === 'function') openModal(a); }, 80);
+  }
+
+  // within-thread reply sort control (gate 8c) — Old (chronological) / New / Top.
+  function hubThreadSortBar() {
+    const opt = [['old', 'Old'], ['new', 'New'], ['top', 'Top']];
+    return `<div class="hub-thread-sort"><span class="hub-thread-sort-label">Sort</span>${opt.map(([k, l]) =>
+      `<button type="button" class="hub-tsort-tab${hubThreadSort === k ? ' is-active' : ''}" data-tsort="${k}">${l}</button>`).join('')}</div>`;
+  }
+
+  // The thread-detail header — a lit ← Threads back affordance (item 4) + a cozy
+  // lantern, kept at the top of every level (item 3). X still closes the whole tab.
+  function hubThreadHeaderHtml() {
+    return `<header class="hub-header hub-header--thread">
+        <button type="button" class="hub-back" aria-label="Back to threads"><span class="hub-back-arrow" aria-hidden="true">←</span> Threads</button>
+        <span class="hub-thread-lantern" aria-hidden="true">🏮</span>
+        <button type="button" class="hub-close" aria-label="Close">&times;</button>
+      </header>`;
+  }
+
+  function renderThreadDetail(tid) {
+    teardownHubThread();
+    openThreadPanel();                           // slide the level-2 panel in over the (mounted) list
+    hubReplyParent = null; hubRepaintPosts = null;
+    const host = hubThreadScroll();
+    host.innerHTML = `${hubThreadHeaderHtml()}<div class="hub-thread-body"><p class="hub-loading">Loading…</p></div>`;
+    host.scrollTop = 0;
+    const bodyEl = host.querySelector('.hub-thread-body');
+
+    const tref = doc(db, 'forum', tid);
+    const u1 = onSnapshot(tref, async (snap) => {
+      if (!snap.exists()) { bodyEl.innerHTML = '<p class="hub-loading">This thread is gone.</p>'; return; }
+      const t = { id: snap.id, ...(snap.data() || {}) };
+      hubThreadAuthorUid = t.authorUid || null;
+      const name = await hubProfileName(t.authorUid);
+      const isAdmin = (typeof window !== 'undefined' && window.__rarIsAdmin === true);
+      const verdict = verdictRailHtml(t.tag);
+      const adminBar = isAdmin ? `<div class="hub-admin-bar">
+          <button type="button" class="action-btn hub-admin" data-hub-admin="pin">${t.pinned ? 'Unpin' : 'Pin'}</button>
+          <button type="button" class="action-btn hub-admin" data-hub-admin="lock">${t.locked ? 'Unlock' : 'Lock'}</button>
+          <button type="button" class="action-btn hub-admin danger" data-hub-admin="remove">Remove</button>
+        </div>` : '';
+      const bodyHtml = t.removed ? '<em>[removed by a moderator]</em>'
+        : (window.renderMarkdown ? window.renderMarkdown(t.body || '') : escapeHtml(t.body || ''));
+      const cover = hubSafeCover(t.coverImage);   // gate 8d — attached-anime cover (not gold)
+      const coverHtml = cover ? `<img class="hub-thread-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">` : '';
+      bodyEl.innerHTML = `${coverHtml}${verdict}
+        <article class="hub-thread">
+          <div class="hub-thread-head"><span class="hub-tag-chip">${escapeHtml((t.tag && t.tag.indexOf('anime:al:') === 0 && typeof t.animeTitle === 'string' && t.animeTitle) ? t.animeTitle : tagLabel(t.tag))}</span>
+            <span class="hub-op-tag" title="Started this thread">OP</span>
+            <span class="hub-card-time">${escapeHtml(relTimeHub(t.createdAt))}</span>${t.locked ? '<span class="hub-lock">🔒 Locked</span>' : ''}</div>
+          <h2 class="hub-thread-title">${t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)')}</h2>
+          <div class="hub-thread-by">${escapeHtml(name)}</div>
+          <div class="hub-thread-text">${bodyHtml}</div>
+          ${adminBar}
+        </article>
+        <h3 class="hub-replies-h">Replies</h3>
+        ${hubThreadSortBar()}
+        <ul class="hub-posts" id="hub-posts"><li class="hub-post-empty hub-loading">Loading the conversation…</li></ul>
+        <div class="hub-reply" id="hub-reply"></div>`;
+      mountReplyComposer(tid, !!t.locked);
+      if (hubRepaintPosts) hubRepaintPosts();   // re-paint posts into the fresh #hub-posts
+    }, () => {});
+    hubThreadUnsubs.push(u1);
+
+    // posts (replies) — oldest first; build a parentId tree, render recursively.
+    let lastPosts = [];
+    const paintPosts = () => {
+      const postsEl = document.getElementById('hub-posts');
+      if (!postsEl) return;
+      const meUid = auth.currentUser ? auth.currentUser.uid : null;
+      const isAdmin = (typeof window !== 'undefined' && window.__rarIsAdmin === true);
+      const ids = new Set(lastPosts.map((p) => p.id));
+      const nameByPost = new Map(lastPosts.map((p) => [p.id, _hubProfileCache.get(p.authorUid) || 'Member']));
+      const byParent = new Map();
+      lastPosts.forEach((p) => {
+        const k = (p.parentId && ids.has(p.parentId)) ? p.parentId : '';   // orphans -> root
+        if (!byParent.has(k)) byParent.set(k, []);
+        byParent.get(k).push(p);
+      });
+      // within-thread sort (gate 8c) — applied to every sibling group, default 'old' (chronological)
+      const sortSibs = (arr) => arr.slice().sort((a, b) => {
+        if (hubThreadSort === 'new') return _ms(b.createdAt) - _ms(a.createdAt);
+        if (hubThreadSort === 'top') return ((b.likesCount || 0) - (a.likesCount || 0)) || (_ms(a.createdAt) - _ms(b.createdAt));
+        return _ms(a.createdAt) - _ms(b.createdAt);
+      });
+      const renderNode = (p, depth) => {
+        const kids = sortSibs(byParent.get(p.id) || []);
+        const childHtml = kids.map((c) => renderNode(c, depth + 1)).join('');
+        return hubReplyHtml(p, {
+          depth: depth,
+          authorName: nameByPost.get(p.id) || 'Member',
+          parentName: p.parentId ? nameByPost.get(p.parentId) : '',
+          isOp: !!hubThreadAuthorUid && p.authorUid === hubThreadAuthorUid,
+          isOwn: !!meUid && p.authorUid === meUid,
+          isAdmin: isAdmin,
+          collapsed: hubCollapsed.has(p.id),
+          editing: hubEditing.has(p.id),
+          draft: hubEditing.get(p.id),
+          confirmDel: hubConfirmDel.has(p.id),
+          menuOpen: hubMenuOpen.has(p.id),
+          myVote: hubMyVotes.get(p.id) || 0,
+          childHtml: childHtml,
+        });
+      };
+      const roots = sortSibs(byParent.get('') || []);
+      postsEl.innerHTML = roots.length
+        ? roots.map((p) => renderNode(p, 0)).join('')
+        : `<li class="hub-post-empty">${HUB_EMPTY_REPLIES}</li>`;
+    };
+    hubRepaintPosts = paintPosts;
+
+    const pq = query(collection(db, 'forum', tid, 'posts'), orderBy('createdAt', 'asc'), limit(300));
+    const u2 = onSnapshot(pq, async (psnap) => {
+      lastPosts = []; psnap.forEach((d) => lastPosts.push({ id: d.id, ...(d.data() || {}) }));
+      await Promise.all(lastPosts.map((p) => hubProfileName(p.authorUid)));
+      lastPosts.forEach((p) => _hubRawBody.set(p.id, p.body || ''));
+      paintPosts();
+    }, () => {});
+    hubThreadUnsubs.push(u2);
+  }
+
+  function mountReplyComposer(tid, locked) {
+    const host = document.getElementById('hub-reply');
+    if (!host) return;
+    if (locked) { host.innerHTML = '<p class="hub-locked-note">🔒 This thread is locked — no new replies.</p>'; return; }
+    host.innerHTML = `<div class="hub-replyto-banner" hidden><span class="hub-replyto-text"></span><button type="button" class="hub-replyto-cancel" data-replyto-cancel aria-label="Cancel reply">&times;</button></div>
+      <div class="comment-composer">
+        <textarea class="hub-reply-input" placeholder="${HUB_REPLY_PLACEHOLDER}" maxlength="4000"></textarea>
+        <div class="composer-actions"><span class="char-count"><span class="hub-reply-count">0</span>/4000</span>
+          <button type="button" class="btn hub-reply-post" disabled>Reply</button></div>
+      </div>`;
+    const input = host.querySelector('.hub-reply-input');
+    const postBtn = host.querySelector('.hub-reply-post');
+    const counter = host.querySelector('.hub-reply-count');
+    const sync = () => { const n = input.value.trim().length; counter.textContent = String(input.value.length); postBtn.disabled = !(auth.currentUser && n > 0); };
+    input.addEventListener('input', sync); sync();
+    // restore an in-flight reply target if the thread doc re-snapshotted mid-reply
+    if (hubReplyParent) setReplyTarget(hubReplyParent.id, hubReplyParent.name);
+    postBtn.addEventListener('click', async () => {
+      const u = auth.currentUser; if (!u) { openAuth('signin'); return; }
+      const body = input.value.trim(); if (!body) return;
+      if (!(await ensureCanParticipate())) return;   // gate-3 consent before a first forum write
+      postBtn.disabled = true;
+      try {
+        const docData = { authorUid: u.uid, body, createdAt: serverTimestamp(), likesCount: 0, reportCount: 0, removed: false };
+        // reply-to-reply (item 6): parentId is write-once at create; the edit/delete
+        // rules use hasOnly() and would reject it, so it is NEVER touched again.
+        if (hubReplyParent && hubReplyParent.id) docData.parentId = hubReplyParent.id;
+        await addDoc(collection(db, 'forum', tid, 'posts'), docData);
+        input.value = ''; clearReplyTarget(); sync();
+      } catch (err) { alert('Could not post your reply: ' + (err && err.message || err)); postBtn.disabled = false; }
+    });
+    if (window.RarComposer) window.RarComposer.enhance(input, { inline: true, submit: 'enter', onSubmit: () => postBtn.click() });
+  }
+
+  // ---- New-thread composer (gate 8c item 4/5/6) — a branded TOPIC PICKER (chips +
+  // a searchable "About a title" list), the RarComposer treatment on the body (B/I/🔗
+  // + live preview + Ctrl/⌘+Enter + a keycap hint), and a disabled IMAGE hook (gate 13).
+  function openNewThreadModal(presetTag) {
+    if (!auth.currentUser) { openAuth('signin'); return; }
+    document.querySelectorAll('.hub-newthread-overlay').forEach((n) => n.remove());
+    const ddOpts = FORUM_TOPICS.map(([k, l]) => `<li><button type="button" class="hub-nt-dd-opt" data-topic="${escapeHtml(k)}">${escapeHtml(l)}</button></li>`).join('');
+    const overlay = document.createElement('div');
+    overlay.className = 'hub-newthread-overlay';
+    overlay.innerHTML = `<div class="hub-newthread" role="dialog" aria-modal="true" aria-label="New thread">
+        <div class="hub-nt-form">
+          <h3 class="hub-nt-title">Start a thread <span class="jp-mini">新規</span></h3>
+          <input class="hub-nt-input" type="text" maxlength="120" placeholder="Thread title">
+          <span class="hub-nt-label">Topic</span>
+          <div class="hub-nt-dropdown">
+            <button type="button" class="hub-nt-dd-toggle" aria-haspopup="true" aria-expanded="false"><span class="hub-nt-dd-current">General</span><span class="hub-nt-dd-caret" aria-hidden="true">▾</span></button>
+            <ul class="hub-nt-dd-list" hidden>${ddOpts}</ul>
+          </div>
+          <span class="hub-nt-label">Or attach an anime <span class="hub-nt-label-opt">(optional — adds cover art)</span></span>
+          <div class="hub-nt-attach">
+            <button type="button" class="hub-nt-attach-btn">🎬 Attach an anime</button>
+            <div class="hub-nt-chosen" hidden>
+              <img class="hub-nt-chosen-cover" alt="" hidden>
+              <span class="hub-nt-chosen-text"></span>
+              <button type="button" class="hub-nt-chosen-change">change</button>
+              <button type="button" class="hub-nt-chosen-remove" aria-label="Remove the attached anime">&times;</button>
+            </div>
+          </div>
+          <textarea class="hub-nt-body" maxlength="4000" placeholder="Say what you think…"></textarea>
+          <!-- gate 13 image hook: the upload control mounts in .hub-nt-media when Storage lands -->
+          <div class="hub-nt-media">
+            <button type="button" class="hub-nt-image-btn" disabled aria-disabled="true" title="Image uploads arrive soon">📷 Add an image</button>
+            <span class="hub-nt-image-soon">coming soon</span>
+          </div>
+          <p class="hub-nt-error" role="alert"></p>
+          <div class="hub-nt-actions">
+            <button type="button" class="action-btn hub-nt-cancel">Cancel</button>
+            <button type="button" class="action-btn hub-nt-create">Post thread</button>
+          </div>
+        </div>
+        <div class="hub-nt-pick" hidden>
+          <div class="hub-nt-pick-head">
+            <button type="button" class="hub-mini hub-nt-pick-back">← Back</button>
+            <input class="hub-nt-search" type="text" placeholder="Search any anime…" aria-label="Search anime">
+            <span class="hub-nt-spinner" hidden aria-hidden="true"></span>
+          </div>
+          <p class="hub-nt-pick-hint">Type to search. <b>Blake&rsquo;s reviewed titles</b> show a ★ — pick one for his verdict rail; any other anime just adds the cover.</p>
+          <ul class="hub-nt-results"></ul>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const form = overlay.querySelector('.hub-nt-form');
+    const pick = overlay.querySelector('.hub-nt-pick');
+    const dd = overlay.querySelector('.hub-nt-dropdown');
+    const ddToggle = overlay.querySelector('.hub-nt-dd-toggle');
+    const ddList = overlay.querySelector('.hub-nt-dd-list');
+    const ddCurrent = overlay.querySelector('.hub-nt-dd-current');
+    const chosen = overlay.querySelector('.hub-nt-chosen');
+    const chosenText = overlay.querySelector('.hub-nt-chosen-text');
+    const chosenCover = overlay.querySelector('.hub-nt-chosen-cover');
+    const bodyEl = overlay.querySelector('.hub-nt-body');
+    const searchEl = overlay.querySelector('.hub-nt-search');
+    const resultsEl = overlay.querySelector('.hub-nt-results');
+    const spinner = overlay.querySelector('.hub-nt-spinner');
+    const errEl = overlay.querySelector('.hub-nt-error');
+    let selectedTopic = 'general';     // the dropdown topic
+    let attached = null;               // { tag, title, cover, is44 } when an anime is attached
+    let searchTimer = null, inflight = null;
+
+    // ---- the branded topic dropdown (Part C) ----
+    function setTopic(tag) {
+      selectedTopic = tag;
+      const row = FORUM_TOPICS.find(([k]) => k === tag);
+      ddCurrent.textContent = row ? row[1] : tag;
+      ddList.querySelectorAll('.hub-nt-dd-opt').forEach((o) => o.classList.toggle('is-active', o.dataset.topic === tag));
+      closeDd();
+    }
+    function openDd() { ddList.hidden = false; ddToggle.setAttribute('aria-expanded', 'true'); }
+    function closeDd() { ddList.hidden = true; ddToggle.setAttribute('aria-expanded', 'false'); }
+    ddToggle.addEventListener('click', () => { if (ddList.hidden) openDd(); else closeDd(); });
+    ddList.addEventListener('click', (e) => { const o = e.target.closest('[data-topic]'); if (o) setTopic(o.dataset.topic); });
+
+    // ---- the attached-anime slot (Part B) ----
+    function renderChosen() {
+      if (!attached) { chosen.hidden = true; return; }
+      if (attached.cover) { chosenCover.src = attached.cover; chosenCover.hidden = false; } else { chosenCover.hidden = true; chosenCover.removeAttribute('src'); }
+      chosenText.textContent = (attached.is44 ? '★ ' : '🎬 ') + attached.title;
+      chosen.hidden = false;
+    }
+    function clearAttach() { attached = null; renderChosen(); }
+    function showPicker() { form.hidden = true; pick.hidden = false; searchEl.value = ''; resultsEl.innerHTML = ''; setTimeout(() => { try { searchEl.focus(); } catch (_) {} }, 0); }
+    function showForm() { pick.hidden = true; form.hidden = false; }
+
+    function renderResults(media) {
+      if (!media.length) { resultsEl.innerHTML = '<li class="hub-nt-result-empty">No anime found.</li>'; return; }
+      resultsEl.innerHTML = media.map((m) => {
+        const title = (m.title && (m.title.english || m.title.romaji)) || 'Untitled';
+        const cover = hubSafeCover(m.coverImage && m.coverImage.medium);
+        const fav = blake44ByAniListId(m.id);
+        const year = m.seasonYear || '';
+        const star = fav ? '<span class="hub-nt-result-star" title="Reviewed by Blake">★</span>' : '';
+        return `<li><button type="button" class="hub-nt-result${fav ? ' is-fav' : ''}" data-al-id="${escapeHtml(String(m.id))}" data-al-title="${escapeHtml(title)}" data-al-cover="${escapeHtml(cover)}"${fav ? ` data-fav-slug="${escapeHtml(animeSlug(fav))}"` : ''}>
+          ${cover ? `<img class="hub-nt-result-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">` : '<span class="hub-nt-result-cover hub-nt-result-cover--none" aria-hidden="true"></span>'}
+          <span class="hub-nt-result-body"><span class="hub-nt-result-title">${escapeHtml(title)}</span><span class="hub-nt-result-meta">${star}${year ? `<span class="hub-nt-result-year">${escapeHtml(String(year))}</span>` : ''}</span></span>
+        </button></li>`;
+      }).join('');
+    }
+    function onSearchInput() {
+      const q = searchEl.value.trim();
+      if (searchTimer) clearTimeout(searchTimer);
+      if (inflight) { try { inflight.abort(); } catch (_) {} }
+      if (q.length < 2) { resultsEl.innerHTML = ''; spinner.hidden = true; return; }
+      spinner.hidden = false;
+      searchTimer = setTimeout(async () => {
+        inflight = new AbortController();
+        try { const r = await hubAniListSearch(q, inflight.signal); spinner.hidden = true; renderResults(r); }
+        catch (err) { if (err && err.name === 'AbortError') return; spinner.hidden = true; resultsEl.innerHTML = '<li class="hub-nt-result-empty">Search failed — check your connection.</li>'; }
+      }, 350);
+    }
+    function selectAnime(btn) {
+      const id = btn.dataset.alId; const title = btn.dataset.alTitle || 'this anime';
+      const cover = hubSafeCover(btn.dataset.alCover); const favSlug = btn.dataset.favSlug || '';
+      attached = favSlug ? { tag: 'anime:' + favSlug, title: title, cover: cover, is44: true }
+                         : { tag: 'anime:al:' + id, title: title, cover: cover, is44: false };
+      renderChosen(); showForm();
+    }
+
+    overlay.querySelector('.hub-nt-attach-btn').addEventListener('click', showPicker);
+    overlay.querySelector('.hub-nt-chosen-change').addEventListener('click', showPicker);
+    overlay.querySelector('.hub-nt-chosen-remove').addEventListener('click', clearAttach);
+    overlay.querySelector('.hub-nt-pick-back').addEventListener('click', showForm);
+    searchEl.addEventListener('input', onSearchInput);
+    resultsEl.addEventListener('click', (e) => { const r = e.target.closest('.hub-nt-result'); if (r) selectAnime(r); });
+
+    const close = () => { if (inflight) { try { inflight.abort(); } catch (_) {} } document.removeEventListener('keydown', onEsc); try { overlay.remove(); } catch (_) {} };
+    const onEsc = (e) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); if (!pick.hidden) showForm(); else if (!ddList.hidden) closeDd(); else close(); } };
+    document.addEventListener('keydown', onEsc);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); else if (!dd.contains(e.target) && !ddList.hidden) closeDd(); });
+    overlay.querySelector('.hub-nt-cancel').addEventListener('click', close);
+
+    setTopic('general');
+    // preset from a "start the thread" empty state (item 6b) — pre-attach one of the 44.
+    if (presetTag) {
+      const s = hubAnimeSlugFromTag(presetTag);
+      if (s) { const a = animeBySlug(s); if (a) { attached = { tag: 'anime:' + s, title: a.Title, cover: hubSafeCover(a.image ? 'assets/' + a.image : ''), is44: true }; renderChosen(); } }
+      else if (FORUM_TOPICS.some(([k]) => k === presetTag)) setTopic(presetTag);
+    }
+    // item 5 — the full review-composer treatment on the body (Ctrl/⌘+Enter + hint + B/I/🔗)
+    if (window.RarComposer) window.RarComposer.enhance(bodyEl, { inline: false, submit: 'mod', onSubmit: () => overlay.querySelector('.hub-nt-create').click() });
+
+    overlay.querySelector('.hub-nt-create').addEventListener('click', async () => {
+      const title = overlay.querySelector('.hub-nt-input').value.trim();
+      const body = bodyEl.value.trim();
+      const tag = attached ? attached.tag : selectedTopic;   // a thread is about an anime OR a topic
+      errEl.textContent = '';
+      if (title.length < 1 || title.length > 120) { errEl.textContent = 'Give it a title (1–120 characters).'; return; }
+      const createBtn = overlay.querySelector('.hub-nt-create'); createBtn.disabled = true;
+      if (!(await ensureCanParticipate())) { createBtn.disabled = false; return; }
+      try {
+        const docData = {
+          authorUid: auth.currentUser.uid, title, body, tag,
+          createdAt: serverTimestamp(), lastPostAt: serverTimestamp(),
+          postCount: 0, reportCount: 0, hotScore: 0, pinned: false, locked: false, removed: false,
+        };
+        if (attached) { docData.animeTitle = String(attached.title).slice(0, 200); if (attached.cover) docData.coverImage = attached.cover; }
+        const ref = await addDoc(collection(db, 'forum'), docData);
+        close();
+        openThreadById(ref.id);
+      } catch (err) { createBtn.disabled = false; errEl.textContent = 'Could not post: ' + (err && err.message || err); }
+    });
+  }
+
+  // ---- Drawer click delegation ----------------------------------------------
+  async function onHubClick(e) {
+    const t = e.target;
+    if (t.closest('.hub-close')) { closeHubDrawer(); return; }
+    if (t.closest('.hub-back')) { closeThreadPanel(); return; }   // level 2 -> reveal the list (item 9)
+    if (t.closest('[data-replyto-cancel]')) { clearReplyTarget(); return; }
+    // a "start the thread" empty state (item 6b) — pre-tag it; must beat .hub-new
+    const startBtn = t.closest('[data-start-anime]'); if (startBtn) { openNewThreadModal('anime:' + startBtn.dataset.startAnime); return; }
+    if (t.closest('.hub-new')) { openNewThreadModal(); return; }
+    const sortBtn = t.closest('[data-sort]'); if (sortBtn) { hubSort = sortBtn.dataset.sort; renderHubList(); return; }
+    const chip = t.closest('[data-tag]'); if (chip) { hubTag = chip.dataset.tag || null; renderHubList(); return; }
+    // the shelf leads to the CONVERSATION (item 6b); the verdict link reads the review
+    const shelfChip = t.closest('.hub-shelf-chip'); if (shelfChip) { openAnimeConversation(shelfChip.dataset.animeSlug); return; }
+    const verdictLink = t.closest('.hub-verdict-link'); if (verdictLink) { hubExitToReview(verdictLink.dataset.animeSlug); return; }
+    const suggestBtn = t.closest('[data-suggest]'); if (suggestBtn) { window.location.href = '/suggest?title=' + encodeURIComponent(String(suggestBtn.dataset.suggest || '').replace(/-/g, ' ')); return; }
+    const animeBtn = t.closest('[data-anime-slug]'); if (animeBtn) { hubExitToReview(animeBtn.dataset.animeSlug); return; }
+    const risingEl = t.closest('.hub-rising-item'); if (risingEl) { openThreadById(risingEl.dataset.threadId); return; }
+    const card = t.closest('.hub-card'); if (card) { openThreadById(card.dataset.threadId); return; }
+    // within-thread reply sort (gate 8c)
+    const tsortBtn = t.closest('[data-tsort]'); if (tsortBtn) {
+      hubThreadSort = tsortBtn.dataset.tsort;
+      const bar = tsortBtn.closest('.hub-thread-sort');
+      if (bar) bar.querySelectorAll('.hub-tsort-tab').forEach((b) => b.classList.toggle('is-active', b === tsortBtn));
+      if (hubRepaintPosts) hubRepaintPosts();
+      return;
+    }
+    // ---- per-reply actions (thread view) ----
+    // the ⋯ overflow menu (only one open at a time)
+    const menuBtn = t.closest('[data-menu]'); if (menuBtn) {
+      const pid = menuBtn.dataset.menu;
+      if (hubMenuOpen.has(pid)) hubMenuOpen.delete(pid); else { hubMenuOpen.clear(); hubMenuOpen.add(pid); }
+      if (hubRepaintPosts) hubRepaintPosts();
+      return;
+    }
+    const copyBtn = t.closest('[data-copy-link]'); if (copyBtn && hubThreadId) {
+      const pid = copyBtn.dataset.copyLink;
+      const url = location.origin + '/#forum/' + encodeURIComponent(hubThreadId) + '/' + encodeURIComponent(pid);
+      try { await navigator.clipboard.writeText(url); copyBtn.textContent = 'Link copied ✓'; }
+      catch (_) { copyBtn.textContent = 'Copy failed — ' + url; }
+      setTimeout(() => { hubMenuOpen.delete(pid); if (hubRepaintPosts) hubRepaintPosts(); }, 1100);
+      return;
+    }
+    const pickBtn = t.closest('[data-pick-post]'); if (pickBtn && hubThreadId) { hubMenuOpen.clear(); await hubPickReply(pickBtn.dataset.pickPost); return; }
+    const colBtn = t.closest('[data-collapse]'); if (colBtn) {
+      const pid = colBtn.dataset.collapse; const li = colBtn.closest('.hub-post');
+      if (hubCollapsed.has(pid)) { hubCollapsed.delete(pid); if (li) li.classList.remove('is-collapsed'); colBtn.textContent = '[–]'; }
+      else { hubCollapsed.add(pid); if (li) li.classList.add('is-collapsed'); colBtn.textContent = '[+]'; }
+      return;
+    }
+    const replyToBtn = t.closest('[data-reply-to]'); if (replyToBtn) {
+      const li = replyToBtn.closest('.hub-post');
+      const nameEl = li && li.querySelector('.hub-post-name');
+      setReplyTarget(replyToBtn.dataset.replyTo, nameEl ? nameEl.textContent : 'them');
+      return;
+    }
+    const repBtn = t.closest('[data-report-post]'); if (repBtn && hubThreadId) {
+      const pid = repBtn.dataset.reportPost; const li = repBtn.closest('.hub-post');
+      const textEl = li && li.querySelector('.hub-post-text');
+      openReportModal({ targetType: 'post', targetPath: 'forum/' + hubThreadId + '/posts/' + pid,
+        targetUid: li ? (li.dataset.author || '') : '', snapshotText: textEl ? textEl.textContent : '' });
+      hubMenuOpen.delete(pid); if (hubRepaintPosts) hubRepaintPosts();
+      return;
+    }
+    const editBtn = t.closest('[data-edit-post]'); if (editBtn) {
+      const pid = editBtn.dataset.editPost;
+      hubEditing.set(pid, _hubRawBody.get(pid) || ''); hubConfirmDel.delete(pid); hubMenuOpen.delete(pid);
+      if (hubRepaintPosts) hubRepaintPosts();
+      const ta = document.querySelector('[data-edit-input="' + pid + '"]');
+      if (ta) { try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {} }
+      return;
+    }
+    const editCancel = t.closest('[data-edit-cancel]'); if (editCancel) { hubEditing.delete(editCancel.dataset.editCancel); if (hubRepaintPosts) hubRepaintPosts(); return; }
+    const editSave = t.closest('[data-edit-save]'); if (editSave && hubThreadId) {
+      const pid = editSave.dataset.editSave; const ta = document.querySelector('[data-edit-input="' + pid + '"]');
+      const val = ta ? ta.value.trim() : ''; if (!val) return;
+      if (!(await ensureCanParticipate())) return;
+      editSave.disabled = true;
+      try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { body: val, editedAt: serverTimestamp() }); hubEditing.delete(pid); _hubRawBody.set(pid, val); if (hubRepaintPosts) hubRepaintPosts(); }
+      catch (err) { editSave.disabled = false; alert('Could not save your edit: ' + (err && err.message || err)); }
+      return;
+    }
+    const delBtn = t.closest('[data-del-post]'); if (delBtn) { hubMenuOpen.delete(delBtn.dataset.delPost); hubConfirmDel.add(delBtn.dataset.delPost); if (hubRepaintPosts) hubRepaintPosts(); return; }
+    const delCancel = t.closest('[data-del-cancel]'); if (delCancel) { hubConfirmDel.delete(delCancel.dataset.delCancel); if (hubRepaintPosts) hubRepaintPosts(); return; }
+    const delConfirm = t.closest('[data-del-confirm]'); if (delConfirm && hubThreadId) {
+      const pid = delConfirm.dataset.delConfirm;
+      if (!(await ensureCanParticipate())) return;
+      try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { removed: true, body: '' }); hubConfirmDel.delete(pid); hubEditing.delete(pid); }
+      catch (err) { alert('Could not take it down: ' + (err && err.message || err)); }
+      return;
+    }
+    const adminBtn = t.closest('[data-hub-admin]'); if (adminBtn && hubThreadId) { await hubAdminAction(adminBtn.dataset.hubAdmin); return; }
+    const voteBtn = t.closest('[data-hub-vote]'); if (voteBtn && hubThreadId) { await hubVote(voteBtn.dataset.postId, voteBtn.dataset.hubVote, voteBtn); return; }
+  }
+
+  async function hubAdminAction(action) {
+    if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
+    const tref = doc(db, 'forum', hubThreadId);
+    try {
+      if (action === 'pin') { const t = hubThreads.find((x) => x.id === hubThreadId); await updateDoc(tref, { pinned: !(t && t.pinned) }); }
+      else if (action === 'lock') { const t = hubThreads.find((x) => x.id === hubThreadId); await updateDoc(tref, { locked: !(t && t.locked) }); }
+      else if (action === 'remove') { await updateDoc(tref, { removed: true, title: '', body: '' }); closeThreadPanel(); }
+    } catch (err) { alert('Admin action failed: ' + (err && err.message || err)); }
+  }
+
+  // gate 8c extra — Blake's-pick: admin marks ONE reply per thread as the gold pick
+  // (the only gold in the reply stream; owner-granted endorsement). Toggling a new pick
+  // unsets the previous one (one per thread). Rules: only the admin update branch allows
+  // 'blakePick'; owners cannot set it.
+  async function hubPickReply(pid) {
+    if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true) || !hubThreadId || !pid) return;
+    try {
+      const li = document.querySelector('.hub-post[data-post-id="' + pid + '"]');
+      const isPicked = !!(li && li.classList.contains('hub-post--pick'));
+      if (isPicked) {
+        await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { blakePick: false });
+      } else {
+        const prev = document.querySelectorAll('.hub-post--pick[data-post-id]');
+        for (let i = 0; i < prev.length; i++) {
+          const other = prev[i].getAttribute('data-post-id');
+          if (other && other !== pid) { try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', other), { blakePick: false }); } catch (_) {} }
+        }
+        await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { blakePick: true });
+      }
+    } catch (err) { alert('Could not update Blake’s pick: ' + (err && err.message || err)); }
+  }
+
+  // Render this viewer's thumb state onto a reply foot (up = purple, down = neutral white).
+  function applyHubVoteUI(btn, val) {
+    const foot = btn && btn.closest('.hub-post-foot'); if (!foot) return;
+    const up = foot.querySelector('.hub-vote.up'); const down = foot.querySelector('.hub-vote.down');
+    if (up) up.classList.toggle('active', val === 1);
+    if (down) down.classList.toggle('active', val === -1);
+  }
+
+  // Post vote: client writes ONLY its own vote doc (value 1 = 👍, -1 = 👎); the count
+  // CF lands in gate 9 and the Tavern stays COUNT-FREE regardless (heart rule).
+  // hubMyVotes is the SESSION record of this viewer's own thumb so the lit state both
+  // survives a posts-list repaint AND reverts cleanly if a fast up<->down flip is
+  // denied by the 2s voteUpdateOk clamp (no visual lie left behind).
+  async function hubVote(postId, dir, btn) {
+    const u = auth.currentUser; if (!u) { openAuth('signin'); return; }
+    if (!postId || !hubThreadId) return;
+    if (!(await ensureCanParticipate())) return;
+    const want = dir === 'down' ? -1 : 1;
+    const prev = hubMyVotes.get(postId) || 0;
+    const next = (prev === want) ? 0 : want;        // re-press the lit thumb -> clear it
+    if (next === 0) hubMyVotes.delete(postId); else hubMyVotes.set(postId, next);
+    applyHubVoteUI(btn, next);                        // optimistic
+    const vref = doc(db, 'forum', hubThreadId, 'posts', postId, 'votes', u.uid);
+    try {
+      if (next === 0) await deleteDoc(vref);
+      else await setDoc(vref, { uid: u.uid, value: want, updatedAt: serverTimestamp() }, { merge: true });
+    } catch (_e) {
+      // revert the optimistic change (e.g. the 2s vote-change clamp denied a fast flip)
+      if (prev === 0) hubMyVotes.delete(postId); else hubMyVotes.set(postId, prev);
+      applyHubVoteUI(btn, prev);
+    }
+  }
 
   // ============================
 // COMMUNITY (right sheet)
@@ -8419,8 +9448,10 @@ randomBtn?.addEventListener("click", (e) => {
   // #home-button keeps its HARD reload as the clean-reset escape hatch). Re-measure the
   // sliding marker on resize since the active place can reflow.
   denBtn?.addEventListener("click", (e) => { e.preventDefault(); showHome(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  // v1.10.0 gate 6 — Community opens the Hub (the Lantern Room) as a left drawer over the lit Den.
+  communityBtn?.addEventListener("click", (e) => { e.preventDefault(); showCommunity(); });
   window.addEventListener('resize', () => {
-    const active = [denBtn, foryouBtn, discoverBtn].find((b) => b && b.classList.contains('is-active'));
+    const active = [denBtn, foryouBtn, discoverBtn, communityBtn].find((b) => b && b.classList.contains('is-active'));
     moveMarker(active || null);
   });
   if (discoverSearchInput) {
@@ -8914,6 +9945,24 @@ try {
     if (typeof showAll === 'function') showAll();
     if (typeof openNotifTarget === 'function') openNotifTarget(target);
     // Normalize so a refresh doesn't re-fire (the async scroll already captured it).
+    history.replaceState({}, '', location.pathname + location.search + '#all');
+  } else if (h === '#community' || h === '#tavern') {
+    // gate 8c — open the Tavern (used by the account-page nav "Tavern" link).
+    if (typeof window.__rarShowCommunity === 'function') window.__rarShowCommunity();
+    history.replaceState({}, '', location.pathname + location.search + '#all');
+  } else if (h.startsWith('#forum')) {
+    // v1.10.0 gate 5 — forum thread deep-link (#forum=<tid> or #forum/<tid>): open the
+    // Tavern + the thread. gate 8c — an optional reply permalink: #forum/<tid>/<pid>
+    // (or #forum/<tid>/posts/<pid>) scrolls to + flashes the specific reply.
+    const parts = h.slice('#forum'.length).replace(/^[=/]/, '').split('/').filter(Boolean);
+    const tid = decodeURIComponent(parts[0] || '');
+    let pid = '';
+    if (parts.length === 2) pid = decodeURIComponent(parts[1]);
+    else if (parts.length >= 3 && parts[1] === 'posts') pid = decodeURIComponent(parts[2]);
+    if (tid && typeof window.openHubThread === 'function') window.openHubThread(tid, pid);
+    history.replaceState({}, '', location.pathname + location.search + '#all');
+  } else if (h.startsWith('#conversations')) {
+    // DMs land in gate 18 — recognize the route + stub cleanly (no dead click / void).
     history.replaceState({}, '', location.pathname + location.search + '#all');
   } else if (h.startsWith('#open=') || h.startsWith('#anime=')) {
     const isOpen = h.startsWith('#open=');

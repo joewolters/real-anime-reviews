@@ -149,6 +149,64 @@ async function seed() {
     }
   }
 
+  // v1.10.0 gates 6-8 — seed forum threads + replies so Blake can smoke the Hub:
+  // an anime-tagged (+ pinned) thread drives Blake's verdict rail; varied ages /
+  // lastPostAt / postCount make Hot / New / Top visibly reorder; free-tag threads
+  // exercise the tag filter. Authors = the seeded prac-* users (Admin SDK bypasses rules).
+  const nowMs = Date.now();
+  const animeSlug0 = picks[0] ? slug(picks[0].Title) : 'one-punch-man';
+  const fthreads = [
+    { id: 'th-opm',  author: 'prac-yuki', title: (picks[0] ? picks[0].Title : 'One Punch Man') + ' — does the back half hold up?', body: "Rewatched it and the second cour still lands for me. The fights are unreal. Where does everyone land?", tag: 'anime:' + animeSlug0, ageH: 30, lastH: 1, pinned: true, animeTitle: (picks[0] ? picks[0].Title : 'One Punch Man'), cover: (picks[0] && picks[0].image ? 'assets/' + picks[0].image : '') },
+    { id: 'th-recs', author: 'prac-mika', title: 'Cozy slice-of-life recs for a rainy week?', body: "Looking for something gentle — comfort shows only. Hit me.", tag: 'recommend', postCount: 6, ageH: 50, lastH: 3 },
+    { id: 'th-hot',  author: 'prac-ren',  title: 'Hot take: the subs-vs-dubs debate is dead', body: "Watch it however you enjoy it. That's the whole post.", tag: 'general', postCount: 9, ageH: 12, lastH: 0.5 },
+    { id: 'th-new',  author: 'prac-aki',  title: 'Just finished my first seasonal binge — what now?', body: "New to following things weekly. How do you keep up without burning out?", tag: 'general', postCount: 1, ageH: 2, lastH: 2 },
+    { id: 'th-off',  author: 'prac-sora', title: 'Best snacks for a marathon? (off-topic, sorry)', body: "Mine is popcorn + an unreasonable amount of tea.", tag: 'offtopic', postCount: 2, ageH: 70, lastH: 20 },
+  ];
+  for (const t of fthreads) {
+    const tdoc = {
+      authorUid: t.author, title: t.title, body: t.body, tag: t.tag,
+      createdAt: TS.fromMillis(nowMs - t.ageH * 3600000),
+      lastPostAt: TS.fromMillis(nowMs - t.lastH * 3600000),
+      postCount: 0, reportCount: 0, hotScore: 0,   // gate 9 CFs compute postCount + hotScore from the seeded posts
+      pinned: !!t.pinned, locked: false, removed: false,
+    };
+    if (t.cover) tdoc.coverImage = t.cover;        // gate 8d — attached-anime cover
+    if (t.animeTitle) tdoc.animeTitle = t.animeTitle;
+    await db.doc('forum/' + t.id).set(tdoc);
+  }
+  // gate 8b "The Tavern": a reply-to-reply CHAIN on the pinned thread (p1 -> p2 -> p3)
+  // so Blake's smoke shows real nesting + the 2-level indent clamp + the OP tag.
+  const freplies = [
+    { tid: 'th-opm',  id: 'p0', author: 'prac-mika', body: 'The animation spike in the big fight still goes hard.', likes: 3, ageH: 3 },
+    { tid: 'th-opm',  id: 'p1', author: 'prac-ren',  body: 'Disagree a little — the filler dragged for me.', likes: 1, ageH: 2 },
+    { tid: 'th-opm',  id: 'p2', author: 'prac-aki',  body: "Fair, but the back half earns it — Blake's verdict feels right honestly.", likes: 5, ageH: 1, parent: 'p1' },
+    { tid: 'th-opm',  id: 'p3', author: 'prac-yuki', body: 'Agreed with that — the payoff is worth the slower middle.', likes: 0, ageH: 0.5, parent: 'p2' },
+    { tid: 'th-recs', id: 'p0', author: 'prac-yuki', body: 'The one about the angel next door is pure comfort.', likes: 2, ageH: 4 },
+    // th-hot gets recent activity so the gate-9 hotScore lifts it up the Rising rail
+    { tid: 'th-hot',  id: 'p0', author: 'prac-mika', body: 'Hard agree. Gatekeeping how people watch is exhausting.', likes: 4, ageH: 6 },
+    { tid: 'th-hot',  id: 'p1', author: 'prac-aki',  body: 'Dubs have come a long way too, honestly.', likes: 2, ageH: 5 },
+    { tid: 'th-hot',  id: 'p2', author: 'prac-sora', body: 'Subs for me but I get it.', likes: 1, ageH: 3 },
+  ];
+  for (const r of freplies) {
+    const pdoc = {
+      authorUid: r.author, body: r.body, createdAt: TS.fromMillis(nowMs - r.ageH * 3600000),
+      likesCount: r.likes, reportCount: 0, removed: false,
+    };
+    if (r.parent) pdoc.parentId = r.parent;   // write-once at create (edit/delete rules never touch it)
+    await db.doc('forum/' + r.tid + '/posts/' + r.id).set(pdoc);
+  }
+  // gate 9 — seed a few post VOTE docs so onForumPostVote populates the thread aggregate
+  // (likes/dislikes) that hotScore + the Rising rail read (a post's own likesCount doesn't feed it).
+  const fvotes = [
+    { tid: 'th-opm', pid: 'p0', voter: 'prac-ren',  value: 1 },
+    { tid: 'th-opm', pid: 'p2', voter: 'prac-yuki', value: 1 },
+    { tid: 'th-hot', pid: 'p0', voter: 'prac-mika', value: 1 },
+    { tid: 'th-hot', pid: 'p1', voter: 'prac-aki',  value: 1 },
+  ];
+  for (const v of fvotes) {
+    await db.doc('forum/' + v.tid + '/posts/' + v.pid + '/votes/' + v.voter).set({ uid: v.voter, value: v.value, updatedAt: TS.fromMillis(nowMs - 3600000) });
+  }
+
   // seed a full notification inbox for MIKA so Blake can smoke the Lantern (every
   // type + a Blake-origin GOLD ping that sorts first + votes that roll up + a muted
   // type). Written via Admin SDK (bypasses the CF-only create rule).

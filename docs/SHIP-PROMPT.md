@@ -1,29 +1,39 @@
 <!-- author: Cowork | date: 2026-06-09 -->
-# v1.10.0 — BATCH: gate-4 checkpoint commit → reports "View" → Gate 5 → Gates 6-8 (the working Hub). APPLY all, NO deploy. Smoke ONCE at the end.
+# v1.10.0 — BATCH: Tavern polish (8d) + anime-attach-with-covers + Gate 9 (hotScore/Rising) + Gate 10 (mod polish + CHECKPOINT COMMIT). APPLY all, NO deploy. ONE smoke at the end.
 
-> **New cadence (Blake's call, 2026-06-09): batch to smoke MILESTONES, not gates.** Build straight through to a usable Community Hub, self-verifying hard at each step, then hand Blake ONE smoke of the whole Hub. This cuts the report/smoke churn that eats context. Everything stays STAGED — nothing deploys until the cutover (gate 21). Run your adversarial review before the smoke, since Blake isn't smoking mid-batch.
+> **Cadence (Blake): batch the polish + the next couple gates into one ULTRAMAX run — "code is allowed to take as much time as it needs."** Build straight through, self-verify hard + adversarial review, then ONE milestone smoke. Everything STAGED — no deploy. The gate-10 checkpoint commit lands at the end.
 
-## ⭐ STANDING DIRECTIVE (every element, Blake 2026-06-09)
-Every NEW interactive element ships at full brand parity BY DEFAULT — branded buttons (never raw `<button>`), hover states, purple vocabulary, spacing; counters/close/chips/tabs included. No native/unstyled control reaches the smoke. Eyeball everything you add. This is a verification item.
+## ⭐ STANDING DIRECTIVE
+Every interactive element at full brand parity by default — branded, hover states, purple-not-gold, **legible AT REST** (heading text must match plain white body text, not a dimmer "stylized" tone). No native/unstyled control reaches smoke.
 
-## STEP 0 — land the gate-4 checkpoint commit (smoke PASSED)
-Gate-4 smoke passed (consent buttons, Esc fix, counters, reports queue all good). Commit the prepared gates-1→4 checkpoint now (Blake-authored, zero trailers, the 7 Cowork excludes restored out). STAGED — NO deploy.
+## PART A — Tavern polish (Blake's 8c re-smoke, his words)
+1. **Backdrop over-blurred — REVERT.** *"The tavern backdrop is WAY too blurred now. Restore the blur to what it was before."* The `tavern-blur.webp` overshot — go back to the lighter shade-blur from 8b (the sharp `tavern.png` + dark gradient, or a much gentler pre-blur). Cozy, not soupy.
+2. **Nav rename → "The Tavern"** (WITH "The") in the nav headers on BOTH index.html + account.html (8c set it to "Tavern").
+3. **Heading legibility — STILL too dim.** *"The Tavern letters still aren't bright enough. Same with community. Like they look dimmed compared to all other white text."* → make "The Tavern" title + the "Community" kicker render at the SAME brightness as the site's normal white text. Stop dimming them; the text-shadow can stay for contrast but the fill must be full-bright.
+4. (Second-level slide-out = good, no change.)
 
-## STEP 1 — reports "View the content" (Blake's gate-4 ask)
-*"I would like an option to visit the comment, post, review that's being reported."* Each report row gets a branded **View** action that opens the reported comment/review/post in context (scroll + halo). For comments/reviews reuse the existing deep-link path; for forum posts it depends on Step 2's router — wire it through once that lands.
+## PART B — anime-attach with cover art (reshapes "About a title", Blake's idea)
+*"if the user is basing it on an anime they should have that same anime search function thats given to them when requesting an anime for me to watch. That way it gives the thread/forum a nice picture to go with the topic."*
+- The new-thread **"attach an anime"** flow uses the **full AniList search** (the suggest.js/request-an-anime search — debounced, covers, AbortController), NOT just Blake's 44.
+- ⚠️ **Blake's reviewed-anime quick-pick must NOT go away** (his note): *"Make sure my thing for choosing one of my reviewed anime doesn't go away for a thread. Just if they want to specifically look for an anime I haven't reviewed that option is available."* → keep a quick path to his 44 AND allow searching any anime. Unify cleanly: his 44 surface marked/gold in the search; any other anime is also findable.
+- The attached anime gives the thread a **cover image** (the AniList cover) shown on the thread card + thread view.
+- **Heart:** if the attached anime is one of Blake's 44 → the thread gets his **gold verdict rail** (as now). If it's NOT reviewed → just the cover, no verdict (heart-safe; his reviews stay the only gold). A non-catalog anime tags as `anime:al:<id>` (additive rules — Code already uses the `al:<id>` discriminator); keep `anime:<slug>` for the 44.
+- (User-uploaded thread images are gates 12-14 — the `📷` placeholder stays; this is the cover-art step toward it.)
 
-## STEP 2 — Gate 5: the forum/DM deep-link router (latent-bug fix)
-`parseNotifTarget` already classifies `forum/<tid>` and `conversations/<id>`, but index.html has **no boot handler** for them — those notifications currently click into the void. Add the `#forum=<tid>` / `#conversations=<id>` boot handlers reusing the comment/review scroll-highlight machinery. (DMs land in gate 18; wire the forum half now, stub the DM half cleanly.)
+## PART C — topic expansion + dropdown (Blake: "I meant for code to add more topics, going wide")
+- **Propose a full, expansive anime-discussion topic set** (e.g. General · Recommendations · Hot Takes · Episode Discussion · Theories · Animation · Music/OST · News · Manga · Cosplay · Off-topic — your call, go wide and tasteful).
+- Because the list is now long, **the topic picker becomes a branded DROPDOWN** (Blake: *"there should also be a drop down menu for these"*) — not a wrapping chip row. Branded (not a raw `<select>`), searchable/scrollable, with the "attach an anime" as its own clear slot separate from the topic.
+- New topics = additive `forum` tag-enum widening + tests.
 
-## STEP 3 — Gates 6-8: the Community Hub (the milestone Blake smokes)
-Per design study §4a/4b (**"The Lantern Room"** — Blake's pick) + the §4 protect-the-heart specs:
-- **G6 — Hub surface:** Community = the 4th nav button; tapping it sets `data-surface='hub'` (the cozy veil step between Den and Discover, ≠ Den's resting value) and opens the thread **list as a left-anchored full-height sheet reusing the secondary-modal drawer stack** (z-6000, `[hidden]` symmetry). **The Den stays mounted + lit behind the dimmed hub veil** (structural non-co-equality). jp-mini kicker, Blake-voiced empty state.
-- **G7 — thread list + cards:** the `forum` subscription, **Hot 注目 / New 新着 / Top 殿堂** sort tabs, a tag-filter chip row, quiet **purple, count-free** thread cards (no karma/post-count anywhere — heart spec). A single gold-gated **"From Blake's 44" pinned shelf** at the top of Hot = the ONE gold expression.
-- **G8 — thread view + compose:** a single thread opens on the **secondary slide-in sheet** with `RarComposer` docked for replies, vote UI, admin pin/lock/remove→tombstone, and the **anime-cover chip** (an `anime:<slug>`-tagged thread shows **Blake's verdict rail** — his gold rating + pull-quote → deep-links into his review). New-thread composer = a primary modal. Consent-gate + spoiler-aware (spoiler markdown is gate 11 — leave the hook).
-- ⚠️ Protect-the-heart Playwright specs (in `?emu=1`): no gold token on any community card/thread; no count node anywhere; hub veil cozier-than-Discover but ≠ Den; Blake's verdict rail carries the only gold.
-- Seed the practice sandbox with forum threads (some `anime:<slug>`-tagged, some free, varied votes/ages so Hot/New/Top differ) for the smoke.
+## PART D — Gate 9: hotScore + the Rising rail (study idea #7)
+- **`recomputeHotScore` CF** (binding the live `handleVoteWrite` template) — `(up−down+0.5·postCount)/(ageHours+2)^1.5` on each thread; drives the **Hot** sort properly (replace the interim `lastActivityAt` proxy).
+- **A "Rising" rail** with **slot 1 permanently Blake's gold pick** (his pinned anime-tagged thread / verdict) — community velocity literally tops out beneath Blake. Propose placement (top of the Tavern Hot view, or a homepage teaser). Heart: slot-1 gold, the rest purple + count-free.
 
-## Verify (before the smoke)
-All tracks green (npm test 115+ with the new Hub + heart specs; rules/cf hold). **Run your 4-agent adversarial review** across the batch (XSS on user-authored thread/post content, the heart specs, the consent-gate on forum writes, the deep-link router). Walk the whole Hub yourself in `?emu=1`. Then hand Blake the milestone smoke.
+## PART E — Gate 10: final mod polish + the CHECKPOINT COMMIT
+- Pin/lock/remove→tombstone + the Blake's-Reviews shelf already shipped (gate 8) — verify they're solid, fill any gaps (e.g. a locked-thread visible state, a removed-thread tombstone in the list).
+- **Then the gate-10 CHECKPOINT COMMIT** — gates 5→10 working tree, Blake-authored, zero trailers, the 7 Cowork excludes restored out. ⚠️ **`git add` the two public assets** `assets/tavern.png` + `assets/tavern-blur.webp` (or whichever pre-blur survives Part A). STAGED — NO deploy.
 
-## Report (lean): the checkpoint commit hash · each step in plain English (Blake reads this) · the adversarial-review findings+fixes · test counts · Blake's numbered Hub smoke (sign-ins, what to click, what he should see) · confirm production untouched. The next checkpoint commit is gate 10 per the map.
+## Verify
+All tracks green (npm test current+ with updated specs; the new tag-enum + anime-attach + hotScore + Rising-rail heart specs; run `test:rules` if practice frees 8080, else note the expected count). **4-agent adversarial review** across the batch (XSS on the AniList-search results + thread covers, the heart specs on the Rising rail + covers, the hotScore CF idempotency, the new tag rules). Walk everything yourself. Then Blake's ONE numbered smoke.
+
+## Report (lean): Part A/B/C per-item · the topic set you chose · the anime-attach UX · Part D hotScore+Rising · Part E gaps-filled + the **commit hash** + the asset adds · adversarial findings · test counts · Blake's numbered smoke. NO deploy.

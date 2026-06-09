@@ -47,6 +47,19 @@ function safeHtml(s) {
 
 function shortUid(uid) { return uid ? (String(uid).slice(0, 6) + '…') : '—'; }
 
+// Public deep-link to the reported content (opens in context on the live site: scroll + halo).
+// comment/reply/review/thread -> the #notif= boot handler; forum/post -> the #forum= router
+// (gate 5); dm viewing lands in gate 18.
+function viewHref(targetType, targetPath) {
+  if (!targetPath) return null;
+  if (targetType === 'forum' || targetType === 'post') {
+    const tid = String(targetPath).split('/')[1];   // forum/{tid}[/posts/{pid}]
+    return tid ? '../index.html#forum=' + encodeURIComponent(tid) : null;
+  }
+  if (targetType === 'dm') return null;
+  return '../index.html#notif=' + encodeURIComponent(targetPath);
+}
+
 function formatTimestamp(ts) {
   if (!ts) return '';
   const ms = ts.toMillis ? ts.toMillis() : (typeof ts === 'number' ? ts : (ts.seconds ? ts.seconds * 1000 : 0));
@@ -137,9 +150,10 @@ function renderRow(g, index) {
       </div>
     </div>
     <div class="actions">
-      <button data-action="ban" class="danger"${banDisabled}>Ban author</button>
+      <button data-action="view" class="admin-primary">View</button>
+      <button data-action="dismiss" class="secondary">Dismiss</button>
       <button data-action="remove" class="secondary">Remove content</button>
-      <button data-action="dismiss" class="admin-primary">Dismiss</button>
+      <button data-action="ban" class="danger"${banDisabled}>Ban author</button>
     </div>
   </li>`;
 }
@@ -255,6 +269,13 @@ function wireClicks() {
     const targetPath = row.dataset.targetPath;
     const targetUid = row.dataset.targetUid;
     const targetType = row.dataset.targetType;
+
+    if (action === 'view') {
+      const href = viewHref(targetType, targetPath);
+      if (href) window.open(href, '_blank', 'noopener');
+      else alert('That content type can\'t be opened from here yet.');
+      return;
+    }
 
     if (action === 'dismiss') {
       btn.disabled = true;

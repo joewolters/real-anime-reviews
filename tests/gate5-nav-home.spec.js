@@ -10,10 +10,11 @@ test.describe('v1.8.4 gate 5 — nav + home hole-fill', () => {
     await page.goto('/');
     // The three surfaces are the primary places, in order, inside .nav-places.
     const places = page.locator('.nav-places .place-btn');
-    await expect(places).toHaveCount(3);
+    await expect(places).toHaveCount(4);
     await expect(places.nth(0)).toHaveAttribute('id', 'den-btn');
     await expect(places.nth(1)).toHaveAttribute('id', 'foryou-btn');
     await expect(places.nth(2)).toHaveAttribute('id', 'discover-btn');
+    await expect(places.nth(3)).toHaveAttribute('id', 'community-btn');   // v1.10.0 gate 6 — the Hub place
     // The tools live in .nav-tools, after the seam.
     await expect(page.locator('.nav-tools #view-all-btn')).toHaveCount(1);
     await expect(page.locator('.nav-tools #random-btn')).toHaveCount(1);

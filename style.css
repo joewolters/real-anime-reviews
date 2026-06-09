@@ -65,6 +65,7 @@ body::before {
 :root[data-surface="den"]      { --veil-w0: 0.80; --veil-w1: 0.90; --veil-w2: 0.96; }  /* coziest — explicit (not just the fallback) */
 :root[data-surface="foryou"]   { --veil-w0: 0.54; --veil-w1: 0.68; --veil-w2: 0.80; }  /* mid, half-lit */
 :root[data-surface="discover"] { --veil-w0: 0.28; --veil-w1: 0.42; --veil-w2: 0.58; }  /* open — city breathes through */
+:root[data-surface="hub"]      { --veil-w0: 0.67; --veil-w1: 0.79; --veil-w2: 0.88; }  /* v1.10.0 — the Lantern Room: cozier than Discover, distinct from Den */
 :root[data-surface="tool"]     { --veil-w0: 0.70; --veil-w1: 0.82; --veil-w2: 0.92; }  /* View All — a touch lighter than Den */
 /* Intentionally on :root (not a specific selector) — it kills ONLY the veil-wash var
    transition above so the density snaps instantly under reduced-motion; don't add an
@@ -8753,4 +8754,393 @@ html.rar-welcome-pending::before {
 .rar-suspended-modal .rar-consent-sub { color: #f0d9d9; }
 @media (prefers-reduced-motion: reduce) {
   .rar-consent-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* ===========================================================================
+   v1.10.0 GATES 6-8 — the Community Hub ("The Lantern Room").
+   A LEFT-anchored full-height drawer (z-6000) over the dimmed-but-lit Den. Cards
+   are quiet + PURPLE + COUNT-FREE; the ONLY gold is the "From Blake's 44" shelf +
+   an anime-tagged thread's verdict rail (gold = Blake-only — protect the heart).
+   =========================================================================== */
+.hub-layer {
+  position: fixed; inset: 0; z-index: 6000; display: flex;
+}
+.hub-layer[hidden] { display: none; }
+.hub-backdrop {
+  position: absolute; inset: 0; background: rgba(10, 2, 22, 0.55);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity .32s ease;
+}
+.hub-layer.active .hub-backdrop { opacity: 1; }
+.hub-sheet {
+  position: relative; margin-right: auto;          /* LEFT-anchored */
+  width: min(1080px, 94vw); height: 100%;          /* level 1: matches the right-side secondary modal */
+  /* The Tavern backdrop (8d): the SHARP tavern.png under a dark gradient — the heavy
+     pre-blur (8c) read as soupy + washed the text contrast, so we're back to the 8b
+     treatment (sharp + shade = cozy AND high-contrast for legible headings). NO live
+     backdrop-filter over the image (the documented Gecko-perf rule). */
+  background:
+    linear-gradient(180deg, rgba(26, 11, 44, 0.90) 0%, rgba(20, 8, 38, 0.88) 52%, rgba(34, 16, 30, 0.82) 100%),
+    url(assets/tavern.png) center / cover no-repeat;
+  border-right: 1px solid rgba(187, 134, 252, 0.42);
+  box-shadow: 0 0 90px rgba(0, 0, 0, 0.6), 0 0 40px rgba(187, 134, 252, 0.14);
+  transform: translateX(-48px); opacity: 0;
+  transition: transform .32s cubic-bezier(.2, .7, .3, 1), opacity .32s ease;
+  display: flex; flex-direction: column;
+}
+.hub-layer.active .hub-sheet { transform: translateX(0); opacity: 1; }
+.hub-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 22px 24px 60px; font-family: 'Outfit', 'Montserrat', sans-serif; color: #efe6ff; }
+
+/* ---- level-2 thread panel (gate 8c item 9 — a modal stack OVER the lit list) ---- */
+.hub-thread-layer { position: absolute; inset: 0; display: flex; }
+.hub-thread-layer[hidden] { display: none; }
+.hub-thread-scrim {
+  position: absolute; inset: 0; background: rgba(8, 0, 18, 0.5);
+  -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);   /* blur the LIST behind — flat scrim, the sanctioned secondary/tertiary pattern */
+  opacity: 0; transition: opacity .3s ease; cursor: pointer;
+}
+.hub-thread-layer.active .hub-thread-scrim { opacity: 1; }
+.hub-thread-sheet {
+  position: relative; margin-right: auto;             /* LEFT-anchored, narrower than the list -> the list peeks behind */
+  width: min(760px, 90vw); height: 100%;
+  background:
+    linear-gradient(180deg, rgba(22, 9, 38, 0.94) 0%, rgba(16, 6, 32, 0.93) 52%, rgba(30, 14, 26, 0.88) 100%),
+    url(assets/tavern.png) center / cover no-repeat;
+  border-right: 1px solid rgba(187, 134, 252, 0.5);
+  box-shadow: 0 0 90px rgba(0, 0, 0, 0.6), 8px 0 50px rgba(0, 0, 0, 0.5);
+  transform: translateX(-40px); opacity: 0;
+  transition: transform .3s cubic-bezier(.2, .7, .3, 1), opacity .26s ease;
+  display: flex; flex-direction: column;
+}
+.hub-thread-layer.active .hub-thread-sheet { transform: translateX(0); opacity: 1; }
+.hub-thread-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 22px 24px 60px; font-family: 'Outfit', 'Montserrat', sans-serif; color: #efe6ff; }
+
+.hub-header { position: relative; margin-bottom: 14px; }
+/* 8d: a dark gradient backing behind the header so the white heading text has dark
+   GROUND to pop against (the real cause of the "dim" look was low contrast over the
+   warm tavern art, not the text color). */
+.hub-header::before { content: ""; position: absolute; left: -24px; right: -24px; top: -22px; height: 132px; pointer-events: none; z-index: 0;
+  background: linear-gradient(180deg, rgba(6, 2, 14, 0.86) 0%, rgba(6, 2, 14, 0.5) 52%, rgba(6, 2, 14, 0) 100%); }
+.hub-header > * { position: relative; z-index: 1; }
+.hub-kicker { font: 800 0.74rem 'Montserrat', sans-serif; letter-spacing: 0.20em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }  /* 8d: FULL-bright white (Blake: matches body white) */
+.hub-kicker .jp-mini { margin-left: 4px; font-family: 'Noto Sans JP', sans-serif; font-size: 0.62rem; color: #cfc7d9; }
+/* 8d: PURE white. -webkit-text-fill-color:#fff + background:none defeat ANY inherited
+   gradient text-fill (the "computed color says #fff but it renders gray" trap); a tight
+   white glow fattens the thin Bebas-Neue strokes so it reads as bright as body text. */
+.hub-title { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 6px 0 12px; font: 800 2.05rem 'Bebas Neue', sans-serif; letter-spacing: 0.05em; color: #fff; -webkit-text-fill-color: #fff; background: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }
+/* the two heading lanterns (item 1) — a warm, gently-flickering glow */
+.hub-lantern { font-size: 1.55rem; line-height: 1; filter: drop-shadow(0 0 10px rgba(255, 184, 92, 0.75)) drop-shadow(0 0 3px rgba(255, 120, 40, 0.5)); animation: hub-lantern-flicker 4.5s ease-in-out infinite; }
+/* opacity-only flicker (compositor-cheap — the static drop-shadow stays put; no
+   per-frame filter repaint, matching the welcome-door/veil transform+opacity rule). */
+@keyframes hub-lantern-flicker {
+  0%, 100% { opacity: 0.82; }
+  50%      { opacity: 1; }
+}
+/* item 7: the X is clearly visible AT REST (a branded resting fill), glow on hover */
+.hub-close { position: absolute; top: -2px; right: 0; width: 34px; height: 34px; border-radius: 999px;
+  background: rgba(58, 28, 96, 0.62); border: 1px solid rgba(187, 134, 252, 0.6); color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45); transition: background .15s ease, border-color .15s ease, filter .15s ease; }
+.hub-close:hover { background: rgba(187, 134, 252, 0.32); border-color: rgba(206, 170, 255, 0.88); filter: brightness(1.1); }
+.hub-new {
+  display: inline-block; background: linear-gradient(180deg, rgba(140, 70, 220, 0.92), rgba(80, 0, 130, 0.92));
+  border: 1px solid rgba(187, 134, 252, 0.5); border-radius: 999px; padding: 7px 16px; color: #fff;
+  font: 700 0.82rem 'Montserrat', sans-serif; cursor: pointer; box-shadow: 0 4px 12px rgba(120, 40, 200, 0.3);
+  transition: filter .15s ease, transform .1s ease, box-shadow .15s ease;
+}
+.hub-new:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(120, 40, 200, 0.45); }
+
+.hub-sortrow { display: flex; gap: 6px; margin-bottom: 10px; }
+.hub-sort-tab { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.22); border-radius: 10px;
+  padding: 6px 12px; color: #cbb0ff; font: 700 0.78rem 'Montserrat', sans-serif; cursor: pointer; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.hub-sort-tab .jp-mini { font-family: 'Noto Sans JP', sans-serif; font-size: 0.6rem; opacity: 0.7; margin-left: 3px; }
+.hub-sort-tab:hover { background: rgba(187, 134, 252, 0.14); }
+.hub-sort-tab.is-active { background: linear-gradient(180deg, rgba(140, 70, 220, 0.4), rgba(70, 0, 110, 0.5)); border-color: rgba(187, 134, 252, 0.6); color: #fff; }
+
+.hub-chiprow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.hub-chip { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.2); border-radius: 999px;
+  padding: 4px 12px; color: #cbb0ff; font: 600 0.74rem 'Montserrat', sans-serif; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.hub-chip:hover { background: rgba(187, 134, 252, 0.14); }
+.hub-chip.is-active { background: rgba(187, 134, 252, 0.22); border-color: rgba(187, 134, 252, 0.55); color: #fff; }
+
+/* "From Blake's 44" shelf — the ONE gold expression on the Hub. */
+.hub-shelf { margin: 0 0 18px; padding: 12px 14px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(60, 44, 16, 0.36), rgba(30, 20, 6, 0.30));
+  border: 1px solid rgba(255, 213, 74, 0.28); box-shadow: 0 0 18px rgba(255, 213, 74, 0.08); }
+.hub-shelf-kicker { font: 700 0.66rem 'Montserrat', sans-serif; letter-spacing: 0.2em; text-transform: uppercase; color: #ffd54a; margin-bottom: 8px; }
+.hub-shelf-kicker .jp-mini { font-family: 'Noto Sans JP', sans-serif; font-size: 0.58rem; color: rgba(255, 213, 74, 0.7); margin-left: 4px; }
+.hub-shelf-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.hub-shelf-chip { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; min-width: 120px; max-width: 160px; text-align: left;
+  background: rgba(20, 10, 36, 0.6); border: 1px solid rgba(255, 213, 74, 0.32); border-radius: 9px; padding: 8px 10px; cursor: pointer;
+  transition: border-color .15s ease, transform .1s ease; }
+.hub-shelf-chip:hover { border-color: rgba(255, 213, 74, 0.62); transform: translateY(-1px); }
+.hub-shelf-title { font: 700 0.8rem 'Montserrat', sans-serif; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-shelf-rating { font: 800 0.86rem 'Bebas Neue', sans-serif; letter-spacing: 0.04em;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, #ffd54a 45%, #ffb300 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* Thread cards — quiet, PURPLE, COUNT-FREE. */
+.hub-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.hub-card { background: linear-gradient(180deg, rgba(40, 18, 70, 0.5), rgba(20, 6, 38, 0.66));
+  border: 1px solid rgba(187, 134, 252, 0.22); border-radius: 11px; padding: 13px 15px; cursor: pointer;
+  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.hub-card:hover, .hub-card:focus-visible { transform: translateY(-1px); border-color: rgba(187, 134, 252, 0.5);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3), 0 0 14px rgba(187, 134, 252, 0.16); outline: none; }
+.hub-card.is-pinned { border-color: rgba(187, 134, 252, 0.45); background: linear-gradient(180deg, rgba(52, 24, 88, 0.56), rgba(24, 8, 46, 0.7)); }
+.hub-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.hub-pin, .hub-lock { font-size: 0.78rem; }
+.hub-tag-chip, .hub-anime-chip { font: 700 0.64rem 'Montserrat', sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 8px; }
+.hub-tag-chip { background: rgba(187, 134, 252, 0.18); color: #cbb0ff; border: 1px solid rgba(187, 134, 252, 0.3); }
+.hub-anime-chip { background: rgba(187, 134, 252, 0.26); color: #e7d4ff; border: 1px solid rgba(187, 134, 252, 0.45); }
+.hub-card-time { margin-left: auto; font: 600 0.72rem 'Montserrat', sans-serif; color: rgba(255, 255, 255, 0.42); }
+.hub-card-title { margin: 0 0 4px; font: 700 1.02rem 'Montserrat', sans-serif; color: #fff; line-height: 1.3; }
+.hub-card-by { font-size: 0.8rem; color: rgba(255, 255, 255, 0.55); }
+
+.hub-empty { text-align: center; padding: 48px 18px; }
+.hub-empty-glyph { font-size: 2.6rem; filter: drop-shadow(0 0 14px rgba(255, 184, 92, 0.22)); }  /* warm-amber lantern, NOT Blake's gold (heart rule) */
+.hub-empty-lead { margin: 12px 0 6px; font: 700 1.05rem 'Montserrat', sans-serif; color: #efe6ff; }
+.hub-empty-sub { margin: 0 auto; max-width: 380px; font-size: 0.9rem; line-height: 1.5; color: rgba(255, 255, 255, 0.6); }
+
+/* Thread detail */
+.hub-header--thread { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hub-header--thread .hub-close { position: static; flex: 0 0 auto; }
+.hub-thread-lantern { font-size: 1.3rem; line-height: 1; filter: drop-shadow(0 0 9px rgba(255, 184, 92, 0.7)); animation: hub-lantern-flicker 4.5s ease-in-out infinite; }
+/* item 4: a clearly LIT back affordance — branded + glowing, not a faint ghost */
+.hub-back { display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(180deg, rgba(150, 86, 230, 0.40), rgba(96, 24, 160, 0.36));
+  border: 1px solid rgba(187, 134, 252, 0.64); border-radius: 999px; padding: 7px 16px; color: #fff;
+  font: 800 0.8rem 'Montserrat', sans-serif; letter-spacing: 0.02em; cursor: pointer;
+  box-shadow: 0 0 14px rgba(187, 134, 252, 0.30); transition: filter .15s ease, transform .1s ease, box-shadow .15s ease, border-color .15s ease; }
+.hub-back:hover { filter: brightness(1.12); transform: translateX(-2px); border-color: rgba(206, 170, 255, 0.92); box-shadow: 0 0 20px rgba(187, 134, 252, 0.5); }
+.hub-back-arrow { font-size: 1.05rem; line-height: 1; }
+.hub-loading { color: rgba(255, 255, 255, 0.55); padding: 24px 0; text-align: center; }
+.hub-thread { margin: 4px 0 18px; }
+.hub-thread-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.hub-thread-title { margin: 0 0 6px; font: 800 1.35rem 'Bebas Neue', sans-serif; letter-spacing: 0.02em; color: #fff; }
+.hub-thread-by { font-size: 0.84rem; color: rgba(255, 255, 255, 0.55); margin-bottom: 12px; }
+.hub-thread-text { font-size: 0.96rem; line-height: 1.6; color: #efe6ff; overflow-wrap: anywhere; }
+.hub-thread-text p { margin: 0 0 10px; }
+.hub-admin-bar { display: flex; gap: 8px; margin-top: 14px; }
+.hub-admin.action-btn { padding: 5px 12px; border-radius: 8px; font-size: 0.74rem; border: 1px solid rgba(187, 134, 252, 0.3); background: rgba(255, 255, 255, 0.05); color: #cbb0ff; cursor: pointer; }
+.hub-admin.action-btn:hover { background: rgba(187, 134, 252, 0.16); }
+.hub-admin.action-btn.danger { color: #ffb4b4; border-color: rgba(255, 120, 120, 0.35); }
+.hub-admin.action-btn.danger:hover { background: rgba(255, 90, 90, 0.16); }
+.hub-replies-h { margin: 18px 0 10px; font: 700 0.8rem 'Montserrat', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; color: #bb86fc; }
+.hub-posts { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.hub-post { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.16); border-radius: 10px; padding: 10px 13px; }
+.hub-post-by { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 0.78rem; color: rgba(255, 255, 255, 0.55); margin-bottom: 4px; }
+.hub-post-name { color: #d9c8ff; font-weight: 700; }
+.hub-post-text { font-size: 0.92rem; line-height: 1.5; color: #efe6ff; overflow-wrap: anywhere; }
+.hub-post-text p { margin: 0 0 8px; }
+/* the reply bar (item 6): 👍/👎 thumbs + Report + Reply + Edit/Delete — all PURPLE */
+.hub-post-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.hub-vote { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.25); border-radius: 8px;
+  color: #cbb0ff; cursor: pointer; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.hub-vote .vote-ico { width: 15px; height: 15px; fill: currentColor; display: block; }
+.hub-vote .vote-ico--down { transform: rotate(180deg); }
+.hub-vote:hover { background: rgba(187, 134, 252, 0.16); border-color: rgba(187, 134, 252, 0.5); color: #fff; }
+.hub-vote.up.active { background: rgba(187, 134, 252, 0.26); border-color: rgba(187, 134, 252, 0.7); color: #fff; }
+.hub-vote.down.active { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.36); color: #fff; } /* never purple for a downvote */
+.hub-mini { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.22); border-radius: 8px;
+  padding: 4px 10px; color: #cbb0ff; font: 700 0.72rem 'Montserrat', sans-serif; cursor: pointer; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.hub-mini:hover { background: rgba(187, 134, 252, 0.16); border-color: rgba(187, 134, 252, 0.5); color: #fff; }
+.hub-mini.is-primary { background: linear-gradient(180deg, rgba(140, 70, 220, 0.92), rgba(80, 0, 130, 0.92)); border-color: rgba(187, 134, 252, 0.6); color: #fff; }
+.hub-mini.is-danger { color: #ffb4b4; border-color: rgba(255, 120, 120, 0.4); }
+.hub-mini.is-danger:hover { background: rgba(255, 90, 90, 0.18); color: #fff; }
+.hub-report-post { margin-left: auto; }   /* push Report to the trailing edge */
+/* byline affordances: collapse toggle, OP tag, deeper-than-2 marker, edited note */
+.hub-collapse { background: none; border: none; padding: 0 4px 0 0; color: rgba(187, 134, 252, 0.7); font: 700 0.82rem 'Montserrat', monospace; cursor: pointer; }
+.hub-collapse:hover { color: #d9c8ff; }
+.hub-op-tag { display: inline-block; margin: 0 2px; padding: 0 6px; border-radius: 6px; font: 800 0.6rem 'Montserrat', sans-serif;
+  letter-spacing: 0.08em; color: #cbb0ff; background: rgba(187, 134, 252, 0.18); border: 1px solid rgba(187, 134, 252, 0.4); vertical-align: middle; }
+.hub-deep-tag { color: rgba(187, 134, 252, 0.7); }
+.hub-edited { color: rgba(255, 255, 255, 0.4); font-style: italic; }
+/* threaded children — 2 visible indent levels with a purple guide line, flat beyond */
+.hub-childposts { list-style: none; margin: 10px 0 0; padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 10px;
+  border-left: 2px solid rgba(187, 134, 252, 0.22); }
+.hub-post.depth-2 > .hub-post-body > .hub-childposts { margin-left: 0; padding-left: 0; border-left: none; }
+.hub-post.is-collapsed > .hub-post-body { display: none; }
+.hub-post--removed > .hub-post-body > .hub-post-text { color: rgba(255, 255, 255, 0.4); font-style: italic; }
+/* inline edit-own + the branded (no-native-dialog) delete-confirm */
+.hub-edit-input { width: 100%; min-height: 56px; resize: vertical; background: rgba(30, 10, 60, 0.6); color: #fff;
+  border: 1px solid rgba(187, 134, 252, 0.45); border-radius: 9px; padding: 8px 10px; font: 400 0.9rem 'Montserrat', sans-serif; }
+.hub-edit-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+.hub-confirm { gap: 8px; }
+.hub-confirm-q { font-size: 0.8rem; color: #ffd0d0; }
+/* reply-to-reply target banner (sits above the composer) */
+.hub-replyto-banner { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 12px; border-radius: 8px;
+  background: rgba(187, 134, 252, 0.14); border: 1px solid rgba(187, 134, 252, 0.36); }
+.hub-replyto-banner[hidden] { display: none; }
+.hub-replyto-text { font: 700 0.78rem 'Montserrat', sans-serif; color: #d9c8ff; }
+.hub-replyto-cancel { margin-left: auto; background: none; border: none; color: #cbb0ff; font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.hub-replyto-cancel:hover { color: #fff; }
+/* the "start the thread" empty state (item 6b) */
+.hub-intro-empty { text-align: center; padding: 28px 18px 40px; }
+.hub-intro-empty .hub-empty-lead { margin: 12px 0 6px; }
+.hub-intro-start { margin-top: 14px; }
+.hub-post-empty { color: rgba(255, 255, 255, 0.45); font-size: 0.88rem; list-style: none; }
+.hub-locked-note { color: rgba(255, 255, 255, 0.5); font-size: 0.88rem; }
+.hub-reply .comment-composer { margin-top: 8px; }
+.hub-reply-input { width: 100%; min-height: 64px; resize: vertical; background: rgba(30, 10, 60, 0.6); color: #fff;
+  border: 1px solid rgba(187, 134, 252, 0.4); border-radius: 10px; padding: 9px 11px; font: 400 0.92rem 'Montserrat', sans-serif; }
+
+/* Verdict rail — GOLD (Blake-only). */
+.hub-verdict { margin: 0 0 16px; padding: 14px 16px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(60, 44, 16, 0.4), rgba(30, 20, 6, 0.34));
+  border: 1px solid rgba(255, 213, 74, 0.34); box-shadow: 0 0 20px rgba(255, 213, 74, 0.1); }
+.hub-verdict-kicker { font: 700 0.66rem 'Montserrat', sans-serif; letter-spacing: 0.2em; text-transform: uppercase; color: #ffd54a; margin-bottom: 6px; }
+.hub-verdict-kicker .jp-mini { font-family: 'Noto Sans JP', sans-serif; font-size: 0.58rem; color: rgba(255, 213, 74, 0.7); margin-left: 4px; }
+.hub-verdict-row { display: flex; align-items: baseline; gap: 6px; }
+.hub-verdict-score { font: 800 1.8rem 'Bebas Neue', sans-serif; letter-spacing: 0.02em;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, #ffd54a 45%, #ffb300 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.hub-verdict-max { font: 700 0.9rem 'Montserrat', sans-serif; color: rgba(255, 213, 74, 0.7); }
+.hub-verdict-title { margin-left: 8px; font: 700 0.95rem 'Montserrat', sans-serif; color: #fff; }
+.hub-verdict-quote { margin: 8px 0; font-size: 0.9rem; line-height: 1.5; color: rgba(255, 245, 220, 0.85); font-style: italic; }
+.hub-verdict-link { background: none; border: none; padding: 0; color: #ffd54a; font: 700 0.82rem 'Montserrat', sans-serif; cursor: pointer; }
+.hub-verdict-link:hover { color: #ffe089; text-decoration: underline; }
+.hub-verdict--none { color: rgba(255, 255, 255, 0.6); font-size: 0.9rem; }
+.hub-suggest-link { background: none; border: none; padding: 0; color: #cbb0ff; cursor: pointer; text-decoration: underline; font: inherit; }
+
+/* New-thread modal (primary-class overlay) */
+.hub-newthread-overlay { position: fixed; inset: 0; z-index: 6200; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.7); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.hub-newthread { width: min(480px, 92vw); background: linear-gradient(180deg, rgba(40, 12, 72, 0.98), rgba(24, 6, 46, 0.98));
+  border: 1px solid rgba(187, 134, 252, 0.4); border-top: 3px solid #bb86fc; border-radius: 16px; padding: 22px; box-shadow: 0 0 30px rgba(187, 134, 252, 0.45); }
+.hub-nt-title { margin: 0 0 12px; font: 800 1.2rem 'Bebas Neue', sans-serif; letter-spacing: 0.04em; color: #fff; }
+.hub-nt-title .jp-mini { font-size: 0.8rem; color: #cbb0ff; margin-left: 6px; }
+.hub-nt-input, .hub-nt-body, .hub-nt-tag { width: 100%; background: rgba(30, 10, 60, 0.78); color: #fff;
+  border: 1px solid rgba(187, 134, 252, 0.45); border-radius: 10px; padding: 9px 11px; font: 400 0.92rem 'Montserrat', sans-serif; margin-bottom: 10px; }
+.hub-nt-body { min-height: 110px; resize: vertical; }
+.hub-nt-field { display: block; }
+.hub-nt-field > span { display: block; font: 700 0.74rem 'Montserrat', sans-serif; color: #cbb0ff; margin-bottom: 5px; }
+.hub-nt-error { margin: 0 0 8px; min-height: 1.1em; color: #ffb4b4; font-size: 0.82rem; }
+.hub-nt-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.hub-nt-actions .action-btn { padding: 8px 18px; border-radius: 10px; font-size: 0.9rem; border: 1px solid rgba(187, 134, 252, 0.25);
+  background: rgba(255, 255, 255, 0.05); color: #e9ddff; font-weight: 700; cursor: pointer; }
+.hub-nt-cancel:hover { background: rgba(187, 134, 252, 0.16); }
+.hub-nt-create { background: linear-gradient(180deg, rgba(140, 70, 220, 0.95), rgba(80, 0, 130, 0.95)) !important;
+  border-color: rgba(187, 134, 252, 0.7) !important; color: #fff !important; font-weight: 800 !important; }
+.hub-nt-create:hover { filter: brightness(1.08); }
+
+/* ===== gate 8c — within-thread sort, the ⋯ action menu, Blake's-pick gold ===== */
+.hub-thread-sort { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; }
+.hub-thread-sort-label { font: 700 0.7rem 'Montserrat', sans-serif; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.45); margin-right: 2px; }
+.hub-tsort-tab { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.22); border-radius: 8px;
+  padding: 4px 11px; color: #cbb0ff; font: 700 0.72rem 'Montserrat', sans-serif; cursor: pointer; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.hub-tsort-tab:hover { background: rgba(187, 134, 252, 0.14); }
+.hub-tsort-tab.is-active { background: rgba(187, 134, 252, 0.24); border-color: rgba(187, 134, 252, 0.6); color: #fff; }
+/* the ⋯ overflow menu (Copy link / Report / Edit / Delete / Blake's pick) */
+.hub-menu-btn { font-size: 1rem; letter-spacing: 1px; padding: 3px 9px; }
+.hub-post-menu { display: flex; flex-direction: column; align-items: stretch; gap: 2px; margin-top: 6px; padding: 6px; max-width: 220px;
+  background: rgba(20, 8, 40, 0.97); border: 1px solid rgba(187, 134, 252, 0.42); border-radius: 10px; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5); }
+.hub-menu-item { text-align: left; background: none; border: none; border-radius: 7px; padding: 7px 10px;
+  color: #d9c8ff; font: 700 0.78rem 'Montserrat', sans-serif; cursor: pointer; transition: background .12s ease, color .12s ease; }
+.hub-menu-item:hover { background: rgba(187, 134, 252, 0.16); color: #fff; }
+.hub-menu-item.is-danger { color: #ffb4b4; }
+.hub-menu-item.is-danger:hover { background: rgba(255, 90, 90, 0.16); color: #fff; }
+.hub-menu-item.is-gold { color: #ffd54a; }
+.hub-menu-item.is-gold:hover { background: rgba(255, 213, 74, 0.16); color: #ffe089; }
+/* Blake's-pick — the ONLY gold in the reply stream (owner-granted endorsement). */
+.hub-post--pick { border: 1px solid rgba(255, 213, 74, 0.5) !important; background: linear-gradient(180deg, rgba(60, 44, 16, 0.34), rgba(28, 18, 6, 0.4)); box-shadow: 0 0 16px rgba(255, 213, 74, 0.12); }
+.hub-pick-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; padding: 1px 8px; border-radius: 6px;
+  font: 800 0.6rem 'Montserrat', sans-serif; letter-spacing: 0.06em; text-transform: uppercase;
+  color: #ffd54a; background: rgba(255, 213, 74, 0.16); border: 1px solid rgba(255, 213, 74, 0.45); }
+/* deeper-than-2 replies render flat with an "↪ in reply to @name" tag (depth-3 decision) */
+.hub-replying-to { font-size: 0.72rem; color: rgba(187, 134, 252, 0.85); margin: 0 0 3px; }
+.hub-replying-to b { color: #d9c8ff; font-weight: 700; }
+
+/* ===== gate 8c item 4 — the new-thread TOPIC PICKER + searchable title list ===== */
+.hub-nt-form[hidden], .hub-nt-pick[hidden] { display: none; }
+.hub-nt-label { display: block; font: 700 0.74rem 'Montserrat', sans-serif; color: #cbb0ff; margin: 2px 0 6px; }
+.hub-nt-topics { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.hub-topic-chip { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.28); border-radius: 999px;
+  padding: 6px 13px; color: #cbb0ff; font: 700 0.76rem 'Montserrat', sans-serif; cursor: pointer; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.hub-topic-chip:hover { background: rgba(187, 134, 252, 0.16); }
+.hub-topic-chip.is-active { background: linear-gradient(180deg, rgba(140, 70, 220, 0.5), rgba(70, 0, 110, 0.55)); border-color: rgba(187, 134, 252, 0.7); color: #fff; }
+.hub-topic-title { border-style: dashed; }
+.hub-topic-title.is-active { border-style: solid; background: linear-gradient(180deg, rgba(255, 213, 74, 0.22), rgba(180, 130, 20, 0.2)); border-color: rgba(255, 213, 74, 0.55); color: #fff; }
+.hub-nt-pick { display: flex; flex-direction: column; }
+.hub-nt-pick-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.hub-nt-pick-back { flex: 0 0 auto; }
+.hub-nt-search { flex: 1; background: rgba(30, 10, 60, 0.85); color: #fff; border: 1px solid rgba(187, 134, 252, 0.45);
+  border-radius: 10px; padding: 9px 12px; font: 400 0.92rem 'Montserrat', sans-serif; }
+.hub-nt-results { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.hub-nt-result { display: block; width: 100%; text-align: left; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.2);
+  border-radius: 9px; padding: 9px 12px; color: #efe6ff; font: 700 0.86rem 'Montserrat', sans-serif; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
+.hub-nt-result:hover, .hub-nt-result.is-focused { background: rgba(187, 134, 252, 0.16); border-color: rgba(187, 134, 252, 0.5); outline: none; }
+.hub-nt-result-rating { float: right; color: #ffd54a; font-weight: 800; }
+.hub-nt-result-empty { color: rgba(255, 255, 255, 0.5); font-size: 0.86rem; padding: 12px; text-align: center; }
+/* image affordance hook (item 6) — disabled placeholder; the upload pipeline lands at gates 12-14 */
+.hub-nt-media { display: flex; align-items: center; gap: 8px; margin: 2px 0 12px; }
+.hub-nt-image-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(187, 134, 252, 0.4); border-radius: 9px; padding: 7px 12px; color: #b8a8d8; font: 700 0.78rem 'Montserrat', sans-serif; cursor: not-allowed; }
+.hub-nt-image-soon { font-size: 0.7rem; color: rgba(187, 134, 252, 0.8); }
+
+/* ===== gate 8d — anime covers, topic dropdown, AniList attach, the Rising rail ===== */
+.hub-card.has-thumb { display: flex; gap: 12px; align-items: flex-start; }
+.hub-card-thumb { flex: 0 0 auto; width: 46px; height: 64px; object-fit: cover; border-radius: 7px; border: 1px solid rgba(187,134,252,0.3); }
+.hub-card-main { flex: 1 1 auto; min-width: 0; }
+.hub-thread-cover { display: block; width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; border: 1px solid rgba(187,134,252,0.28); margin: 0 0 14px; }
+/* the topic DROPDOWN (Part C) */
+.hub-nt-dropdown { position: relative; margin: 0 0 12px; }
+.hub-nt-dd-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; background: rgba(30,10,60,0.78);
+  border: 1px solid rgba(187,134,252,0.45); border-radius: 10px; padding: 10px 12px; color: #fff; font: 700 0.9rem 'Montserrat', sans-serif; cursor: pointer; }
+.hub-nt-dd-toggle:hover { border-color: rgba(187,134,252,0.7); }
+.hub-nt-dd-caret { color: #cbb0ff; margin-left: 8px; }
+.hub-nt-dd-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; list-style: none; margin: 0; padding: 6px; max-height: 260px; overflow-y: auto;
+  background: rgba(24,8,44,0.99); border: 1px solid rgba(187,134,252,0.5); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.55); }
+.hub-nt-dd-list[hidden] { display: none; }
+.hub-nt-dd-opt { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 7px; padding: 8px 11px; color: #d9c8ff; font: 600 0.86rem 'Montserrat', sans-serif; cursor: pointer; }
+.hub-nt-dd-opt:hover { background: rgba(187,134,252,0.16); color: #fff; }
+.hub-nt-dd-opt.is-active { background: rgba(187,134,252,0.24); color: #fff; }
+.hub-nt-label-opt { font-weight: 400; color: rgba(255,255,255,0.45); text-transform: none; letter-spacing: 0; }
+/* the ATTACH-AN-ANIME slot (Part B) */
+.hub-nt-attach { margin: 0 0 12px; }
+.hub-nt-attach-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(187,134,252,0.4); border-radius: 10px;
+  padding: 9px 14px; color: #d9c8ff; font: 700 0.84rem 'Montserrat', sans-serif; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.hub-nt-attach-btn:hover { background: rgba(187,134,252,0.16); border-color: rgba(187,134,252,0.6); color: #fff; }
+.hub-nt-chosen { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(187,134,252,0.12); border: 1px solid rgba(187,134,252,0.4); }
+.hub-nt-chosen[hidden] { display: none; }
+.hub-nt-chosen-cover { width: 36px; height: 50px; object-fit: cover; border-radius: 5px; }
+.hub-nt-chosen-cover[hidden] { display: none; }
+.hub-nt-chosen-text { flex: 1 1 auto; min-width: 0; color: #fff; font: 700 0.84rem 'Montserrat', sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-nt-chosen-change { background: none; border: none; color: #cbb0ff; cursor: pointer; text-decoration: underline; font: 600 0.76rem 'Montserrat', sans-serif; }
+.hub-nt-chosen-remove { background: none; border: none; color: #cbb0ff; font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.hub-nt-chosen-remove:hover { color: #fff; }
+/* AniList result rows — covers + ★ for Blake's reviewed titles */
+.hub-nt-pick-hint { font-size: 0.78rem; color: rgba(255,255,255,0.6); margin: 0 0 8px; }
+.hub-nt-pick-hint b { color: #d9c8ff; }
+.hub-nt-spinner { width: 16px; height: 16px; flex: 0 0 auto; border-radius: 50%; border: 2px solid rgba(187,134,252,0.3); border-top-color: #bb86fc; animation: hub-spin 0.7s linear infinite; }
+.hub-nt-spinner[hidden] { display: none; }
+@keyframes hub-spin { to { transform: rotate(360deg); } }
+.hub-nt-result { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(187,134,252,0.2); border-radius: 9px; padding: 7px 10px; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
+.hub-nt-result:hover, .hub-nt-result.is-focused { background: rgba(187,134,252,0.16); border-color: rgba(187,134,252,0.5); }
+.hub-nt-result.is-fav { border-color: rgba(255,213,74,0.45); }
+.hub-nt-result-cover { width: 40px; height: 56px; object-fit: cover; border-radius: 5px; flex: 0 0 auto; }
+.hub-nt-result-cover--none { width: 40px; height: 56px; border-radius: 5px; background: rgba(187,134,252,0.14); flex: 0 0 auto; }
+.hub-nt-result-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hub-nt-result-title { color: #efe6ff; font: 700 0.86rem 'Montserrat', sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-nt-result-meta { display: flex; align-items: center; gap: 8px; }
+.hub-nt-result-star { color: #ffd54a; font-size: 0.8rem; }
+.hub-nt-result-year { color: rgba(255,255,255,0.5); font-size: 0.74rem; }
+/* the RISING rail (gate 9) — slot 1 gold (Blake's pick), the rest purple, COUNT-FREE */
+.hub-rising { margin: 0 0 18px; }
+.hub-rising-kicker { font: 700 0.66rem 'Montserrat', sans-serif; letter-spacing: 0.2em; text-transform: uppercase; color: #bb86fc; margin-bottom: 8px; }
+.hub-rising-row { display: flex; flex-direction: column; gap: 6px; }
+.hub-rising-item { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: rgba(40,18,70,0.4);
+  border: 1px solid rgba(187,134,252,0.2); border-radius: 9px; padding: 8px 12px; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
+.hub-rising-item:hover { background: rgba(187,134,252,0.14); border-color: rgba(187,134,252,0.45); }
+.hub-rising-item.is-blake { border-color: rgba(255,213,74,0.5); background: linear-gradient(180deg, rgba(60,44,16,0.34), rgba(28,18,6,0.4)); box-shadow: 0 0 14px rgba(255,213,74,0.1); }
+.hub-rising-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(187,134,252,0.6); flex: 0 0 auto; }
+.hub-rising-star { color: #ffd54a; font-size: 0.9rem; flex: 0 0 auto; }
+.hub-rising-title { flex: 1 1 auto; min-width: 0; color: #efe6ff; font: 700 0.86rem 'Montserrat', sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-rising-item.is-blake .hub-rising-title { color: #fff; }
+.hub-rising-tag { flex: 0 0 auto; font: 800 0.58rem 'Montserrat', sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #ffd54a; background: rgba(255,213,74,0.16); border: 1px solid rgba(255,213,74,0.4); border-radius: 5px; padding: 1px 6px; }
+
+@media (max-width: 600px) { .hub-sheet, .hub-thread-sheet { width: 100vw; } }
+@media (prefers-reduced-motion: reduce) {
+  .hub-backdrop, .hub-sheet, .hub-thread-scrim, .hub-thread-sheet { transition: none; }
+  .hub-card, .hub-new, .hub-vote, .hub-mini, .hub-back, .hub-tsort-tab, .hub-topic-chip, .hub-nt-attach-btn, .hub-rising-item, .hub-nt-result { transition: none; }
+  .hub-lantern, .hub-thread-lantern { animation: none; }
+  .hub-nt-spinner { animation: none; }
 }

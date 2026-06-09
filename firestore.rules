@@ -317,7 +317,9 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 120
         && request.resource.data.body is string
         && request.resource.data.body.size() <= 4000
-        && request.resource.data.tag in ['general', 'recommend', 'blakes-44', 'offtopic']
+        && (request.resource.data.tag in ['general', 'recommend', 'blakes-44', 'offtopic', 'hottake', 'music', 'animation', 'episode', 'theories', 'news', 'manga', 'cosplay']
+            || request.resource.data.tag.matches('anime:[a-z0-9-]{1,100}')
+            || request.resource.data.tag.matches('anime:al:[0-9]{1,12}'))   // gate 6 anime:<slug> verdict-rail blend; gate 8c +hottake/music/animation; gate 8d +episode/theories/news/manga/cosplay topics + anime:al:<id> (non-44 AniList attach)
         && createdNow()
         && request.resource.data.lastPostAt == request.time
         && request.resource.data.postCount == 0
@@ -326,6 +328,9 @@ service cloud.firestore {
         && request.resource.data.pinned == false
         && request.resource.data.locked == false
         && request.resource.data.removed == false
+        // gate 8d — optional attached-anime cover + title (validated: string + capped)
+        && (!('coverImage' in request.resource.data) || (request.resource.data.coverImage is string && request.resource.data.coverImage.size() <= 400))
+        && (!('animeTitle' in request.resource.data) || (request.resource.data.animeTitle is string && request.resource.data.animeTitle.size() <= 200))
         && gateOk();
       // owner edit (body only)
       allow update: if ( isSignedIn() && resource.data.authorUid == request.auth.uid
@@ -367,8 +372,8 @@ service cloud.firestore {
             && request.resource.data.removed == true && request.resource.data.body == ''
             && gateOk() )
           || ( isAdmin()
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt'])
-            && (request.resource.data.removed == false || request.resource.data.body == '') );
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt', 'blakePick'])
+            && (request.resource.data.removed == false || request.resource.data.body == '') );   // gate 8c — admin-only "Blake's pick" gold marker (owner branches above CANNOT set it)
         allow delete: if false;
         match /votes/{voterUid} {
           allow get, list: if true;

@@ -34,6 +34,7 @@ const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 
 const { pingPayload } = require('./lib/ping');
 const { voteCountDeltas } = require('./lib/votecounts');
+const { hotScore } = require('./lib/hotscore'); // v1.10.0 gate 9 — forum thread "hot" rank
 const { shouldNotify, isMuted } = require('./lib/notify');
 const { notifsToPrune } = require('./lib/prune');
 const { rateDecision } = require('./lib/ratelimit');
@@ -196,6 +197,111 @@ exports.onOfficialVote = onDocumentWritten(
 exports.onReplyVote = onDocumentWritten(
   'comments/{anime}/items/{cid}/replies/{rid}/votes/{voterUid}',
   (event) => handleVoteWrite(event, 'reply')
+);
+
+// =============================================================================
+// GATE 9 (v1.10.0) — forum hub thread hotScore + the post-vote / post-create CFs
+// that feed it. Counts-only (NO notifications — forum posts don't ping). The hub
+// "Hot" sort reads forum/{threadId}.hotScore, which is CF-ONLY (the client can't
+// write it, postCount, or lastPostAt — firestore.rules denies those fields).
+//
+// The thread doc holds the AGGREGATE net votes of its posts (likesCount /
+// dislikesCount) + postCount; hotScore is recomputed from those whenever any of
+// them moves. lib/hotscore.js is the pure formula (unit-tested without the emu).
+// =============================================================================
+
+// createdAt -> epoch ms. Threads seed createdAt as a Timestamp; tolerate a raw
+// number or a missing field (NaN-guarded downstream by hotScore()).
+function tsToMillis(v) {
+  if (v && typeof v.toMillis === 'function') return v.toMillis();
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  return 0;
+}
+
+// Recompute + write a thread's hotScore from a thread snapshot's current fields.
+// Caller passes the snapshot (already read) plus the authoritative postCount to
+// use (the snapshot may pre-date an increment we just issued). merge + .catch so
+// a deleted thread no-ops.
+function writeThreadHotScore(threadRef, threadData, postCountOverride, nowMs) {
+  const d = threadData || {};
+  const score = hotScore({
+    likes: d.likesCount,
+    dislikes: d.dislikesCount,
+    postCount: postCountOverride != null ? postCountOverride : d.postCount,
+    createdAtMs: tsToMillis(d.createdAt),
+    nowMs: nowMs != null ? nowMs : Date.now(),
+  });
+  return threadRef.set({ hotScore: score }, { merge: true }).catch(() => {});
+}
+
+// onForumPostVote — a vote on a forum post (value 1/-1). COUNTS-ONLY, no notif.
+// (a) idempotency guard; (b) the POST's own likesCount/dislikesCount via the
+// shared voteCountDeltas + increment; (c) the SAME deltas onto the PARENT THREAD
+// (so the thread carries its posts' net votes); (d) re-read the thread + rewrite
+// its hotScore. Post + thread writes are merge + .catch (a deleted parent no-ops).
+async function handleForumPostVote(event) {
+  if (await alreadyProcessed(event.id)) return;
+
+  const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data().value : null;
+  const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data().value : null;
+  const p = event.params;
+
+  const { likesDelta, dislikesDelta } = voteCountDeltas(before, after);
+  if (likesDelta === 0 && dislikesDelta === 0) return; // no net change (e.g. metadata-only write)
+
+  const postRef = db.doc('forum/' + p.threadId + '/posts/' + p.postId);
+  const threadRef = db.doc('forum/' + p.threadId);
+  const counts = { likesCount: FieldValue.increment(likesDelta), dislikesCount: FieldValue.increment(dislikesDelta) };
+
+  // (b) post counts + (c) thread aggregate counts — both via the same deltas.
+  await Promise.all([
+    postRef.set(counts, { merge: true }).catch(() => {}),   // post may have been deleted
+    threadRef.set(counts, { merge: true }).catch(() => {}), // thread may have been deleted
+  ]);
+
+  // (d) recompute the thread's hotScore from its now-updated aggregate counts.
+  const threadSnap = await threadRef.get();
+  if (!threadSnap.exists) return; // thread gone -> nothing to score
+  await writeThreadHotScore(threadRef, threadSnap.data());
+}
+
+exports.onForumPostVote = onDocumentWritten(
+  'forum/{threadId}/posts/{postId}/votes/{voterUid}',
+  (event) => handleForumPostVote(event)
+);
+
+// onForumPostCreate — a new post lands under a thread: bump the thread's
+// postCount, advance lastPostAt to the post's createdAt (fallback serverTimestamp),
+// and recompute hotScore. Idempotency-guarded. The read (current postCount) and the
+// write run inside a TRANSACTION so concurrent first-posts under one thread can't lose
+// an increment (the read-then-set version raced); the txn also keeps postCount + hotScore
+// atomically consistent.
+async function handleForumPostCreate(event) {
+  if (await alreadyProcessed(event.id)) return;
+  const post = event.data && typeof event.data.data === 'function' ? event.data.data() : null;
+  const threadRef = db.doc('forum/' + event.params.threadId);
+  const lastPostAt = post && post.createdAt ? post.createdAt : FieldValue.serverTimestamp();
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(threadRef);
+      if (!snap.exists) return; // post under a vanished thread -> nothing to do
+      const t = snap.data();
+      const nextPostCount = (typeof t.postCount === 'number' ? t.postCount : 0) + 1;
+      const score = hotScore({
+        likes: t.likesCount,
+        dislikes: t.dislikesCount,
+        postCount: nextPostCount,
+        createdAtMs: tsToMillis(t.createdAt),
+        nowMs: Date.now(),
+      });
+      tx.set(threadRef, { postCount: nextPostCount, lastPostAt, hotScore: score }, { merge: true });
+    });
+  } catch (_e) { /* txn aborted (e.g. thread deleted mid-flight) — safe to drop */ }
+}
+
+exports.onForumPostCreate = onDocumentCreated(
+  'forum/{threadId}/posts/{postId}',
+  (event) => handleForumPostCreate(event)
 );
 
 // -----------------------------------------------------------------------------

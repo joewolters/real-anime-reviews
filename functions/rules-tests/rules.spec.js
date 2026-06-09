@@ -161,6 +161,12 @@ const thread = (over = {}) => ({
 test('forum: happy thread create with zeroed counters', async () => {
   await assertSucceeds(setDoc(doc(as('alice'), 'forum/t1'), thread()));
 });
+test('forum: anime-tagged thread (anime:<slug>) create is ALLOWED (v1.10.0 verdict-rail blend)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tAnime'), thread({ tag: 'anime:one-punch-man' })));
+});
+test('forum: HOSTILE malformed anime tag (uppercase + spaces) is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'forum/tBadTag'), thread({ tag: 'anime:One Punch Man' })));
+});
 test('forum: HOSTILE seeding a non-zero counter at create (H2) is DENIED', async () => {
   await assertFails(setDoc(doc(as('alice'), 'forum/t2'), thread({ postCount: 5 })));
 });
@@ -184,6 +190,39 @@ test('forum post: HOSTILE reply to a LOCKED thread is DENIED', async () => {
   await seed((db) => setDoc(doc(db, 'forum/tLocked'), { ...thread({ locked: true }), createdAt: Timestamp.now(), lastPostAt: Timestamp.now() }));
   await assertFails(setDoc(doc(as('alice'), 'forum/tLocked/posts/p1'),
     { authorUid: 'alice', body: 'sneak', createdAt: serverTimestamp(), likesCount: 0, reportCount: 0, removed: false }));
+});
+test('forum: new topic tags hottake/music/animation create is ALLOWED (gate 8c)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tHot'), thread({ tag: 'hottake' })));
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tMusic'), thread({ tag: 'music' })));
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tAnim'), thread({ tag: 'animation' })));
+});
+test('forum: gate-8d wide topics (episode/theories/news/manga/cosplay) create is ALLOWED', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tEp'), thread({ tag: 'episode' })));
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tTh'), thread({ tag: 'theories' })));
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tNews'), thread({ tag: 'news' })));
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tManga'), thread({ tag: 'manga' })));
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tCos'), thread({ tag: 'cosplay' })));
+});
+test('forum: anime:al:<id> tag (non-44 AniList attach) create is ALLOWED + cover fields pass; HOSTILE malformed al tag DENIED', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'forum/tAl'), thread({ tag: 'anime:al:16498', animeTitle: 'Attack on Titan', coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/x.jpg' })));
+  await assertFails(setDoc(doc(as('alice'), 'forum/tAlBad'), thread({ tag: 'anime:al:notanumber' })));
+});
+test('forum: HOSTILE unknown thread tag is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'forum/tBadEnum'), thread({ tag: 'spam-tag' })));
+});
+test("forum post: admin may set Blake's pick (gate 8c gold marker)", async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'forum/t1'), { ...thread(), createdAt: Timestamp.now(), lastPostAt: Timestamp.now() });
+    await setDoc(doc(db, 'forum/t1/posts/p1'), { authorUid: 'alice', body: 'hi', createdAt: Timestamp.now(), likesCount: 0, reportCount: 0, removed: false });
+  });
+  await assertSucceeds(updateDoc(doc(as(ADMIN), 'forum/t1/posts/p1'), { blakePick: true }));
+});
+test("forum post: HOSTILE owner setting Blake's pick is DENIED (admin-only)", async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'forum/t1'), { ...thread(), createdAt: Timestamp.now(), lastPostAt: Timestamp.now() });
+    await setDoc(doc(db, 'forum/t1/posts/p1'), { authorUid: 'alice', body: 'hi', createdAt: Timestamp.now(), likesCount: 0, reportCount: 0, removed: false });
+  });
+  await assertFails(updateDoc(doc(as('alice'), 'forum/t1/posts/p1'), { blakePick: true }));
 });
 
 // ---------------- CONVERSATIONS / DMs (admin-floor only, H4) ----------------

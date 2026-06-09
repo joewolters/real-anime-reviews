@@ -44,9 +44,11 @@
           <!-- gate 6d item 7: the real nav comes to the account page (static links back
                to the home surfaces) + the logo/Den as a clear way back. -->
           <nav class="nav-places" aria-label="Sections">
-            <button type="button" class="inline-header-btn place-btn" onclick="location.href='index.html'">Blake&rsquo;s Den <span class="jp-mini">隠れ家</span></button>
-            <button type="button" class="inline-header-btn place-btn" onclick="location.href='index.html?place=foryou'">For You <span class="jp-mini">君へ</span></button>
-            <button type="button" class="inline-header-btn place-btn" onclick="location.href='index.html?place=discover'">Discover <span class="jp-mini">発見</span></button>
+            <button type="button" id="den-btn" class="inline-header-btn place-btn" onclick="location.href='index.html'">Blake&rsquo;s Den <span class="jp-mini">隠れ家</span></button>
+            <button type="button" id="foryou-btn" class="inline-header-btn place-btn" onclick="location.href='index.html?place=foryou'">For You <span class="jp-mini">君へ</span></button>
+            <button type="button" id="discover-btn" class="inline-header-btn place-btn" onclick="location.href='index.html?place=discover'">Discover <span class="jp-mini">発見</span></button>
+            <button type="button" id="community-btn" class="inline-header-btn place-btn" onclick="location.href='index.html#community'">The Tavern <span class="jp-mini">酒場</span></button>
+            <span class="place-marker" aria-hidden="true"></span>
           </nav>
           <span class="toolbar-seam" aria-hidden="true"></span>
           <div class="nav-tools" role="group" aria-label="Tools">
