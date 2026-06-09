@@ -66,9 +66,29 @@ service firebase.storage {
 
     function emailVerified() { return request.auth.token.email_verified == true; }
 
-    // Default-deny EVERYTHING. Only the uploads/ match below opens anything.
+    // Default-deny EVERYTHING. Only the matches below open anything.
     match /{allPaths=**} {
       allow read, write: if false;
+    }
+
+    // avatars/{uid}/profile.{jpg|png} — the account page's avatar upload has
+    // shipped since v1.8.x and lands HERE, not under uploads/. ⚠️ Without this
+    // match the gate-12 default-deny would have BROKEN avatar saves at the
+    // cutover (prod works today only because no storage rules are deployed
+    // yet — caught in the mega-batch ripple audit). Owner-only write, small,
+    // images only; public read (avatars render site-wide). No consent gate:
+    // an avatar is account identity, not community content (the profile DOC
+    // write is what the firestore gate guards).
+    match /avatars/{uid}/{file} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.size > 0
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)')
+        && file.matches('profile[.](jpg|png)');
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
     }
 
     // uploads/{uid}/{docId}/{imageId} — docId is the content doc the image

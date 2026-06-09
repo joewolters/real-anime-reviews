@@ -590,6 +590,23 @@ test('overhaul: uploadHashes — owner reads own entry; foreign read + any clien
   await assertFails(setDoc(doc(as('alice'), 'uploadHashes/alice__zzz'), { uid: 'alice', hash: 'zzz', path: 'x' }));
 });
 
+// -------- GATE 16 — profiles: the items CG went PUBLIC (profile pages list a
+// member's reviews cross-anime); threads/replies CG stay owner-only --------
+const { collectionGroup, getDocs, query, where } = require('firebase/firestore');
+test('gate16: items CG query is PUBLIC; threads CG stays owner-only', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'reviews/al:101922/items/carol'),
+      { uid: 'carol', title: 'T', body: 'b', rating: 8, displayName: 'C', createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(), likesCount: 0, dislikesCount: 0 });
+    await setDoc(doc(db, 'reviews/al:101922/items/carol/threads/t1'),
+      { uid: 'carol', text: 'x', displayName: 'C', createdAt: Timestamp.now(), likesCount: 0, dislikesCount: 0 });
+  });
+  // anyone (even signed-out) may run the profile-page reviews query…
+  await assertSucceeds(getDocs(query(collectionGroup(anon(), 'items'), where('uid', '==', 'carol'))));
+  // …but the private activity-feed CGs hold: another user may NOT sweep carol's threads
+  await assertFails(getDocs(query(collectionGroup(as('mallory'), 'threads'), where('uid', '==', 'carol'))));
+});
+
 // ---------------- GATE 14 — the 'image' report target ----------------
 test('report: happy image report (targetType image + pinned imagePath shape)', async () => {
   await assertSucceeds(setDoc(doc(as('alice'), 'reports/r-img-1'), {

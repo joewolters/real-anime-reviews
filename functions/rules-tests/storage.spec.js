@@ -140,6 +140,16 @@ test('storage: admin may delete anyone\'s object', async () => {
   await assertSucceeds(deleteObject(ref(stAs(ADMIN), 'uploads/alice/t1/img1')));
 });
 
+// ---------------- avatars (the pre-gate-12 live feature — cutover-saver) ----------------
+test('storage: avatar upload — owner happy; stranger/oversize/wrong-name DENIED; public read', async () => {
+  const png = { contentType: 'image/png' };
+  await assertSucceeds(uploadBytes(ref(stAs('alice', { email_verified: false }), 'avatars/alice/profile.png'), BYTES, png));
+  await assertFails(uploadBytes(ref(stAs('bob'), 'avatars/alice/profile.png'), BYTES, png));        // not the owner
+  await assertFails(uploadBytes(ref(stAs('alice'), 'avatars/alice/evil.html'), BYTES, { contentType: 'text/html' }));
+  await assertFails(uploadBytes(ref(stAs('alice'), 'avatars/alice/profile.png'), new Uint8Array(2 * 1024 * 1024 + 1), png));
+  await assertSucceeds(getBytes(ref(stAnon(), 'avatars/alice/profile.png')));                       // avatars render site-wide
+});
+
 // ---------------- default-deny everywhere else ----------------
 test('storage: HOSTILE write OUTSIDE uploads/ is DENIED (default-deny proven)', async () => {
   await assertFails(uploadBytes(ref(stAs('alice'), 'random/evil.html'), BYTES, { contentType: 'text/html' }));

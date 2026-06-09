@@ -179,11 +179,14 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // Collection-group reads for the activity feed (owner-only).
-    // `replies` is NEW (depth-1 comment replies) and is deliberately a distinct
-    // segment from `threads` (the per-review reply subcollection).
+    // Collection-group reads. `items` went PUBLIC at gate 16: the profile
+    // pages list a member's reviews via a CG query, and every doc in an
+    // `items` subcollection (comments + community reviews) is ALREADY
+    // individually public via its own collection match — the CG widening
+    // exposes nothing new, it only makes the cross-anime query legal.
+    // `threads`/`replies` stay owner-only (the private activity feed).
     // =========================================================================
-    match /{path=**}/items/{docId}   { allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid; }
+    match /{path=**}/items/{docId}   { allow get, list: if true; }
     match /{path=**}/threads/{docId} { allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid; }
     match /{path=**}/replies/{docId} { allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid; }
 

@@ -4,7 +4,7 @@
 import {
   doc, setDoc, serverTimestamp, runTransaction,
   collection, addDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc,
-  where, limit, getCountFromServer, getDoc
+  where, limit, getCountFromServer, getDoc, getDocs, collectionGroup
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
 import { ref as storRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js'; // v1.10.0 gate 13 — forum image uploads
@@ -4554,11 +4554,12 @@ sortEl?.addEventListener('change', onSortChange);
         imageDocPath: 'comments/' + s + '/items/' + docSnap.id,
       });
 
-      // live author profile subscription
+      // live author identity — gate 15: profiles-first, users-fallback
       if (d && d.uid) {
-        const uref = doc(db, 'users', d.uid);
-        const unsubAuthor = onSnapshot(uref, (us) => {
-          const u = us.data(); if (!u) return;
+        const nameLink = li.querySelector('.name');
+        if (nameLink) { nameLink.classList.add('rar-name-link'); nameLink.setAttribute('data-profile-uid', d.uid); nameLink.setAttribute('role', 'link'); nameLink.setAttribute('tabindex', '0'); }
+        const unsubAuthor = authorLiveSub(d.uid, (a) => {
+          const u = { username: a.name, photoURL: a.photo };
 
           const nameEl = li.querySelector('.name');
           if (nameEl && u.username && nameEl.textContent !== u.username) {
@@ -5024,6 +5025,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const body = document.createElement('div'); body.className = 'reply-body-wrap';
     const meta = document.createElement('div'); meta.className = 'meta';
     const nameEl = document.createElement('span'); nameEl.className = 'name'; nameEl.textContent = displayName || 'User';
+    if (uid) { nameEl.classList.add('rar-name-link'); nameEl.setAttribute('data-profile-uid', uid); nameEl.setAttribute('role', 'link'); nameEl.setAttribute('tabindex', '0'); }   // gate 16
     const sep = document.createTextNode(' · ');
     const millis = createdAt?.toMillis ? createdAt.toMillis() : (typeof createdAt === 'number' ? createdAt : Date.now());
     const t = document.createElement('time'); t.textContent = timeAgo(millis);
@@ -5653,6 +5655,166 @@ function openInlineCommentEditor(editBtn, itemRef) {
     openImageLightbox(img.currentSrc || img.src);
   }, true);
 
+  // ===========================================================================
+  // v1.10.0 GATES 15-16 — PUBLIC PROFILES.
+  // Gate 15: author identity reads go PROFILES-FIRST with a users/ fallback
+  // (migration-safe: legacy accounts that never dual-wrote keep rendering).
+  // Gate 16: every author name routes to a FULL profile page (#profile=<uid>):
+  // avatar · name · member-since · bio (escape-first) · their public threads +
+  // reviews. HEART: count-free, zero gold, Blake's name goes HOME to his Den
+  // (his identity IS the site); banned → suspended; gone → former member.
+  // ===========================================================================
+  function authorLiveSub(uid, cb) {
+    let userUnsub = null;
+    const pUnsub = onSnapshot(doc(db, 'profiles', uid), (ps) => {
+      if (ps.exists()) {
+        const p = ps.data() || {};
+        if (userUnsub) { try { userUnsub(); } catch (_) {} userUnsub = null; }
+        cb({ name: p.displayName || null, photo: p.photoURL || null });
+      } else if (!userUnsub) {
+        userUnsub = onSnapshot(doc(db, 'users', uid), (us) => {
+          const u = us.data(); if (!u) return;
+          cb({ name: u.username || u.displayName || null, photo: u.photoURL || null });
+        }, () => {});
+      }
+    }, () => {});
+    return () => { try { pUnsub(); } catch (_) {} if (userUnsub) { try { userUnsub(); } catch (_) {} } };
+  }
+
+  // PURE — where does a profile click land? (exposed for the heart spec)
+  function profileDecision(uid, prof, userDoc) {
+    if (uid === NOTIF_ADMIN_UID) return 'den';                  // Blake IS the site
+    if (prof && prof.isBanned === true) return 'suspended';
+    if (prof) return 'profile';
+    if (userDoc) return 'profile-legacy';                        // pre-migration account
+    return 'former';                                             // truly gone — graceful, no dead click
+  }
+  window.profileDecision = profileDecision;
+
+  // PURE header builder (exposed for the heart spec: NO gold token, NO counts)
+  function profileHeaderHtml(p) {
+    const name = escapeHtml(p.name || 'Member');
+    const initial = (p.name || '?').toString().trim().charAt(0).toUpperCase() || '?';
+    const avatar = (typeof p.photo === 'string' && /^https:\/\//.test(p.photo))
+      ? `<img src="${escapeHtml(p.photo)}" alt="">` : escapeHtml(initial);
+    const since = p.sinceMs ? `<div class="profile-since">here since ${new Date(p.sinceMs).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</div>` : '';
+    const bio = p.bio ? `<div class="profile-bio">${window.renderMarkdownInline ? window.renderMarkdownInline(String(p.bio)) : escapeHtml(String(p.bio))}</div>` : '';
+    return `<div class="profile-head">
+        <div class="profile-avatar">${avatar}</div>
+        <h2 class="profile-name">${name}</h2>
+        ${since}${bio}
+      </div>`;
+  }
+  window.profileHeaderHtml = profileHeaderHtml;
+
+  let profileLayerEl = null;
+  function closeProfilePage() {
+    if (profileLayerEl) { try { profileLayerEl.remove(); } catch (_) {} profileLayerEl = null; }
+    if (/^#profile=/.test(location.hash)) {
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
+    }
+  }
+  async function openProfilePage(uid) {
+    if (typeof uid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) return;
+    if (uid === NOTIF_ADMIN_UID) {
+      // Blake's name leads HOME — to the Den, not a community card.
+      closeProfilePage();
+      try { if (typeof closeHubDrawer === 'function') closeHubDrawer(); } catch (_) {}
+      try { window.scrollTo({ top: 0 }); } catch (_) {}
+      return;
+    }
+    closeProfilePage();
+    const layer = document.createElement('div');
+    layer.className = 'profile-layer';
+    layer.innerHTML = `<div class="profile-scrim"></div>
+      <section class="profile-sheet" role="dialog" aria-modal="true" aria-label="Member profile">
+        <div class="profile-kicker">MEMBER <span class="jp-mini">旅人</span>
+          <button type="button" class="profile-close" aria-label="Close">&times;</button></div>
+        <div class="profile-body"><p class="hub-loading">Opening…</p></div>
+      </section>`;
+    document.body.appendChild(layer);
+    profileLayerEl = layer;
+    try { history.replaceState(null, '', '#profile=' + encodeURIComponent(uid)); } catch (_) {}
+    const close = () => closeProfilePage();
+    layer.querySelector('.profile-scrim').addEventListener('click', close);
+    layer.querySelector('.profile-close').addEventListener('click', close);
+    const onEsc = (e) => { if (e.key === 'Escape' && profileLayerEl === layer) { e.stopPropagation(); close(); document.removeEventListener('keydown', onEsc, true); } };
+    document.addEventListener('keydown', onEsc, true);
+
+    const bodyEl = layer.querySelector('.profile-body');
+    let prof = null, userDoc = null;
+    try { const ps = await getDoc(doc(db, 'profiles', uid)); prof = ps.exists() ? ps.data() : null; } catch (_) {}
+    if (!prof) { try { const us = await getDoc(doc(db, 'users', uid)); userDoc = us.exists() ? us.data() : null; } catch (_) {} }
+    const decision = profileDecision(uid, prof, userDoc);
+    if (decision === 'suspended') {
+      bodyEl.innerHTML = `<div class="profile-tombstone">🚫 <b>This account is suspended.</b><br>Their posts were taken down with them.</div>`;
+      return;
+    }
+    if (decision === 'former') {
+      bodyEl.innerHTML = `<div class="profile-tombstone">🌙 <b>A former member.</b><br>They've moved on — what they shared lives where they posted it.</div>`;
+      return;
+    }
+    const ident = prof
+      ? { name: prof.displayName, photo: prof.photoURL, bio: prof.bio, sinceMs: prof.joinedAt && prof.joinedAt.toMillis ? prof.joinedAt.toMillis() : 0 }
+      : { name: (userDoc.username || userDoc.displayName), photo: userDoc.photoURL, bio: '', sinceMs: 0 };
+    bodyEl.innerHTML = profileHeaderHtml(ident)
+      + '<h3 class="profile-h">Their threads</h3><ul class="profile-list" data-profile-threads><li class="hub-loading">Looking…</li></ul>'
+      + '<h3 class="profile-h">Their reviews</h3><ul class="profile-list" data-profile-reviews><li class="hub-loading">Looking…</li></ul>';
+
+    // PUBLIC activity — count-free by design (no "N posts" anywhere).
+    try {
+      const tq = query(collection(db, 'forum'), where('authorUid', '==', uid), orderBy('createdAt', 'desc'), limit(12));
+      const tsnap = await getDocs(tq);
+      const tEl = bodyEl.querySelector('[data-profile-threads]');
+      const rows = [];
+      tsnap.forEach((d) => { const t = d.data() || {}; if (t.removed) return;
+        rows.push(`<li class="profile-item" data-open-thread="${escapeHtml(d.id)}"><span class="profile-item-title">${escapeHtml(t.title || '(untitled)')}</span><span class="hub-card-time">${escapeHtml(relTimeHub(t.createdAt))}</span></li>`); });
+      tEl.innerHTML = rows.length ? rows.join('') : '<li class="profile-empty">No threads yet.</li>';
+    } catch (_e) { const tEl = bodyEl.querySelector('[data-profile-threads]'); if (tEl) tEl.innerHTML = '<li class="profile-empty">No threads yet.</li>'; }
+    try {
+      const rq = query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(24));
+      const rsnap = await getDocs(rq);
+      const rEl = bodyEl.querySelector('[data-profile-reviews]');
+      const rows = [];
+      rsnap.forEach((d) => {
+        const v = d.data() || {};
+        if (!d.ref.path.startsWith('reviews/') || v.removed) return;   // items CG mixes comments in
+        const animeKey = d.ref.path.split('/')[1] || '';
+        const label = animeKey.indexOf('al:') === 0 ? 'a season' : animeKey.replace(/-/g, ' ');
+        rows.push(`<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(v.title || '(review)')}</span><span class="profile-item-sub">${escapeHtml(label)} · ${escapeHtml(String(v.rating || ''))}/10</span></li>`);
+      });
+      rEl.innerHTML = rows.length ? rows.slice(0, 12).join('') : '<li class="profile-empty">No reviews yet.</li>';
+    } catch (_e) { const rEl = bodyEl.querySelector('[data-profile-reviews]'); if (rEl) rEl.innerHTML = '<li class="profile-empty">No reviews yet.</li>'; }
+
+    bodyEl.addEventListener('click', (e) => {
+      const th = e.target.closest('[data-open-thread]');
+      if (th) { closeProfilePage(); try { openThreadById(th.getAttribute('data-open-thread')); } catch (_) {} return; }
+      const tg = e.target.closest('[data-open-target]');
+      if (tg) {
+        const p = tg.getAttribute('data-open-target');
+        closeProfilePage();
+        try {
+          const t = (typeof parseNotifTarget === 'function') ? parseNotifTarget(p) : null;
+          if (t && typeof openNotifTarget === 'function') openNotifTarget(t);
+        } catch (_) {}
+      }
+    });
+  }
+  window.openProfilePage = openProfilePage;
+
+  // every author name routes here (one delegation; names carry data-profile-uid)
+  document.addEventListener('click', (e) => {
+    const nm = e.target && e.target.closest ? e.target.closest('[data-profile-uid]') : null;
+    if (!nm) return;
+    e.preventDefault(); e.stopPropagation();
+    openProfilePage(nm.getAttribute('data-profile-uid'));
+  }, true);
+  // deep link: #profile=<uid> on load
+  if (/^#profile=/.test(location.hash)) {
+    const uid = decodeURIComponent(location.hash.slice(9));
+    setTimeout(() => openProfilePage(uid), 400);
+  }
+
   // ⚑ Report / 🗑 Remove — ONE document-level handler for every surface.
   // (Adversarial review, HIGH: these used to live only in the hub drawer's
   // delegation, leaving the buttons INERT on comments/replies/reviews — 3 of
@@ -5969,7 +6131,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       ${thumb}<div class="hub-card-main">
       <div class="hub-card-head">${pin}${thumb ? '' : chip}${lock}<span class="hub-card-time">${escapeHtml(relTimeHub(t.lastPostAt || t.createdAt))}</span></div>
       <h3 class="hub-card-title">${title}</h3>
-      <div class="hub-card-by">${escapeHtml(authorName || 'Member')}</div></div>
+      <div class="hub-card-by"><span class="rar-name-link" data-profile-uid="${escapeHtml(t.authorUid || '')}" role="link" tabindex="0">${escapeHtml(authorName || 'Member')}</span></div></div>
     </li>`;
   }
   window.hubThreadCardHtml = hubThreadCardHtml;
@@ -6008,7 +6170,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
 
     const byline = `<div class="hub-post-by">
         <button type="button" class="hub-collapse" data-collapse="${id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '[+]' : '[–]'}</button>
-        <span class="hub-post-name">${name}</span>${opTag}${pickBadge}
+        <span class="hub-post-name rar-name-link" data-profile-uid="${author}" role="link" tabindex="0">${name}</span>${opTag}${pickBadge}
         <span class="hub-card-time">${time}${edited}</span>
       </div>`;
 
@@ -6427,7 +6589,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
             <span class="hub-op-tag" title="Started this thread">OP</span>
             <span class="hub-card-time">${escapeHtml(relTimeHub(t.createdAt))}</span>${t.locked ? '<span class="hub-lock">🔒 Locked</span>' : ''}</div>
           <h2 class="hub-thread-title">${t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)')}</h2>
-          <div class="hub-thread-by">${escapeHtml(name)}</div>
+          <div class="hub-thread-by"><span class="rar-name-link" data-profile-uid="${escapeHtml(t.authorUid || '')}" role="link" tabindex="0">${escapeHtml(name)}</span></div>
           <div class="hub-thread-text">${bodyHtml}</div>
           <div class="hub-op-gallery"></div>
           ${adminBar}
@@ -7530,11 +7692,12 @@ function subscribeReviews(anime) {
               showReplies: false   // discussion-thread rows have no nested replies
             });
 
-            // live author profile subscription
+            // live author identity — gate 15: profiles-first, users-fallback
             if (td && td.uid) {
-              const uref = doc(db, 'users', td.uid);
-              const unsubAuthor = onSnapshot(uref, (us) => {
-                const u = us.data(); if (!u) return;
+              const nameLink = item.querySelector('.name');
+              if (nameLink) { nameLink.classList.add('rar-name-link'); nameLink.setAttribute('data-profile-uid', td.uid); nameLink.setAttribute('role', 'link'); nameLink.setAttribute('tabindex', '0'); }
+              const unsubAuthor = authorLiveSub(td.uid, (a) => {
+                const u = { username: a.name, photoURL: a.photo };
 
                 const nameEl = item.querySelector('.name');
                 if (nameEl && u.username && nameEl.textContent !== u.username) {
@@ -7741,11 +7904,12 @@ function subscribeReviews(anime) {
         stopThreadSub();
       });
 
-      // live author profile subscription
+      // live author identity — gate 15: profiles-first, users-fallback
       if (d && d.uid) {
-        const uref = doc(db, 'users', d.uid);
-        const unsubAuthor = onSnapshot(uref, (us) => {
-          const u = us.data(); if (!u) return;
+        const nameLink = li.querySelector('.author-name');
+        if (nameLink) { nameLink.classList.add('rar-name-link'); nameLink.setAttribute('data-profile-uid', d.uid); nameLink.setAttribute('role', 'link'); nameLink.setAttribute('tabindex', '0'); }
+        const unsubAuthor = authorLiveSub(d.uid, (a) => {
+          const u = { username: a.name, photoURL: a.photo };
 
           const nameEl = li.querySelector('.author-name');
           if (nameEl && u.username && nameEl.textContent !== u.username) {

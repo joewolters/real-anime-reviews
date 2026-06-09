@@ -11,7 +11,7 @@ import {
   sendPasswordResetEmail
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import {
-  doc, setDoc, collection, onSnapshot, deleteDoc,
+  doc, setDoc, getDoc, collection, onSnapshot, deleteDoc,
   query, orderBy, where, limit, collectionGroup,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
@@ -645,6 +645,19 @@ saveBtn.addEventListener('click', async () => {
 
     await updateProfile(u, { displayName: name, photoURL: photo });
     await setDoc(doc(db, 'users', u.uid), { username: name, photoURL: photo }, { merge: true });
+
+    // v1.10.0 gate 15 — DUAL-WRITE the public profile doc (author reads across
+    // the site go profiles-first with a users fallback, so this mirror is what
+    // the new profile pages + CF sender identity prefer). Best-effort: the
+    // staged rules consent-gate profiles writes, so a pre-consent save must
+    // not break the legacy path above — the fallback keeps names rendering.
+    try {
+      const pref = doc(db, 'profiles', u.uid);
+      const pSnap = await getDoc(pref);
+      const pData = { displayName: name, photoURL: photo };
+      if (!pSnap.exists()) pData.joinedAt = serverTimestamp();   // member-since: first write only
+      await setDoc(pref, pData, { merge: true });
+    } catch (_profileErr) { /* un-consented yet — the users/ fallback covers reads */ }
 
     // Full-page reload to signal saved state (your request #3)
     location.reload();
