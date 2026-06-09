@@ -3982,21 +3982,38 @@ body.filter-open { overflow: hidden; }
 /* Phase 2 tweaks */
 .comment-composer { opacity: 1; border-style: solid; }
 
+/* v1.10.0 gate 4 (Part A) — premium Post/Publish pill: purple gradient, branded
+   border, lift-on-hover. Replaces the flat slab so the composer row reads premium. */
 .composer-actions .btn {
-  background: rgba(88,11,118,.9);
-  border: none;
-  padding: 6px 12px;
-  border-radius: 10px;
-  color: #eee;
+  background: linear-gradient(180deg, rgba(140,70,220,.92), rgba(80,0,130,.92));
+  border: 1px solid rgba(187,134,252,.5);
+  padding: 7px 18px;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: .02em;
   cursor: pointer;
   opacity: 1;
-  transition: opacity .15s ease, transform .1s ease;
+  box-shadow: 0 4px 12px rgba(120,40,200,.3);
+  transition: filter .15s ease, transform .1s ease, box-shadow .15s ease, opacity .15s ease;
+}
+.composer-actions .btn:not([disabled]):hover {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 16px rgba(120,40,200,.45);
+  transform: translateY(-1px);
 }
 .composer-actions .btn[disabled] {
   opacity: .5;
   cursor: not-allowed;
 }
 .composer-actions .btn:not([disabled]):active { transform: translateY(1px); }
+/* The char counter reads as a subtle muted count, not a loud label. */
+.composer-actions .char-count {
+  font-size: .78rem;
+  color: rgba(255,255,255,.42);
+  letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+}
 /* =========================
    AUTH MODAL (Sign in / up)
    ========================= */
@@ -4889,10 +4906,16 @@ body.filter-open { overflow: hidden; }
 .review-composer .composer-actions {
   display: flex; align-items: center; justify-content: space-between;
 }
+/* v1.10.0 gate 4 (Part A) — Publish pill matches the premium composer button. */
 .review-composer .btn {
-  background: rgba(88,11,118,.9);
-  border: none; padding: 8px 14px; border-radius: 10px;
-  color: #eee; cursor: pointer;
+  background: linear-gradient(180deg, rgba(140,70,220,.92), rgba(80,0,130,.92));
+  border: 1px solid rgba(187,134,252,.5); padding: 8px 20px; border-radius: 999px;
+  color: #fff; font-weight: 700; letter-spacing: .02em; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(120,40,200,.3);
+  transition: filter .15s ease, transform .1s ease, box-shadow .15s ease;
+}
+.review-composer .btn:not([disabled]):hover {
+  filter: brightness(1.08); box-shadow: 0 6px 16px rgba(120,40,200,.45); transform: translateY(-1px);
 }
 .review-composer .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .review-composer .signin-hint { opacity: .85; }
@@ -8665,4 +8688,69 @@ html.rar-welcome-pending::before {
   .comment-item .bubble, .reply-toggle, .comment-item .action-btn, .comments-admin-lock .lock-toggle { transition: none; }
   .comment-item .bubble:hover { box-shadow: none; }
   .rar-report-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* v1.10.0 gate 3 — community-rules consent + suspended modals. Self-contained,
+   mirroring the branded report modal (purple = community, NEVER gold). The COPY
+   is Blake's plain numbered rules; the container carries the brand. */
+.rar-consent-overlay {
+  position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.7);
+  display: flex; align-items: center; justify-content: center;
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+.rar-consent-modal {
+  width: min(460px, 92vw);
+  background: linear-gradient(180deg, rgba(40,12,72,.98), rgba(24,6,46,.98));
+  border: 1px solid rgba(187,134,252,.4); border-top: 3px solid #bb86fc; border-radius: 16px;
+  padding: 22px 22px 18px; box-shadow: 0 0 30px rgba(187,134,252,.45);
+}
+.rar-consent-title { margin: 0 0 4px; font: 800 1.2rem 'Bebas Neue', sans-serif; letter-spacing: .04em; color: #fff; }
+.rar-consent-title .jp-mini { font-size: .8rem; color: #cbb0ff; margin-left: 6px; }
+.rar-consent-sub { margin: 0 0 12px; color: #d9c9ff; font-size: .9rem; }
+.rar-consent-rules { margin: 0 0 12px; padding-left: 1.3em; color: #efe6ff; font: 400 .92rem 'Montserrat', sans-serif; }
+.rar-consent-rules li { margin-bottom: 7px; line-height: 1.4; }
+.rar-consent-error { margin: 0 0 8px; min-height: 1.1em; color: #ffb4b4; font-size: .82rem; }
+.rar-consent-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+/* v1.10.0 gate 4 (Part A) — modal-scale branded buttons: "I agree" = primary purple
+   gradient pill, Cancel/Close = quiet ghost. (Were too small/plain — read as native.) */
+/* These modal action buttons use .action-btn but live OUTSIDE .comment-item, where
+   the only base .action-btn rule lives. Give them a real base (border-style so the
+   per-button border-color paints; NO `background` here — that would out-specify the
+   per-button gradient/ghost). Per-button rules below are .rar-*-actions-scoped
+   (0,2,0) so they beat this base cleanly and the primary keeps its gradient. */
+.rar-consent-actions .action-btn,
+.rar-report-actions .action-btn {
+  padding: 8px 18px; border-radius: 10px; font-size: .9rem;
+  border: 1px solid rgba(187,134,252,.25);
+  color: #e9ddff; font-weight: 700; cursor: pointer;
+  transition: filter .15s ease, transform .1s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+}
+/* Quiet ghost: Cancel / Close */
+.rar-consent-actions .rar-consent-cancel,
+.rar-report-actions .rar-report-cancel {
+  background: rgba(255,255,255,.05); color: #cbb8e6;
+}
+.rar-consent-actions .rar-consent-cancel:hover,
+.rar-report-actions .rar-report-cancel:hover {
+  background: rgba(187,134,252,.16); border-color: rgba(187,134,252,.5);
+}
+/* Primary purple gradient pill: I agree / Send report */
+.rar-consent-actions .rar-consent-agree,
+.rar-report-actions .rar-report-send {
+  background: linear-gradient(180deg, rgba(140,70,220,.95), rgba(80,0,130,.95));
+  border-color: rgba(187,134,252,.7); color: #fff; font-weight: 800;
+  box-shadow: 0 6px 16px rgba(120,40,200,.35);
+}
+.rar-consent-actions .rar-consent-agree:hover,
+.rar-report-actions .rar-report-send:hover {
+  filter: brightness(1.08); transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(120,40,200,.5); border-color: rgba(187,134,252,.85);
+}
+.rar-consent-actions .rar-consent-agree:disabled,
+.rar-report-actions .rar-report-send:disabled {
+  opacity: .55; cursor: default; filter: none; transform: none; box-shadow: none;
+}
+.rar-suspended-modal .rar-consent-sub { color: #f0d9d9; }
+@media (prefers-reduced-motion: reduce) {
+  .rar-consent-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

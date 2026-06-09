@@ -17,16 +17,17 @@
 // a buggy/loop-triggered one — can scale to the Blaze ceiling. Pairs with the
 // GCP budget alert (docs/DEPLOYMENT.md).
 //
-// ⚠️ DEPLOY TIMING (gate 2 decision): the vote/notify/prune functions below are
-// EMULATOR-VERIFIED but NOT deployed live. They write the SAME notification +
-// count the live client still writes, so deploying them now would double Blake's
-// bell + double counts. They deploy atomically at the gate-6 cutover, in the
-// same change that deletes the client write paths and flips firestore.rules.
-// (`ping` IS deployed — it's a standalone no-op and conflicts with nothing.)
+// ⚠️ DEPLOY STATE (updated for v1.10.0): the v1.9.0 functions — `ping` + the 13
+// vote/notify/prune/cascade/rate-limit/suggestion CFs below — are ALL LIVE in
+// production (deployed at the v1.9.0 cutover, 2026-06-08). The NEW v1.10.0 GATE-2
+// moderation CFs at the BOTTOM of this file (acceptRules / setBanState /
+// onBanCascade) are STAGED — they deploy with the rest of v1.10.0 at that cutover,
+// NOT before (the gate-1 rules they pair with deny every community write until they
+// exist). Never a bare `firebase deploy`; use `npm run deploy:functions`.
 // =============================================================================
 
 const { setGlobalOptions } = require('firebase-functions');
-const { onRequest } = require('firebase-functions/https');
+const { onRequest, onCall, HttpsError } = require('firebase-functions/https');
 const { onDocumentWritten, onDocumentCreated, onDocumentDeleted } = require('firebase-functions/firestore');
 const admin = require('firebase-admin');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
@@ -36,6 +37,7 @@ const { voteCountDeltas } = require('./lib/votecounts');
 const { shouldNotify, isMuted } = require('./lib/notify');
 const { notifsToPrune } = require('./lib/prune');
 const { rateDecision } = require('./lib/ratelimit');
+const moderation = require('./lib/moderation'); // v1.10.0 gate 2 — ban + consent cores
 
 setGlobalOptions({
   region: 'us-central1',
@@ -326,4 +328,48 @@ exports.aggregateSuggestionCounts = onDocumentCreated('suggestions/{docId}', asy
     if (!snap.exists) next.firstSuggestedAt = FieldValue.serverTimestamp();
     tx.set(ref, next, { merge: true });
   });
+});
+
+// =============================================================================
+// v1.10.0 GATE 2 — the MODERATION SPINE CFs (ban + community-rules consent).
+// STAGED — deploy with the rest of v1.10.0 at the cutover. The gate-1 rules read
+// the moderationGate/{uid} doc these manage; without these CFs no one has that doc,
+// so every community write is denied (which is why these can't deploy early).
+// Cores live in lib/moderation.js (testable; cf-tests drive them against the emu).
+// =============================================================================
+
+// acceptRules (callable) — mints the caller's first moderationGate doc + the
+// rulesConsent record. The load-bearing one: nothing else can create that doc.
+exports.acceptRules = onCall(async (request) => {
+  try {
+    return await moderation.applyAcceptRules(
+      db, FieldValue,
+      request.auth && request.auth.uid,
+      request.data && request.data.version
+    );
+  } catch (e) { throw new HttpsError(e.code || 'internal', e.message || 'acceptRules failed'); }
+});
+
+// setBanState (callable, admin-only — literal-UID gated in the core, never a client
+// field) — ban/unban a user: writes banned/{uid} (triggers the cascade below) +
+// moderationGate.banned + a best-effort custom claim. Unban reverses all three.
+exports.setBanState = onCall(async (request) => {
+  const setClaim = (uid, banned) => admin.auth().setCustomUserClaims(uid, { banned: !!banned });
+  try {
+    return await moderation.applySetBanState(
+      db, FieldValue, setClaim,
+      request.auth && request.auth.uid,
+      request.data && request.data.uid,
+      !!(request.data && request.data.banned),
+      request.data && request.data.reason
+    );
+  } catch (e) { throw new HttpsError(e.code || 'internal', e.message || 'setBanState failed'); }
+});
+
+// onBanCascade (trigger on a banned/{uid} create) — H5-redact the banned user's
+// authored backlog + lock their conversations. Idempotent (alreadyProcessed +
+// re-redacting empty content is a no-op).
+exports.onBanCascade = onDocumentCreated('banned/{uid}', async (event) => {
+  if (await alreadyProcessed(event.id)) return;
+  await moderation.runBanCascade(db, FieldValue, event.params.uid);
 });

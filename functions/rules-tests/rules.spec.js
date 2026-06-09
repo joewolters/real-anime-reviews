@@ -17,7 +17,7 @@ const {
   assertSucceeds,
 } = require('@firebase/rules-unit-testing');
 const {
-  doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp,
 } = require('firebase/firestore');
 
 const ADMIN = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'; // the existing ADMIN_UID (status quo)
@@ -34,11 +34,25 @@ before(async () => {
   });
 });
 after(async () => { if (env) await env.cleanup(); });
-beforeEach(async () => { await env.clearFirestore(); });
 
 const as = (uid) => env.authenticatedContext(uid).firestore();
 const anon = () => env.unauthenticatedContext().firestore();
 const seed = (fn) => env.withSecurityRulesDisabled((c) => fn(c.firestore()));
+
+// v1.10.0 gate 1: the standard actors are CONSENTED + not-banned (moderationGate
+// doc with consentVersion >= the rules literal 1), so EVERY happy path below
+// exercises the moderation gate's ALLOW side without changing the assertions. The
+// DENY side (banned / un-consented / stale-consent / admin-bypass) is proven in the
+// dedicated MODERATION GATE block at the bottom of this file.
+const CONSENT_ROSTER = ['alice', 'bob', 'carol', 'mallory', 'victim'];
+beforeEach(async () => {
+  await env.clearFirestore();
+  await seed(async (db) => {
+    for (const uid of CONSENT_ROSTER) {
+      await setDoc(doc(db, 'moderationGate/' + uid), { banned: false, consentVersion: 1 });
+    }
+  });
+});
 
 // ---------------- COMMENTS (+ per-season al: key, H1, L2) ----------------
 test('comment: happy create by owner', async () => {
@@ -288,4 +302,121 @@ test('a LOCKED thread blocks comment + reply create server-side; unlocked allows
   // an open thread (no commentsMeta doc) still allows posting
   await assertSucceeds(setDoc(doc(as('alice'), 'comments/open-anime/items/c1'),
     { uid: 'alice', text: 'hello', displayName: 'A', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+});
+
+// ============================================================================
+// v1.10.0 GATE 1 — the MODERATION GATE (ban + community-rules consent).
+// gateOk() = isAdmin() || (notBanned() && hasConsented()); reportGateOk() =
+// isAdmin() || notBanned(). moderationGate/{uid} is CF-only; the roster is seeded
+// consented in beforeEach. These prove the DENY side + the explicit ALLOW edges.
+// ============================================================================
+const gate = (db, uid, over = {}) => setDoc(doc(db, 'moderationGate/' + uid), { banned: false, consentVersion: 1, ...over });
+
+test('gate: un-consented user (no moderationGate doc) is DENIED every community write path', async () => {
+  await assertFails(setDoc(doc(as('newbie'), 'comments/x/items/c1'),
+    { uid: 'newbie', text: 'hi', displayName: 'N', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  await assertFails(setDoc(doc(as('newbie'), 'forum/t1'), thread({ authorUid: 'newbie' })));
+  await assertFails(setDoc(doc(as('newbie'), 'reviews/x/items/newbie'),
+    { uid: 'newbie', title: 'T', body: 'b', rating: 8, displayName: 'N', createdAt: serverTimestamp(), updatedAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  await assertFails(setDoc(doc(as('newbie'), 'comments/x/items/c1/votes/newbie'),
+    { value: 1, uid: 'newbie', updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('newbie'), 'profiles/newbie'),
+    { displayName: 'Newbie', joinedAt: serverTimestamp() }));
+});
+
+test('gate: a CONSENTED user is allowed (explicit ALLOW edge)', async () => {
+  await seed((db) => gate(db, 'carl'));
+  await assertSucceeds(setDoc(doc(as('carl'), 'comments/x/items/c1'),
+    { uid: 'carl', text: 'consented', displayName: 'Carl', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+});
+
+test('gate: STALE consent (version < CURRENT_RULES_VERSION) is DENIED until re-consent', async () => {
+  await seed((db) => gate(db, 'sam', { consentVersion: 0 }));
+  await assertFails(setDoc(doc(as('sam'), 'comments/x/items/c1'),
+    { uid: 'sam', text: 'old consent', displayName: 'Sam', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+});
+
+test('gate: a BANNED user is DENIED every community write path', async () => {
+  await seed((db) => gate(db, 'badguy', { banned: true }));
+  await assertFails(setDoc(doc(as('badguy'), 'comments/x/items/c1'),
+    { uid: 'badguy', text: 'spam', displayName: 'B', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  await assertFails(setDoc(doc(as('badguy'), 'forum/t1'), thread({ authorUid: 'badguy' })));
+  await assertFails(setDoc(doc(as('badguy'), 'reviews/x/items/badguy'),
+    { uid: 'badguy', title: 'T', body: 'b', rating: 8, displayName: 'B', createdAt: serverTimestamp(), updatedAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  await assertFails(setDoc(doc(as('badguy'), 'comments/x/items/c1/votes/badguy'),
+    { value: 1, uid: 'badguy', updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('badguy'), 'profiles/badguy'),
+    { displayName: 'Badguy', joinedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('badguy'), 'conversations/c_bad_admin'),
+    { participants: ['badguy', ADMIN], kind: 'admin', state: 'open', createdAt: serverTimestamp() }));
+});
+
+test('gate: a banned user may still UNVOTE (delete their vote — unvote is ungated)', async () => {
+  await seed(async (db) => {
+    await gate(db, 'voter', { banned: true });
+    await setDoc(doc(db, 'comments/x/items/c1/votes/voter'), { value: 1, uid: 'voter', updatedAt: Timestamp.now() });
+  });
+  await assertSucceeds(deleteDoc(doc(as('voter'), 'comments/x/items/c1/votes/voter')));
+});
+
+test('gate: a banned user cannot EDIT their existing forum thread (update is gated)', async () => {
+  await seed(async (db) => {
+    await gate(db, 'author', { banned: true });
+    await setDoc(doc(db, 'forum/t1'), { ...thread({ authorUid: 'author' }), createdAt: Timestamp.now(), lastPostAt: Timestamp.now() });
+  });
+  await assertFails(updateDoc(doc(as('author'), 'forum/t1'), { body: 'edited while banned', editedAt: serverTimestamp() }));
+});
+
+test('gate: a banned participant cannot SEND a DM message (message-create is gated)', async () => {
+  await seed(async (db) => {
+    await gate(db, 'banned-dm', { banned: true });
+    await setDoc(doc(db, 'conversations/c_bdm'), { participants: ['banned-dm', ADMIN], kind: 'admin', state: 'open', createdAt: Timestamp.now() });
+  });
+  await assertFails(setDoc(doc(as('banned-dm'), 'conversations/c_bdm/messages/m1'),
+    { senderUid: 'banned-dm', text: 'hi', createdAt: serverTimestamp() }));
+});
+
+test('gate: REPORTS are ban-gated but NOT consent-gated', async () => {
+  // an un-consented user (no moderationGate doc) CAN report — reporting is frictionless:
+  await assertSucceeds(setDoc(doc(as('reporter-new'), 'reports/r_new'),
+    { reporterUid: 'reporter-new', reason: 'harassment', status: 'new', targetType: 'comment', targetPath: 'comments/x/items/y', createdAt: serverTimestamp() }));
+  // a BANNED user CANNOT report:
+  await seed((db) => gate(db, 'banned-reporter', { banned: true }));
+  await assertFails(setDoc(doc(as('banned-reporter'), 'reports/r_ban'),
+    { reporterUid: 'banned-reporter', reason: 'spam', status: 'new', targetType: 'comment', targetPath: 'comments/x/items/y', createdAt: serverTimestamp() }));
+});
+
+test('gate: ADMIN bypasses the gate (no moderationGate doc needed)', async () => {
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'comments/x/items/cAdmin'),
+    { uid: ADMIN, text: 'from blake', displayName: 'Blake', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'forum/tAdmin'), thread({ authorUid: ADMIN })));
+});
+
+test('gate: moderationGate / banned / rulesConsent are CF-only (client write DENIED; owner read OK)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'moderationGate/alice'), { banned: false, consentVersion: 1 }));
+  await assertFails(setDoc(doc(as('alice'), 'banned/alice'), { by: 'self' }));
+  await assertFails(setDoc(doc(as('alice'), 'rulesConsent/alice'), { version: 99 }));
+  // a banned user cannot self-clear their gate doc:
+  await seed((db) => gate(db, 'sneaky', { banned: true }));
+  await assertFails(updateDoc(doc(as('sneaky'), 'moderationGate/sneaky'), { banned: false }));
+  // but the owner may READ their own gate doc (to drive the consent UI):
+  await seed((db) => gate(db, 'reader'));
+  await assertSucceeds(getDoc(doc(as('reader'), 'moderationGate/reader')));
+});
+
+test('gate: a banned user is ALSO denied replies, review-threads, forum posts, and post-votes (every gateOk() path)', async () => {
+  await seed(async (db) => {
+    await gate(db, 'badguy2', { banned: true });
+    await setDoc(doc(db, 'comments/x/items/parent'), { uid: 'alice', text: 'p', displayName: 'A', createdAt: Timestamp.now(), likesCount: 0, dislikesCount: 0 });
+    await setDoc(doc(db, 'reviews/x/items/rev'), { uid: 'alice', title: 'T', body: 'b', rating: 8, displayName: 'A', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), likesCount: 0, dislikesCount: 0 });
+    await setDoc(doc(db, 'forum/tparent'), { authorUid: 'alice', title: 'Hi', body: 'h', tag: 'general', createdAt: Timestamp.now(), lastPostAt: Timestamp.now(), postCount: 0, reportCount: 0, pinned: false, locked: false, removed: false });
+  });
+  await assertFails(setDoc(doc(as('badguy2'), 'comments/x/items/parent/replies/r1'),
+    { uid: 'badguy2', text: 'reply', displayName: 'B', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  await assertFails(setDoc(doc(as('badguy2'), 'reviews/x/items/rev/threads/t1'),
+    { uid: 'badguy2', text: 'thread', displayName: 'B', createdAt: serverTimestamp(), likesCount: 0, dislikesCount: 0 }));
+  await assertFails(setDoc(doc(as('badguy2'), 'forum/tparent/posts/p1'),
+    { authorUid: 'badguy2', body: 'post', createdAt: serverTimestamp(), likesCount: 0, reportCount: 0, removed: false }));
+  await assertFails(setDoc(doc(as('badguy2'), 'forum/tparent/posts/p1/votes/badguy2'),
+    { value: 1, uid: 'badguy2', updatedAt: serverTimestamp() }));
 });

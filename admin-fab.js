@@ -38,6 +38,11 @@ const ADMIN_MENU_ITEMS = [
     jp: '提案',
     href: 'admin/suggestions.html',
   },
+  {
+    label: 'Reports',
+    jp: '通報',
+    href: 'admin/reports.html',
+  },
   // Future entries land here:
   // { label: 'Site Health', jp: '監視', href: 'admin/health.html' },
   // { label: 'Audit', jp: '監査', href: 'admin/audit.html' },

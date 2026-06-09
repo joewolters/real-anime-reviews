@@ -1,44 +1,44 @@
-<!-- author: Code | date: 2026-06-08 -->
-# v1.9.1c — review deep-link HALO: real bug found + fixed, e2e upgraded to assert VISIBILITY. BUILT + VERIFIED (awaiting re-smoke → hosting-only deploy on "ship it")
+<!-- author: Code | date: 2026-06-09 -->
+# v1.10.0 GATE 4 — admin reports queue + the 3b consent-modal fixes. DONE (verified + adversarially reviewed · STAGED · awaiting your go for the checkpoint commit)
 
-This is the test-integrity round. I was wrong twice on this halo — once trusting a class-presence e2e, once over-attributing to environment. This time I inspected the actual rendered pixels (screenshots + the box-shadow animation curve), found the real root cause, fixed the visible glow, and rebuilt the e2e to assert it actually paints. Still client-side only; nothing committed/deployed.
+Bundled Part A (4 consent-modal polish fixes) + Part B (the admin reports queue). Client + a new admin page — no rules/CF change. I ran a 4-agent adversarial review before wrapping and fixed everything it found (incl. a real XSS and a rules gap). `npm test` 109 → **115**, full suite green.
 
-## Root cause — TWO bugs, both real, both confirmed in a real browser
-1. **The halo was clipped to nothing.** The flash class sat on `.row-toggle`, a child of `.review-row` — and `.review-row { overflow:hidden }` (for its rounded corners + title line-clamp). A `box-shadow` glow renders *outside* the element's box, so the parent's `overflow:hidden` clipped it away entirely. Diagnostic dump: the `.row-toggle` had a live animated box-shadow, but its immediate ancestor `.review-row` is an `overflow:hidden` clipper, and `.review-row` itself had `box-shadow: none`. Comments never hit this — `.bubble` has no clipping ancestor.
-2. **My own sticky re-apply was resetting the animation.** `applyReviewDeepLink` did `remove → reflow → add` on *every* render, so during the initial snapshot/auth churn it kept restarting the 2.4s glow back to 0% (transparent) before it ever reached its visible peak — so even after fixing the clip, the glow looked absent.
+## PART A — the consent-modal 3b fixes
+1. **Esc-scope bug — fixed (real bug).** Pressing Esc on the consent/suspended/report modal used to ALSO close the anime modal underneath. Now Esc closes only the top modal. (The review caught a follow-on listener-leak in the report modal that I also fixed.)
+2. **"I agree" is now a primary purple gradient pill; "Cancel"/"Close" a quiet ghost.** Root cause of the "native beveled" look: those modal buttons had no base style (the base `.action-btn` is scoped to comments) — fixed properly. I branded the **report modal's** Send/Cancel too (you'll see those when smoking reports).
+3. **Suspended "Close"** is a branded secondary button.
+4. **Composer counters + Post/Publish** read premium now — gradient pill buttons with hover, the `N/500`·`N/2000` counter is a subtle muted count.
 
-## The fix
-- **Halo the whole `.review-row`,** not its `.row-toggle` child. An element's own outset box-shadow is NOT clipped by its own `overflow:hidden` (that only clips descendants), so on the row the glow renders as a visible purple card-glow — matching how the comment halo lands on the `.bubble`.
-- **Add the class only if missing** (drop the reflow-restart). A freshly rebuilt row plays the glow from its start; a persisting row keeps glowing uninterrupted — no more resets.
-- Both origins (index + account) go through the same `openNotifTarget → applyReviewDeepLink`, so both are fixed.
+## PART B — the admin reports queue (`admin/reports.html`, cloned from the suggestions queue)
+- Renders **open reports**, **deduped by target**: 10 reports of one comment = ONE row reading **"reported ×N"** (sorted most-reported first, then newest), never 10 rows.
+- The reporter's snapshot is unverified, so the queue **re-fetches the live content** and shows both, each labeled. All reported text renders **escape-first** (no way for a malicious report to run code in your admin page — a test + the review confirm it).
+- **Three branded actions per row** (with a branded confirm for the destructive ones): **Ban author** (bans + tombstones everything they posted, via the gate-2 cascade), **Remove content** (takes the item down — hard-delete for comments/reviews, soft-redact for forum/posts), **Dismiss** (resolves the report).
+- Reachable from your **admin pill → "Reports" (通報)**.
+- **Anti-spam:** one person can't spam-file the same target repeatedly — a repeat report is silently de-duplicated ("already filed").
 
-**Real-browser proof:** sampled the row's computed box-shadow continuously from load — it ramps cleanly to the designed peak (**alpha 0.55** = the 15% keyframe) at ~1.3s and fades by ~3.1s, ONE clean play. Screenshot at peak shows the target row visibly ringed in purple while the others aren't.
+## Your numbered smoke (`npm run practice` → `http://127.0.0.1:8765/?emu=1`)
+**Part A — consent/composer (sign in as `prac-newbie@practice.test` / practice123):**
+1. Open "One Punch Man" → Community. Type a comment → post → the **Community Rules** modal opens. Check the buttons: **"I agree"** is a solid purple gradient pill, **"Cancel"** is a quiet ghost (not native).
+2. Press **Esc** → the consent modal closes **and the anime modal stays open** (this was the bug). Open it again and click **I agree** → it posts.
+3. Look at the comment composer's **Post** button + the `N/500` counter — premium pill + muted count.
 
-## The e2e: from class-presence → VISIBILITY (so this can't recur)
-The old spec asserted `.row-toggle.rar-deeplink-flash` (class on an element) — which is exactly why it stayed green while the browser showed nothing. The rewrite asserts the **visible result**:
-- the halo class is on the **`.review-row`** itself (a clipped child would fail), in viewport, visible;
-- **poll the row's actual computed box-shadow alpha** until it exceeds 0.25 (peaks ~0.55) — so the glow must really paint;
-- still flashed + in view after a 1.5s settle (survives the re-render).
-- **A/B (re-run): reverted the fix (flash back on the clipped child) → the upgraded e2e went RED** (the `.review-row` received no halo class / no painted box-shadow); restored → green.
-- Honest limitation: the box-shadow poll proves the glow *paints on the visible row*; it doesn't pixel-verify against a future NEW clipping ancestor. It does catch this bug class (and the diag screenshots back it visually). A pixel sampler would be stronger but flaky.
+**Part B — reports queue (sign in as Blake `blake@practice.test` / practice123):**
+4. Click your **admin pill** (bottom-left) → **Reports**. (Or go to `/admin/reports.html`.)
+5. You'll see a queue: a comment row reading **"reported ×3"** (three people flagged it) and a review row "1 report". Each shows the reporter snapshot + the live content + the reasons.
+6. On a row, click **Dismiss** → it animates out (report resolved). On another, click **Remove content** → branded confirm → it's taken down. On another, click **Ban author** → branded confirm → that user is banned (their content tombstones via the cascade).
+7. (Optional) As a normal user, report the same comment twice → the second time says "already filed" (dedupe).
 
-## Tests
-- `npm test` (deterministic) — **104**.
-- `npm run test:e2e` (emulator) — **3** green, incl. the rewritten visibility-asserting review spec; **A/B-proven red on the broken landing**.
-- `test:rules` 49 · `test:functions` 21 · `test:cf` 15 — untouched.
+## Tests — `npm test` 109 → **115** (floor holds)
+6 new specs in `tests/g4-reports.spec.js`: the pure dedupe model (group/count/sort) + escape-safety (Node), and the Esc-scope fix (anime modal stays open), the branded gradient button, and the deterministic report id (browser). `test:rules` 60 / `test:functions` 21 / `test:cf` 24 unchanged (no rules/CF change). The admin page itself is auth-gated (redirects non-admins), so it's verified by the seeded practice smoke above, not Playwright.
 
-## What ships in v1.9.1 overall (this + the earlier rounds)
-Composer redesign (`composer-toolbar.js` → `RarComposer`: B/I/🔗 + ⌘/Ctrl+B/I + live preview, XSS-safe) · v1.9.1b polish (declutter, hint only on reviews, signed-out hide, "★ My review" chip) · self-rolling season label (Spring 2026 · 春) · **review deep-link halo now genuinely visible**.
+## Adversarial review (4 agents) — found + fixed before this report
+- **Critical:** an admin-page XSS hole (a malicious report's `targetUid` could inject script into your queue) — closed.
+- **High:** the Remove button would have errored on forum/post/DM reports — fixed with per-type handling.
+- **Medium:** an Esc-listener leak I'd introduced — fixed.
+- **Low:** a cosmetic border that wasn't painting — fixed. (Wiring/clone-fidelity check came back clean.)
 
-## Files changed this round (client-side only)
-- `script.js` — `applyReviewDeepLink`: halo `.review-row` + add-if-missing (no reflow-restart).
-- `tests-e2e/deeplink-emu.spec.js` — review spec rewritten to assert painted box-shadow visibility.
-
-## Blake's 1-step re-smoke — sandbox is running: `http://127.0.0.1:8765/?emu=1`
-Sign in (`prac-mika@practice.test` / `practice123`), open the Lantern → "found your review helpful" → the review opens and **its card visibly pulses purple** and holds through the list settling. Do it from **both** the home page and the account page. (Comment + reply halos still flash as before.)
-
-## Deploy (ONLY on your "ship it")
-Hosting-only: `npm test` green → `bump-version` 1.9.1 → `CHANGELOG.md` + homepage widget `version-section` bullets (per `widget-update-skill.md`) → `firebase deploy --only hosting` → verify (APP_VERSION 1.9.1, widget newest = v1.9.1). Commit Blake-authored, zero trailers, the 7 Cowork excludes restored out.
+## Production untouched + the checkpoint commit (your call)
+Everything is STAGED — prod is untouched; the v1.10.0 rules/CFs still deny all community writes until the cutover. **Gate 4 is a checkpoint, so a commit is due — but it'd be the FIRST v1.10.0 commit (capturing gates 1-4, ~20 files) and you haven't smoked it yet.** I've prepared it (Blake-authored, zero trailers, the 7 Cowork excludes restored out) but I won't run it without your word: **smoke first, or commit the checkpoint now?** NO deploy either way.
 
 ## One-liner reply
-The review deep-link halo is now genuinely visible — I was wrong twice (a class-presence e2e, then over-blaming environment), so this round I looked at the actual pixels and found two real bugs: the flash sat on `.row-toggle` whose glow was clipped to nothing by `.review-row { overflow:hidden }`, AND my sticky re-apply was restarting the animation back to transparent every render; fixed by haloing the whole `.review-row` (its own outset shadow escapes its own overflow) and only adding the class if missing, confirmed by the box-shadow ramping to its real peak (0.55) in a screenshot, and the e2e is rebuilt to poll the row's actual painted box-shadow (A/B-proven red on the clipped version) so "green test, invisible result" can't recur — `npm test` 104, e2e 3, nothing committed, sandbox up for your 1-step re-smoke from both pages.
+Gate 4 is done, green (115 tests), and adversarially reviewed — Part A fixed the Esc-closes-the-anime-modal bug and made the consent/composer/report buttons properly branded (no more native look), and Part B shipped the admin reports queue (cloned from suggestions): it dedupes "reported ×N", re-fetches live content, renders attacker text escape-first, and gives you one-click branded Ban-author / Remove-content / Dismiss, reachable from the admin pill, with a deterministic report id stopping one-user spam — the review caught and I fixed a real admin-XSS hole + a rules gap where Remove would error on forum/DM reports; it's all STAGED and I've prepared the gate-4 checkpoint commit (the first v1.10.0 commit, gates 1-4) but am holding for your go to commit (smoke first or commit now?), nothing deployed.

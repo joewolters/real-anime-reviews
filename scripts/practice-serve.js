@@ -55,8 +55,24 @@ async function ensureUser(uid, email, displayName) {
 async function seed() {
   await ensureUser(ADMIN_UID, ADMIN_EMAIL, 'Blake');
   const fakes = [{ uid: 'prac-mika', name: 'Mika' }, { uid: 'prac-ren', name: 'Ren' }, { uid: 'prac-yuki', name: 'Yuki' },
-                 { uid: 'prac-aki', name: 'Aki' }, { uid: 'prac-sora', name: 'Sora' }];
+                 { uid: 'prac-aki', name: 'Aki' }, { uid: 'prac-sora', name: 'Sora' },
+                 // v1.10.0 gate 3 — two extra accounts with NO seeded content, for the consent smoke:
+                 { uid: 'prac-newbie', name: 'Kana' },   // fresh: no moderationGate doc -> sees the consent modal
+                 { uid: 'prac-banned', name: 'Toru' }];  // banned: moderationGate.banned -> sees the suspended state
   for (const f of fakes) await ensureUser(f.uid, f.uid + '@practice.test', f.name);
+
+  // v1.10.0 gate 3 — seed the moderationGate docs the consent gate reads. These are
+  // CF-only in prod (acceptRules/setBanState write them); the Admin SDK bypasses the
+  // rules here, so we set them directly — same shape setBanState/acceptRules produce.
+  //   • content authors = already-consented members (no modal on their writes)
+  //   • prac-newbie gets NO doc (a fresh user -> the consent modal fires on first post)
+  //   • prac-banned is banned (-> the branded suspended state). Only moderationGate.banned
+  //     is set (the field the client reads); the banned/{uid} audit doc is intentionally
+  //     NOT written, so the gate-2 onBanCascade trigger stays out of this gate-3 smoke.
+  for (const uid of ['prac-mika', 'prac-ren', 'prac-yuki', 'prac-aki', 'prac-sora']) {
+    await db.doc('moderationGate/' + uid).set({ consentVersion: 1 }, { merge: true });
+  }
+  await db.doc('moderationGate/prac-banned').set({ banned: true }, { merge: true });
 
   const animeData = loadAnime();
   const picks = animeData.slice(0, 2);
@@ -109,6 +125,26 @@ async function seed() {
         uid: r.uid, displayName: r.name, photoURL: null,
         title: r.title, rating: r.rating, body: r.body, reviewKey: 'seed-' + r.uid,
         createdAt: when, updatedAt: when, likesCount: r.likes, dislikesCount: r.dislikes,
+      });
+    }
+
+    // v1.10.0 gate 4 — seed reports so Blake can smoke the admin reports queue +
+    // the ban flow. THREE reporters flag the SAME comment (seed-0) => the queue
+    // dedupes to ONE row reading "reported ×3"; one report flags Ren's review (×1).
+    // Doc ids use the client's deterministic format (reporterUid__targetPath).
+    const reportSeeds = [
+      { reporter: 'prac-ren',  reason: 'harassment', type: 'comment', path: 'comments/' + key + '/items/seed-0', uid: 'prac-mika', snap: 'This one **stuck with me** for days. The back half goes hard.' },
+      { reporter: 'prac-yuki', reason: 'spam',       type: 'comment', path: 'comments/' + key + '/items/seed-0', uid: 'prac-mika', snap: 'This one stuck with me for days.' },
+      { reporter: 'prac-aki',  reason: 'offtopic',   type: 'comment', path: 'comments/' + key + '/items/seed-0', uid: 'prac-mika', snap: 'This one stuck with me for days.' },
+      { reporter: 'prac-mika', reason: 'other',      type: 'review',  path: 'reviews/' + key + '/items/prac-ren', uid: 'prac-ren',  snap: 'Solid but overhyped' },
+    ];
+    for (let i = 0; i < reportSeeds.length; i++) {
+      const rp = reportSeeds[i];
+      const rid = rp.reporter + '__' + rp.path.replace(/\//g, '~');
+      await db.doc('reports/' + rid).set({
+        reporterUid: rp.reporter, reason: rp.reason, status: 'new',
+        targetType: rp.type, targetPath: rp.path, targetUid: rp.uid, targetAnimeId: key,
+        snapshotText: rp.snap, createdAt: TS.fromMillis(Date.now() - (i + 1) * 600000),
       });
     }
   }
@@ -164,8 +200,11 @@ function serve() {
     console.log('\n══════════════════════════════════════════════════════════════');
     console.log('  PRACTICE MODE READY  (local emulators — NOT production)');
     console.log('  Open:   http://127.0.0.1:' + PORT + '/?emu=1');
-    console.log('  Admin (Blake):  ' + ADMIN_EMAIL + '   /   ' + PRAC_PW);
-    console.log('  Normal user :   prac-mika@practice.test   /   ' + PRAC_PW);
+    console.log('  Admin (Blake):    ' + ADMIN_EMAIL + '   /   ' + PRAC_PW);
+    console.log('  Consented user:   prac-mika@practice.test    /   ' + PRAC_PW + '   (no modal — already agreed)');
+    console.log('  Fresh user:       prac-newbie@practice.test  /   ' + PRAC_PW + '   (sees the consent modal on first post)');
+    console.log('  Banned user:      prac-banned@practice.test  /   ' + PRAC_PW + '   (sees the suspended state)');
+    console.log('  Reports queue:    sign in as Blake -> admin pill -> Reports  (or /admin/reports.html) — a comment reported ×3 + a review ×1');
     console.log('  Stop: Ctrl-C');
     console.log('══════════════════════════════════════════════════════════════\n');
   });

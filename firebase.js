@@ -4,6 +4,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, connectAuthEmulator }      from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getFirestore, connectFirestoreEmulator } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFunctions, connectFunctionsEmulator } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js";
 
 // Paste YOUR config from the console:
 const firebaseConfig = {
@@ -20,6 +21,10 @@ const firebaseConfig = {
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
+// v1.10.0 gate 3 — Functions SDK so the client can call the `acceptRules`
+// callable (community-rules consent). Region defaults to us-central1, matching
+// the deployed CFs (functions/index.js setGlobalOptions).
+const functions = getFunctions(app);
 
 // ── GATE 4 practice mode ───────────────────────────────────────────────────
 // Opt-in ONLY: point the client SDK at the LOCAL Firebase emulators so Blake can
@@ -38,17 +43,19 @@ const db   = getFirestore(app);
     if (localStorage.getItem("rar:useEmulators") !== "1") return;
     connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
     connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    connectFunctionsEmulator(functions, "127.0.0.1", 5001); // v1.10.0 gate 3 — acceptRules callable
     window.RAR_PRACTICE_MODE = true;
-    console.log("🔧 PRACTICE MODE — connected to local Firebase emulators (auth:9099, firestore:8080)");
+    console.log("🔧 PRACTICE MODE — connected to local Firebase emulators (auth:9099, firestore:8080, functions:5001)");
   } catch (e) {
     console.warn("practice-mode emulator connect skipped:", e && e.message);
   }
 })();
 
 // Export for script.js
-export { app, auth, db };
+export { app, auth, db, functions };
 
 window.auth = auth;
 window.db = db;
+window.functions = functions;
 
 console.log("✅ Firebase initialized");

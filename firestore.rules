@@ -1,19 +1,23 @@
 rules_version = '2';
 
 // =============================================================================
-// ⚠️⚠️  v1.9.0 STAGED RULES — NOT YET DEPLOYED TO PRODUCTION  ⚠️⚠️
+// ⚠️⚠️  v1.10.0 STAGED RULES — NOT YET DEPLOYED TO PRODUCTION  ⚠️⚠️
 // -----------------------------------------------------------------------------
-// This file is the v1.9.0 TARGET (gate 1). Production is STILL running the
-// previous rules. These rules intentionally BREAK the current live client:
-//   • H1 — the client may no longer write likesCount/dislikesCount directly
-//     (counts become Cloud-Function-owned). Live voting writes counts the old
-//     way and would be DENIED.
-//   • H3 — notifications create is `if false` (Cloud-Function-only). The live
-//     client writes notifications directly and would be DENIED.
+// This file is the v1.10.0 "Community Hub" TARGET (gate 1: the moderation spine).
+// Production is STILL running the v1.9.x rules. These rules intentionally BREAK
+// the current live client until the v1.10.0 cutover, because of the NEW global
+// MODERATION GATE (gate 1):
+//   • Every community write now requires a CF-written `moderationGate/{uid}`
+//     {banned, consentVersion} doc: the writer must be NOT banned AND must have
+//     consented to the community rules (consentVersion >= the rules-file literal
+//     `rulesVersion()`). A user with no moderationGate doc (i.e. before the
+//     gate-2 ban CFs + the consent flow exist) is DENIED every community write.
+//   • Deploying this now would DENY all community writes (no one has consented).
 // Therefore: DO NOT `firebase deploy --only firestore` (and never a bare
-// `firebase deploy`) until the vote/notification Cloud Functions are live and
-// the client is cut over (the 3-step migration, gates 2 -> 6). Emulator-green
-// is gate 1's finish line. Contract: docs/DATA-MODEL.md.
+// `firebase deploy`) until the gate-2 ban CFs + the `acceptRules` consent flow
+// are live and the client is cut over at the v1.10.0 cutover (same staged model
+// v1.9.0 used). Emulator-green (`npm run test:rules`) is gate 1's finish line.
+// Contract: docs/DATA-MODEL.md · study: docs/SHIP-OUTPUT.md.
 // =============================================================================
 
 service cloud.firestore {
@@ -26,6 +30,30 @@ service cloud.firestore {
     // CF-set custom claim (request.auth.token.admin == true) in a later gate so
     // it rotates without a rules redeploy. Until then, the literal stands.
     function isAdmin() { return isSignedIn() && request.auth.uid == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'; }
+
+    // === v1.10.0 GATE 1 — the MODERATION GATE (ban + community-rules consent).
+    // Every community write gates on a CF-written `moderationGate/{uid}` doc
+    // {banned:bool, consentVersion:int}:
+    //   • notBanned    — no doc (a fresh user) OR banned != true.
+    //   • hasConsented — doc EXISTS and consentVersion >= rulesVersion() (the
+    //     literal below; bumping it re-prompts EVERYONE on their next write).
+    //   • gateOk       — admin bypasses; everyone else must be not-banned AND
+    //     consented. Appended to every content create/update + every vote
+    //     create/update (NOT vote delete — unvote stays allowed while banned).
+    //   • reportGateOk — admin OR not-banned (reporting stays consent-FREE so it
+    //     is always frictionless; banned users cannot report).
+    // Cost: Firestore caches get()/exists() on the SAME path within one rule
+    // evaluation, so the repeated moderationGate reads bill as ~1 read per write
+    // (the live forum-post rule already does a get(parent) per reply — same shape).
+    // moderationGate is CF-ONLY written (gate 2: setBanState + acceptRules).
+    function rulesVersion() { return 1; }   // CURRENT_RULES_VERSION — bump to re-prompt everyone
+    function modGateExists() { return exists(/databases/$(database)/documents/moderationGate/$(request.auth.uid)); }
+    function modGate() { return get(/databases/$(database)/documents/moderationGate/$(request.auth.uid)).data; }
+    function notBanned() { return !modGateExists() || modGate().get('banned', false) != true; }
+    function hasConsented() { return modGateExists() && modGate().get('consentVersion', 0) >= rulesVersion(); }
+    function gateOk() { return isAdmin() || (notBanned() && hasConsented()); }
+    function reportGateOk() { return isAdmin() || notBanned(); }
+
     // L2 — client-written timestamps must equal the server time (no backdating
     // to pin content, no future-dating). serverTimestamp() satisfies this.
     function createdNow() { return request.resource.data.createdAt == request.time; }
@@ -35,18 +63,22 @@ service cloud.firestore {
     // L5: vote docs carry `uid == voterUid` so a departing user's votes scattered
     // under OTHER people's content are findable by a collectionGroup('votes')
     // sweep in onUserDelete (a CG query can't filter by leaf doc-id alone).
+    // v1.10.0 gate 1: && gateOk() — a banned/un-consented user cannot cast or
+    // change a vote (but CAN unvote — delete is ungated).
     function voteCreateOk(voterUid) {
       return isOwner(voterUid)
         && request.resource.data.value in [1, -1]
         && request.resource.data.uid == voterUid
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+        && gateOk();
     }
     function voteUpdateOk(voterUid) {
       return isOwner(voterUid)
         && request.resource.data.value in [1, -1]
         && request.resource.data.uid == voterUid
         && request.resource.data.updatedAt == request.time
-        && request.time > resource.data.updatedAt + duration.value(2, 's');
+        && request.time > resource.data.updatedAt + duration.value(2, 's')
+        && gateOk();
     }
     // Profile field validation (shared by create + update). M1 reserved-name
     // denylist; M2 photoURL constrained to known-good origins.
@@ -63,7 +95,8 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // USER PROFILES + per-user lists
+    // USER PROFILES + per-user lists  (PRIVATE per-user data — NOT gated; the
+    // moderation gate is for COMMUNITY content, not a user's own saves/bell.)
     // =========================================================================
     match /users/{uid} {
       // get stays PUBLIC (status quo). The live comment/review/thread author
@@ -130,12 +163,14 @@ service cloud.firestore {
         && request.resource.data.dislikesCount == 0
         && (!('pinned' in request.resource.data) || request.resource.data.pinned == false)
         && (!exists(/databases/$(database)/documents/commentsMeta/$(anime))
-            || get(/databases/$(database)/documents/commentsMeta/$(anime)).data.get('locked', false) != true);
+            || get(/databases/$(database)/documents/commentsMeta/$(anime)).data.get('locked', false) != true)
+        && gateOk();
       // owner may edit text only (H1: counts are CF-owned). Admins may also flip
       // the `pinned` flag (gate-4 mod tool) and nothing else.
       allow update: if (isSignedIn()
           && resource.data.uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName'])
+          && gateOk())
         || (isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned']));
       // owner OR admin (the day-1 mod tool) may delete.
@@ -161,10 +196,12 @@ service cloud.firestore {
           && request.resource.data.likesCount == 0
           && request.resource.data.dislikesCount == 0
           && (!exists(/databases/$(database)/documents/commentsMeta/$(anime))
-              || get(/databases/$(database)/documents/commentsMeta/$(anime)).data.get('locked', false) != true);
+              || get(/databases/$(database)/documents/commentsMeta/$(anime)).data.get('locked', false) != true)
+          && gateOk();
         allow update: if isSignedIn()
           && resource.data.uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName'])
+          && gateOk();
         allow delete: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
         match /votes/{voterUid} {
           allow get, list: if true;
@@ -204,11 +241,13 @@ service cloud.firestore {
         && createdNow()
         && request.resource.data.updatedAt == request.time
         && request.resource.data.likesCount == 0
-        && request.resource.data.dislikesCount == 0;
+        && request.resource.data.dislikesCount == 0
+        && gateOk();
       // owner edits content only — H1: no count branch.
       allow update: if isOwner(uid)
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'rating', 'updatedAt', 'displayName', 'photoURL']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'rating', 'updatedAt', 'displayName', 'photoURL'])
+        && gateOk();
       allow delete: if isOwner(uid) || isAdmin();
 
       match /votes/{voterUid} {
@@ -229,10 +268,12 @@ service cloud.firestore {
           && request.resource.data.displayName is string
           && createdNow()
           && request.resource.data.likesCount == 0
-          && request.resource.data.dislikesCount == 0;
+          && request.resource.data.dislikesCount == 0
+          && gateOk();
         allow update: if isSignedIn()
           && resource.data.uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'photoURL', 'displayName'])
+          && gateOk();
         allow delete: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
         match /votes/{voterUid} {
           allow get, list: if true;
@@ -263,6 +304,9 @@ service cloud.firestore {
     // COMMUNITY HUB — top-level `forum` (NOT `threads`, to avoid the existing
     // collection-group rule). H2: counters/mod-flags pinned at create; no
     // client branch writes a counter. H5: removing redacts the body/title.
+    // Soft-delete is MONOTONIC: no owner branch ever sets removed=false (only the
+    // admin branch may un-remove), so a banned user cannot resurrect content
+    // during the gate-2 cascade window.
     // =========================================================================
     match /forum/{threadId} {
       allow get, list: if true;
@@ -281,15 +325,18 @@ service cloud.firestore {
         && (!('hotScore' in request.resource.data) || request.resource.data.hotScore == 0)
         && request.resource.data.pinned == false
         && request.resource.data.locked == false
-        && request.resource.data.removed == false;
+        && request.resource.data.removed == false
+        && gateOk();
       // owner edit (body only)
-      allow update: if isSignedIn() && resource.data.authorUid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+      allow update: if ( isSignedIn() && resource.data.authorUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+          && gateOk() )
         || // owner soft-delete (H5: must redact)
         ( isSignedIn() && resource.data.authorUid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'title', 'editedAt'])
           && request.resource.data.removed == true
-          && request.resource.data.body == '' && request.resource.data.title == '' )
+          && request.resource.data.body == '' && request.resource.data.title == ''
+          && gateOk() )
         || // admin mod tools (pin / lock / remove). H5: if removed, body+title redacted.
         ( isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned', 'locked', 'removed', 'body', 'title', 'editedAt'])
@@ -310,12 +357,15 @@ service cloud.firestore {
           && request.resource.data.reportCount == 0
           && request.resource.data.removed == false
           // parent must exist and not be locked (one get() per reply — cheap vs abuse)
-          && get(/databases/$(database)/documents/forum/$(threadId)).data.locked == false;
-        allow update: if isSignedIn() && resource.data.authorUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+          && get(/databases/$(database)/documents/forum/$(threadId)).data.locked == false
+          && gateOk();
+        allow update: if ( isSignedIn() && resource.data.authorUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+            && gateOk() )
           || ( isSignedIn() && resource.data.authorUid == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt'])
-            && request.resource.data.removed == true && request.resource.data.body == '' )
+            && request.resource.data.removed == true && request.resource.data.body == ''
+            && gateOk() )
           || ( isAdmin()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['removed', 'body', 'editedAt'])
             && (request.resource.data.removed == false || request.resource.data.body == '') );
@@ -333,9 +383,10 @@ service cloud.firestore {
     // DIRECT MESSAGES — admin-floor only in v1.9.0 (one participant is always
     // ADMIN_UID, so there is no stranger-to-stranger surface). `kind:"peer"` is
     // BANKED: peer create is implicitly DENIED here (create requires
-    // kind=="admin"); adding peer later is one additive clause, zero migration.
-    // H4: reads are member-pinned and there is NO messages collection-group rule.
-    // (Message send moves to a callable CF at gate 10; these rules are the floor.)
+    // kind=="admin"); adding peer later is a CF-created path (study §3c), NOT a
+    // client allow-branch. H4: reads are member-pinned and there is NO messages
+    // collection-group rule. v1.10.0 gate 1: conversation create + the participant
+    // summary update + message create are gated (banned/un-consented denied).
     // =========================================================================
     match /conversations/{convId} {
       allow get, list: if isSignedIn() && request.auth.uid in resource.data.participants;
@@ -347,10 +398,12 @@ service cloud.firestore {
             || request.resource.data.participants[1] == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1')
         && createdNow()
         && request.resource.data.state == 'open'
-        && (!('lastMessageText' in request.resource.data) || request.resource.data.lastMessageText.size() <= 140);
+        && (!('lastMessageText' in request.resource.data) || request.resource.data.lastMessageText.size() <= 140)
+        && gateOk();
       // a participant maintains the summary; lock is admin-only.
-      allow update: if isSignedIn() && request.auth.uid in resource.data.participants
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'lastMessageText', 'lastSenderUid', 'unread'])
+      allow update: if ( isSignedIn() && request.auth.uid in resource.data.participants
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'lastMessageText', 'lastSenderUid', 'unread'])
+          && gateOk() )
         || ( isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']) );
       allow delete: if false; // CF cascade (onUserDelete / admin)
 
@@ -364,7 +417,8 @@ service cloud.firestore {
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000
-          && createdNow();
+          && createdNow()
+          && gateOk();
         allow update, delete: if false; // immutable; moderation via state:"locked" / CF
       }
 
@@ -380,15 +434,19 @@ service cloud.firestore {
     // PROFILES — public identity. M1: reserved-name denylist + isAdmin is the
     // only authority signal. M2: photoURL constrained to known-good origins.
     // isAdmin/isBanned are CF-only (absent from the owner-writable key set).
+    // v1.10.0 gate 1: create + update gated (a banned user cannot establish or
+    // change their public identity to evade).
     // =========================================================================
     match /profiles/{uid} {
       allow get, list: if true;
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt'])
-        && profileFieldsOk();
+        && profileFieldsOk()
+        && gateOk();
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt'])
-        && profileFieldsOk();
+        && profileFieldsOk()
+        && gateOk();
       allow delete: if false; // account deletion is the onUserDelete cascade CF
     }
 
@@ -404,7 +462,9 @@ service cloud.firestore {
     // =========================================================================
     // REPORTS — moderation queue. Signed-in create (reporterUid pinned),
     // admin-only read/manage. L3: the queue re-fetches live public content;
-    // snapshotText is treated as unverified.
+    // snapshotText is treated as unverified. v1.10.0 gate 1: reportGateOk —
+    // ban-gated (banned users cannot report) but NOT consent-gated (reporting
+    // must always be frictionless, even for a user who hasn't read the rules).
     // =========================================================================
     match /reports/{reportId} {
       allow get, list, update, delete: if isAdmin();
@@ -417,12 +477,15 @@ service cloud.firestore {
         && request.resource.data.targetType in ['review', 'comment', 'reply', 'thread', 'forum', 'post', 'dm']
         && request.resource.data.targetPath is string
         && (!('snapshotText' in request.resource.data) || (request.resource.data.snapshotText is string && request.resource.data.snapshotText.size() <= 500))
-        && createdNow();
+        && createdNow()
+        && reportGateOk();
     }
 
     // =========================================================================
-    // SUGGESTIONS (existing) — public create + ADMIN-only manage. Q2: an
-    // OPTIONAL signed-in `submitterUid` enables the suggestion-reply channel.
+    // SUGGESTIONS (existing) — public create + ADMIN-only manage. NOT gated:
+    // anime requests are allowed anonymously (no uid to gate), and a request to
+    // Blake is not community content. Q2: an OPTIONAL signed-in `submitterUid`
+    // enables the suggestion-reply channel.
     // =========================================================================
     match /suggestions/{docId} {
       allow create: if request.resource.data.keys().hasOnly(['title', 'reason', 'submittedAt', 'status',
@@ -453,6 +516,26 @@ service cloud.firestore {
         && (!('romajiTitle' in request.resource.data)
             || (request.resource.data.romajiTitle is string && request.resource.data.romajiTitle.size() < 200));
       allow get, list, update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // moderationGate / banned / rulesConsent — the gate-1 moderation spine docs.
+    // ALL CF-ONLY WRITE (set by the gate-2 setBanState + acceptRules callables via
+    // the Admin SDK, which bypasses rules). moderationGate is the rules-truth the
+    // gate() reads; banned is the audit + cascade trigger; rulesConsent is the
+    // consent record. Owner may READ their own gate/consent (to drive the UI).
+    // =========================================================================
+    match /moderationGate/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list, create, update, delete: if false;
+    }
+    match /banned/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list, create, update, delete: if false;
+    }
+    match /rulesConsent/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list, create, update, delete: if false;
     }
   }
 }

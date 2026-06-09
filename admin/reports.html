@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports Queue — Real Anime Reviews</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <script>window.APP_VERSION="1.9.1"</script>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Admin-only reports queue — not indexed." />
+
+  <link rel="stylesheet" href="../style.css?v=1.9.1" />
+  <link rel="stylesheet" href="../mobile.css?v=1.9.1" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="reports.css?v=1.9.1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="admin-page">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="../index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" id="back-btn" class="inline-header-btn" onclick="location.href='../index.html'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-gate-message">
+      <div class="admin-gate-spinner"></div>
+      <p>Verifying admin access…</p>
+    </div>
+  </div>
+
+  <main class="admin-main" id="admin-main" hidden>
+    <div class="admin-shell">
+
+      <div class="admin-header">
+        <h2 class="admin-title-line">
+          <span class="admin-kicker-inline">REPORTS <span class="jp-mini">通報</span></span>
+          <span class="admin-divider">·</span>
+          <span class="admin-title-text">Queue</span>
+        </h2>
+        <div class="reports-stats" id="queue-stats" hidden></div>
+      </div>
+
+      <div id="reports-queue">
+        <ul id="reports-list" class="reports-list"></ul>
+      </div>
+
+      <div id="reports-empty" class="reports-empty-card" hidden>
+        <div class="empty-glyph" aria-hidden="true">🛡️</div>
+        <div class="empty-kicker">QUEUE CLEAR <span class="jp-mini">異常なし</span></div>
+        <p class="empty-body">No open reports. Flagged content lands here.</p>
+      </div>
+
+      <div id="reports-error" class="reports-error-card" hidden>
+        <div class="error-glyph" aria-hidden="true">⚠️</div>
+        <div class="error-kicker">COULDN'T LOAD <span class="jp-mini">接続</span></div>
+        <p class="error-body">Couldn't reach the queue. Reload to retry.</p>
+        <button type="button" class="error-reload-btn" onclick="location.reload()">Reload</button>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Branded confirm modal — reused for the destructive actions (Ban, Remove).
+       Lives OUTSIDE .admin-shell (that shell has backdrop-filter + overflow:hidden
+       which would clip a position:fixed descendant). The JS fills glyph/kicker/body/
+       ok-label per action. -->
+  <div id="confirm-modal" class="confirm-overlay" hidden>
+    <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="confirm-glyph" id="confirm-glyph" aria-hidden="true">⚠️</div>
+      <div class="confirm-kicker" id="confirm-kicker">CONFIRM <span class="jp-mini">確認</span></div>
+      <p class="confirm-body" id="confirm-title"></p>
+      <div class="confirm-actions">
+        <button type="button" class="secondary" data-confirm="cancel">Cancel</button>
+        <button type="button" class="danger" data-confirm="ok" id="confirm-ok">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="modal-scroll-lock.js"></script>
+  <script src="../markdown.js?v=1.9.1"></script>
+  <script src="reports-model.js?v=1.9.1"></script>
+  <script type="module" src="../firebase.js?v=1.9.1"></script>
+  <script type="module" src="reports.js?v=1.9.1"></script>
+</body>
+</html>
