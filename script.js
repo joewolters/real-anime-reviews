@@ -1603,6 +1603,7 @@ const NOTIF_TYPE_META = {
   new_season:          { glyph: '◷', label: 'New seasons', verb: 'has a new season' },
   comment_vote:        { glyph: '♥', label: 'Likes',       verb: 'liked your comment' },
   review_vote:         { glyph: '♥', label: 'Likes',       verb: 'liked your review' },
+  profile_like:        { glyph: '♥', label: 'Profile',     verb: 'liked your profile' },   // dream-profile (mirror lantern.js)
 };
 
 async function cleanupOldNotifications(uid, snapDocs) {
@@ -1794,6 +1795,9 @@ function parseNotifTarget(targetPath) {
   const mr = /^reviews\/([^/]+)\/items\/([^/]+)/.exec(path);
   if (mr) return { kind: 'review', slug: mr[1], id: mr[2] };
   if (/^(forum|conversations)\//.test(path)) return { kind: 'hash', path };
+  // dream-profile gate — a profile_like ping leads to the liked profile.
+  const mp = /^profiles\/([A-Za-z0-9_-]{1,128})$/.exec(path);
+  if (mp) return { kind: 'profile', uid: mp[1] };
   return { kind: 'none' };
 }
 if (typeof window !== 'undefined') window.parseNotifTarget = parseNotifTarget;
@@ -1828,6 +1832,12 @@ function openNotifTarget(targetPath, animeId) {
     if (fm && typeof window.openHubThread === 'function') { window.openHubThread(fm[1]); return; }
     if (/^conversations\//.test(t.path || '')) { location.href = 'account#inbox'; return; }   // gate 18 — the Inbox is real now
     try { window.location.hash = '#' + t.path; } catch (_) {}
+    return;
+  }
+  if (t.kind === 'profile') {
+    // dream-profile gate — "appreciates your profile" lands on the profile sheet.
+    if (typeof window.openProfilePage === 'function') { window.openProfilePage(t.uid); return; }
+    try { window.location.hash = '#profile=' + encodeURIComponent(t.uid); } catch (_) {}
     return;
   }
   if (animeId) openAnimeFromId(animeId);
@@ -1875,8 +1885,14 @@ function renderLanternRow(n) {
   const ago = ms ? timeAgoMs(ms) : '';
   const unread = ms > notifLastSeenMs;   // gate 6e: unread rows glow until read+closed
 
-  const avatar = n.fromPhotoURL
-    ? `<img src="${escapeHtml(n.fromPhotoURL)}" alt="">`
+  // dream-profile adversarial HIGH: this is the LIVE notification renderer on
+  // index.html (lantern.js is account-only) — it had NO origin gate, so a
+  // notification's server-copied fromPhotoURL (senderIdentity falls back to the
+  // rules-UNVALIDATED users/{uid}.photoURL) could IP-beacon every recipient.
+  // Mirror the safeAvatar allowlist the lantern.js twin already carries.
+  const safePhoto = safeAvatar(n.fromPhotoURL);
+  const avatar = safePhoto
+    ? `<img src="${escapeHtml(safePhoto)}" alt="">`
     : `<span>${escapeHtml(String(name).trim().slice(0,1).toUpperCase() || '?')}</span>`;
 
   const target = n.targetPath || '';
@@ -1927,7 +1943,7 @@ function renderLanternRollup(votes, expanded) {
 
 // Compact per-type mute control strip.
 function renderLanternMutes() {
-  const types = ['reply', 'dm', 'comment_vote', 'new_season', 'suggestion_accepted'];
+  const types = ['reply', 'dm', 'comment_vote', 'profile_like', 'new_season', 'suggestion_accepted'];
   const chips = types.map((t) => {
     const meta = NOTIF_TYPE_META[t] || {};
     const off = !!notifMuted[t];
@@ -4330,11 +4346,18 @@ function positionFeaturedDrop() {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  if (photoURL) {
-    avatar.innerHTML = `<img src="${escapeHtml(photoURL)}" alt="">`;
+  // dream-profile fix: the INITIAL paint joins the origin gate (the live
+  // authorLiveSub path was gated by the MED fix, but doc-carried photoURL is
+  // only `is string` in the rules — ungated first paint was still a beacon).
+  const initPhoto = safeAvatar(photoURL);
+  if (initPhoto) {
+    avatar.innerHTML = `<img src="${escapeHtml(initPhoto)}" alt="">`;
   } else {
     avatar.textContent = (displayName || '?').toString().trim().charAt(0).toUpperCase() || '?';
   }
+  // dream-profile fix 2 — the pfp opens the profile, same as the name (one
+  // delegation handles every [data-profile-uid]).
+  if (uid) { avatar.classList.add('rar-ava-link'); avatar.setAttribute('data-profile-uid', uid); avatar.setAttribute('role', 'link'); avatar.setAttribute('tabindex', '0'); avatar.setAttribute('aria-label', 'View profile'); }
 
   const bubble = document.createElement('div'); bubble.className = 'bubble';
 
@@ -5021,8 +5044,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
     li.dataset.rid = id || '';
     li.dataset.uid = uid || '';
     const avatar = document.createElement('div'); avatar.className = 'avatar reply-avatar';
-    if (photoURL) avatar.innerHTML = `<img src="${escapeHtml(photoURL)}" alt="">`;
+    const rInitPhoto = safeAvatar(photoURL);   // dream-profile fix: origin-gate the initial paint too
+    if (rInitPhoto) avatar.innerHTML = `<img src="${escapeHtml(rInitPhoto)}" alt="">`;
     else avatar.textContent = (displayName || '?').toString().trim().charAt(0).toUpperCase() || '?';
+    if (uid) { avatar.classList.add('rar-ava-link'); avatar.setAttribute('data-profile-uid', uid); avatar.setAttribute('role', 'link'); avatar.setAttribute('tabindex', '0'); avatar.setAttribute('aria-label', 'View profile'); }   // fix 2 — pfp routes like the name
     const body = document.createElement('div'); body.className = 'reply-body-wrap';
     const meta = document.createElement('div'); meta.className = 'meta';
     const nameEl = document.createElement('span'); nameEl.className = 'name'; nameEl.textContent = displayName || 'User';
@@ -5594,6 +5619,22 @@ function openInlineCommentEditor(editBtn, itemRef) {
       const card = img.closest('.hub-card.has-thumb');
       const wrap = img.closest('.hub-card-thumbwrap');
       if (card && wrap) { card.classList.remove('has-thumb'); wrap.remove(); return; }
+      // fix 1 — a dangling review cover drops its whole banner (and the row's
+      // banner layout), so the headline never floats over an empty strip.
+      const banner = img.closest('.row-cover-banner');
+      if (banner) {
+        const row = banner.closest('.review-row.has-cover');
+        if (row) row.classList.remove('has-cover');
+        banner.remove(); return;
+      }
+      // profile sheets — a dangling background drops its layer, the sheet
+      // falls back to the veil panel.
+      const bgw = img.closest('.profile-bg-wrap');
+      if (bgw) {
+        const sheet = bgw.closest('.profile-sheet.has-bg');
+        if (sheet) sheet.classList.remove('has-bg');
+        bgw.remove(); return;
+      }
       img.remove();
     };
     rootEl.querySelectorAll('img[data-imgref]:not([src])').forEach((img) => {
@@ -5709,18 +5750,29 @@ function openInlineCommentEditor(editBtn, itemRef) {
   }
   window.profileDecision = profileDecision;
 
-  // PURE header builder (exposed for the heart spec: NO gold token, NO counts)
+  // PURE header builder (exposed for the heart spec: NO gold token; the ONE
+  // sanctioned community count is the profile likesCount — the Cowork-approved
+  // heart carve-out — and it renders purple, only here, never on cards/rows).
+  // p: { name, photo, bio, sinceMs, status, tags, likesCount }. Tags/status are
+  // length-clamped at render (the rules cap the tag COUNT; per-entry length
+  // can't loop in rules, so the clamp lives here — escape-first regardless).
   function profileHeaderHtml(p) {
     const name = escapeHtml(p.name || 'Member');
     const initial = (p.name || '?').toString().trim().charAt(0).toUpperCase() || '?';
     const safePhoto = safeAvatar(p.photo);
     const avatar = safePhoto ? `<img src="${escapeHtml(safePhoto)}" alt="">` : escapeHtml(initial);
+    const status = (typeof p.status === 'string' && p.status.trim())
+      ? `<div class="profile-status">${escapeHtml(String(p.status).slice(0, 80))}</div>` : '';
     const since = p.sinceMs ? `<div class="profile-since">here since ${new Date(p.sinceMs).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</div>` : '';
+    const tags = (Array.isArray(p.tags) && p.tags.length)
+      ? `<div class="profile-tags">${p.tags.slice(0, 6).map((t) => `<span class="profile-tag">${escapeHtml(String(t).slice(0, 24))}</span>`).join('')}</div>` : '';
     const bio = p.bio ? `<div class="profile-bio">${window.renderMarkdownInline ? window.renderMarkdownInline(String(p.bio)) : escapeHtml(String(p.bio))}</div>` : '';
+    const likes = (typeof p.likesCount === 'number')
+      ? `<div class="profile-like-row"><button type="button" class="profile-like-btn" aria-pressed="false"><span class="profile-like-heart" aria-hidden="true">♥</span><span class="profile-like-verb">Appreciate</span></button><span class="profile-like-count" aria-label="appreciations">${Math.max(0, p.likesCount)}</span></div>` : '';
     return `<div class="profile-head">
         <div class="profile-avatar">${avatar}</div>
         <h2 class="profile-name">${name}</h2>
-        ${since}${bio}
+        ${status}${since}${tags}${bio}${likes}
       </div>`;
   }
   window.profileHeaderHtml = profileHeaderHtml;
@@ -5747,7 +5799,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
     layer.innerHTML = `<div class="profile-scrim"></div>
       <section class="profile-sheet" role="dialog" aria-modal="true" aria-label="Member profile">
         <div class="profile-kicker">MEMBER <span class="jp-mini">旅人</span>
-          <button type="button" class="profile-close" aria-label="Close">&times;</button></div>
+          <span class="profile-kicker-actions">
+            <button type="button" class="profile-report" title="Report this profile" aria-label="Report this profile">⚑</button>
+            <button type="button" class="profile-close" aria-label="Close">&times;</button>
+          </span></div>
         <div class="profile-body"><p class="hub-loading">Opening…</p></div>
       </section>`;
     document.body.appendChild(layer);
@@ -5773,38 +5828,212 @@ function openInlineCommentEditor(editBtn, itemRef) {
       return;
     }
     const ident = prof
-      ? { name: prof.displayName, photo: prof.photoURL, bio: prof.bio, sinceMs: prof.joinedAt && prof.joinedAt.toMillis ? prof.joinedAt.toMillis() : 0 }
+      ? { name: prof.displayName, photo: prof.photoURL, bio: prof.bio, sinceMs: prof.joinedAt && prof.joinedAt.toMillis ? prof.joinedAt.toMillis() : 0,
+          status: prof.status, tags: prof.tags,
+          // the carve-out count renders only for a REAL profiles doc (the CF's
+          // count update() needs the doc; legacy users/ rows show no like row).
+          likesCount: (typeof prof.likesCount === 'number') ? prof.likesCount : 0 }
       : { name: (userDoc.username || userDoc.displayName), photo: userDoc.photoURL, bio: '', sinceMs: 0 };
-    bodyEl.innerHTML = profileHeaderHtml(ident)
-      + '<h3 class="profile-h">Their threads</h3><ul class="profile-list" data-profile-threads><li class="hub-loading">Looking…</li></ul>'
-      + '<h3 class="profile-h">Their reviews</h3><ul class="profile-list" data-profile-reviews><li class="hub-loading">Looking…</li></ul>';
 
-    // PUBLIC activity — count-free by design (no "N posts" anywhere).
-    try {
-      const tq = query(collection(db, 'forum'), where('authorUid', '==', uid), orderBy('createdAt', 'desc'), limit(12));
-      const tsnap = await getDocs(tq);
-      const tEl = bodyEl.querySelector('[data-profile-threads]');
-      const rows = [];
-      tsnap.forEach((d) => { const t = d.data() || {}; if (t.removed) return;
-        rows.push(`<li class="profile-item" data-open-thread="${escapeHtml(d.id)}"><span class="profile-item-title">${escapeHtml(t.title || '(untitled)')}</span><span class="hub-card-time">${escapeHtml(relTimeHub(t.createdAt))}</span></li>`); });
-      tEl.innerHTML = rows.length ? rows.join('') : '<li class="profile-empty">No threads yet.</li>';
-    } catch (_e) { const tEl = bodyEl.querySelector('[data-profile-threads]'); if (tEl) tEl.innerHTML = '<li class="profile-empty">No threads yet.</li>'; }
-    try {
-      const rq = query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(40));
-      const rsnap = await getDocs(rq);
-      const rEl = bodyEl.querySelector('[data-profile-reviews]');
-      const rows = [];
-      rsnap.forEach((d) => {
-        const v = d.data() || {};
-        if (!d.ref.path.startsWith('reviews/') || v.removed) return;   // items CG mixes comments in
-        const animeKey = d.ref.path.split('/')[1] || '';
-        const label = animeKey.indexOf('al:') === 0 ? 'a season' : animeKey.replace(/-/g, ' ');
-        rows.push(`<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(v.title || '(review)')}</span><span class="profile-item-sub">${escapeHtml(label)} · ${escapeHtml(String(v.rating || ''))}/10</span></li>`);
+    // accent — curated palette only (the palette holds no gold/yellow, so a
+    // profile can never dress itself in Blake's color).
+    const sheet = layer.querySelector('.profile-sheet');
+    const accent = (prof && typeof prof.accent === 'string'
+      && ['violet', 'ember', 'teal', 'rose', 'sky', 'moss'].indexOf(prof.accent) !== -1) ? prof.accent : '';
+    if (accent && sheet) sheet.setAttribute('data-accent', accent);
+
+    // profile BACKGROUND — rides the same pipeline as every other upload
+    // (own-prefix pinned in the rules, magic-byte + EXIF re-encode in the CF,
+    // reportable via ⚑, admin-removable, swept on change by onProfileWritten).
+    // A dangling ref drops the whole layer (see dropImg).
+    const bgRef = prof ? hubSafeImageRef(prof.bgRef) : '';
+    if (bgRef && sheet) {
+      sheet.classList.add('has-bg');
+      const wrap = document.createElement('div');
+      wrap.className = 'profile-bg-wrap';
+      wrap.setAttribute('aria-hidden', 'true');
+      wrap.innerHTML = `<img class="profile-bg" alt="" decoding="async" data-imgref="${escapeHtml(bgRef)}">`;
+      sheet.insertBefore(wrap, sheet.firstChild);
+      // perf guard — under reduced-motion an animated GIF background must not
+      // move: swap in a one-frame canvas snapshot on load (drawImage paints
+      // frame 1; we never read pixels back, so cross-origin taint is moot).
+      // Off-screen cost is structural: the sheet is removed on close.
+      const bgImg = wrap.querySelector('.profile-bg');
+      bgImg.addEventListener('load', () => {
+        try {
+          if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+          // adversarial perf MED: cap the freeze canvas at DISPLAY scale — the
+          // pipeline never downscales, so a 30MP source would otherwise allocate
+          // ~120MB to paint a ~640px box (and silently blank on mobile Safari's
+          // canvas-area cap).
+          const nw = bgImg.naturalWidth || 1, nh = bgImg.naturalHeight || 1;
+          const w = Math.min(nw, 1280), h = Math.max(1, Math.round(w * nh / nw));
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(bgImg, 0, 0, w, h);
+          c.className = 'profile-bg';
+          bgImg.replaceWith(c);
+        } catch (_) { /* decode quirk — leave the img */ }
+      }, { once: true });
+      hubHydrateImages(layer);
+    }
+
+    // ⚑ report — the whole profile is reportable (bio/tags/status/avatar/bg in
+    // one): targetType 'profile'; the bg object rides imagePath when present.
+    const repBtn = layer.querySelector('.profile-report');
+    if (repBtn) {
+      if (auth.currentUser && auth.currentUser.uid === uid) repBtn.hidden = true;
+      else repBtn.addEventListener('click', () => {
+        try {
+          openReportModal({
+            targetType: 'profile', targetPath: 'profiles/' + uid, targetUid: uid,
+            snapshotText: [(prof && prof.displayName) || (userDoc && (userDoc.username || userDoc.displayName)) || '',
+                           (prof && prof.status) || '', (prof && prof.bio) || ''].filter(Boolean).join(' · ').slice(0, 480),
+            imagePath: bgRef || undefined,
+          });
+        } catch (_) {}
       });
-      rEl.innerHTML = rows.length ? rows.slice(0, 12).join('') : '<li class="profile-empty">No reviews yet.</li>';
-    } catch (_e) { const rEl = bodyEl.querySelector('[data-profile-reviews]'); if (rEl) rEl.innerHTML = '<li class="profile-empty">No reviews yet.</li>'; }
+    }
+
+    bodyEl.innerHTML = profileHeaderHtml(ident)
+      + '<div class="profile-featured-slot"></div>'
+      + '<div class="profile-acts" role="tablist" aria-label="Their activity">'
+      +   '<button type="button" class="profile-act-chip is-active" data-act="threads" role="tab" aria-selected="true">Threads</button>'
+      +   '<button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>'
+      +   '<button type="button" class="profile-act-chip" data-act="comments" role="tab" aria-selected="false">Comments</button>'
+      +   '<button type="button" class="profile-act-chip" data-act="replies" role="tab" aria-selected="false">Replies</button>'
+      + '</div>'
+      + '<ul class="profile-list" data-profile-acts><li class="hub-loading">Looking…</li></ul>';
+
+    // the heart carve-out — wire the like. Signed-out invites sign-in; the
+    // owner's own button hides (rules deny self-likes — don't render the tease);
+    // an un-consented member meets the rules modal first, like any first write.
+    const likeBtn = bodyEl.querySelector('.profile-like-btn');
+    if (likeBtn) {
+      const viewer = auth.currentUser;
+      if (!viewer) {
+        likeBtn.addEventListener('click', () => { try { openAuth('signin'); } catch (_) {} });
+      } else if (viewer.uid === uid) {
+        likeBtn.hidden = true;
+      } else {
+        const lref = doc(db, 'profiles', uid, 'likes', viewer.uid);
+        let liked = false;
+        try { liked = (await getDoc(lref)).exists(); } catch (_) {}
+        let busy = false;
+        const paint = () => { likeBtn.classList.toggle('is-liked', liked); likeBtn.setAttribute('aria-pressed', String(liked)); };
+        paint();
+        likeBtn.addEventListener('click', async () => {
+          if (busy) return; busy = true;
+          try {
+            if (!liked && !(await ensureCanParticipate())) return;   // consent before the first like
+            const cEl = bodyEl.querySelector('.profile-like-count');
+            const cur = cEl ? (parseInt(cEl.textContent, 10) || 0) : 0;
+            if (liked) { await deleteDoc(lref); liked = false; if (cEl) cEl.textContent = String(Math.max(0, cur - 1)); }
+            else { await setDoc(lref, { uid: viewer.uid, value: 1, updatedAt: serverTimestamp() }); liked = true; if (cEl) cEl.textContent = String(cur + 1); }
+          } catch (_) { /* rules said no (banned/offline) — leave state as-is */
+          } finally { paint(); busy = false; }
+        });
+      }
+    }
+
+    // 📌 the FEATURED PIN — the owner's chosen review leads their activity.
+    // The fetch path is reviews/{key}/items/{THEIR uid}, so it can only ever
+    // surface the profile owner's own review.
+    if (prof && typeof prof.featuredAnime === 'string' && /^[A-Za-z0-9:_-]{1,120}$/.test(prof.featuredAnime)) {
+      try {
+        const fsnap = await getDoc(doc(db, 'reviews', prof.featuredAnime, 'items', uid));
+        if (fsnap.exists() && !(fsnap.data() || {}).removed) {
+          const fv = fsnap.data() || {};
+          const flabel = prof.featuredAnime.indexOf('al:') === 0 ? 'a season' : prof.featuredAnime.replace(/-/g, ' ');
+          const slot = bodyEl.querySelector('.profile-featured-slot');
+          if (slot) slot.innerHTML = `<div class="profile-featured" data-open-target="${escapeHtml(fsnap.ref.path)}" role="link" tabindex="0">
+              <span class="profile-featured-kicker">📌 PINNED REVIEW</span>
+              <span class="profile-item-title">${escapeHtml(fv.title || '(review)')}</span>
+              <span class="profile-item-sub">${escapeHtml(flabel)} · ${escapeHtml(String(fv.rating || ''))}/10</span>
+            </div>`;
+        }
+      } catch (_) {}
+    }
+
+    // PUBLIC activity, separated by type — count-free rows (no totals anywhere).
+    // ONE items-CG fetch feeds BOTH reviews and comments (they share the
+    // `items` subcollection name); threads/replies load on their chips.
+    const actCache = {};
+    const actListEl = bodyEl.querySelector('[data-profile-acts]');
+    const actLabel = (key) => key.indexOf('al:') === 0 ? 'a season' : key.replace(/-/g, ' ');
+    const shortAct = (s, max) => { const t = String(s || '').trim(); const m = max || 90; return t.length <= m ? t : t.slice(0, m - 1) + '…'; };
+    async function loadItemsSplit() {
+      if (actCache.reviews) return;
+      const rows = { reviews: [], comments: [] };
+      try {
+        const snap = await getDocs(query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(60)));
+        snap.forEach((d) => {
+          const v = d.data() || {}; if (v.removed) return;
+          const key = d.ref.path.split('/')[1] || '';
+          if (d.ref.path.startsWith('reviews/')) {
+            rows.reviews.push(`<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(v.title || '(review)')}</span><span class="profile-item-sub">${escapeHtml(actLabel(key))} · ${escapeHtml(String(v.rating || ''))}/10</span></li>`);
+          } else if (d.ref.path.startsWith('comments/')) {
+            rows.comments.push(`<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(shortAct(v.text))}</span><span class="profile-item-sub">on ${escapeHtml(actLabel(key))}</span></li>`);
+          }
+        });
+      } catch (_) {}
+      actCache.reviews = rows.reviews.slice(0, 12);
+      actCache.comments = rows.comments.slice(0, 12);
+    }
+    // adversarial perf LOW: memoize threads/replies like reviews/comments —
+    // toggling chips on a sheet (it opens from any author name site-wide) must
+    // not re-query Firestore on every click.
+    const actLoaders = {
+      threads: async () => {
+        if (actCache.threads) return actCache.threads;
+        const rows = [];
+        try {
+          const tsnap = await getDocs(query(collection(db, 'forum'), where('authorUid', '==', uid), orderBy('createdAt', 'desc'), limit(12)));
+          tsnap.forEach((d) => { const t = d.data() || {}; if (t.removed) return;
+            rows.push(`<li class="profile-item" data-open-thread="${escapeHtml(d.id)}"><span class="profile-item-title">${escapeHtml(t.title || '(untitled)')}</span><span class="hub-card-time">${escapeHtml(relTimeHub(t.createdAt))}</span></li>`); });
+        } catch (_) {}
+        actCache.threads = rows;
+        return rows;
+      },
+      reviews: async () => { await loadItemsSplit(); return actCache.reviews; },
+      comments: async () => { await loadItemsSplit(); return actCache.comments; },
+      replies: async () => {
+        if (actCache.replies) return actCache.replies;
+        // comment replies + review-discussion replies, merged newest-first.
+        const merged = [];
+        const pull = async (cg, sub) => {
+          try {
+            const snap = await getDocs(query(collectionGroup(db, cg), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(15)));
+            snap.forEach((d) => {
+              const v = d.data() || {}; if (v.removed) return;
+              const key = d.ref.path.split('/')[1] || '';
+              merged.push({ ms: v.createdAt && v.createdAt.toMillis ? v.createdAt.toMillis() : 0,
+                html: `<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(shortAct(v.text))}</span><span class="profile-item-sub">${sub} · ${escapeHtml(actLabel(key))}</span></li>` });
+            });
+          } catch (_) {}
+        };
+        await pull('replies', 'a reply');
+        await pull('threads', 'in a discussion');
+        merged.sort((a, b) => b.ms - a.ms);
+        actCache.replies = merged.slice(0, 12).map((m) => m.html);
+        return actCache.replies;
+      },
+    };
+    const ACT_EMPTY = { threads: 'No threads yet.', reviews: 'No reviews yet.', comments: 'No comments yet.', replies: 'No replies yet.' };
+    async function showAct(kind) {
+      bodyEl.querySelectorAll('.profile-act-chip').forEach((c) => {
+        const on = c.getAttribute('data-act') === kind;
+        c.classList.toggle('is-active', on); c.setAttribute('aria-selected', String(on));
+      });
+      if (actListEl) actListEl.innerHTML = '<li class="hub-loading">Looking…</li>';
+      const rows = await (actLoaders[kind] ? actLoaders[kind]() : Promise.resolve([]));
+      if (profileLayerEl !== layer || !actListEl) return;   // closed mid-load
+      actListEl.innerHTML = rows.length ? rows.join('') : `<li class="profile-empty">${ACT_EMPTY[kind]}</li>`;
+    }
 
     bodyEl.addEventListener('click', (e) => {
+      const chip = e.target.closest('.profile-act-chip');
+      if (chip) { showAct(chip.getAttribute('data-act')); return; }
       const th = e.target.closest('[data-open-thread]');
       if (th) { closeProfilePage(); try { openThreadById(th.getAttribute('data-open-thread')); } catch (_) {} return; }
       const tg = e.target.closest('[data-open-target]');
@@ -5817,11 +6046,22 @@ function openInlineCommentEditor(editBtn, itemRef) {
         try { if (typeof openNotifTarget === 'function') openNotifTarget(p); } catch (_) {}
       }
     });
+    showAct('threads');
   }
   window.openProfilePage = openProfilePage;
 
-  // every author name routes here (one delegation; names carry data-profile-uid)
+  // every author name AND avatar routes here (one delegation; both carry
+  // data-profile-uid — fix 2). Capture-phase so a surrounding toggle/card
+  // handler never swallows or doubles the open.
   document.addEventListener('click', (e) => {
+    const nm = e.target && e.target.closest ? e.target.closest('[data-profile-uid]') : null;
+    if (!nm) return;
+    e.preventDefault(); e.stopPropagation();
+    openProfilePage(nm.getAttribute('data-profile-uid'));
+  }, true);
+  // keyboard parity for the role="link" spans (names + avatars are tabbable).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
     const nm = e.target && e.target.closest ? e.target.closest('[data-profile-uid]') : null;
     if (!nm) return;
     e.preventDefault(); e.stopPropagation();
@@ -7475,15 +7715,27 @@ function subscribeReviews(anime) {
       li.className = 'review-row';
       li.dataset.id = docSnap.id;
 
-      const avatarHtml = d.photoURL
-        ? `<span class="row-avatar avatar"><img src="${escapeHtml(d.photoURL)}" alt=""></span>`
+      // dream-profile fix: initial paint joins the origin gate (doc photoURL is
+      // only `is string` in the rules — see commentItemEl).
+      const rowPhoto = safeAvatar(d.photoURL);
+      const avatarHtml = rowPhoto
+        ? `<span class="row-avatar avatar"><img src="${escapeHtml(rowPhoto)}" alt=""></span>`
         : `<span class="row-avatar avatar">${(d.displayName||'?').trim().charAt(0).toUpperCase()||'?'}</span>`;
 
+      // Fix 1 — the review COVER redesign: a cover-carrying row presents as a
+      // full-width banner strip ABOVE the headline (was a 48×34 thumb squeezed
+      // inline — "looks terrible and not large"). Cover-less rows are untouched;
+      // .row-headline carries the old avatar|title|rating grid either way.
+      const rvCover = hubSafeImageRef(d.thumbImage);
+      if (rvCover) li.classList.add('has-cover');
       li.innerHTML = `
         <button type="button" class="row-toggle" aria-expanded="false">
-          ${avatarHtml}
-          <span class="row-title">${escapeHtml(d.title || '—')}</span>
-          <span class="row-rating">${Number.isFinite(rating) ? rating.toFixed(1) : '—'}/10</span>
+          ${rvCover ? `<span class="row-cover-banner"><img class="row-cover" alt="" loading="lazy" decoding="async" data-imgref="${escapeHtml(rvCover)}"></span>` : ''}
+          <span class="row-headline">
+            ${avatarHtml}
+            <span class="row-title">${escapeHtml(d.title || '—')}</span>
+            <span class="row-rating">${Number.isFinite(rating) ? rating.toFixed(1) : '—'}/10</span>
+          </span>
         </button>
 
         <div class="row-detail" hidden>
@@ -7511,19 +7763,8 @@ function subscribeReviews(anime) {
 
       // image overhaul — reviews carry images: [img:N] slots resolve inline in
       // the body, the rest trail as a gallery before the action row. A4: the
-      // dedicated COVER (thumbImage) leads the collapsed row header instead of
-      // repeating in the gallery.
-      const rvCover = hubSafeImageRef(d.thumbImage);
-      if (rvCover) {
-        const toggleBtn = li.querySelector('.row-toggle');
-        const avatarEl = toggleBtn && toggleBtn.querySelector('.row-avatar');
-        if (toggleBtn) {
-          const cv = document.createElement('img');
-          cv.className = 'row-cover'; cv.alt = ''; cv.loading = 'lazy';
-          cv.setAttribute('data-imgref', rvCover);
-          toggleBtn.insertBefore(cv, avatarEl ? avatarEl.nextSibling : toggleBtn.firstChild);
-        }
-      }
+      // dedicated COVER (thumbImage) leads the collapsed row (the banner above)
+      // instead of repeating in the gallery.
       if (Array.isArray(d.imageRefs) && d.imageRefs.length) {
         const rowBody = li.querySelector('.row-body');
         const rvOpts = { docPath: 'reviews/' + s + '/items/' + docSnap.id, authorUid: d.uid || '' };
@@ -7927,6 +8168,8 @@ function subscribeReviews(anime) {
       if (d && d.uid) {
         const nameLink = li.querySelector('.author-name');
         if (nameLink) { nameLink.classList.add('rar-name-link'); nameLink.setAttribute('data-profile-uid', d.uid); nameLink.setAttribute('role', 'link'); nameLink.setAttribute('tabindex', '0'); }
+        const avaEl = li.querySelector('.row-avatar');   // fix 2 — pfp routes like the name
+        if (avaEl) { avaEl.classList.add('rar-ava-link'); avaEl.setAttribute('data-profile-uid', d.uid); avaEl.setAttribute('role', 'link'); avaEl.setAttribute('tabindex', '0'); avaEl.setAttribute('aria-label', 'View profile'); }
         const unsubAuthor = authorLiveSub(d.uid, (a) => {
           const u = { username: a.name, photoURL: a.photo };
 

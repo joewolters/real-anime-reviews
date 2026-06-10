@@ -62,7 +62,18 @@ async function applySetBanState(db, FieldValue, setClaim, callerUid, targetUid, 
       { merge: true }
     );
     await db.doc('moderationGate/' + targetUid).set({ banned: true }, { merge: true });
-    await db.doc('profiles/' + targetUid).set({ isBanned: true }, { merge: true });
+    // isBanned mirror + the dream-profile customization SCRUB in one write: the
+    // gate-16 tombstone hides the profile, but the data behind it is still
+    // world-readable — it must not linger. displayName stays (the tombstone
+    // hides it); photoURL nulls (an avatar URL is itself an exposure);
+    // likesCount may stay. Dropping bgRef also trips onProfileWritten -> the
+    // background object leaves Storage. Unban does NOT restore (content-loss
+    // event, like the redaction) — the user re-customizes.
+    await db.doc('profiles/' + targetUid).set({
+      isBanned: true,
+      bio: '', status: '', tags: [], photoURL: null,
+      bgRef: FieldValue.delete(), accent: FieldValue.delete(), featuredAnime: FieldValue.delete(),
+    }, { merge: true });
   } else {
     await db.doc('banned/' + targetUid).delete();
     await db.doc('moderationGate/' + targetUid).set({ banned: false }, { merge: true });

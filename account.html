@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<!-- v1.8.4 gate 6 — static mid veil density (no in-page surface switcher on this page). -->
-<html lang="en" data-surface="foryou">
+<!-- dream-profile gate — the account page wears its OWN surface: the neon-sakura
+     night under the constellation veil (personal + unique, still the veil
+     vocabulary). Static density; no in-page switcher. -->
+<html lang="en" data-surface="account">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -33,6 +35,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+
+  <!-- dream-profile — the veil pulse comes to the account page (same machinery as
+       index: html.veil-pulse-active is added by JS only when motion is allowed). -->
+  <div id="veil-pulse" aria-hidden="true"><div class="vp-glow"></div></div>
 
   <!-- Header -->
   <header>
@@ -100,10 +106,82 @@
 
       <!-- tab panels -->
       <section class="account-cards">
-        <!-- PROFILE -->
+        <!-- PROFILE — dream-profile gate: the identity STUDIO. A live preview of
+             how the room sees you, then every customization control. The old
+             personal-info machinery (email/password) keeps its IDs below. -->
         <article class="account-card" id="card-profile">
-  <h3 class="card-title">Personal Information</h3>
+  <h3 class="acct-kicker">Your Constellation <span class="jp-mini">星座</span></h3>
+  <p class="acct-section-sub">How the room sees you — every piece below is yours to shape.</p>
 
+  <!-- live preview (rendered by account.js from the same pure builder the real
+       profile sheet uses; the bg/accent/tags update as you edit) -->
+  <div class="acct-preview" id="acct-preview" aria-label="Profile preview"></div>
+  <div class="acct-preview-open">
+    <button type="button" id="acct-view-public" class="linky">View your public profile ↗</button>
+  </div>
+
+  <div class="card-body form-grid">
+    <!-- Display name -->
+    <div class="form-row">
+      <label>Display name</label>
+      <input id="prof-name" type="text" maxlength="40" />
+    </div>
+    <!-- Avatar upload -->
+    <div class="form-row">
+      <label>Avatar</label>
+      <button type="button" id="avatar-pick" class="avatar-preview" aria-label="Upload avatar"></button>
+      <input type="file" id="avatar-file" accept="image/*" hidden />
+    </div>
+    <!-- Status line -->
+    <div class="form-row" style="grid-column: 1 / -1;">
+      <label>Status <span class="muted">— one line under your name</span></label>
+      <input id="prof-status" type="text" maxlength="80" placeholder="rewatching Mob Psycho…" />
+    </div>
+    <!-- Bio -->
+    <div class="form-row" style="grid-column: 1 / -1;">
+      <label>Bio</label>
+      <textarea id="prof-bio" maxlength="500" rows="3" placeholder="Tell the room who you are…"></textarea>
+    </div>
+    <!-- Bio tags -->
+    <div class="form-row" style="grid-column: 1 / -1;">
+      <label>Tags <span class="muted">— up to 6, your colors on the door</span></label>
+      <div class="acct-tags" id="acct-tags">
+        <input id="acct-tag-input" class="acct-tag-input" type="text" maxlength="24" placeholder="Add a tag + Enter" />
+      </div>
+      <div class="acct-tag-suggest" id="acct-tag-suggest" aria-label="Tag suggestions"></div>
+    </div>
+    <!-- Accent -->
+    <div class="form-row" style="grid-column: 1 / -1;">
+      <label>Accent <span class="muted">— tints your profile's frame</span></label>
+      <div class="acct-accents" id="acct-accents" role="radiogroup" aria-label="Accent color"></div>
+    </div>
+    <!-- Profile background -->
+    <div class="form-row" style="grid-column: 1 / -1;">
+      <label>Profile background <span class="muted">— image or GIF, your sky</span></label>
+      <div class="acct-bg-row">
+        <span class="acct-bg-thumb" id="acct-bg-thumb">none yet</span>
+        <button type="button" id="acct-bg-pick" class="inline-header-btn small">Choose image / GIF</button>
+        <button type="button" id="acct-bg-remove" class="linky" hidden>Remove</button>
+        <input type="file" id="acct-bg-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+        <span class="acct-bg-note">Up to 5 MB · JPEG/PNG/WebP/GIF · email-verified accounts · backgrounds follow the community rules and can be reported.</span>
+      </div>
+    </div>
+    <!-- Featured review -->
+    <div class="form-row" style="grid-column: 1 / -1;">
+      <label>📌 Pinned review <span class="muted">— leads your profile</span></label>
+      <select id="acct-featured" class="acct-featured-select">
+        <option value="">None — let the latest speak</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card-actions">
+    <button id="profile-save" class="inline-header-btn" type="button">Save changes</button>
+    <span id="profile-status" class="muted" role="status"></span>
+  </div>
+  <div id="profile-error" role="alert" style="color:#ffbdbd;margin-top:6px;"></div>
+
+  <h3 class="acct-kicker" style="margin-top:22px;">Account <span class="jp-mini">管理</span></h3>
   <div class="card-body form-grid">
     <!-- Email -->
     <div class="form-row">
@@ -115,22 +193,8 @@
         <button id="acct-resend-verify" class="linky" type="button" style="display:none;">Resend</button>
       </div>
     </div>
-
-    <!-- Display name -->
-    <div class="form-row"> 
-      <label>Display name</label>
-      <input id="prof-name" type="text" maxlength="40" />
-    </div>
-    <!-- Avatar upload -->
-    <div class="form-row">
-    <label>Choose an avatar</label>
-   <button type="button" id="avatar-pick" class="avatar-preview" aria-label="Upload avatar"></button>
-    <input type="file" id="avatar-file" accept="image/*" hidden />
-    </div>
-
-
     <!-- Password (never show the real password; just a masked placeholder) -->
-    <div class="form-row password-row" style="grid-column: 1 / -1;">
+    <div class="form-row password-row">
       <label>Password</label>
       <div class="password-wrap">
         <input id="prof-password" type="password" value="••••••••" disabled />
@@ -140,18 +204,25 @@
       <p class="muted">To change your password, you’ll re-enter your current password to confirm.</p>
     </div>
   </div>
-
-  <div class="card-actions">
-    <button id="profile-save" class="inline-header-btn" type="button">Save changes</button>
-    <span id="profile-status" class="muted" role="status"></span>
-  </div>
-  <div id="profile-error" role="alert" style="color:#ffbdbd;margin-top:6px;"></div>
 </article>
 
 
         <!-- WATCHLIST -->
         <article class="account-card is-tab" id="tab-watchlist">
   <h3>Your Watchlist</h3>
+
+  <!-- dream-profile gate: precise controls (filter · sort · type) -->
+  <div class="saved-controls" data-saved-controls="watchlist">
+    <input type="search" class="saved-filter" placeholder="Filter by title…" aria-label="Filter watchlist" />
+    <select aria-label="Sort watchlist">
+      <option value="recent">Recently added</option>
+      <option value="alpha">A → Z</option>
+      <option value="year">By year</option>
+    </select>
+    <button type="button" class="saved-type-chip is-active" data-type="all">All</button>
+    <button type="button" class="saved-type-chip" data-type="catalog">Blake's 44</button>
+    <button type="button" class="saved-type-chip" data-type="anilist">Beyond</button>
+  </div>
 
   <!-- scrollable area -->
   <div class="tab-scroll">
@@ -173,6 +244,19 @@
         <article class="account-card is-tab" id="tab-favorites">
   <h3>Your Favorites</h3>
 
+  <!-- dream-profile gate: precise controls (filter · sort · type) -->
+  <div class="saved-controls" data-saved-controls="favorites">
+    <input type="search" class="saved-filter" placeholder="Filter by title…" aria-label="Filter favorites" />
+    <select aria-label="Sort favorites">
+      <option value="recent">Recently added</option>
+      <option value="alpha">A → Z</option>
+      <option value="year">By year</option>
+    </select>
+    <button type="button" class="saved-type-chip is-active" data-type="all">All</button>
+    <button type="button" class="saved-type-chip" data-type="catalog">Blake's 44</button>
+    <button type="button" class="saved-type-chip" data-type="anilist">Beyond</button>
+  </div>
+
   <!-- scrollable area -->
   <div class="tab-scroll">
   <ul class="saved-list" id="favoritesList"></ul>
@@ -190,11 +274,18 @@
 
 
 
-        <!-- ACTIVITY -->
+        <!-- ACTIVITY — dream-profile gate: separated by type -->
         <article class="account-card is-tab" id="tab-activity" hidden>
         <h3 class="card-title">My Activity</h3>
-        <p class="muted">Your latest comments and community reviews will appear here.</p>
+        <p class="muted">Everything you've put into the room, by type.</p>
 
+  <div class="acct-act-chips" id="acct-act-chips" role="tablist" aria-label="Activity type">
+    <button type="button" class="profile-act-chip is-active" data-act="all" role="tab" aria-selected="true">All</button>
+    <button type="button" class="profile-act-chip" data-act="comments" role="tab" aria-selected="false">Comments</button>
+    <button type="button" class="profile-act-chip" data-act="replies" role="tab" aria-selected="false">Replies</button>
+    <button type="button" class="profile-act-chip" data-act="threads" role="tab" aria-selected="false">Threads</button>
+    <button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>
+  </div>
   <p id="activity-empty" class="muted saved-empty">Loading...</p>
   <ul id="activity-list" class="saved-list activity-list" aria-label="Recent activity"></ul>
 </article>

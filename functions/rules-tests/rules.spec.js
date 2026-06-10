@@ -590,10 +590,12 @@ test('overhaul: uploadHashes — owner reads own entry; foreign read + any clien
   await assertFails(setDoc(doc(as('alice'), 'uploadHashes/alice__zzz'), { uid: 'alice', hash: 'zzz', path: 'x' }));
 });
 
-// -------- GATE 16 — profiles: the items CG went PUBLIC (profile pages list a
-// member's reviews cross-anime); threads/replies CG stay owner-only --------
+// -------- GATE 16 → DREAM-PROFILE — public-activity collection groups.
+// items went public at gate 16; the dream-profile activity-by-type feed
+// widened threads/replies/posts on the same argument (every doc is already
+// individually public in context — only the cross-context query is new) --------
 const { collectionGroup, getDocs, query, where } = require('firebase/firestore');
-test('gate16: items CG query is PUBLIC; threads CG stays owner-only', async () => {
+test('activity CGs: items/threads/replies/posts queries are PUBLIC (the by-type feed)', async () => {
   await seed(async (db) => {
     await setDoc(doc(db, 'reviews/al:101922/items/carol'),
       { uid: 'carol', title: 'T', body: 'b', rating: 8, displayName: 'C', createdAt: Timestamp.now(),
@@ -601,10 +603,16 @@ test('gate16: items CG query is PUBLIC; threads CG stays owner-only', async () =
     await setDoc(doc(db, 'reviews/al:101922/items/carol/threads/t1'),
       { uid: 'carol', text: 'x', displayName: 'C', createdAt: Timestamp.now(), likesCount: 0, dislikesCount: 0 });
   });
-  // anyone (even signed-out) may run the profile-page reviews query…
+  // anyone (even signed-out) may run every activity-by-type query
   await assertSucceeds(getDocs(query(collectionGroup(anon(), 'items'), where('uid', '==', 'carol'))));
-  // …but the private activity-feed CGs hold: another user may NOT sweep carol's threads
-  await assertFails(getDocs(query(collectionGroup(as('mallory'), 'threads'), where('uid', '==', 'carol'))));
+  await assertSucceeds(getDocs(query(collectionGroup(anon(), 'threads'), where('uid', '==', 'carol'))));
+  await assertSucceeds(getDocs(query(collectionGroup(anon(), 'replies'), where('uid', '==', 'carol'))));
+  await assertSucceeds(getDocs(query(collectionGroup(anon(), 'posts'), where('authorUid', '==', 'carol'))));
+});
+test('activity CGs: the votes CG is NOT widened (vote privacy holds)', async () => {
+  await seed((db) => setDoc(doc(db, 'comments/x/items/c1/votes/carol'),
+    { value: 1, uid: 'carol', updatedAt: Timestamp.now() }));
+  await assertFails(getDocs(query(collectionGroup(as('mallory'), 'votes'), where('uid', '==', 'carol'))));
 });
 
 // ---------------- GATE 14 — the 'image' report target ----------------
@@ -625,5 +633,111 @@ test('report: HOSTILE image report with a malformed imagePath is DENIED', async 
     reporterUid: 'alice', reason: 'other', status: 'new',
     targetType: 'image', targetPath: 'forum/t1/posts/p1',
     imagePath: 'uploads/x/../../secrets', createdAt: serverTimestamp(),
+  }));
+});
+
+// ============================================================================
+// DREAM-PROFILE GATE — profile customization fields, profile likes (the ONE
+// sanctioned community count), the 'profile' report target.
+// ============================================================================
+
+// ---------------- profile customization fields ----------------
+test('dream: happy full customization set (tags + accent + status + own bgRef + featuredAnime)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'profiles/alice'), {
+    displayName: 'Alice', bio: 'hi', joinedAt: serverTimestamp(),
+    tags: ['Action', 'Sub', 'Binge-watcher'], accent: 'violet',
+    status: 'rewatching Mob Psycho', bgRef: 'uploads/alice/profilebg/bg1',
+    featuredAnime: 'al:101922',
+  }));
+});
+test('dream: HOSTILE 7 tags is DENIED (list cap 6)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', tags: ['1', '2', '3', '4', '5', '6', '7'] }));
+});
+test('dream: HOSTILE non-list tags is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', tags: 'just-a-string' }));
+});
+test('dream: HOSTILE accent outside the curated palette is DENIED (gold cannot be dressed)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), { displayName: 'Alice', accent: 'gold' }));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), { displayName: 'Alice', accent: '#ffd54a' }));
+});
+test('dream: HOSTILE 81-char status is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', status: 'x'.repeat(81) }));
+});
+test('dream: HOSTILE bgRef outside the caller own profilebg prefix is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', bgRef: 'uploads/mallory/profilebg/stolen' }));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', bgRef: 'uploads/alice/somepost/img1' }));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', bgRef: 'https://evil.example/bg.gif' }));
+});
+test('dream: HOSTILE featuredAnime with path characters is DENIED (charset pin)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', featuredAnime: 'reviews/x/items/y' }));
+});
+test('dream: HOSTILE client-written likesCount is DENIED (CF-owned count)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', likesCount: 9999 }));
+  await seed((db) => setDoc(doc(db, 'profiles/alice'),
+    { displayName: 'Alice', joinedAt: Timestamp.now(), likesCount: 2 }));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { likesCount: 9999 }, { merge: true }));
+});
+
+// ---------------- profile likes (the heart carve-out) ----------------
+const like = (uid) => ({ uid, value: 1, updatedAt: serverTimestamp() });
+test('like: happy create on someone else profile', async () => {
+  await assertSucceeds(setDoc(doc(as('bob'), 'profiles/alice/likes/bob'), like('bob')));
+});
+test('like: HOSTILE self-like is DENIED (no inflation)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice/likes/alice'), like('alice')));
+});
+test('like: HOSTILE like on BLAKE\'s own profile is DENIED (the heart never wears a community count)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/' + ADMIN + '/likes/alice'), like('alice')));
+});
+test('like: HOSTILE non-1 values are DENIED (no dislikes on people, no weighting)', async () => {
+  await assertFails(setDoc(doc(as('bob'), 'profiles/alice/likes/bob'),
+    { uid: 'bob', value: -1, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('bob'), 'profiles/alice/likes/bob'),
+    { uid: 'bob', value: 2, updatedAt: serverTimestamp() }));
+});
+test('like: HOSTILE forged uid / foreign doc id is DENIED', async () => {
+  await assertFails(setDoc(doc(as('bob'), 'profiles/alice/likes/bob'),
+    { uid: 'mallory', value: 1, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('bob'), 'profiles/alice/likes/carol'), like('carol')));
+});
+test('like: update is DENIED (unlike is delete, re-like is create)', async () => {
+  await seed((db) => setDoc(doc(db, 'profiles/alice/likes/bob'),
+    { uid: 'bob', value: 1, updatedAt: Timestamp.now() }));
+  await assertFails(setDoc(doc(as('bob'), 'profiles/alice/likes/bob'), like('bob')));
+});
+test('like: banned create DENIED; banned UNLIKE still allowed (unvote stays ungated)', async () => {
+  await seed(async (db) => {
+    await gate(db, 'badguy', { banned: true });
+    await setDoc(doc(db, 'profiles/alice/likes/badguy'), { uid: 'badguy', value: 1, updatedAt: Timestamp.now() });
+  });
+  await assertFails(setDoc(doc(as('badguy'), 'profiles/carol/likes/badguy'), like('badguy')));
+  await assertSucceeds(deleteDoc(doc(as('badguy'), 'profiles/alice/likes/badguy')));
+});
+test('like: un-consented create is DENIED (the gate holds)', async () => {
+  await assertFails(setDoc(doc(as('newbie'), 'profiles/alice/likes/newbie'), like('newbie')));
+});
+test('like: foreign get + any list are DENIED (only the CF-owned count is public)', async () => {
+  await seed((db) => setDoc(doc(db, 'profiles/alice/likes/bob'),
+    { uid: 'bob', value: 1, updatedAt: Timestamp.now() }));
+  await assertFails(getDoc(doc(as('mallory'), 'profiles/alice/likes/bob')));
+  await assertSucceeds(getDoc(doc(as('bob'), 'profiles/alice/likes/bob')));
+  await assertFails(getDocs(query(collectionGroup(as('mallory'), 'likes'), where('uid', '==', 'bob'))));
+});
+
+// ---------------- the 'profile' report target ----------------
+test('report: happy profile report (targetType profile, optional bg imagePath)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'reports/r-prof-1'), {
+    reporterUid: 'alice', reason: 'other', status: 'new',
+    targetType: 'profile', targetPath: 'profiles/mallory',
+    imagePath: 'uploads/mallory/profilebg/bg1', createdAt: serverTimestamp(),
   }));
 });

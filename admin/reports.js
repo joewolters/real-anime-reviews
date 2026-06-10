@@ -59,6 +59,12 @@ function viewHref(targetType, targetPath) {
     const tid = String(targetPath).split('/')[1];   // forum/{tid}[/posts/{pid}]
     return tid ? '../index.html#forum=' + encodeURIComponent(tid) : null;
   }
+  // dream-profile — a reported profile opens its live sheet (bio/tags/status/
+  // avatar/background all visible in one place).
+  if (targetType === 'profile') {
+    const uid = String(targetPath).split('/')[1];   // profiles/{uid}
+    return uid ? '../index.html#profile=' + encodeURIComponent(uid) : null;
+  }
   if (targetType === 'dm') return null;
   return '../index.html#notif=' + encodeURIComponent(targetPath);
 }
@@ -106,6 +112,15 @@ async function fetchLive(targetPath) {
     if (!snap.exists()) return { state: 'gone', html: '<em>Content no longer exists (deleted).</em>' };
     const d = snap.data() || {};
     if (d.removed === true) return { state: 'removed', html: '<em>Content already removed (tombstoned).</em>' };
+    // dream-profile — a profiles/{uid} target previews the live identity text
+    // (name · status · bio · tags), escape-first like everything else here.
+    if (/^profiles\//.test(targetPath)) {
+      if (d.isBanned === true) return { state: 'removed', html: '<em>Account already suspended.</em>' };
+      const bits = [d.displayName, d.status, d.bio,
+        Array.isArray(d.tags) && d.tags.length ? 'tags: ' + d.tags.slice(0, 6).map((t) => String(t).slice(0, 24)).join(', ') : ''
+      ].filter(Boolean).join(' · ');
+      return bits ? { state: 'live', html: safeHtml(bits) } : { state: 'empty', html: '<em>(a bare profile — no bio/status/tags)</em>' };
+    }
     const text = d.text || d.body || d.title || '';
     if (!text) return { state: 'empty', html: '<em>(no text content)</em>' };
     return { state: 'live', html: safeHtml(text) };
@@ -191,7 +206,18 @@ async function renderQueue(rows) {
     if (block) block.dataset.live = res.state;
     // gate 14 — an image report also previews the reported OBJECT itself
     // (shape-pinned path -> getDownloadURL; a dead pointer shows as removed).
-    if (content && g.targetType === 'image' && /^uploads\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,100}\/[A-Za-z0-9_-]{1,120}$/.test(g.imagePath || '')) {
+    // dream-profile: a 'profile' report with a background pointer previews it
+    // the same way (Blake sees the reported bg without opening the sheet).
+    // adversarial LOW: the rules pin imagePath SHAPE but never bind it to the
+    // target — a forged 'profile' report could point imagePath at an unrelated
+    // victim object and surface it under a profile label. For a 'profile'
+    // report, require the bg object to belong to the TARGET uid's profilebg
+    // prefix before fetching/previewing it.
+    const profOwner = g.targetType === 'profile' ? String(g.targetPath || '').split('/')[1] : '';
+    const imagePathOk = g.targetType === 'profile'
+      ? new RegExp('^uploads/' + (profOwner || '\0').replace(/[^A-Za-z0-9_-]/g, '') + '/profilebg/[A-Za-z0-9_-]{1,120}$').test(g.imagePath || '')
+      : /^uploads\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,100}\/[A-Za-z0-9_-]{1,120}$/.test(g.imagePath || '');
+    if (content && (g.targetType === 'image' || g.targetType === 'profile') && imagePathOk) {
       try {
         const url = await getDownloadURL(storRef(storage, g.imagePath));
         const img = document.createElement('img');
@@ -310,11 +336,16 @@ function wireClicks() {
     }
 
     if (action === 'remove') {
+      const isProfileBg = targetType === 'profile' && row.dataset.imagePath;
       const ok = await confirmModal({
         glyph: '🗑️', kicker: 'REMOVE CONTENT', kickerJp: '削除',
         body: targetType === 'image'
           ? 'Remove this image for good? It leaves Storage AND the post pointer together (the atomic remove).'
-          : `Permanently delete this ${targetType || 'content'}? This can't be undone.`,
+          : isProfileBg
+            ? 'Remove this profile BACKGROUND for good? Storage object + the bgRef pointer leave together. (Bio/tags scrub rides the Ban action.)'
+            : targetType === 'profile'
+              ? 'A profile with no reported background has nothing to remove here — use Ban to take the account (it scrubs the profile), or dismiss.'
+              : `Permanently delete this ${targetType || 'content'}? This can't be undone.`,
         okLabel: 'Remove',
       });
       if (!ok) return;
@@ -322,8 +353,10 @@ function wireClicks() {
       try {
         // gate 14 — IMAGE rows go through the adminRemoveImage callable: the
         // Storage object is deleted FIRST, then the Firestore pointer (never
-        // the Firestore-only path — that's the legal trap).
-        if (targetType === 'image') {
+        // the Firestore-only path — that's the legal trap). dream-profile:
+        // a profile's reported BACKGROUND rides the same atomic callable
+        // (docPath profiles/{uid} → the bgRef field).
+        if (targetType === 'image' || isProfileBg) {
           const imagePath = row.dataset.imagePath;
           if (!imagePath) throw new Error('No image path on this report.');
           await httpsCallable(functions, 'adminRemoveImage')({ docPath: targetPath, imagePath });
@@ -331,6 +364,7 @@ function wireClicks() {
           collapseAndRemove(row);
           return;
         }
+        if (targetType === 'profile') { btn.disabled = false; return; }   // nothing removable without a bg pointer
         // Per-type removal: comment/reply/review/thread are admin-deletable; forum
         // threads + posts are delete:false in the rules (soft-delete via the `removed`
         // flag + a CF cascade), so REDACT them instead; dm messages are immutable

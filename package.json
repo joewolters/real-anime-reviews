@@ -15,7 +15,7 @@
     "emulators": "firebase emulators:start --only functions,firestore,auth",
     "deploy:functions": "firebase deploy --only functions",
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-rar \"node --test --test-concurrency=1 functions/rules-tests/rules.spec.js functions/rules-tests/storage.spec.js\"",
-    "test:cf": "firebase emulators:exec --only functions,firestore,storage --project demo-rar \"node --test --test-concurrency=1 functions/cf-tests/cf-integration.spec.js functions/cf-tests/cf-cascade.spec.js functions/cf-tests/cf-moderation.spec.js functions/cf-tests/cf-hotscore.spec.js functions/cf-tests/cf-forum.spec.js functions/cf-tests/cf-images.spec.js\"",
+    "test:cf": "firebase emulators:exec --only functions,firestore,storage --project demo-rar \"node --test --test-concurrency=1 functions/cf-tests/cf-integration.spec.js functions/cf-tests/cf-cascade.spec.js functions/cf-tests/cf-moderation.spec.js functions/cf-tests/cf-hotscore.spec.js functions/cf-tests/cf-forum.spec.js functions/cf-tests/cf-images.spec.js functions/cf-tests/cf-profile.spec.js\"",
     "practice": "node scripts/practice-preflight.js",
     "test:e2e": "playwright test --config=playwright.emu.config.js"
   },

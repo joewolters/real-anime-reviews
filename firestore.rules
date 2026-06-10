@@ -134,7 +134,39 @@ service cloud.firestore {
         && (!('photoURL' in request.resource.data)
             || request.resource.data.photoURL == null
             || (request.resource.data.photoURL is string
-                && request.resource.data.photoURL.matches('https://(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)/.*')));
+                && request.resource.data.photoURL.matches('https://(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)/.*')))
+        && profileCustomFieldsOk();
+    }
+    // Dream-profile gate — the customization fields. All optional:
+    //   • tags — self-tags rendered as purple chips. Rules can't loop a list,
+    //     so only the COUNT is enforced here; per-entry length is clamped at
+    //     render (escape-first + slice). A hostile long tag is display-inert.
+    //   • accent — a CURATED enum, not free hex: an arbitrary color would let a
+    //     profile dress itself gold (#ffd54a). The palette deliberately
+    //     contains no gold/yellow — the heart stays Blake's by construction.
+    //   • status — one short line under the name.
+    //   • bgRef — the profile background: ONE Storage path pinned to the
+    //     caller's own uploads/{uid}/profilebg/ prefix (same own-prefix pin as
+    //     forum imageRefs; rides the full upload pipeline + moderation).
+    //   • featuredAnime — the owner's pinned review: a communityKey (slug or
+    //     al:<id>); the profile page fetches reviews/{key}/items/{ownUid}, so
+    //     it can only ever surface the owner's OWN review.
+    //   • likesCount is CF-owned (absent from the owner-writable key sets).
+    function profileCustomFieldsOk() {
+      return (!('tags' in request.resource.data)
+            || (request.resource.data.tags is list && request.resource.data.tags.size() <= 6))
+        && (!('accent' in request.resource.data)
+            || request.resource.data.accent in ['violet', 'ember', 'teal', 'rose', 'sky', 'moss'])
+        && (!('status' in request.resource.data)
+            || (request.resource.data.status is string && request.resource.data.status.size() <= 80))
+        && (!('bgRef' in request.resource.data)
+            || request.resource.data.bgRef == null
+            || (request.resource.data.bgRef is string
+                && request.resource.data.bgRef.matches('uploads/' + request.auth.uid + '/profilebg/[A-Za-z0-9_-]{1,120}')))
+        && (!('featuredAnime' in request.resource.data)
+            || request.resource.data.featuredAnime == null
+            || (request.resource.data.featuredAnime is string
+                && request.resource.data.featuredAnime.matches('[A-Za-z0-9:_-]{1,120}')));
     }
 
     // =========================================================================
@@ -184,11 +216,17 @@ service cloud.firestore {
     // `items` subcollection (comments + community reviews) is ALREADY
     // individually public via its own collection match — the CG widening
     // exposes nothing new, it only makes the cross-anime query legal.
-    // `threads`/`replies` stay owner-only (the private activity feed).
+    // Dream-profile gate: `threads`/`replies`/`posts` widen on the SAME
+    // argument — every doc is already individually public in context (review
+    // discussions, comment replies, forum posts); the activity-by-type feed
+    // on public profiles needs the cross-context query. Tombstoned docs
+    // (removed:true) are filtered at render. `votes` and DM collections are
+    // NOT widened — those stay private.
     // =========================================================================
     match /{path=**}/items/{docId}   { allow get, list: if true; }
-    match /{path=**}/threads/{docId} { allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid; }
-    match /{path=**}/replies/{docId} { allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid; }
+    match /{path=**}/threads/{docId} { allow get, list: if true; }
+    match /{path=**}/replies/{docId} { allow get, list: if true; }
+    match /{path=**}/posts/{docId}   { allow get, list: if true; }
 
     // =========================================================================
     // COMMENTS — `{anime}` is a catalog slug OR an `al:<aniListId>` per-season
@@ -514,14 +552,44 @@ service cloud.firestore {
     match /profiles/{uid} {
       allow get, list: if true;
       allow create: if isOwner(uid)
-        && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt'])
+        && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt',
+                                                 'tags', 'accent', 'status', 'bgRef', 'featuredAnime'])
         && profileFieldsOk()
         && gateOk();
       allow update: if isOwner(uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt',
+                                                                             'tags', 'accent', 'status', 'bgRef', 'featuredAnime'])
         && profileFieldsOk()
         && gateOk();
       allow delete: if false; // account deletion is the onUserDelete cascade CF
+
+      // Dream-profile gate — PROFILE LIKES, the ONE sanctioned community
+      // count (the heart carve-out): user-to-user social, never gold, no
+      // leaderboard anywhere. Like-only (value must be 1 — there is no
+      // dislike on a person), no self-like, vote-doc shape so the existing
+      // CF machinery owns the count. Unlike (delete) stays ungated like
+      // every other unvote. `get` is owner-of-the-like only (the client
+      // needs "did I already like this?"); the public surface is ONLY the
+      // CF-owned likesCount on the parent.
+      match /likes/{likerUid} {
+        allow get: if isOwner(likerUid);
+        allow list: if false;
+        // dream-profile HEART (adversarial MED): a like cannot land on BLAKE's
+        // own profile — the carve-out count is community→community only; minting
+        // it onto the one identity that must never carry a community count (even
+        // though his name routes to the Den and the count is invisible on-site)
+        // would still publish a likesCount on profiles/<ADMIN_UID> via raw read.
+        allow create: if isOwner(likerUid)
+          && likerUid != uid
+          && uid != 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'
+          && request.resource.data.keys().hasOnly(['uid', 'value', 'updatedAt'])
+          && request.resource.data.uid == likerUid
+          && request.resource.data.value == 1
+          && request.resource.data.updatedAt == request.time
+          && gateOk();
+        allow update: if false; // nothing to change — unlike is delete, re-like is create
+        allow delete: if isOwner(likerUid);
+      }
     }
 
     // =========================================================================
@@ -550,7 +618,10 @@ service cloud.firestore {
         && request.resource.data.status == 'new'
         // gate 14 — 'image': targetPath = the forum doc holding the pointer,
         // imagePath = the uploads/... Storage object (shape-pinned below).
-        && request.resource.data.targetType in ['review', 'comment', 'reply', 'thread', 'forum', 'post', 'dm', 'image']
+        // dream-profile gate — 'profile': targetPath = profiles/{uid}; covers
+        // bio/tags/status/avatar/background in one report (the admin View
+        // opens the live profile; the bg object rides imagePath if reported).
+        && request.resource.data.targetType in ['review', 'comment', 'reply', 'thread', 'forum', 'post', 'dm', 'image', 'profile']
         && request.resource.data.targetPath is string
         && (!('imagePath' in request.resource.data)
             || (request.resource.data.imagePath is string

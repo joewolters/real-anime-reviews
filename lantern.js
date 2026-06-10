@@ -57,6 +57,9 @@ const NOTIF_TYPE_META = {
   new_season:          { glyph: '◷', label: 'New seasons', verb: 'has a new season' },
   comment_vote:        { glyph: '♥', label: 'Likes',       verb: 'liked your comment' },
   review_vote:         { glyph: '♥', label: 'Likes',       verb: 'liked your review' },
+  // dream-profile — the heart carve-out ping. Deterministic doc id (pl_<liker>)
+  // server-side, so a like-unlike-like cycle re-lights ONE row, never spams.
+  profile_like:        { glyph: '♥', label: 'Profile',     verb: 'liked your profile' },
 };
 
 async function cleanupOldNotifications(uid, snapDocs) {
@@ -224,6 +227,8 @@ function parseNotifTarget(targetPath) {
   if (mc) return { kind: 'comment', slug: mc[1], id: mc[2] };
   const mr = /^reviews\/([^/]+)\/items\/([^/]+)/.exec(path);
   if (mr) return { kind: 'review', slug: mr[1], id: mr[2] };
+  const mp = /^profiles\/([A-Za-z0-9_-]{1,128})$/.exec(path);   // dream-profile — profile_like
+  if (mp) return { kind: 'profile', uid: mp[1] };
   if (/^(forum|conversations)\//.test(path)) return { kind: 'hash', path };
   return { kind: 'none' };
 }
@@ -236,6 +241,7 @@ export function notifHref(targetPath, animeId) {
   const t = parseNotifTarget(targetPath);
   if (t.kind === 'comment' || t.kind === 'review') return 'index.html#notif=' + encodeURIComponent(targetPath);
   if (t.kind === 'hash') return 'index.html#' + t.path;
+  if (t.kind === 'profile') return 'index.html#profile=' + encodeURIComponent(t.uid);   // dream-profile
   if (animeId) return 'index.html#open=' + encodeURIComponent(animeId);
   return 'index.html';
 }
@@ -259,8 +265,13 @@ function renderLanternRow(n) {
   // Unread glow: this row's createdAt is newer than the user's lastSeenAt.
   const unread = ms > notifLastSeenMs;
 
-  const avatar = n.fromPhotoURL
-    ? `<img src="${escapeHtml(n.fromPhotoURL)}" alt="">`
+  // dream-profile fix: origin-gate the notif avatar too — senderIdentity's
+  // users/ fallback photoURL is rules-unvalidated, so a hostile origin could
+  // ride a notification into every recipient's lantern (IP beacon).
+  const safePhoto = (typeof n.fromPhotoURL === 'string'
+    && /^https:\/\/(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)\//.test(n.fromPhotoURL)) ? n.fromPhotoURL : '';
+  const avatar = safePhoto
+    ? `<img src="${escapeHtml(safePhoto)}" alt="">`
     : `<span>${escapeHtml(String(name).trim().slice(0,1).toUpperCase() || '?')}</span>`;
 
   const target = n.targetPath || '';
@@ -309,7 +320,7 @@ function renderLanternRollup(votes, expanded) {
 
 // Compact per-type mute control strip.
 function renderLanternMutes() {
-  const types = ['reply', 'dm', 'comment_vote', 'new_season', 'suggestion_accepted'];
+  const types = ['reply', 'dm', 'comment_vote', 'profile_like', 'new_season', 'suggestion_accepted'];
   const chips = types.map((t) => {
     const meta = NOTIF_TYPE_META[t] || {};
     const off = !!notifMuted[t];

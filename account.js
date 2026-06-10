@@ -11,9 +11,9 @@ import {
   sendPasswordResetEmail
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import {
-  doc, setDoc, getDoc, collection, onSnapshot, deleteDoc,
+  doc, setDoc, getDoc, getDocs, collection, onSnapshot, deleteDoc,
   query, orderBy, where, limit, collectionGroup,
-  serverTimestamp
+  serverTimestamp, deleteField
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 
@@ -60,7 +60,10 @@ function activateTab(name){
   });
 }
 $$('.side-link').forEach(btn => {
-  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+  btn.addEventListener('click', () => {
+    activateTab(btn.dataset.tab);
+    if (btn.dataset.tab === 'activity') ensureActivity();   // lazy — see boot block
+  });
 });
 // deep-link: #inbox lands on the Inbox tab (the Lantern's dm pings route here)
 activateTab(location.hash === '#inbox' ? 'inbox' : 'profile');
@@ -90,11 +93,253 @@ const activityEmptyEl = document.getElementById('activity-empty');
 // it so future v1.9.x deploys that change lantern.js refresh for visitors.)
 initLantern();
 
+// dream-profile — the veil pulse comes to the account page (same gating as
+// index's initVeilPulse: the class only when the element exists AND motion is
+// allowed; reduced-motion keeps the static LIT veil).
+(function initVeilPulse() {
+  const vp = document.getElementById('veil-pulse');
+  if (!vp) return;
+  const glow = vp.querySelector('.vp-glow');
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const apply = () => document.documentElement.classList.toggle('veil-pulse-active', !mq.matches);
+  apply();
+  if (mq.addEventListener) mq.addEventListener('change', apply);
+  else if (mq.addListener) mq.addListener(apply);
+  const syncPlay = () => { if (glow) glow.style.animationPlayState = document.hidden ? 'paused' : 'running'; };
+  syncPlay();
+  document.addEventListener('visibilitychange', syncPlay);
+})();
+
 // HTML-escape used by the saved-row renderers below (favorites/watchlist/AniList).
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (m) => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
+}
+
+// =============================================================================
+// DREAM-PROFILE — the identity STUDIO state. Everything the public profile can
+// wear, staged here and written to profiles/{uid} on Save. The accent palette
+// mirrors the rules enum exactly (curated, gold-free).
+// =============================================================================
+const PROF_ACCENTS = ['violet', 'ember', 'teal', 'rose', 'sky', 'moss'];
+const PROF_TAG_SUGGEST = ['Action', 'Romance', 'Slice of Life', 'Mecha', 'Sports', 'Horror', 'Isekai',
+  'Shonen', 'Seinen', 'Sub', 'Dub', 'Binge-watcher', 'Weekly watcher', 'Manga reader', 'Cosplayer'];
+const profState = {
+  bio: '', status: '', tags: [], accent: '', bgRef: '', featuredAnime: '',
+  bgStagedBlob: null, bgStagedMime: '', bgStagedUrl: '', bgRemove: false, bgCurrentUrl: '',
+};
+
+const profStatus2 = () => document.getElementById('prof-status');
+const profBio     = () => document.getElementById('prof-bio');
+
+// the live preview — a compact mirror of the public sheet's header (same
+// escape-first discipline; the real sheet's builder lives in script.js, which
+// this page doesn't load).
+// adversarial perf MED: the preview is split so a keystroke only repaints the
+// TEXT head — the bg <img> node is rebuilt ONLY when the bg URL actually
+// changes (a fresh innerHTML per keypress restarted/re-decoded the staged GIF
+// every character). The head and the bg layer are sibling nodes; syncPreviewBg
+// is keyed by URL so an unchanged bg is left entirely alone.
+let _previewBgUrl = null;
+function syncPreviewBg(host) {
+  const bgUrl = profState.bgRemove ? '' : (profState.bgStagedUrl || profState.bgCurrentUrl);
+  if (bgUrl === _previewBgUrl) return;   // unchanged — never touch the live GIF
+  _previewBgUrl = bgUrl;
+  let wrap = host.querySelector('.acct-preview-bg');
+  if (!bgUrl) { if (wrap) wrap.remove(); return; }
+  if (!wrap) { wrap = document.createElement('span'); wrap.className = 'acct-preview-bg'; host.insertBefore(wrap, host.firstChild); }
+  const img = document.createElement('img'); img.alt = ''; img.src = bgUrl;
+  wrap.innerHTML = ''; wrap.appendChild(img);
+  // reduced-motion: freeze the GIF to its first frame, capped at display scale.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    img.addEventListener('load', () => {
+      try {
+        const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1;
+        const w = Math.min(nw, 1280), h = Math.max(1, Math.round(w * nh / nw));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        img.replaceWith(c);
+      } catch (_) {}
+    }, { once: true });
+  }
+}
+function renderProfPreview() {
+  const host = document.getElementById('acct-preview');
+  if (!host) return;
+  const u = auth.currentUser;
+  const name = esc(($('#prof-name')?.value || '').trim() || (u && u.displayName) || 'You');
+  const status = (profStatus2()?.value || '').trim();
+  const bio = (profBio()?.value || '').trim();
+  const avatarImg = avatarPick?.querySelector('img');
+  const avatar = avatarImg ? `<img src="${esc(avatarImg.src)}" alt="">`
+    : esc((name || '?').trim().charAt(0).toUpperCase() || '?');
+  const tags = profState.tags.length
+    ? `<div class="profile-tags">${profState.tags.slice(0, 6).map((t) => `<span class="profile-tag">${esc(String(t).slice(0, 24))}</span>`).join('')}</div>` : '';
+  host.setAttribute('data-accent', PROF_ACCENTS.indexOf(profState.accent) !== -1 ? profState.accent : 'violet');
+  syncPreviewBg(host);   // bg layer: untouched unless its URL changed
+  let head = host.querySelector('.profile-head');
+  if (!head) { head = document.createElement('div'); head.className = 'profile-head'; host.appendChild(head); }
+  head.innerHTML = `<div class="profile-avatar">${avatar}</div>
+      <h2 class="profile-name">${name}</h2>
+      ${status ? `<div class="profile-status">${esc(status.slice(0, 80))}</div>` : ''}
+      ${tags}
+      ${bio ? `<div class="profile-bio">${esc(bio)}</div>` : ''}`;
+}
+
+function renderTagEditor() {
+  const wrap = document.getElementById('acct-tags');
+  const input = document.getElementById('acct-tag-input');
+  if (!wrap || !input) return;
+  wrap.querySelectorAll('.acct-tag-chip').forEach((n) => n.remove());
+  profState.tags.slice(0, 6).forEach((t, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'acct-tag-chip';
+    const txt = document.createElement('span'); txt.textContent = String(t).slice(0, 24);
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'acct-tag-x'; x.setAttribute('aria-label', 'Remove tag'); x.textContent = '×';
+    x.addEventListener('click', () => { profState.tags.splice(i, 1); renderTagEditor(); renderProfPreview(); });
+    chip.appendChild(txt); chip.appendChild(x);
+    wrap.insertBefore(chip, input);
+  });
+  input.disabled = profState.tags.length >= 6;
+  input.placeholder = input.disabled ? '6 of 6 — remove one to add' : 'Add a tag + Enter';
+  const sug = document.getElementById('acct-tag-suggest');
+  if (sug) {
+    sug.innerHTML = '';
+    PROF_TAG_SUGGEST.filter((t) => profState.tags.indexOf(t) === -1).slice(0, 10).forEach((t) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = t;
+      b.addEventListener('click', () => { addProfTag(t); });
+      sug.appendChild(b);
+    });
+  }
+}
+function addProfTag(raw) {
+  const t = String(raw || '').trim().slice(0, 24);
+  if (!t || profState.tags.length >= 6 || profState.tags.indexOf(t) !== -1) return;
+  profState.tags.push(t);
+  renderTagEditor(); renderProfPreview();
+}
+
+function renderAccentPicker() {
+  const host = document.getElementById('acct-accents');
+  if (!host) return;
+  host.innerHTML = '';
+  PROF_ACCENTS.forEach((a) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'acct-accent'; b.setAttribute('data-accent', a);
+    b.setAttribute('role', 'radio'); b.title = a;
+    const on = profState.accent === a;
+    b.classList.toggle('is-active', on);
+    b.setAttribute('aria-checked', String(on));
+    b.addEventListener('click', () => { profState.accent = (profState.accent === a) ? '' : a; renderAccentPicker(); renderProfPreview(); });
+    host.appendChild(b);
+  });
+}
+
+// background staging — upload happens on Save (the onProfileWritten CF sweeps
+// the OLD object once bgRef changes, so no client-side delete dance).
+const PROF_BG_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+function renderBgThumb() {
+  const thumb = document.getElementById('acct-bg-thumb');
+  const removeBtn = document.getElementById('acct-bg-remove');
+  if (!thumb) return;
+  const url = profState.bgRemove ? '' : (profState.bgStagedUrl || profState.bgCurrentUrl);
+  thumb.innerHTML = '';
+  if (url) { const img = document.createElement('img'); img.alt = ''; img.src = url; thumb.appendChild(img); }
+  else thumb.textContent = 'none yet';
+  if (removeBtn) removeBtn.hidden = !url;
+}
+function initBgPicker() {
+  const pick = document.getElementById('acct-bg-pick');
+  const file = document.getElementById('acct-bg-file');
+  const removeBtn = document.getElementById('acct-bg-remove');
+  if (!pick || !file) return;
+  pick.addEventListener('click', () => file.click());
+  removeBtn?.addEventListener('click', () => {
+    profState.bgRemove = true; profState.bgStagedBlob = null; profState.bgStagedMime = '';
+    if (profState.bgStagedUrl) { try { URL.revokeObjectURL(profState.bgStagedUrl); } catch (_) {} profState.bgStagedUrl = ''; }
+    renderBgThumb(); renderProfPreview();
+  });
+  file.addEventListener('change', (e) => {
+    const f = e.target.files?.[0];
+    file.value = '';
+    if (!f) return;
+    if (PROF_BG_TYPES.indexOf(f.type) === -1) { errEl.textContent = 'Background must be JPEG, PNG, WebP, or GIF.'; return; }
+    if (f.size > 5 * 1024 * 1024) { errEl.textContent = 'Background is over 5 MB — choose a smaller file.'; return; }
+    errEl.textContent = '';
+    // GIFs upload as-is (a canvas downscale would freeze the animation); the
+    // server pipeline re-encodes + strips metadata regardless.
+    profState.bgStagedBlob = f; profState.bgStagedMime = f.type; profState.bgRemove = false;
+    if (profState.bgStagedUrl) { try { URL.revokeObjectURL(profState.bgStagedUrl); } catch (_) {} }
+    profState.bgStagedUrl = URL.createObjectURL(f);
+    renderBgThumb(); renderProfPreview();
+  });
+}
+
+// featured-review picker — only the user's OWN reviews can be pinned (the
+// public sheet fetches reviews/{key}/items/{their uid}, so it's structural).
+async function loadFeaturedChoices(uid) {
+  const sel = document.getElementById('acct-featured');
+  if (!sel) return;
+  try {
+    const snap = await getDocs(query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(60)));
+    snap.forEach((d) => {
+      if (!d.ref.path.startsWith('reviews/')) return;
+      const v = d.data() || {}; if (v.removed) return;
+      const key = d.ref.path.split('/')[1] || '';
+      const label = (titleById.get(key) || (key.indexOf('al:') === 0 ? 'a season' : key.replace(/-/g, ' ')));
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = `${label} — “${String(v.title || '(review)').slice(0, 60)}”`;
+      sel.appendChild(opt);
+    });
+    sel.value = profState.featuredAnime || '';
+    if (sel.value !== (profState.featuredAnime || '')) sel.value = '';
+  } catch (_) { /* leave the None option */ }
+  sel.addEventListener('change', () => { profState.featuredAnime = sel.value || ''; });
+}
+
+// load the saved customization into the studio
+async function initProfileStudio(user) {
+  try {
+    const ps = await getDoc(doc(db, 'profiles', user.uid));
+    if (ps.exists()) {
+      const p = ps.data() || {};
+      profState.bio = typeof p.bio === 'string' ? p.bio : '';
+      profState.status = typeof p.status === 'string' ? p.status : '';
+      profState.tags = Array.isArray(p.tags) ? p.tags.slice(0, 6).map((t) => String(t).slice(0, 24)) : [];
+      profState.accent = (PROF_ACCENTS.indexOf(p.accent) !== -1) ? p.accent : '';
+      profState.bgRef = typeof p.bgRef === 'string' ? p.bgRef : '';
+      profState.featuredAnime = typeof p.featuredAnime === 'string' ? p.featuredAnime : '';
+    }
+  } catch (_) {}
+  if (profStatus2()) profStatus2().value = profState.status;
+  if (profBio()) profBio().value = profState.bio;
+  // hydrate the current background thumb (SDK-derived URL, never doc-built)
+  if (profState.bgRef && /^uploads\/[A-Za-z0-9_-]{1,128}\/profilebg\/[A-Za-z0-9_-]{1,120}$/.test(profState.bgRef)) {
+    try {
+      profState.bgCurrentUrl = await getDownloadURL(storageRef(getStorage(), profState.bgRef));
+    } catch (_) { profState.bgCurrentUrl = ''; }
+  }
+  renderTagEditor(); renderAccentPicker(); renderBgThumb(); renderProfPreview();
+  loadFeaturedChoices(user.uid);
+  // live preview while typing
+  $('#prof-name')?.addEventListener('input', renderProfPreview);
+  profStatus2()?.addEventListener('input', renderProfPreview);
+  profBio()?.addEventListener('input', renderProfPreview);
+  const tagInput = document.getElementById('acct-tag-input');
+  tagInput?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    addProfTag(tagInput.value); tagInput.value = '';
+  });
+  initBgPicker();
+  document.getElementById('acct-view-public')?.addEventListener('click', () => {
+    location.href = 'index.html#profile=' + encodeURIComponent(user.uid);
+  });
 }
 
 
@@ -153,7 +398,8 @@ function renderActivity(items) {
     openBtn.textContent = it.title || it.animeId;
     openBtn.title = 'Open details';
     openBtn.addEventListener('click', () => {
-      location.href = `index.html#open=${encodeURIComponent(it.animeId)}`;
+      // dream-profile: forum items carry their own deep-link
+      location.href = it.href || `index.html#open=${encodeURIComponent(it.animeId)}`;
     });
 
     const desc = document.createElement('div');
@@ -174,6 +420,20 @@ function renderActivity(items) {
   });
 }
 
+// dream-profile — activity SEPARATED BY TYPE. Five streams, one merged model,
+// a chip filter on top: comments · replies (comment replies + review
+// discussions + forum replies) · threads (forum) · reviews. The two original
+// streams stay LIVE (onSnapshot); the three new ones are one-shot reads
+// (owner-scoped, capped — a tab visit doesn't need five live listeners).
+let actTypeFilter = 'all';
+const ACT_KIND_FOR_FILTER = {
+  all: null,
+  comments: ['comment'],
+  replies: ['reply'],
+  threads: ['thread'],
+  reviews: ['review'],
+};
+
 function subscribeActivity(user) {
   if (unsubActivity) { try { unsubActivity(); } catch(_) {} unsubActivity = null; }
 
@@ -187,13 +447,8 @@ function subscribeActivity(user) {
 
   const uid = user.uid;
 
-  // We listen to TWO streams and merge them:
-  // 1) collectionGroup('items')  -> anime comments + community reviews
-  // 2) collectionGroup('threads')-> discussion comments under community reviews
-  let itemsA = [];
-  let itemsB = [];
-  let gotA = false;
-  let gotB = false;
+  const streams = { items: [], discussions: [], replies: [], forumThreads: [], forumPosts: [] };
+  let gotAny = false;
 
   const shorten = (s, max = 120) => {
     const str = String(s || '').trim();
@@ -202,13 +457,15 @@ function subscribeActivity(user) {
   };
 
   const rerender = () => {
-    // Once at least one stream has loaded, render what we have
-    if (!gotA && !gotB) return;
-
-    const merged = [...itemsA, ...itemsB];
-    merged.sort((a,b) => (b.ms || 0) - (a.ms || 0));
-    renderActivity(merged.slice(0, 15));
+    if (!gotAny) return;
+    const merged = [...streams.items, ...streams.discussions, ...streams.replies,
+                    ...streams.forumThreads, ...streams.forumPosts];
+    const kinds = ACT_KIND_FOR_FILTER[actTypeFilter] || null;
+    const view = kinds ? merged.filter((it) => kinds.indexOf(it.kind) !== -1) : merged;
+    view.sort((a, b) => (b.ms || 0) - (a.ms || 0));
+    renderActivity(view.slice(0, 20));
   };
+  subscribeActivity._rerender = rerender;   // the chip handler reaches it
 
   const qItems = query(
     collectionGroup(db, 'items'),
@@ -218,40 +475,30 @@ function subscribeActivity(user) {
   );
 
   const unsubA = onSnapshot(qItems, (snap) => {
-    gotA = true;
+    gotAny = true;
     const next = [];
-
     snap.forEach((d) => {
       const data = d.data() || {};
+      if (data.removed) return;
       const path = d.ref.path.split('/');
       const root = path[0];
       const animeId = path[1];
       if (!animeId) return;
-
       const title = titleById.get(animeId) || animeId;
       const ms = toMillis(data.editedAt || data.updatedAt || data.createdAt);
-
-      let desc = '';
       if (root === 'comments') {
-        desc = `Commented: ${shorten(data.text)}`;
+        next.push({ animeId, title, ms, kind: 'comment', desc: `Commented: ${shorten(data.text)}` });
       } else if (root === 'reviews') {
         const rt = (data.title || '').trim();
         const r = (typeof data.rating === 'number') ? data.rating : null;
-        desc = r ? `Reviewed (${r}/10): ${shorten(rt)}` : `Reviewed: ${shorten(rt)}`;
-      } else {
-        return;
+        next.push({ animeId, title, ms, kind: 'review', desc: r ? `Reviewed (${r}/10): ${shorten(rt)}` : `Reviewed: ${shorten(rt)}` });
       }
-
-      next.push({ animeId, title, ms, desc });
     });
-
-    itemsA = next;
+    streams.items = next;
     rerender();
   }, (err) => {
     console.warn('Activity items failed:', err);
-    gotA = true;
-    itemsA = [];
-    rerender();
+    gotAny = true; streams.items = []; rerender();
   });
 
   const qThreads = query(
@@ -262,43 +509,84 @@ function subscribeActivity(user) {
   );
 
   const unsubB = onSnapshot(qThreads, (snap) => {
-    gotB = true;
+    gotAny = true;
     const next = [];
-
     snap.forEach((d) => {
       const data = d.data() || {};
+      if (data.removed) return;
       const path = d.ref.path.split('/');
       // reviews/{animeId}/items/{reviewUid}/threads/{tid}
       const animeId = path[1];
       if (!animeId) return;
-
       const title = titleById.get(animeId) || animeId;
       const ms = toMillis(data.editedAt || data.updatedAt || data.createdAt);
-      const txt = shorten(data.text);
-      const desc = `Discussion comment: ${txt}`;
-
-      next.push({ animeId, title, ms, desc });
+      next.push({ animeId, title, ms, kind: 'reply', desc: `Discussion comment: ${shorten(data.text)}` });
     });
-
-    itemsB = next;
+    streams.discussions = next;
     rerender();
   }, (err) => {
     console.warn('Activity threads failed:', err);
-
-    // NOTE: If you see a Firebase Console link about an index, you need to create it.
-    // Typical fix is a collection group index on:
-    //   threads: uid (ASC) + createdAt (DESC)
-
-    gotB = true;
-    itemsB = [];
-    rerender();
+    gotAny = true; streams.discussions = []; rerender();
   });
+
+  // one-shot: comment replies
+  getDocs(query(collectionGroup(db, 'replies'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(20)))
+    .then((snap) => {
+      const next = [];
+      snap.forEach((d) => {
+        const data = d.data() || {};
+        if (data.removed) return;
+        const animeId = d.ref.path.split('/')[1];
+        if (!animeId) return;
+        next.push({ animeId, title: titleById.get(animeId) || animeId, ms: toMillis(data.editedAt || data.updatedAt || data.createdAt),
+          kind: 'reply', desc: `Replied: ${shorten(data.text)}` });
+      });
+      gotAny = true; streams.replies = next; rerender();
+    }).catch(() => { gotAny = true; rerender(); });
+
+  // one-shot: forum threads + forum replies (the Tavern)
+  getDocs(query(collection(db, 'forum'), where('authorUid', '==', uid), orderBy('createdAt', 'desc'), limit(20)))
+    .then((snap) => {
+      const next = [];
+      snap.forEach((d) => {
+        const data = d.data() || {};
+        if (data.removed) return;
+        next.push({ title: 'The Tavern', ms: toMillis(data.editedAt || data.createdAt),
+          kind: 'thread', desc: `Thread: ${shorten(data.title)}`, href: `index.html#forum=${encodeURIComponent(d.id)}` });
+      });
+      gotAny = true; streams.forumThreads = next; rerender();
+    }).catch(() => { gotAny = true; rerender(); });
+  getDocs(query(collectionGroup(db, 'posts'), where('authorUid', '==', uid), orderBy('createdAt', 'desc'), limit(20)))
+    .then((snap) => {
+      const next = [];
+      snap.forEach((d) => {
+        const data = d.data() || {};
+        if (data.removed) return;
+        const tid = d.ref.path.split('/')[1];
+        next.push({ title: 'The Tavern', ms: toMillis(data.editedAt || data.createdAt),
+          kind: 'reply', desc: `Tavern reply: ${shorten(data.body)}`, href: tid ? `index.html#forum=${encodeURIComponent(tid)}` : undefined });
+      });
+      gotAny = true; streams.forumPosts = next; rerender();
+    }).catch(() => { gotAny = true; rerender(); });
 
   unsubActivity = () => {
     try { unsubA(); } catch(_) {}
     try { unsubB(); } catch(_) {}
   };
 }
+
+// the activity chips (account page) — filter without re-querying
+document.getElementById('acct-act-chips')?.addEventListener('click', (e) => {
+  const chip = e.target.closest('.profile-act-chip');
+  if (!chip) return;
+  actTypeFilter = chip.getAttribute('data-act') || 'all';
+  document.querySelectorAll('#acct-act-chips .profile-act-chip').forEach((c) => {
+    const on = c === chip;
+    c.classList.toggle('is-active', on);
+    c.setAttribute('aria-selected', String(on));
+  });
+  if (typeof subscribeActivity._rerender === 'function') subscribeActivity._rerender();
+});
 
 
 
@@ -438,6 +726,52 @@ function renderSaved(listEl, emptyEl, items, kind, uid) {
   });
 }
 
+// dream-profile — precise list controls: a client-side view (filter · sort ·
+// type) over the live snapshot. The snapshot stays the model; the controls
+// only change how it reads. al:<id> + #open=/#secondary= routing untouched.
+const savedView = {
+  watchlist: { items: [], filter: '', sort: 'recent', type: 'all' },
+  favorites: { items: [], filter: '', sort: 'recent', type: 'all' },
+};
+function applySavedView(kind) {
+  const st = savedView[kind];
+  let v = st.items.slice();
+  if (st.type !== 'all') v = v.filter((it) => (it.type || 'catalog') === st.type);
+  if (st.filter) {
+    const f = st.filter.toLowerCase();
+    v = v.filter((it) => String(it.title || it.animeId).toLowerCase().indexOf(f) !== -1);
+  }
+  if (st.sort === 'alpha') v.sort((a, b) => String(a.title || a.animeId).localeCompare(String(b.title || b.animeId)));
+  else if (st.sort === 'year') v.sort((a, b) => (b.year || 0) - (a.year || 0) || (b.ms || 0) - (a.ms || 0));
+  else v.sort((a, b) => (b.ms || 0) - (a.ms || 0));
+  return v;
+}
+function repaintSaved(kind, uid) {
+  const listEl = kind === 'watchlist' ? watchListEl : favListEl;
+  const emptyEl = kind === 'watchlist' ? watchEmptyEl : favEmptyEl;
+  const st = savedView[kind];
+  const v = applySavedView(kind);
+  if (emptyEl) emptyEl.textContent = (st.items.length && !v.length) ? 'No matches in this view.' : (kind === 'watchlist' ? 'No watchlist yet.' : 'No favorites yet.');
+  renderSaved(listEl, emptyEl, v, kind, uid);
+}
+function initSavedControls(uid) {
+  ['watchlist', 'favorites'].forEach((kind) => {
+    const host = document.querySelector(`[data-saved-controls="${kind}"]`);
+    if (!host || host._wired) return;
+    host._wired = true;
+    const st = savedView[kind];
+    host.querySelector('.saved-filter')?.addEventListener('input', (e) => { st.filter = e.target.value.trim(); repaintSaved(kind, uid); });
+    host.querySelector('select')?.addEventListener('change', (e) => { st.sort = e.target.value; repaintSaved(kind, uid); });
+    host.querySelectorAll('.saved-type-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        st.type = chip.getAttribute('data-type') || 'all';
+        host.querySelectorAll('.saved-type-chip').forEach((c) => c.classList.toggle('is-active', c === chip));
+        repaintSaved(kind, uid);
+      });
+    });
+  });
+}
+
 function subscribeSavedLists(user) {
   if (unsubFav) { try { unsubFav(); } catch(_) {} unsubFav = null; }
   if (unsubWatch) { try { unsubWatch(); } catch(_) {} unsubWatch = null; }
@@ -446,6 +780,7 @@ function subscribeSavedLists(user) {
   if (!user) return;
 
   const uid = user.uid;
+  initSavedControls(uid);
 
   unsubFav = onSnapshot(
     collection(db, 'users', uid, 'favorites'),
@@ -470,8 +805,8 @@ function subscribeSavedLists(user) {
           year: data.year || null
         });
       });
-      items.sort((a,b) => (b.ms || 0) - (a.ms || 0));
-      renderSaved(favListEl, favEmptyEl, items, 'favorites', uid);
+      savedView.favorites.items = items;
+      repaintSaved('favorites', uid);
     },
     (err) => console.error('Favorites list failed:', err)
   );
@@ -496,8 +831,8 @@ function subscribeSavedLists(user) {
           year: data.year || null
         });
       });
-      items.sort((a,b) => (b.ms || 0) - (a.ms || 0));
-      renderSaved(watchListEl, watchEmptyEl, items, 'watchlist', uid);
+      savedView.watchlist.items = items;
+      repaintSaved('watchlist', uid);
     },
     (err) => console.error('Watchlist failed:', err)
   );
@@ -652,18 +987,60 @@ saveBtn.addEventListener('click', async () => {
     await updateProfile(u, { displayName: name, photoURL: photo });
     await setDoc(doc(db, 'users', u.uid), { username: name, photoURL: photo }, { merge: true });
 
-    // v1.10.0 gate 15 — DUAL-WRITE the public profile doc (author reads across
-    // the site go profiles-first with a users fallback, so this mirror is what
-    // the new profile pages + CF sender identity prefer). Best-effort: the
-    // staged rules consent-gate profiles writes, so a pre-consent save must
-    // not break the legacy path above — the fallback keeps names rendering.
+    // dream-profile — stage the background upload BEFORE the profiles write so
+    // bgRef only ever points at an object that exists. The onProfileWritten CF
+    // sweeps the old object once the pointer moves; a failed upload surfaces
+    // honestly (verify-email / size are the usual suspects) and the save of
+    // everything else still proceeds.
+    let nextBgRef = profState.bgRemove ? null : (profState.bgRef || null);
+    let bgUploadErr = '';
+    if (profState.bgStagedBlob && !profState.bgRemove) {
+      try {
+        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        const path = `uploads/${u.uid}/profilebg/${id}`;
+        await uploadBytes(storageRef(getStorage(), path), profState.bgStagedBlob, { contentType: profState.bgStagedMime });
+        nextBgRef = path;
+      } catch (bgErr) {
+        bgUploadErr = !u.emailVerified
+          ? 'Background not saved — verify your email first (uploads are email-verified only).'
+          : (/permission|unauthorized|403/i.test(String(bgErr?.message || bgErr))
+              ? 'Background not saved — uploads unlock after you accept the community rules (open any discussion to read them).'
+              : 'Background upload failed — ' + (bgErr?.message || String(bgErr)));
+      }
+    }
+
+    // v1.10.0 gate 15 → dream-profile — the public profile doc now carries the
+    // whole identity (name/photo/bio/status/tags/accent/bgRef/featuredAnime).
+    // Best-effort: the staged rules consent-gate profiles writes, so a
+    // pre-consent save must not break the legacy path above — but it now SAYS
+    // so instead of failing silent.
+    let profWriteOk = true;
     try {
       const pref = doc(db, 'profiles', u.uid);
       const pSnap = await getDoc(pref);
-      const pData = { displayName: name, photoURL: photo };
+      const pData = {
+        displayName: name, photoURL: photo,
+        bio: (profBio()?.value || '').trim().slice(0, 500),
+        status: (profStatus2()?.value || '').trim().slice(0, 80),
+        tags: profState.tags.slice(0, 6).map((t) => String(t).slice(0, 24)),
+        // the accent enum has no null — clearing means REMOVING the key
+        // (post-merge the key is gone, so the rules' `in`-check is skipped).
+        accent: (PROF_ACCENTS.indexOf(profState.accent) !== -1) ? profState.accent : deleteField(),
+        bgRef: nextBgRef,
+        featuredAnime: profState.featuredAnime || null,
+      };
       if (!pSnap.exists()) pData.joinedAt = serverTimestamp();   // member-since: first write only
       await setDoc(pref, pData, { merge: true });
-    } catch (_profileErr) { /* un-consented yet — the users/ fallback covers reads */ }
+      profState.bgRef = nextBgRef || '';
+    } catch (_profileErr) {
+      profWriteOk = false;
+    }
+
+    if (bgUploadErr) { errEl.textContent = bgUploadErr; saveBtn.disabled = false; return; }
+    if (!profWriteOk) {
+      errEl.textContent = 'Your name is saved. The public profile bits (bio, tags, background…) unlock after you accept the community rules — open any discussion to read and accept them.';
+      saveBtn.disabled = false; return;
+    }
 
     // Full-page reload to signal saved state (your request #3)
     location.reload();
@@ -703,10 +1080,25 @@ onAuthStateChanged(auth, (user) => {
   const headerSignoutBtn = document.querySelector('#signout-btn');
   if (headerSignoutBtn) headerSignoutBtn.style.display = '';
   subscribeSavedLists(user);
-  subscribeActivity(user);
+  // adversarial perf MED: DON'T subscribe activity on load — it's ~110 reads +
+  // 2 live collection-group listeners for a tab that starts HIDDEN (Profile is
+  // the default). Defer to the first time the Activity tab is opened. If the
+  // page deep-links straight to activity, run it now.
+  activityUserPending = user;
+  if (document.querySelector('.side-link[data-tab="activity"].is-active')) ensureActivity();
+  initProfileStudio(user);   // dream-profile — the identity studio
   initInbox(user);   // gate 18 — the Message-Blake DM
   // Notifications (Lantern) subscribe to auth on their own inside initLantern().
 });
+
+// lazy activity — subscribe the first time the Activity tab is shown
+let activityUserPending = null;
+let activityStarted = false;
+function ensureActivity() {
+  if (activityStarted || !activityUserPending) return;
+  activityStarted = true;
+  subscribeActivity(activityUserPending);
+}
 
 // =============================================================================
 // GATE 18 — the INBOX (admin-floor DM: "Message Blake"). Peer DMs stay BANKED —

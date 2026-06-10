@@ -46,6 +46,7 @@ const { sniffImageType, contentTypeMatches, parseUploadPath } = require('./lib/i
 const { capDecision } = require('./lib/uploadcap');   // gate 13 — per-user bucket-fill cap
 const images = require('./lib/images');               // gate 14 — admin atomic image removal
 const { sha256Hex, hashDocId } = require('./lib/imagehash'); // image overhaul — per-user dedupe
+const { likeDelta, shouldNotifyLike, likeNotifId, bgSweepDecision } = require('./lib/profile'); // dream profile
 
 setGlobalOptions({
   region: 'us-central1',
@@ -445,14 +446,25 @@ exports.onUserDelete = onDocumentDeleted('users/{uid}', async (event) => {
   const foreignVotes = await db.collectionGroup('votes').where('uid', '==', uid).get();
   foreignVotes.forEach((d) => tasks.push(d.ref.delete()));
 
+  // FOREIGN profile likes (dream profile) — the user's like docs under OTHER
+  // people's profiles (same shape as the votes sweep; like docs carry
+  // uid == liker). Each delete fires onProfileLike, which decrements that
+  // profile's likesCount — counts stay exact as the fan departs.
+  const foreignLikes = await db.collectionGroup('likes').where('uid', '==', uid).get();
+  foreignLikes.forEach((d) => tasks.push(d.ref.delete()));
+
   // the user's own subtree (favorites/watchlist/notifications/notifPrefs/notifMeta)
-  // + public profile.
+  // + public profile. The profile recursiveDeletes (its likes subcollection
+  // must not orphan), and the doc's deletion trips onProfileWritten -> the bg
+  // object leaves Storage with it.
   tasks.push(db.recursiveDelete(db.doc('users/' + uid)));
-  tasks.push(db.doc('profiles/' + uid).delete());
+  tasks.push(db.recursiveDelete(db.doc('profiles/' + uid)));
 
   // gate 14 — EVERY image they ever uploaded leaves Storage ("ZERO trace" now
-  // spans the bucket, not just Firestore).
+  // spans the bucket, not just Firestore). Avatars live under their own top-
+  // level prefix (NOT uploads/) — sweep it too or it orphans on account wipe.
   tasks.push(uploadsBucket().deleteFiles({ prefix: 'uploads/' + uid + '/' }).catch(() => {}));
+  tasks.push(uploadsBucket().deleteFiles({ prefix: 'avatars/' + uid + '/' }).catch(() => {}));
 
   // tombstone DMs they're in (don't half-delete the other party's thread).
   const convos = await db.collection('conversations').where('participants', 'array-contains', uid).get();
@@ -552,8 +564,13 @@ exports.onBanCascade = onDocumentCreated('banned/{uid}', async (event) => {
   if (await alreadyProcessed(event.id)) return;
   await moderation.runBanCascade(db, FieldValue, event.params.uid);
   // gate 14 — a banned user's images actually leave Storage (the redaction
-  // above empties their docs; this empties their bucket prefix).
-  await uploadsBucket().deleteFiles({ prefix: 'uploads/' + event.params.uid + '/' }).catch(() => {});
+  // above empties their docs; this empties their bucket prefixes). avatars/
+  // is its own top-level prefix (NOT under uploads/) — a banned account's
+  // face must not stay world-readable either.
+  await Promise.all([
+    uploadsBucket().deleteFiles({ prefix: 'uploads/' + event.params.uid + '/' }).catch(() => {}),
+    uploadsBucket().deleteFiles({ prefix: 'avatars/' + event.params.uid + '/' }).catch(() => {}),
+  ]);
 });
 
 // =============================================================================
@@ -789,3 +806,92 @@ exports.onDmMessageCreate = onDocumentCreated(
     });
   }
 );
+
+// =============================================================================
+// v1.10.0 — DREAM PROFILE CFs (profile likes + the background edit-strip sweep).
+// STAGED — deploys with the rest of v1.10.0. The rules own the write shape
+// (profiles/{uid}/likes/{likerUid} = { uid, value: 1, updatedAt }, LIKE-ONLY,
+// self-like denied, unlike = delete); these CFs own what rules can't: the
+// exact profiles/{uid}.likesCount, the owner's ping, and the orphaned-Storage-
+// object class for backgrounds. Decision cores in lib/profile.js (pure units).
+// =============================================================================
+
+// onProfileLike — fires on a like doc create/delete under a profile. (1) keeps
+// profiles/{uid}.likesCount exact via atomic increment (CF-owned — clients
+// can't write it); (2) on a fresh CREATE only, pings the profile owner with
+// server-sourced identity, honoring the owner's mute. The notification id is
+// DETERMINISTIC (likeNotifId: 'pl_' + liker) so an unlike/re-like toggle
+// OVERWRITES one doc instead of stacking pings. Unlike never pings.
+exports.onProfileLike = onDocumentWritten(
+  'profiles/{uid}/likes/{likerUid}',
+  async (event) => {
+    if (await alreadyProcessed(event.id)) return;
+    const uid = event.params.uid;
+    const likerUid = event.params.likerUid;
+    // dream-profile HEART (adversarial MED, defense in depth): never let the
+    // carve-out count touch Blake's own profile — the rules already deny it,
+    // this guards the count+ping even if a like doc lands by some other path.
+    if (uid === 'G2jGRa14u8bzGAmeBTkvXy8PKmr1') return;   // ADMIN_UID (status-quo literal, as in lib/moderation.js)
+    const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+    const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+
+    // (1) exact count. On a CREATE (delta > 0) use set+merge so a like on a
+    // member who has no profiles doc yet (legacy users/-only identity) still
+    // MATERIALIZES the count instead of silently no-op'ing an update() against a
+    // missing doc (adversarial LOW: undercount/negative-drift). On a DELETE
+    // (delta < 0) use update() — an unlike racing the profile's deletion
+    // (onUserDelete fans out unlikes via the foreign-likes sweep) must NOT
+    // resurrect a ghost profiles doc holding only a count.
+    const delta = likeDelta(before, after);
+    if (delta > 0) {
+      await db.doc('profiles/' + uid).set({ likesCount: FieldValue.increment(delta) }, { merge: true }).catch(() => {});
+    } else if (delta < 0) {
+      await db.doc('profiles/' + uid).update({ likesCount: FieldValue.increment(delta) }).catch(() => {});
+    }
+
+    // (2) ping — CREATE only, never self (rules already deny a self-like;
+    // defense in depth here because this runs with rules bypassed).
+    if (!shouldNotifyLike(before, after, uid, likerUid)) return;
+
+    // mute-at-source: don't even write the doc if the owner muted this type
+    const prefsSnap = await db.doc('users/' + uid + '/notifPrefs/prefs').get();
+    if (prefsSnap.exists && isMuted(prefsSnap.data(), 'profile_like')) return;
+
+    const ident = await senderIdentity(likerUid);
+    // adversarial MED (relight spam): use create(), NOT set(). The deterministic
+    // pl_<liker> id stops STACKING; create-if-absent also stops RE-LIGHTING — an
+    // unlike→re-like loop can no longer flip an already-read ping back to unread
+    // with a fresh timestamp (the doc already exists → create throws → caught).
+    // One appreciation ping per liker, ever; the count still moves each toggle.
+    await db.doc('users/' + uid + '/notifications/' + likeNotifId(likerUid)).create({
+      toUid: uid,
+      fromUid: likerUid,
+      fromDisplayName: ident.name,   // server-sourced — a forged client name never reaches here
+      fromPhotoURL: ident.photo,
+      type: 'profile_like',
+      value: 1,
+      verb: 'liked your profile',
+      targetPath: 'profiles/' + uid,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + NOTIF_TTL_DAYS * DAY_MS),
+    }).catch(() => {});   // already pinged this liker — do not re-light
+  }
+);
+
+// onProfileWritten — the background EDIT-STRIP sweeper. When a profile's bgRef
+// changes (new background), is removed, or the doc itself is deleted, the OLD
+// object must leave Storage — redacting only the pointer leaves the image
+// world-readable (the gate-14 legal trap, now on the edit path no delete
+// cascade sees). bgSweepDecision's unchanged-bgRef no-op is the FIRST early
+// return — load-bearing, because this CF fires on every likesCount increment
+// onProfileLike writes — and it refuses any ref outside the owner's own
+// uploads/{uid}/profilebg/ prefix. No cfProcessed marker: an object delete is
+// naturally idempotent (mirrors the onDocumentDeleted sweeps).
+exports.onProfileWritten = onDocumentWritten('profiles/{uid}', async (event) => {
+  const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  const dec = bgSweepDecision(before, after, event.params.uid);
+  if (!dec.sweep) return; // unchanged / no bg / foreign-prefix ref — touch nothing
+  await uploadsBucket().file(dec.path).delete({ ignoreNotFound: true }).catch(() => {});
+});

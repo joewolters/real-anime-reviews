@@ -93,6 +93,42 @@ test('adminRemoveImage: REVIEW + COMMENT + REPLY doc paths accepted (image overh
   await ok('comments/al:101922/items/c1/replies/r2');    // depth-1 reply
 });
 
+test('adminRemoveImage: PROFILES bgRef variant — binding enforced, Storage FIRST, bgRef dropped', async () => {
+  const img = 'uploads/u1/profilebg/bg1';
+  const { calls, updates, db, bucket, FieldValue } = fakes([], { bgRef: img });
+  const res = await applyAdminRemoveImage(db, bucket, FieldValue, ADMIN_UID, 'profiles/u1', img);
+  assert.equal(res.ok, true);
+  assert.deepEqual(calls, ['storage:' + img, 'doc:profiles/u1'], 'Storage object FIRST, pointer second');
+  assert.ok(updates[0].bgRef && updates[0].bgRef.__delete, 'bgRef must be FieldValue.delete()d');
+});
+
+test('adminRemoveImage: PROFILES — unbound / foreign / non-bg pointers remove NOTHING; junk paths rejected', async () => {
+  const img = 'uploads/u1/profilebg/bg1';
+  // pointer mismatch — the doc points at a different object
+  const a = fakes([], { bgRef: 'uploads/u1/profilebg/other' });
+  await assert.rejects(
+    applyAdminRemoveImage(a.db, a.bucket, a.FieldValue, ADMIN_UID, 'profiles/u1', img),
+    /not attached/);
+  assert.deepEqual(a.calls, []);
+  // a FOREIGN-owner object, even when the doc DOES point at it (forged pre-rules pointer)
+  const foreign = 'uploads/victim/profilebg/bg9';
+  const b = fakes([], { bgRef: foreign });
+  await assert.rejects(
+    applyAdminRemoveImage(b.db, b.bucket, b.FieldValue, ADMIN_UID, 'profiles/u1', foreign),
+    /not attached/);
+  assert.deepEqual(b.calls, [], 'the victim\'s object was NOT touched');
+  // not a profilebg upload (the pointer aims at a forum image)
+  const c = fakes([], { bgRef: 'uploads/u1/somepost/i1' });
+  await assert.rejects(
+    applyAdminRemoveImage(c.db, c.bucket, c.FieldValue, ADMIN_UID, 'profiles/u1', 'uploads/u1/somepost/i1'),
+    /not attached/);
+  // subcollection junk under profiles is not a valid docPath
+  const d = fakes([], { bgRef: img });
+  await assert.rejects(
+    applyAdminRemoveImage(d.db, d.bucket, d.FieldValue, ADMIN_UID, 'profiles/u1/likes/l1', img),
+    /docPath/);
+});
+
 test('adminRemoveImage: non-content / truncated / traversal docPaths all rejected', async () => {
   const bad = async (docPath) => {
     const { calls, db, bucket, FieldValue } = fakes(['uploads/u/p1/i1']);

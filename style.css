@@ -67,6 +67,12 @@ body::before {
 :root[data-surface="discover"] { --veil-w0: 0.28; --veil-w1: 0.42; --veil-w2: 0.58; }  /* open — city breathes through */
 :root[data-surface="hub"]      { --veil-w0: 0.67; --veil-w1: 0.79; --veil-w2: 0.88; }  /* v1.10.0 — the Lantern Room: cozier than Discover, distinct from Den */
 :root[data-surface="tool"]     { --veil-w0: 0.70; --veil-w1: 0.82; --veil-w2: 0.92; }  /* View All — a touch lighter than Den */
+:root[data-surface="account"]  { --veil-w0: 0.62; --veil-w1: 0.76; --veil-w2: 0.88; }  /* dream-profile — personal-cozy: warmer than For-You, never the Den's 0.80 */
+/* dream-profile — the account page's OWN night: the neon-sakura street (Blake's
+   new asset, webp derivative) replaces the city under the SAME constellation
+   veil. Same compositor layer, zero new cost; the page reads personal + unique
+   while staying inside the veil vocabulary. */
+html[data-surface="account"] body::before { background-image: url('assets/account_background.webp'); }
 /* Intentionally on :root (not a specific selector) — it kills ONLY the veil-wash var
    transition above so the density snaps instantly under reduced-motion; don't add an
    unrelated :root transition expecting it to survive here. */
@@ -5037,18 +5043,27 @@ body.filter-open { overflow: hidden; }
   border: 1px solid rgba(255,255,255,.18);
   overflow: hidden;
 }
+/* fix 1 — the toggle stacks (optional cover banner above the headline); the
+   old avatar|title|rating grid moved onto .row-headline. */
 .review-row .row-toggle {
   width: 100%;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   padding: 10px 12px;
   background: transparent;
   color: #fff;
   border: none;
   text-align: left;
   cursor: pointer;
+}
+.review-row .row-headline {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 /* Community review titles: wrap + break long unspaced strings */
 .review-row .row-title{
@@ -5330,8 +5345,8 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 999px;
 }
 
-/* Community row avatar */
-.review-list .review-row .row-toggle {
+/* Community row avatar (fix 1: the grid lives on .row-headline now) */
+.review-list .review-row .row-headline {
   display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
 }
 .review-list .review-row .row-avatar {
@@ -9163,9 +9178,22 @@ html.rar-welcome-pending::before {
 .profile-empty { color: rgba(217, 201, 255, 0.5); font-size: 0.85rem; padding: 6px 2px; list-style: none; }
 .profile-tombstone { text-align: center; padding: 36px 10px 26px; color: #e9ddff; line-height: 1.7; }
 
-/* mega-batch A4 — the review COVER leads the collapsed row (purple, never gold) */
-.row-toggle .row-cover { width: 48px; height: 34px; object-fit: cover; border-radius: 7px;
-  border: 1px solid rgba(187, 134, 252, 0.35); margin-right: 8px; flex: 0 0 auto; }
+/* fix 1 — the review COVER redesign (was a 48×34 inline thumb Blake called
+   "terrible and not large"): a cover-carrying row leads with a full-width
+   banner strip above the headline. Purple frame, never gold; a gradient floor
+   settles the art into the row panel. Cover-less rows are untouched. */
+.review-row .row-cover-banner { position: relative; display: block; width: 100%; height: 116px;
+  border-radius: 10px; overflow: hidden; border: 1px solid rgba(187, 134, 252, 0.35);
+  background: rgba(187, 134, 252, 0.06); }
+.review-row .row-cover-banner::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 55%, rgba(14, 4, 30, 0.55)); pointer-events: none; }
+.review-row .row-cover { width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform .35s ease; }
+.review-row.has-cover .row-toggle:hover .row-cover { transform: scale(1.025); }
+@media (prefers-reduced-motion: reduce) {
+  .review-row .row-cover { transition: none !important; }
+  .review-row.has-cover .row-toggle:hover .row-cover { transform: none !important; }
+}
 
 /* mega-batch A3 — the card thumb grows into a left rail with the topic pill
    OVERLAID on the art (uniform pill position across thumbed + text cards). */
@@ -9460,3 +9488,180 @@ html.rar-welcome-pending::before {
 @media (prefers-reduced-motion: reduce) {
   .hub-admin-bar .hub-admin { transition: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   DREAM-PROFILE GATE — profile customization + the account page's own night.
+   HEART RULES BAKED IN: the accent palette holds NO gold/yellow (a profile can
+   never dress itself in Blake's color); the like row is the ONE sanctioned
+   community count and it is purple; everything else stays count-free.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* the pfp is a link wherever the name is (fix 2) */
+.rar-ava-link { cursor: pointer; }
+.rar-ava-link:hover { box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.65); }
+.rar-ava-link:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+
+/* accent — the curated six (deliberately gold-free) */
+.profile-sheet { --pf-accent: #bb86fc; }
+.profile-sheet[data-accent="violet"] { --pf-accent: #bb86fc; }
+.profile-sheet[data-accent="ember"]  { --pf-accent: #ff8a65; }
+.profile-sheet[data-accent="teal"]   { --pf-accent: #4dd0e1; }
+.profile-sheet[data-accent="rose"]   { --pf-accent: #f48fb1; }
+.profile-sheet[data-accent="sky"]    { --pf-accent: #81d4fa; }
+.profile-sheet[data-accent="moss"]   { --pf-accent: #a5d6a7; }
+.profile-sheet[data-accent] .profile-avatar { border-color: var(--pf-accent); }
+
+/* the profile BACKGROUND layer — under everything, behind a dark floor so the
+   sheet's text never fights the art. The img may be swapped for a one-frame
+   canvas under reduced-motion (the GIF freeze). */
+/* adversarial perf MED: own compositor layer so an animated-GIF background
+   re-rasters ONLY the bg, not the sheet's text/avatar/rows above it. */
+.profile-bg-wrap { position: absolute; inset: 0; border-radius: 18px; overflow: hidden; z-index: 0; pointer-events: none; transform: translateZ(0); }
+.profile-bg-wrap .profile-bg { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.38; }
+.profile-bg-wrap::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(14, 4, 30, 0.30) 0%, rgba(14, 4, 30, 0.78) 55%, rgba(14, 4, 30, 0.96) 100%); }
+.profile-sheet.has-bg > *:not(.profile-bg-wrap) { position: relative; z-index: 1; }
+
+/* kicker actions (⚑ report rides beside close) */
+.profile-kicker-actions { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; }
+.profile-report { width: 34px; height: 34px; border-radius: 9px; background: rgba(30, 10, 60, 0.9);
+  border: 1px solid rgba(187, 134, 252, 0.5); color: #d9c9ff; cursor: pointer; font-size: 0.95rem; }
+.profile-report:hover { border-color: rgba(187, 134, 252, 0.9); color: #fff; }
+.profile-report:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+
+/* status line + self-tags */
+.profile-status { margin-top: 4px; font-size: 0.86rem; color: #e9ddff; font-style: italic; opacity: 0.92; }
+.profile-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.profile-tag { font: 600 0.7rem 'Montserrat', sans-serif; letter-spacing: 0.04em; color: #efe6ff;
+  padding: 3px 10px; border-radius: 999px; background: rgba(187, 134, 252, 0.12);
+  border: 1px solid var(--pf-accent, #bb86fc); max-width: 180px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+
+/* the heart carve-out — profile likes (purple, never gold, only here) */
+.profile-like-row { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.profile-like-btn { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 999px;
+  background: rgba(187, 134, 252, 0.10); border: 1px solid var(--pf-accent, #bb86fc); color: #efe6ff;
+  font: 600 0.8rem 'Montserrat', sans-serif; cursor: pointer; }
+.profile-like-btn:hover { background: rgba(187, 134, 252, 0.2); }
+.profile-like-btn:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+.profile-like-btn .profile-like-heart { color: #d9a8ff; }
+.profile-like-btn.is-liked { background: rgba(187, 134, 252, 0.28); border-color: #d9a8ff; }
+.profile-like-count { font: 700 0.9rem 'Montserrat', sans-serif; color: #d9c9ff; }
+
+/* 📌 the featured pin */
+.profile-featured { display: flex; flex-direction: column; gap: 3px; margin: 16px 0 4px; padding: 12px 14px;
+  border-radius: 12px; cursor: pointer; background: rgba(187, 134, 252, 0.08);
+  border: 1px solid var(--pf-accent, #bb86fc); }
+.profile-featured:hover { background: rgba(187, 134, 252, 0.15); }
+.profile-featured:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+.profile-featured-kicker { font: 700 0.64rem 'Montserrat', sans-serif; letter-spacing: 0.12em; color: #cbb0ff; }
+
+/* activity, separated by type */
+.profile-acts { display: flex; gap: 7px; margin: 18px 0 10px; flex-wrap: wrap; }
+.profile-act-chip { padding: 6px 13px; border-radius: 999px; font: 600 0.74rem 'Montserrat', sans-serif;
+  letter-spacing: 0.05em; color: #d9c9ff; background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(187, 134, 252, 0.3); cursor: pointer; }
+.profile-act-chip:hover { border-color: rgba(187, 134, 252, 0.65); }
+.profile-act-chip.is-active { background: rgba(187, 134, 252, 0.2); border-color: var(--pf-accent, #bb86fc); color: #fff; }
+.profile-act-chip:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+
+/* ── the ACCOUNT page under its own night: panels go translucent so the
+   neon-sakura street + veil read through; the side rail gets the kicker
+   treatment. Scoped to the account surface — index is untouched.
+   adversarial perf HIGH: NO backdrop-filter here. These are always-visible
+   SCROLLING page panels (not transient modals like the sanctioned blur uses),
+   and the veil pulse animates beneath them — a live blur(7px) would force a
+   full-viewport re-blur every animation AND scroll frame (the exact v1.8.0
+   "static dim beats live blur" lesson). A higher background alpha does the
+   legibility job with zero per-frame paint. ── */
+html[data-surface="account"] .account-side {
+  background: rgba(16, 4, 34, 0.9);
+}
+html[data-surface="account"] .account-card {
+  background: rgba(22, 6, 44, 0.92);
+  box-shadow: 0 0 0 1px rgba(187, 134, 252, 0.22) inset, 0 14px 38px rgba(0, 0, 0, 0.4);
+}
+html[data-surface="account"] .side-link { background: rgba(255, 255, 255, 0.05); }
+html[data-surface="account"] .side-link.is-active {
+  background: rgba(187, 134, 252, 0.16);
+  box-shadow: 0 0 0 1.5px rgba(187, 134, 252, 0.55);
+}
+
+/* the account page's IDENTITY editor (the dream controls) */
+.acct-kicker { font: 800 0.68rem 'Montserrat', sans-serif; letter-spacing: 0.16em; color: #cbb0ff;
+  text-transform: uppercase; margin: 0 0 2px; }
+.acct-kicker .jp-mini { margin-left: 6px; }
+.acct-section-sub { color: #b8a8d8; font-size: 0.8rem; margin: 0 0 12px; }
+.acct-preview { position: relative; border-radius: 14px; overflow: hidden;
+  border: 1px solid rgba(187, 134, 252, 0.35); margin-bottom: 16px; padding: 18px 14px;
+  background: linear-gradient(180deg, rgba(26, 8, 52, 0.92), rgba(14, 4, 30, 0.94)); }
+.acct-preview .profile-head { position: relative; z-index: 1; padding: 0; text-align: center; }
+.acct-preview .profile-like-row { display: none; }   /* the preview shows identity, not the count */
+.acct-preview-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; transform: translateZ(0); }
+.acct-preview-bg img, .acct-preview-bg canvas { width: 100%; height: 100%; object-fit: cover; opacity: 0.38; display: block; }
+.acct-preview-bg::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(14, 4, 30, 0.35) 0%, rgba(14, 4, 30, 0.9) 100%); }
+.acct-preview[data-accent="violet"] { --pf-accent: #bb86fc; }
+.acct-preview[data-accent="ember"]  { --pf-accent: #ff8a65; }
+.acct-preview[data-accent="teal"]   { --pf-accent: #4dd0e1; }
+.acct-preview[data-accent="rose"]   { --pf-accent: #f48fb1; }
+.acct-preview[data-accent="sky"]    { --pf-accent: #81d4fa; }
+.acct-preview[data-accent="moss"]   { --pf-accent: #a5d6a7; }
+.acct-preview-open { margin-top: 10px; }
+
+/* tag editor — chips you can remove + an adder */
+.acct-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.acct-tag-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 11px;
+  border-radius: 999px; background: rgba(187, 134, 252, 0.12); border: 1px solid rgba(187, 134, 252, 0.5);
+  color: #efe6ff; font: 600 0.74rem 'Montserrat', sans-serif; }
+.acct-tag-x { border: none; background: none; color: #cbb0ff; cursor: pointer; font-size: 0.9rem; padding: 0 2px; }
+.acct-tag-x:hover { color: #fff; }
+.acct-tag-input { min-width: 130px; flex: 1 1 auto; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; color: #fff; padding: 7px 10px; }
+.acct-tag-suggest { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.acct-tag-suggest button { padding: 3px 9px; border-radius: 999px; font: 600 0.68rem 'Montserrat', sans-serif;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.3); color: #d9c9ff; cursor: pointer; }
+.acct-tag-suggest button:hover { border-color: rgba(187, 134, 252, 0.7); color: #fff; }
+
+/* accent swatches */
+.acct-accents { display: flex; gap: 9px; flex-wrap: wrap; }
+.acct-accent { width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.25); }
+.acct-accent.is-active { border-color: #fff; box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.45); }
+.acct-accent:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+.acct-accent[data-accent="violet"] { background: #bb86fc; }
+.acct-accent[data-accent="ember"]  { background: #ff8a65; }
+.acct-accent[data-accent="teal"]   { background: #4dd0e1; }
+.acct-accent[data-accent="rose"]   { background: #f48fb1; }
+.acct-accent[data-accent="sky"]    { background: #81d4fa; }
+.acct-accent[data-accent="moss"]   { background: #a5d6a7; }
+
+/* background uploader row */
+.acct-bg-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acct-bg-thumb { width: 96px; height: 54px; border-radius: 9px; overflow: hidden;
+  border: 1px solid rgba(187, 134, 252, 0.4); background: rgba(187, 134, 252, 0.08);
+  display: grid; place-items: center; color: #b8a8d8; font-size: 0.66rem; }
+.acct-bg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acct-bg-note { flex-basis: 100%; color: #b8a8d8; font-size: 0.72rem; }
+
+/* featured-review picker */
+.acct-featured-select { width: 100%; background: rgba(255, 255, 255, 0.06); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; padding: 8px 10px; }
+.acct-featured-select option { background: #1a0834; }
+
+/* watchlist/favorites precise controls */
+.saved-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 10px; }
+.saved-controls .saved-filter { flex: 1 1 160px; min-width: 140px; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; color: #fff; padding: 7px 10px; }
+.saved-controls select { background: rgba(255, 255, 255, 0.06); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; padding: 7px 9px; }
+.saved-controls select option { background: #1a0834; }
+.saved-type-chip { padding: 5px 11px; border-radius: 999px; font: 600 0.7rem 'Montserrat', sans-serif;
+  color: #d9c9ff; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.3); cursor: pointer; }
+.saved-type-chip.is-active { background: rgba(187, 134, 252, 0.2); border-color: rgba(187, 134, 252, 0.7); color: #fff; }
+
+/* activity-by-type chips on the account page */
+.acct-act-chips { display: flex; gap: 7px; flex-wrap: wrap; margin: 0 0 10px; }
+
+/* reduced-motion: nothing here animates per-frame; the only transition is the
+   review-cover hover zoom, silenced above. */

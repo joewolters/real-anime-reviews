@@ -239,7 +239,44 @@ async function seed() {
       resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
     });
     await db.doc('forum/th-new').set({ imageRefs: [thumbPath], thumbImage: thumbPath }, { merge: true });
-    console.log('✓ Seeded practice images (REAL 480x270): inline on th-opm/p0 + a card thumbnail on th-new.');
+    // (3) a review COVER on Mika's One Punch Man review (fix 1 — the banner
+    // presentation needs a cover-carrying row to smoke against).
+    const coverPath = 'uploads/prac-mika/rvopm/seed-cover1';
+    await bucket.file(coverPath).save(await sharp(Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="320">
+         <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+           <stop offset="0" stop-color="#2b0a54"/><stop offset="0.55" stop-color="#7a2bb8"/><stop offset="1" stop-color="#ff4fd8"/>
+         </linearGradient></defs><rect width="960" height="320" fill="url(#g)"/></svg>`
+    )).png().toBuffer(), {
+      resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
+    });
+    await db.doc('reviews/one-punch-man/items/prac-mika').set({ thumbImage: coverPath, imageRefs: [coverPath] }, { merge: true });
+    // (4) dream-profile — Mika wears the FULL kit (bio/status/tags/accent/bg/
+    // featured + a CF-shaped likesCount) so the profile sheet smokes loaded;
+    // Sora stays bare (the empty-state invites). Counts set directly (Admin
+    // SDK bypasses the CF — same convention as the vote counts above).
+    const bgPath = 'uploads/prac-mika/profilebg/seedbg1';
+    await bucket.file(bgPath).save(await sharp(Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500">
+         <rect width="1200" height="500" fill="#0a2342"/>
+         <circle cx="220" cy="120" r="2.2" fill="#bfe3ff"/><circle cx="480" cy="80" r="1.6" fill="#bfe3ff"/>
+         <circle cx="760" cy="170" r="2.4" fill="#e3c9ff"/><circle cx="1020" cy="90" r="1.8" fill="#bfe3ff"/>
+         <circle cx="340" cy="330" r="1.7" fill="#e3c9ff"/><circle cx="880" cy="380" r="2.1" fill="#bfe3ff"/>
+       </svg>`
+    )).png().toBuffer(), {
+      resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
+    });
+    await db.doc('profiles/prac-mika').set({
+      bio: 'Back-half believer. If the finale lands, I forgive everything.',
+      status: 'rewatching the big fight, again',
+      tags: ['Action', 'Sub', 'Binge-watcher'],
+      accent: 'teal',
+      bgRef: bgPath,
+      featuredAnime: 'one-punch-man',
+      likesCount: 2,
+      joinedAt: TS.fromMillis(Date.now() - 90 * 24 * 3600000),
+    }, { merge: true });
+    console.log('✓ Seeded practice images (REAL 480x270): inline on th-opm/p0 + card thumbnail on th-new + review cover + Mika\'s dream profile (bg/tags/accent/featured/likes).');
   } catch (e) { console.warn('storage seed skipped:', e.message); }
 
   // seed a full notification inbox for MIKA so Blake can smoke the Lantern (every
@@ -258,6 +295,8 @@ async function seed() {
     { type: 'comment_vote', fromUid: 'prac-aki', fromDisplayName: 'Aki', value: 1, verb: 'liked your comment', animeId: 'one-punch-man', targetPath: 'comments/one-punch-man/items/seed-0', createdAt: now - 900000 },
     { type: 'comment_vote', fromUid: 'prac-sora', fromDisplayName: 'Sora', value: 1, verb: 'liked your comment', animeId: 'one-punch-man', targetPath: 'comments/one-punch-man/items/seed-0', createdAt: now - 1000000 },
     { type: 'review_vote', fromUid: 'prac-ren', fromDisplayName: 'Ren', value: 1, verb: 'found your review helpful', animeId: 'one-punch-man', targetPath: 'reviews/one-punch-man/items/prac-mika', createdAt: now - 1100000 },
+    // dream-profile — the heart-carve-out ping (deep-links to her own profile sheet)
+    { type: 'profile_like', fromUid: 'prac-ren', fromDisplayName: 'Ren', value: 1, verb: 'liked your profile', targetPath: 'profiles/prac-mika', createdAt: now - 1200000 },
   ];
   const NCOL = db.collection('users/prac-mika/notifications');
   for (let i = 0; i < notifs.length; i++) {

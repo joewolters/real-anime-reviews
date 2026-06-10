@@ -89,8 +89,8 @@ test.describe('v1.8.4 gate 6 — Constellation veil + layout calls', () => {
     expect(parseFloat(border)).toBeGreaterThan(0);
   });
 
-  test('account + suggest pages carry a static mid veil density', async ({ page }) => {
+  test('the account page carries its OWN static surface (dream-profile: the personal night)', async ({ page }) => {
     await page.goto('/account.html');
-    expect(await page.evaluate(() => document.documentElement.dataset.surface)).toBe('foryou');
+    expect(await page.evaluate(() => document.documentElement.dataset.surface)).toBe('account');
   });
 });
