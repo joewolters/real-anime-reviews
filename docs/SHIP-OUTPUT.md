@@ -1,53 +1,46 @@
 <!-- author: Code | date: 2026-06-09 -->
-# v1.10.0 — THE DREAM PROFILE/ACCOUNT PLATFORM (+ 2 small fixes). DONE · STAGED · NO deploy
+# v1.10.0 — ACCOUNT/PROFILE OVERHAUL ROUND 2: a real social platform. DONE · STAGED · NO deploy
 
-Mode **ULTRAMAX**. One pushed checkpoint. A **5-lens adversarial review** caught **1 HIGH + 5 MED + 4 LOW** — all fixed and re-verified. **All tracks green. Production untouched. Nothing deploys.**
+Mode **ULTRAMAX**. One pushed checkpoint. The **5-lens adversarial review caught 2 HIGH + 4 MED + 4 LOW** — all fixed, all re-proven. **All tracks green. Production untouched. Nothing deploys.**
 
 ## Design vision (1 para)
-The profile becomes a **constellation a member arranges** — bio, self-tags, a curated (gold-free) accent, a status line, a pinned review, an image/GIF sky behind it — and `account.html` is the **studio** where they arrange it, wearing its OWN personal night: the new neon-sakura street (Blake's asset, rotated correct) under the same constellation veil, so it feels theirs without leaving the site's vocabulary. The community gains exactly ONE new currency — **Appreciate**, a purple profile-like count, the sanctioned heart carve-out — and nothing else: no post counts, no karma, no leaderboard. Gold is still only Blake's.
+The account becomes a **real settings platform**: a grouped Discord-style rail (Identity · Collections · Community · Settings) where every section owns a **full-width panel**; the profile editor goes wide under a **social-grade hero preview** (your background full-bleed, avatar overlapping, name/status/tags composed like a real platform header); an **Edit ↔ 👁 Public view** toggle shows the saved identity exactly as the room sees it; and the community-rules consent happens **in place** — a 🔓 banner + the branded modal, no more "go comment somewhere to accept the terms." Every label is a pill, every animation is compositor-only, and the heart law holds: gold is Blake's, Appreciate stays the one purple count.
 
-## The 2 small fixes
-1. **Review-cover redesign:** the 48×34 inline thumb → a full-width **banner** above a stacked headline (cover-less rows untouched; dangling cover drops the banner cleanly).
-2. **Pfp OR name → profile:** the author avatar opens the profile everywhere the name does (3 sites + keyboard) — and its initial paint joined the avatar origin-gate (a ripple catch).
+## Blake's items, one by one
+1. **Widen + enlarge** — 1340px canvas, full-column panels, a 2-col editor grid of branded field cards, the ~240px hero preview with a breathing ring.
+2. **See what viewers see** — the 👁 toggle renders the SAVED profile with the live sheet's exact pieces (markdown bio, accent, tags, bg, featured pin, the Appreciate row), honest about the deltas ("activity loads on the live page · viewers can also report a profile"), and honest in the edge states: a suspended account previews the tombstone viewers actually get; Blake previews "your name leads home to the Den."
+3. **Each section its own surface** — six dedicated panels behind the grouped rail; Watchlist/Favorites add a **list ↔ cover-grid** view toggle on top of the filter/sort/type controls.
+4. **Settings split out** — Email / Password / Session set-cards under their own "Account" nav item (member-since flair + sign-out).
+5. **More + unique tags via a dropdown** — a branded grouped catalog (Genres · Watch style · Identity, ~40 anime-flavored entries: Sakuga nerd, Lore historian, Waifu connoisseur, Gacha survivor, Night-shift watcher…), tick-marked when worn, multi-pick; custom tags still typed in; the 6-cap and tints intact.
+6. **The consent dead-end — FIXED (the real bug):** consent now lives in ONE shared module (`consent.js`, imported by both pages — the round-1 "fix landed in only one copy" lesson applied). The account shows the 🔓 unlock banner, the branded modal opens right there, "I agree" mints consent through the `acceptRules` CF (never self-attested). Proven end-to-end in the emulator: fresh user → banner → modal → accept → unlocked → a full customization save persists.
+7. **Unique animations** — panel slide-ins, the hero breathe ring, tag-chip pops, the dropdown drop, the floating 🔓, the Appreciate heart-beat, the rail's accent bar — all transform/opacity-only, all silent under reduced-motion.
 
-## The dream-profile features (all built; none PITCHed)
-- **Customization:** bio · status · up-to-6 self-tags · a 6-color accent (no gold by construction) · profile background (image/GIF) · a 📌 featured review.
-- **Profile background** rides the existing image pipeline (magic-byte + EXIF + caps, no SVG), is reportable + admin-removable + **edit-strip-swept** (`onProfileWritten` — closes the orphan-object gap NEXT.md flagged), and is perf-safe (reduced-motion GIF freeze, own compositor layer).
-- **Profile likes (the carve-out):** CF-owned count, deterministic one-ping-per-liker, no self-like, **no liking Blake**, purple-only.
-- **Activity by type:** Threads / Reviews / Comments / Replies (sheet chips + account filter), via the now-public threads/replies/posts collection-groups.
-- **Watchlist/favorites:** filter · sort · type controls over the live snapshot (routing intact).
-- **Account studio + own night** (`data-surface="account"`, veil 0.62 — never the Den's 0.80), live preview, the rotated 2400×1200 backdrop (+ webp).
+## The new information architecture
+**Identity** → Profile (hero + editor + public view) · **Collections** → Watchlist, Favorites (filter/sort/type + list/grid) · **Community** → My Activity (typed chips), Inbox (Message Blake) · **Settings** → Account (email/password/session).
 
-## The heart carve-out — how it stays safe
-Likes are the ONE community count and they are **purple, only on the profile, never sorted/ranked**. Gold stays Blake-only (the accent palette holds no gold; a like FROM Blake renders gold by the dm precedent — provenance, not the count). Blake's own profile **cannot** be liked (rules + CF). Den stays the darkest surface.
-
-## bg/GIF moderation + perf approach
-Lock (existing storage.rules `uploads/` match) → validate/EXIF/cap (`processUploadedImage`) → report (⚑ `profile`) + atomic admin-remove → **edit-strip sweep** on change. Perf: GIF frozen to a display-scale canvas under reduced-motion; bg layers isolated to their own compositor layer; account panels are static high-alpha (no live blur over the veil pulse).
-
-## Adversarial findings → fixes
-- **HIGH:** the LIVE script.js lantern avatar bypassed the origin allowlist (index loads script.js, not lantern.js) → `profile_like` ping could IP-beacon recipients. Gated; also added the missing profile_like glyph + mute.
-- **MED (heart):** rules let members like Blake's profile → `uid != ADMIN_UID` in rule + CF.
-- **MED (spam):** unlike/re-like relit the bell → `.create()` (one ping per liker).
-- **MED×3 (perf):** live-blur panels → static; GIF compositor isolation; freeze-canvas cap; preview no longer restarts the GIF per keystroke.
-- **LOW×4:** count undercount on profile-less target (set-merge); forged-report preview bound to target prefix; chip query memoize; lazy account-activity init.
+## Adversarial findings → fixes (all in this checkpoint)
+- **HIGH:** `addDoc` was used by the gate-18 inbox but never imported — **every "Message Blake"/Send has thrown since the mega-batch**; no spec drove the flow. Fixed + a new e2e performs a REAL send.
+- **HIGH:** the round-1 520px tab clamp caged the new panels — the editor spilled ~670px past the card. Unlocked + a computed-style spec.
+- **MED×4:** mid-session bans now re-checked on every gated action (no stale "ok" cache); suspended users get suspended copy (not "accept the rules"); viewer mode honors `isBanned` + special-cases Blake; the preview bio renders the same markdown as the live page.
+- **LOW×4:** the rail's unread dot ignored `[hidden]` (painted forever — same trap class the walk caught on the banner); viewer name no longer falls back to auth PII; the Appreciate row always previews (coerced 0); honest partial-save copy + the gold-adjacent verify text went purple.
 
 ## Tests — ALL GREEN
-`npm test` **158** · `test:rules` **126** · `test:functions` **56** · `test:cf` **57** · e2e **9**. New static specs `tests/g19-dream-profile.spec.js` + real-pixel `tests-e2e/dream-profile-emu.spec.js`. Live like as Ren moved Mika's CF-owned count **2→3** (fresh read confirmed).
+`npm test` **166** · `test:rules` **126** · `test:functions` **56** · `test:cf` **57** · e2e **10** (incl. the real Message-Blake send). Real-pixel walk re-shot every panel; the spill measured fixed (offset == scroll).
 
 ## Checkpoint / deploy
-One pushed checkpoint. APP_VERSION stays **1.9.1** (staged). Production untouched. **NO deploy** — the cutover (gate 21, on Blake's "ship it") runs indexes → hosting → firestore → storage → functions.
+One pushed checkpoint. APP_VERSION stays **1.9.1** (staged). **NO deploy.** Cutover note: `consent.js` is a new hosted file (verified not firebase-ignored); it joins lantern.js in the post-cutover ?v= version-busting item.
 
 ## YOUR NUMBERED SMOKE (practice is up + seeded: http://127.0.0.1:8765/?emu=1)
-**Sign-ins:** seeded members `prac-mika`…`prac-sora` (pw `practice123`); admin `blake@practice.test` / `practice123`. Mika now wears the full kit; Sora is bare (the empty-state invite).
+**Sign-ins:** `prac-mika`…`prac-sora` / `practice123`; admin `blake@practice.test` / `practice123`. **prac-newbie is the consent smoke** (fresh account, never accepted).
 
-1. **The review banner (fix 1):** open **One Punch Man → community reviews**. Mika's review row now leads with a **big cover banner**, not a tiny thumb. Other rows stay compact.
-2. **Pfp opens the profile (fix 2):** in any comment/review, click the **avatar** (not just the name) → the profile sheet opens.
-3. **The dream profile:** click **Mika's** name/avatar → her sheet wears a **background**, an accent, **tags**, a status line, a 📌 **pinned review**, and an **Appreciate** count. Click the activity chips (**Threads / Reviews / Comments / Replies**).
-4. **Appreciate (the carve-out):** signed in as anyone-but-Mika, hit **Appreciate** on her profile → the count moves, you get a purple state. Sign in as **Mika** → her bell has an **"X liked your profile"** ping. (Try clicking **Blake's** name → it goes **home to the Den**; there's no like button on him, by design.)
-5. **The studio (Account → Profile):** the account page wears its **own neon night**. Edit your **bio / status / tags / accent**, pick a **background image or GIF**, choose a **pinned review** → **Save** → reopen your public profile (the "View your public profile" link) and see it.
-6. **Activity by type (Account → My Activity):** the **All / Comments / Replies / Threads / Reviews** chips filter your own history.
-7. **Watchlist controls (Account → Watchlist):** **filter by title**, **sort**, and the **All / Blake's 44 / Beyond** type chips.
-8. **Moderation (admin):** in **admin/reports.html**, a reported **profile** row gets a **View** (opens the live sheet) + a background preview; **Remove** pulls a reported background atomically.
+1. **The new shape:** sign in as Mika → Account. The left rail is grouped (Identity / Collections / Community / Settings); each item opens its **own full panel** with a slide-in.
+2. **The wide editor:** Profile fills the column — the **hero preview** composes your identity over your background; every label is a pill; the panel **contains** everything (no spill past the card).
+3. **👁 Public view:** flip the toggle — your saved profile renders exactly as viewers see it (badge says so), with your pinned review and the Appreciate row. Flip back to ✎ Edit.
+4. **The tag dropdown:** in Tags, hit **⬡ Browse tags** — pick from Genres / Watch style / Identity (picked ones tick ✓); type a custom one too; 6 max.
+5. **The consent fix (the bug you called):** sign in as **prac-newbie** → Account. The **🔓 unlock banner** sits on the Profile panel → **Read the rules** → the branded modal opens RIGHT THERE → **I agree** → banner gone, "your profile is unlocked." Now customize + Save — it sticks. No comment-section detour.
+6. **Settings split:** the **Account** nav item owns email/password/session (member-since pill + sign out). The profile editor no longer mentions passwords.
+7. **Collections:** Watchlist/Favorites — try the **▦ cover view** toggle next to the filter/sort/type controls.
+8. **The inbox actually sends now:** as any member → Inbox → **Message Blake** → send a line (this was silently dead since the mega-batch — the adversarial review caught it; an e2e now drives the real send every run).
 
 ## One-liner reply
-The dream profile/account platform shipped in one staged checkpoint — the two fixes (review-cover **banner** redesign + **avatar-opens-profile**) plus the full set: bio/status/**tags**/curated-gold-free-**accent**/image-or-GIF **background**/📌-**featured-review** customization, **activity separated by type**, **watchlist filter-sort-type** controls, and the account page wearing its **own neon-sakura night** under the veil; the community's one new currency is **Appreciate** — a purple, CF-owned, never-gold, never-on-Blake profile-like count (the heart carve-out) — and a **5-lens adversarial review** caught a real **HIGH** (the live lantern avatar could IP-beacon recipients) + 5 MED + 4 LOW, all fixed and re-proven with `npm test` **158** · rules **126** · functions **56** · cf **57** · e2e **9** green and a live like round-trip moving the CF-owned count 2→3; **practice is up + seeded, one checkpoint is pushed, APP_VERSION stays 1.9.1, and nothing deploys.**
+Round 2 rebuilt the account into a **real settings platform** — a grouped Discord-style rail where Profile/Watchlist/Favorites/Activity/Inbox/**Account-settings** each own a full panel, the profile editor went wide under a **hero preview** with an **Edit ↔ Public-view toggle**, tags moved into a **branded grouped dropdown** (~40 curated anime-flavored entries + custom), every label became a pill and every animation is compositor-cheap — and the **consent dead-end you called out is fixed in place** (a 🔓 banner + the branded modal wired to the acceptRules CF via ONE shared consent.js, proven end-to-end: fresh user accepts in the account and their customization saves); the 5-lens adversarial review then caught **2 HIGH** — the gate-18 inbox's send was silently DEAD since the mega-batch (`addDoc` never imported; fixed + a real-send e2e now guards it) and the round-1 520px clamp made the new editor **spill 670px past its card** (unlocked + spec'd) — plus 4 MED + 4 LOW (mid-session-ban re-checks, suspended-state honesty in copy + viewer mode, Blake's viewer special-case, the forever-lit unread dot, markdown-true bio preview), all fixed with `npm test` **166** · rules **126** · functions **56** · cf **57** · e2e **10** green; **practice is up + seeded, the checkpoint is pushed, APP_VERSION stays 1.9.1, nothing deploys.**

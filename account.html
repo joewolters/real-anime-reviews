@@ -86,106 +86,171 @@
   </header>
 
   <!-- ===== Account content ===== -->
-  <main class="account-wrap" aria-labelledby="acct-hello">
+  <!-- account-overhaul ROUND 2 — Discord/Reddit-grade IA: a grouped left rail,
+       and every section is its OWN full-width panel (no shared column). -->
+  <main class="account-wrap account-v2" aria-labelledby="acct-hello">
     <div class="account-hello">
       <h2 id="acct-hello">HELLO, <span id="acct-name">—</span>!</h2>
       <button id="acct-signout" class="signout-pill" type="button" title="Sign out">Sign out ↪</button>
     </div>
 
     <div class="account-grid">
-      <!-- sidebar -->
+      <!-- sidebar — grouped, Discord-style -->
       <aside class="account-side">
-        <ul class="side-nav" role="tablist" aria-orientation="vertical">
-          <li><button data-tab="profile"   class="side-link is-active" role="tab" aria-selected="true">Profile</button></li>
-          <li><button data-tab="watchlist" class="side-link"          role="tab" aria-selected="false">Watchlist</button></li>
-          <li><button data-tab="favorites" class="side-link"          role="tab" aria-selected="false">Favorites</button></li>
-          <li><button data-tab="activity"  class="side-link"          role="tab" aria-selected="false">My Activity</button></li>
-          <li><button data-tab="inbox"     class="side-link"          role="tab" aria-selected="false">Inbox <span id="inbox-dot" class="inbox-dot" hidden aria-label="Unread"></span></button></li>
-        </ul>
+        <nav aria-label="Account sections">
+          <div class="side-group">
+            <div class="side-group-label">Identity <span class="jp-mini">自分</span></div>
+            <ul class="side-nav" role="tablist" aria-orientation="vertical">
+              <li><button data-tab="profile" class="side-link is-active" role="tab" aria-selected="true"><span class="side-ico" aria-hidden="true">✦</span>Profile</button></li>
+            </ul>
+          </div>
+          <div class="side-group">
+            <div class="side-group-label">Collections <span class="jp-mini">棚</span></div>
+            <ul class="side-nav" role="tablist" aria-orientation="vertical">
+              <li><button data-tab="watchlist" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">◷</span>Watchlist</button></li>
+              <li><button data-tab="favorites" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">♥</span>Favorites</button></li>
+            </ul>
+          </div>
+          <div class="side-group">
+            <div class="side-group-label">Community <span class="jp-mini">部屋</span></div>
+            <ul class="side-nav" role="tablist" aria-orientation="vertical">
+              <li><button data-tab="activity" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">⌁</span>My Activity</button></li>
+              <li><button data-tab="inbox" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">✉</span>Inbox <span id="inbox-dot" class="inbox-dot" hidden aria-label="Unread"></span></button></li>
+            </ul>
+          </div>
+          <div class="side-group">
+            <div class="side-group-label">Settings <span class="jp-mini">管理</span></div>
+            <ul class="side-nav" role="tablist" aria-orientation="vertical">
+              <li><button data-tab="settings" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">⚙</span>Account</button></li>
+            </ul>
+          </div>
+        </nav>
       </aside>
 
-      <!-- tab panels -->
-      <section class="account-cards">
-        <!-- PROFILE — dream-profile gate: the identity STUDIO. A live preview of
-             how the room sees you, then every customization control. The old
-             personal-info machinery (email/password) keeps its IDs below. -->
-        <article class="account-card" id="card-profile">
-  <h3 class="acct-kicker">Your Constellation <span class="jp-mini">星座</span></h3>
-  <p class="acct-section-sub">How the room sees you — every piece below is yours to shape.</p>
-
-  <!-- live preview (rendered by account.js from the same pure builder the real
-       profile sheet uses; the bg/accent/tags update as you edit) -->
-  <div class="acct-preview" id="acct-preview" aria-label="Profile preview"></div>
-  <div class="acct-preview-open">
-    <button type="button" id="acct-view-public" class="linky">View your public profile ↗</button>
-  </div>
-
-  <div class="card-body form-grid">
-    <!-- Display name -->
-    <div class="form-row">
-      <label>Display name</label>
-      <input id="prof-name" type="text" maxlength="40" />
+      <!-- panels — ONE host, each section a full-width surface -->
+      <section class="account-panel">
+        <!-- PROFILE — round 2: the identity studio goes WIDE. A hero preview
+             composing the real identity, an Edit ↔ Public-view toggle, the
+             consent unlock IN PLACE, and every control a branded field. -->
+        <article class="account-card account-panel-card is-tab" id="tab-profile">
+  <header class="panel-head">
+    <div class="panel-head-text">
+      <h3 class="acct-kicker">Your Constellation <span class="jp-mini">星座</span></h3>
+      <p class="acct-section-sub">How the room sees you — every piece is yours to shape.</p>
     </div>
-    <!-- Avatar upload -->
-    <div class="form-row">
-      <label>Avatar</label>
-      <button type="button" id="avatar-pick" class="avatar-preview" aria-label="Upload avatar"></button>
-      <input type="file" id="avatar-file" accept="image/*" hidden />
-    </div>
-    <!-- Status line -->
-    <div class="form-row" style="grid-column: 1 / -1;">
-      <label>Status <span class="muted">— one line under your name</span></label>
-      <input id="prof-status" type="text" maxlength="80" placeholder="rewatching Mob Psycho…" />
-    </div>
-    <!-- Bio -->
-    <div class="form-row" style="grid-column: 1 / -1;">
-      <label>Bio</label>
-      <textarea id="prof-bio" maxlength="500" rows="3" placeholder="Tell the room who you are…"></textarea>
-    </div>
-    <!-- Bio tags -->
-    <div class="form-row" style="grid-column: 1 / -1;">
-      <label>Tags <span class="muted">— up to 6, your colors on the door</span></label>
-      <div class="acct-tags" id="acct-tags">
-        <input id="acct-tag-input" class="acct-tag-input" type="text" maxlength="24" placeholder="Add a tag + Enter" />
-      </div>
-      <div class="acct-tag-suggest" id="acct-tag-suggest" aria-label="Tag suggestions"></div>
-    </div>
-    <!-- Accent -->
-    <div class="form-row" style="grid-column: 1 / -1;">
-      <label>Accent <span class="muted">— tints your profile's frame</span></label>
-      <div class="acct-accents" id="acct-accents" role="radiogroup" aria-label="Accent color"></div>
-    </div>
-    <!-- Profile background -->
-    <div class="form-row" style="grid-column: 1 / -1;">
-      <label>Profile background <span class="muted">— image or GIF, your sky</span></label>
-      <div class="acct-bg-row">
-        <span class="acct-bg-thumb" id="acct-bg-thumb">none yet</span>
-        <button type="button" id="acct-bg-pick" class="inline-header-btn small">Choose image / GIF</button>
-        <button type="button" id="acct-bg-remove" class="linky" hidden>Remove</button>
-        <input type="file" id="acct-bg-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
-        <span class="acct-bg-note">Up to 5 MB · JPEG/PNG/WebP/GIF · email-verified accounts · backgrounds follow the community rules and can be reported.</span>
+    <div class="panel-head-actions">
+      <div class="acct-mode-toggle" role="tablist" aria-label="Editor mode">
+        <button type="button" id="acct-mode-edit" class="acct-mode-btn is-active" role="tab" aria-selected="true">✎ Edit</button>
+        <button type="button" id="acct-mode-view" class="acct-mode-btn" role="tab" aria-selected="false">👁 Public view</button>
       </div>
     </div>
-    <!-- Featured review -->
-    <div class="form-row" style="grid-column: 1 / -1;">
-      <label>📌 Pinned review <span class="muted">— leads your profile</span></label>
-      <select id="acct-featured" class="acct-featured-select">
-        <option value="">None — let the latest speak</option>
-      </select>
+  </header>
+
+  <!-- the consent dead-end fix — accept the rules HERE, not by going to comment -->
+  <div class="acct-consent-banner" id="acct-consent-banner" hidden>
+    <span class="acct-consent-glyph" aria-hidden="true">🔓</span>
+    <div class="acct-consent-text"><b>Unlock your profile.</b> Customization is community content — read and accept the community rules once, right here.</div>
+    <button type="button" id="acct-consent-open" class="btn">Read the rules</button>
+  </div>
+
+  <!-- EDIT MODE -->
+  <div id="acct-edit-mode">
+    <!-- the HERO preview (account.js renders; bg/accent/tags compose live) -->
+    <div class="acct-preview acct-preview--hero" id="acct-preview" aria-label="Profile preview"></div>
+    <div class="acct-preview-open">
+      <button type="button" id="acct-view-public" class="linky">Open your live public page ↗</button>
     </div>
+
+    <div class="card-body acct-editor-grid">
+      <!-- Display name -->
+      <div class="form-row">
+        <span class="fld-pill">✦ Display name</span>
+        <input id="prof-name" type="text" maxlength="40" />
+      </div>
+      <!-- Avatar upload -->
+      <div class="form-row">
+        <span class="fld-pill">◉ Avatar</span>
+        <button type="button" id="avatar-pick" class="avatar-preview" aria-label="Upload avatar"></button>
+        <input type="file" id="avatar-file" accept="image/*" hidden />
+      </div>
+      <!-- Status line -->
+      <div class="form-row">
+        <span class="fld-pill">❝ Status</span>
+        <span class="fld-hint">one line under your name</span>
+        <input id="prof-status" type="text" maxlength="80" placeholder="rewatching Mob Psycho…" />
+      </div>
+      <!-- Accent -->
+      <div class="form-row">
+        <span class="fld-pill">✺ Accent</span>
+        <span class="fld-hint">tints your profile's frame</span>
+        <div class="acct-accents" id="acct-accents" role="radiogroup" aria-label="Accent color"></div>
+      </div>
+      <!-- Bio -->
+      <div class="form-row form-row--full">
+        <span class="fld-pill">✎ Bio</span>
+        <textarea id="prof-bio" maxlength="500" rows="3" placeholder="Tell the room who you are…"></textarea>
+      </div>
+      <!-- Bio tags + the branded dropdown -->
+      <div class="form-row form-row--full">
+        <span class="fld-pill">⬡ Tags</span>
+        <span class="fld-hint">up to 6 — your colors on the door</span>
+        <div class="acct-tags" id="acct-tags">
+          <input id="acct-tag-input" class="acct-tag-input" type="text" maxlength="24" placeholder="Type your own + Enter" />
+          <div class="acct-tag-dd-wrap">
+            <button type="button" id="acct-tag-dd-btn" class="acct-tag-dd-btn" aria-expanded="false" aria-controls="acct-tag-dd">⬡ Browse tags <span class="acct-dd-chev" aria-hidden="true">▾</span></button>
+            <div class="acct-tag-dd" id="acct-tag-dd" role="listbox" aria-label="Curated tags" hidden></div>
+          </div>
+        </div>
+      </div>
+      <!-- Profile background -->
+      <div class="form-row form-row--full">
+        <span class="fld-pill">🌌 Background</span>
+        <span class="fld-hint">image or GIF — your sky</span>
+        <div class="acct-bg-row">
+          <span class="acct-bg-thumb" id="acct-bg-thumb">none yet</span>
+          <button type="button" id="acct-bg-pick" class="inline-header-btn small">Choose image / GIF</button>
+          <button type="button" id="acct-bg-remove" class="linky" hidden>Remove</button>
+          <input type="file" id="acct-bg-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+          <span class="acct-bg-note">Up to 5 MB · JPEG/PNG/WebP/GIF · email-verified accounts · backgrounds follow the community rules and can be reported.</span>
+        </div>
+      </div>
+      <!-- Featured review -->
+      <div class="form-row form-row--full">
+        <span class="fld-pill">📌 Pinned review</span>
+        <span class="fld-hint">leads your profile</span>
+        <select id="acct-featured" class="acct-featured-select">
+          <option value="">None — let the latest speak</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card-actions acct-save-bar">
+      <button id="profile-save" class="inline-header-btn" type="button">Save changes</button>
+      <span id="profile-status" class="muted" role="status"></span>
+    </div>
+    <div id="profile-error" role="alert" style="color:#ffbdbd;margin-top:6px;"></div>
   </div>
 
-  <div class="card-actions">
-    <button id="profile-save" class="inline-header-btn" type="button">Save changes</button>
-    <span id="profile-status" class="muted" role="status"></span>
+  <!-- PUBLIC VIEW — what viewers see, rendered with the live saved identity -->
+  <div id="acct-viewer-mode" hidden>
+    <div class="acct-viewer" id="acct-viewer" aria-label="Your public profile, as viewers see it"></div>
   </div>
-  <div id="profile-error" role="alert" style="color:#ffbdbd;margin-top:6px;"></div>
+</article>
 
-  <h3 class="acct-kicker" style="margin-top:22px;">Account <span class="jp-mini">管理</span></h3>
-  <div class="card-body form-grid">
-    <!-- Email -->
-    <div class="form-row">
-      <label>Email address</label>
+        <!-- SETTINGS — round 2: account management is its OWN nav item
+             (Blake: "password and stuff should be its own dropdown in the
+             side bar… like discord or reddit"). Same control IDs. -->
+        <article class="account-card account-panel-card is-tab" id="tab-settings" hidden>
+  <header class="panel-head">
+    <div class="panel-head-text">
+      <h3 class="acct-kicker">Account <span class="jp-mini">管理</span></h3>
+      <p class="acct-section-sub">The keys to the door — email, password, session.</p>
+    </div>
+  </header>
+
+  <section class="set-card">
+    <div class="set-card-head"><span class="fld-pill">✉ Email</span></div>
+    <div class="set-card-body">
       <input id="prof-email" type="email" disabled />
       <p id="prof-email-verify" class="muted"></p>
       <div class="action-row">
@@ -193,9 +258,11 @@
         <button id="acct-resend-verify" class="linky" type="button" style="display:none;">Resend</button>
       </div>
     </div>
-    <!-- Password (never show the real password; just a masked placeholder) -->
-    <div class="form-row password-row">
-      <label>Password</label>
+  </section>
+
+  <section class="set-card">
+    <div class="set-card-head"><span class="fld-pill">🔒 Password</span></div>
+    <div class="set-card-body">
       <div class="password-wrap">
         <input id="prof-password" type="password" value="••••••••" disabled />
         <button id="acct-change-pass" class="inline-header-btn small" type="button">Change</button>
@@ -203,13 +270,32 @@
       </div>
       <p class="muted">To change your password, you’ll re-enter your current password to confirm.</p>
     </div>
-  </div>
+  </section>
+
+  <section class="set-card">
+    <div class="set-card-head"><span class="fld-pill">✦ Session</span></div>
+    <div class="set-card-body set-session-row">
+      <span class="set-member-since" id="set-member-since"></span>
+      <button type="button" id="acct-signout-2" class="signout-pill" title="Sign out">Sign out ↪</button>
+    </div>
+  </section>
 </article>
 
 
-        <!-- WATCHLIST -->
-        <article class="account-card is-tab" id="tab-watchlist">
-  <h3>Your Watchlist</h3>
+        <!-- WATCHLIST — round 2: its own full surface, with view modes -->
+        <article class="account-card account-panel-card is-tab" id="tab-watchlist" hidden>
+  <header class="panel-head">
+    <div class="panel-head-text">
+      <h3 class="acct-kicker">Watchlist <span class="jp-mini">観る</span></h3>
+      <p class="acct-section-sub">The queue you're building — filter it, sort it, shape it.</p>
+    </div>
+    <div class="panel-head-actions">
+      <div class="saved-viewmode" data-viewmode="watchlist" role="group" aria-label="View mode">
+        <button type="button" class="saved-view-btn is-active" data-view="list" title="List view" aria-label="List view">☰</button>
+        <button type="button" class="saved-view-btn" data-view="grid" title="Cover view" aria-label="Cover view">▦</button>
+      </div>
+    </div>
+  </header>
 
   <!-- dream-profile gate: precise controls (filter · sort · type) -->
   <div class="saved-controls" data-saved-controls="watchlist">
@@ -240,9 +326,20 @@
 </article>
 
 
-        <!-- FAVORITES -->
-        <article class="account-card is-tab" id="tab-favorites">
-  <h3>Your Favorites</h3>
+        <!-- FAVORITES — round 2: its own full surface, with view modes -->
+        <article class="account-card account-panel-card is-tab" id="tab-favorites" hidden>
+  <header class="panel-head">
+    <div class="panel-head-text">
+      <h3 class="acct-kicker">Favorites <span class="jp-mini">推し</span></h3>
+      <p class="acct-section-sub">The ones that stayed with you.</p>
+    </div>
+    <div class="panel-head-actions">
+      <div class="saved-viewmode" data-viewmode="favorites" role="group" aria-label="View mode">
+        <button type="button" class="saved-view-btn is-active" data-view="list" title="List view" aria-label="List view">☰</button>
+        <button type="button" class="saved-view-btn" data-view="grid" title="Cover view" aria-label="Cover view">▦</button>
+      </div>
+    </div>
+  </header>
 
   <!-- dream-profile gate: precise controls (filter · sort · type) -->
   <div class="saved-controls" data-saved-controls="favorites">
@@ -274,10 +371,14 @@
 
 
 
-        <!-- ACTIVITY — dream-profile gate: separated by type -->
-        <article class="account-card is-tab" id="tab-activity" hidden>
-        <h3 class="card-title">My Activity</h3>
-        <p class="muted">Everything you've put into the room, by type.</p>
+        <!-- ACTIVITY — round 2: its own full surface, separated by type -->
+        <article class="account-card account-panel-card is-tab" id="tab-activity" hidden>
+  <header class="panel-head">
+    <div class="panel-head-text">
+      <h3 class="acct-kicker">My Activity <span class="jp-mini">足跡</span></h3>
+      <p class="acct-section-sub">Everything you've put into the room, by type.</p>
+    </div>
+  </header>
 
   <div class="acct-act-chips" id="acct-act-chips" role="tablist" aria-label="Activity type">
     <button type="button" class="profile-act-chip is-active" data-act="all" role="tab" aria-selected="true">All</button>
@@ -290,9 +391,14 @@
   <ul id="activity-list" class="saved-list activity-list" aria-label="Recent activity"></ul>
 </article>
 
-        <!-- INBOX — gate 18: the Message-Blake DM (admin-floor only) -->
-        <article class="account-card is-tab" id="tab-inbox" hidden>
-          <h3 class="card-title">Inbox <span class="jp-mini">受信箱</span></h3>
+        <!-- INBOX — gate 18 machinery; round 2 gives it the full panel -->
+        <article class="account-card account-panel-card is-tab" id="tab-inbox" hidden>
+          <header class="panel-head">
+            <div class="panel-head-text">
+              <h3 class="acct-kicker">Inbox <span class="jp-mini">受信箱</span></h3>
+              <p class="acct-section-sub">Letters in and out — Blake reads everything himself.</p>
+            </div>
+          </header>
 
           <div id="inbox-home">
             <div class="inbox-blake-card">
@@ -371,6 +477,11 @@
   // only to backfill cover/format/year on legacy non-catalog rows missing the
   // snapshot (new saves carry their own snapshot, so this rarely fires).
   document.write(`<script src="franchise-fetch.js?v=${v}"><\/script>`);
+  // round 2 — the Public-view preview renders the bio through the SAME
+  // escape-first markdown the live profile sheet uses (adversarial MED: an
+  // esc()-only preview showed literal asterisks while the live page rendered
+  // bold + clickable links — "exactly what viewers see" must be exact).
+  document.write(`<script src="markdown.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="firebase.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="account.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="admin-fab.js?v=${v}"><\/script>`);

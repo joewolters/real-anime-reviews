@@ -18,6 +18,8 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 
 import { auth, db, functions, storage } from './firebase.js';
+// account-overhaul round 2 — the ONE consent implementation (shared with account.js)
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js';
 
 // Wrap in IIFE to avoid leaking globals
 (() => {
@@ -5330,31 +5332,16 @@ function openInlineCommentEditor(editBtn, itemRef) {
   // ===========================================================================
   // v1.10.0 GATE 3 — community-rules consent gate (the branded "I agree" modal).
   // ---------------------------------------------------------------------------
-  // Before a user's first community write the gate-1 rules DENY them (no
-  // moderationGate doc yet). This pre-flight reads the owner-readable
-  // moderationGate/{uid} and, when needed, shows a branded modal whose "I agree"
-  // calls the acceptRules callable (gate 2) — which mints the doc server-side, so
-  // the queued write then proceeds. NOT a localStorage flag: the server doc is the
-  // truth, so a CURRENT_RULES_VERSION bump re-prompts automatically (consentVersion
-  // falls behind -> 'consent' again). A banned user gets the suspended state.
-  //
-  // ⚠️ CURRENT_RULES_VERSION MUST equal firestore.rules rulesVersion() AND
-  // functions/lib/moderation.js CURRENT_RULES_VERSION (all 1 today). Bump all
-  // THREE together to re-prompt everyone on their next post.
+  // Round 2 of the account overhaul EXTRACTED the whole implementation to the
+  // shared ./consent.js module (the account page wires the same flow in-place —
+  // Blake's "its dumb to have to go comment to accept the terms" fix). This
+  // block is now the index-side BINDING: the same window hooks for the specs,
+  // the same ensureCanParticipate signature for every caller below. The modal
+  // markup/copy + CURRENT_RULES_VERSION semantics live in consent.js — one
+  // implementation, so a fix can never land in only one copy (the lantern
+  // lesson).
   // ===========================================================================
-  const CURRENT_RULES_VERSION = 1;
-  let _consentOkUid = null; // uid confirmed consented THIS session (skip the re-read)
-
-  // PURE — the gate decision from the moderationGate doc data (no I/O). Exposed on
-  // window for the Playwright spec (the durable adversarial check; no emulator).
-  //   gate = the moderationGate doc data, or null when the doc doesn't exist.
-  //   returns 'suspended' | 'consent' | 'ok'.
-  function consentGateDecision(gate, version) {
-    if (gate && gate.banned === true) return 'suspended';
-    const v = (gate && typeof gate.consentVersion === 'number') ? gate.consentVersion : 0;
-    return v >= version ? 'ok' : 'consent';
-  }
-  window.consentGateDecision = consentGateDecision;
+  window.consentGateDecision = consentGateDecision;   // pure; from ./consent.js
 
   // Pre-flight gate run before every community CREATE. Returns true if the caller
   // may proceed (already consented, or just consented via the modal), false to
@@ -5362,114 +5349,12 @@ function openInlineCommentEditor(editBtn, itemRef) {
   async function ensureCanParticipate() {
     const user = auth.currentUser;
     if (!user) { openAuth('signin'); return false; }
-    if (user.uid === NOTIF_ADMIN_UID) return true;        // admin bypasses (mirrors rules isAdmin())
-    if (_consentOkUid === user.uid) return true;          // confirmed earlier this session
-
-    let gate = null;
-    try {
-      const snap = await getDoc(doc(db, 'moderationGate', user.uid));
-      gate = snap.exists() ? snap.data() : null;
-    } catch (_e) {
-      // The owner can read their own gate doc, so this only trips on a transient
-      // network error — degrade to letting the write attempt surface the real error.
-      return true;
-    }
-
-    const decision = consentGateDecision(gate, CURRENT_RULES_VERSION);
-    if (decision === 'suspended') { showSuspendedModal(); return false; }
-    if (decision === 'ok') { _consentOkUid = user.uid; return true; }
-
-    const agreed = await showConsentModal();              // decision === 'consent'
-    if (agreed) { _consentOkUid = user.uid; return true; }
-    return false;
-  }
-
-  // The branded consent modal (NO native dialog). Resolves true after acceptRules
-  // succeeds, false on cancel/Esc/backdrop. COPY is Blake's verbatim numbered list
-  // (2026-06-08); the CONTAINER carries the brand (jp-mini kicker, purple — never
-  // gold, this is a community surface).
-  function showConsentModal() {
-    return new Promise((resolve) => {
-      document.querySelectorAll('.rar-consent-overlay').forEach((n) => n.remove());
-      const overlay = document.createElement('div');
-      overlay.className = 'rar-consent-overlay';
-      overlay.innerHTML = `
-        <div class="rar-consent-modal" role="dialog" aria-modal="true" aria-label="Community rules">
-          <h3 class="rar-consent-title">Community Rules <span class="jp-mini">規約</span></h3>
-          <p class="rar-consent-sub">By posting, you agree to the following:</p>
-          <ol class="rar-consent-rules">
-            <li>No harassment, hate speech, or personal attacks.</li>
-            <li>Mark spoilers with the spoiler tag.</li>
-            <li>No illegal content. No sexually explicit or graphic images.</li>
-            <li>No spam, advertising, or impersonation.</li>
-            <li>Post only content you have the right to share.</li>
-            <li>Violations may result in content removal or a permanent account ban, at the moderator's discretion.</li>
-          </ol>
-          <p class="rar-consent-error" role="alert"></p>
-          <div class="rar-consent-actions">
-            <button type="button" class="action-btn rar-consent-cancel">Cancel</button>
-            <button type="button" class="action-btn rar-consent-agree">I agree</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-
-      let settled = false;
-      const done = (val) => {
-        if (settled) return; settled = true;
-        document.removeEventListener('keydown', onEsc);
-        try { overlay.remove(); } catch (_) {}
-        resolve(val);
-      };
-      // stopPropagation: the anime-modal Esc handler lives on `window` (bubble
-      // phase); without this, Esc here would also close the underlying anime modal.
-      const onEsc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
-      document.addEventListener('keydown', onEsc);
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
-      overlay.querySelector('.rar-consent-cancel').addEventListener('click', () => done(false));
-
-      const agreeBtn = overlay.querySelector('.rar-consent-agree');
-      const errEl = overlay.querySelector('.rar-consent-error');
-      agreeBtn.addEventListener('click', async () => {
-        agreeBtn.disabled = true; errEl.textContent = '';
-        try {
-          await httpsCallable(functions, 'acceptRules')({ version: CURRENT_RULES_VERSION });
-          done(true);
-        } catch (err) {
-          agreeBtn.disabled = false;
-          errEl.textContent = "Couldn't save that — check your connection and try again.";
-        }
-      });
-    });
-  }
-
-  // The branded suspended state (NO native alert) for a banned user who tries to
-  // participate. ensureCanParticipate already saw banned:true; this just renders it.
-  function showSuspendedModal() {
-    document.querySelectorAll('.rar-consent-overlay').forEach((n) => n.remove());
-    const overlay = document.createElement('div');
-    overlay.className = 'rar-consent-overlay';
-    overlay.innerHTML = `
-      <div class="rar-consent-modal rar-suspended-modal" role="dialog" aria-modal="true" aria-label="Account suspended">
-        <h3 class="rar-consent-title">Account suspended <span class="jp-mini">停止</span></h3>
-        <p class="rar-consent-sub">Your account is suspended. You can't post, reply, or review here while it's suspended.</p>
-        <div class="rar-consent-actions">
-          <button type="button" class="action-btn rar-consent-cancel">Close</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    const close = () => { document.removeEventListener('keydown', onEsc); try { overlay.remove(); } catch (_) {} };
-    // stopPropagation so Esc doesn't also close the underlying anime modal (window-level handler).
-    const onEsc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
-    document.addEventListener('keydown', onEsc);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    overlay.querySelector('.rar-consent-cancel').addEventListener('click', close);
+    return (await ensureConsent(user, db, functions, { adminUid: NOTIF_ADMIN_UID })) === 'ok';
   }
 
   // Test hooks for the static Playwright spec (no emulator): open the modals to
-  // assert the branded render. The pure consentGateDecision above covers the logic.
-  window.__rarOpenConsent = showConsentModal;
+  // assert the branded render (the implementations live in ./consent.js).
+  window.__rarOpenConsent = () => showConsentModal(functions);
   window.__rarOpenSuspended = showSuspendedModal;
 
   // ===========================================================================

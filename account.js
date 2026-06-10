@@ -1,5 +1,5 @@
 // account.js (ES module)
-import { auth, db } from './firebase.js';
+import { auth, db, functions } from './firebase.js';
 import {
   onAuthStateChanged,
   updateProfile,
@@ -11,16 +11,23 @@ import {
   sendPasswordResetEmail
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import {
-  doc, setDoc, getDoc, getDocs, collection, onSnapshot, deleteDoc,
+  doc, setDoc, getDoc, getDocs, addDoc, collection, onSnapshot, deleteDoc,
   query, orderBy, where, limit, collectionGroup,
   serverTimestamp, deleteField
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+// (round-2 adversarial HIGH: addDoc was USED by the gate-18 inbox at two call
+// sites but never imported — every "Message Blake"/Send threw ReferenceError.
+// Carried from the mega-batch; no spec drove the flow. The new e2e does.)
 
 
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js';
 
 import { initLantern } from './lantern.js';
+// round 2 — the ONE consent implementation (shared with script.js): the
+// account page accepts the community rules IN PLACE (Blake: "its dumb for
+// users to have to go comment to accept the terms").
+import { ensureConsent, peekConsent } from './consent.js';
 
 
 const $  = (sel) => document.querySelector(sel);
@@ -46,8 +53,11 @@ const saveBtn   = $('#profile-save');
 const statusEl  = $('#profile-status');
 const errEl     = $('#profile-error');
 
-// --- Tabs ---
-const tabs = ['profile','watchlist','favorites','activity','inbox'];   // gate 18 — Inbox is the 5th place
+// --- Tabs --- round 2: six full panels (profile is a REAL tab now; settings
+// split out of the profile editor — Blake's Discord/Reddit IA). The panel-in
+// class drives the slide+fade entrance (transform/opacity only; reduced-motion
+// nulls it in CSS).
+const tabs = ['profile','watchlist','favorites','activity','inbox','settings'];
 function activateTab(name){
   $$('.side-link').forEach(btn => {
     const on = btn.dataset.tab === name;
@@ -56,7 +66,15 @@ function activateTab(name){
   });
   tabs.forEach(t => {
     const panel = document.getElementById(`tab-${t}`);
-    if (panel) panel.toggleAttribute('hidden', t !== name);
+    if (!panel) return;
+    const show = t === name;
+    const wasHidden = panel.hasAttribute('hidden');
+    panel.toggleAttribute('hidden', !show);
+    if (show && wasHidden) {
+      panel.classList.remove('panel-in');
+      void panel.offsetWidth;            // restart the entrance animation
+      panel.classList.add('panel-in');
+    }
   });
 }
 $$('.side-link').forEach(btn => {
@@ -65,8 +83,9 @@ $$('.side-link').forEach(btn => {
     if (btn.dataset.tab === 'activity') ensureActivity();   // lazy — see boot block
   });
 });
-// deep-link: #inbox lands on the Inbox tab (the Lantern's dm pings route here)
-activateTab(location.hash === '#inbox' ? 'inbox' : 'profile');
+// deep-link: #inbox lands on the Inbox tab (the Lantern's dm pings route here);
+// #settings lands on the split-out account settings.
+activateTab(location.hash === '#inbox' ? 'inbox' : (location.hash === '#settings' ? 'settings' : 'profile'));
 
 // ===== Favorites + Watchlist UI =====
 const favListEl = document.getElementById('favoritesList');
@@ -123,8 +142,14 @@ function esc(s) {
 // mirrors the rules enum exactly (curated, gold-free).
 // =============================================================================
 const PROF_ACCENTS = ['violet', 'ember', 'teal', 'rose', 'sky', 'moss'];
-const PROF_TAG_SUGGEST = ['Action', 'Romance', 'Slice of Life', 'Mecha', 'Sports', 'Horror', 'Isekai',
-  'Shonen', 'Seinen', 'Sub', 'Dub', 'Binge-watcher', 'Weekly watcher', 'Manga reader', 'Cosplayer'];
+// round 2 — the CURATED tag catalog behind the branded dropdown (Blake: "More
+// unique tags. Dropdown list should be included"). Grouped, anime-flavored;
+// custom tags still ride the input. Every entry ≤24 chars (the render clamp).
+const PROF_TAG_CATALOG = [
+  ['Genres', '系', ['Action', 'Romance', 'Slice of Life', 'Fantasy', 'Isekai', 'Mecha', 'Sports', 'Horror', 'Psychological', 'Comedy', 'Drama', 'Sci-Fi']],
+  ['Watch style', '流儀', ['Sub', 'Dub', 'Sub & Dub', 'Binge-watcher', 'Weekly watcher', 'Seasonal sampler', 'Completionist', 'Serial dropper', 'Rewatcher', 'Night-shift watcher']],
+  ['Identity', '正体', ['Manga reader', 'Light-novel reader', 'AMV maker', 'Cosplayer', 'Figure collector', 'Tier-list maker', 'OST enjoyer', 'Sakuga nerd', 'Lore historian', 'Power-scaler', 'Theory crafter', 'Waifu connoisseur', 'Husbando defender', 'Filler apologist', 'Subtitle purist', 'Con-goer', 'Gacha survivor', 'Spoiler-phobic']],
+];
 const profState = {
   bio: '', status: '', tags: [], accent: '', bgRef: '', featuredAnime: '',
   bgStagedBlob: null, bgStagedMime: '', bgStagedUrl: '', bgRemove: false, bgCurrentUrl: '',
@@ -204,17 +229,57 @@ function renderTagEditor() {
     wrap.insertBefore(chip, input);
   });
   input.disabled = profState.tags.length >= 6;
-  input.placeholder = input.disabled ? '6 of 6 — remove one to add' : 'Add a tag + Enter';
-  const sug = document.getElementById('acct-tag-suggest');
-  if (sug) {
-    sug.innerHTML = '';
-    PROF_TAG_SUGGEST.filter((t) => profState.tags.indexOf(t) === -1).slice(0, 10).forEach((t) => {
+  input.placeholder = input.disabled ? '6 of 6 — remove one to add' : 'Type your own + Enter';
+  renderTagDropdown();
+}
+
+// the branded tag DROPDOWN — grouped catalog; an already-worn tag shows ticked;
+// click toggles (add if room, remove if worn). Stays open for multi-picking.
+function renderTagDropdown() {
+  const dd = document.getElementById('acct-tag-dd');
+  if (!dd) return;
+  dd.innerHTML = '';
+  PROF_TAG_CATALOG.forEach(([label, jp, items]) => {
+    const head = document.createElement('div');
+    head.className = 'acct-tag-dd-group';
+    const jpEl = document.createElement('span'); jpEl.className = 'jp-mini'; jpEl.textContent = jp;
+    head.textContent = label + ' '; head.appendChild(jpEl);
+    dd.appendChild(head);
+    const row = document.createElement('div');
+    row.className = 'acct-tag-dd-row';
+    items.forEach((t) => {
+      const worn = profState.tags.indexOf(t) !== -1;
       const b = document.createElement('button');
-      b.type = 'button'; b.textContent = t;
-      b.addEventListener('click', () => { addProfTag(t); });
-      sug.appendChild(b);
+      b.type = 'button'; b.className = 'acct-tag-dd-opt' + (worn ? ' is-worn' : '');
+      b.setAttribute('role', 'option'); b.setAttribute('aria-selected', String(worn));
+      b.textContent = worn ? '✓ ' + t : t;
+      b.addEventListener('click', () => {
+        if (worn) { const i = profState.tags.indexOf(t); if (i !== -1) profState.tags.splice(i, 1); }
+        else addProfTag(t);
+        renderTagEditor(); renderProfPreview();
+      });
+      row.appendChild(b);
     });
-  }
+    dd.appendChild(row);
+  });
+}
+function initTagDropdown() {
+  const btn = document.getElementById('acct-tag-dd-btn');
+  const dd = document.getElementById('acct-tag-dd');
+  if (!btn || !dd || btn._wired) return;
+  btn._wired = true;
+  const setOpen = (open) => {
+    dd.toggleAttribute('hidden', !open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.classList.toggle('is-open', open);
+  };
+  btn.addEventListener('click', () => setOpen(dd.hasAttribute('hidden')));
+  document.addEventListener('click', (e) => {
+    if (!dd.hasAttribute('hidden') && !e.target.closest('.acct-tag-dd-wrap')) setOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !dd.hasAttribute('hidden')) { e.stopPropagation(); setOpen(false); btn.focus(); }
+  });
 }
 function addProfTag(raw) {
   const t = String(raw || '').trim().slice(0, 24);
@@ -302,6 +367,162 @@ async function loadFeaturedChoices(uid) {
   sel.addEventListener('change', () => { profState.featuredAnime = sel.value || ''; });
 }
 
+// round 2 — "see what viewers see": renders the SAVED public identity with the
+// real profile-sheet vocabulary (same classes; style.css is shared), inside the
+// panel. Reads the profiles doc fresh so it shows what the room actually sees
+// — unsaved edits stay in the editor.
+function freezeIfReduced(img) {
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  img.addEventListener('load', () => {
+    try {
+      const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1;
+      const w = Math.min(nw, 1280), h = Math.max(1, Math.round(w * nh / nw));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      c.className = img.className;
+      img.replaceWith(c);
+    } catch (_) {}
+  }, { once: true });
+}
+const VIEWER_AVATAR_RE = /^https:\/\/(firebasestorage\.googleapis\.com|lh3\.googleusercontent\.com)\//;
+async function renderViewerMode(user) {
+  const host = document.getElementById('acct-viewer');
+  if (!host) return;
+  host.innerHTML = '<p class="muted">Opening the public view…</p>';
+  // HEART (adversarial MED): Blake has no member sheet — his name routes every
+  // viewer to the Den. Don't render member chrome for him, and don't invite a
+  // save that would mint a profiles doc for the one identity that never wears one.
+  if (user.uid === RAR_ADMIN_UID) {
+    host.innerHTML = '<div class="acct-viewer-empty">🏮 Your name leads members <b>home to the Den</b> — there is no public member sheet for this account.</div>';
+    return;
+  }
+  let p = null;
+  try { const s = await getDoc(doc(db, 'profiles', user.uid)); p = s.exists() ? s.data() : null; } catch (_) {}
+  if (!p) {
+    host.innerHTML = '<div class="acct-viewer-empty">🌙 Nothing public yet — save your profile once and the room can see you.</div>';
+    return;
+  }
+  // honesty (adversarial MED): a suspended account's viewers see the tombstone,
+  // not the sheet — the preview must say so too (same copy as the live page).
+  if (p.isBanned === true) {
+    host.innerHTML = '<div class="acct-viewer-empty">🚫 <b>This account is suspended.</b><br>Viewers see this notice — not your profile.</div>';
+    return;
+  }
+  // source the preview EXCLUSIVELY from the profiles doc (the live sheet never
+  // reads auth) — an auth-name fallback here would present private PII as public.
+  const name = esc(String(p.displayName || 'Member').slice(0, 40));
+  const initial = esc((p.displayName || '?').toString().trim().charAt(0).toUpperCase() || '?');
+  const photo = (typeof p.photoURL === 'string' && VIEWER_AVATAR_RE.test(p.photoURL)) ? p.photoURL : '';
+  const accent = (PROF_ACCENTS.indexOf(p.accent) !== -1) ? p.accent : '';
+  const since = p.joinedAt && p.joinedAt.toMillis
+    ? `<div class="profile-since">here since ${esc(new Date(p.joinedAt.toMillis()).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }))}</div>` : '';
+  const status = (typeof p.status === 'string' && p.status.trim())
+    ? `<div class="profile-status">${esc(String(p.status).slice(0, 80))}</div>` : '';
+  const tags = (Array.isArray(p.tags) && p.tags.length)
+    ? `<div class="profile-tags">${p.tags.slice(0, 6).map((t) => `<span class="profile-tag">${esc(String(t).slice(0, 24))}</span>`).join('')}</div>` : '';
+  // bio renders through the SAME escape-first markdown as the live sheet
+  // (markdown.js is loaded by account.html; esc() is the no-JS fallback).
+  const bio = (typeof p.bio === 'string' && p.bio.trim())
+    ? `<div class="profile-bio">${window.renderMarkdownInline ? window.renderMarkdownInline(String(p.bio)) : esc(p.bio)}</div>` : '';
+  // viewers ALWAYS see the Appreciate row (the live sheet coerces a missing
+  // count to 0) — the preview must too, or a fresh profile under-promises.
+  const likesCount = (typeof p.likesCount === 'number') ? p.likesCount : 0;
+  const likes = `<div class="profile-like-row"><button type="button" class="profile-like-btn" disabled title="Viewers can appreciate you here"><span class="profile-like-heart" aria-hidden="true">♥</span><span class="profile-like-verb">Appreciate</span></button><span class="profile-like-count" aria-label="appreciations">${Math.max(0, likesCount)}</span></div>`;
+  host.innerHTML = `<section class="profile-sheet acct-viewer-sheet"${accent ? ` data-accent="${esc(accent)}"` : ''}>
+      <div class="profile-kicker">MEMBER <span class="jp-mini">旅人</span>
+        <span class="acct-viewer-badge">as last saved — exactly what viewers see</span></div>
+      <div class="profile-body">
+        <div class="profile-head">
+          <div class="profile-avatar">${photo ? `<img src="${esc(photo)}" alt="">` : initial}</div>
+          <h2 class="profile-name">${name}</h2>
+          ${status}${since}${tags}${bio}${likes}
+        </div>
+        <div class="profile-featured-slot"></div>
+        <div class="acct-viewer-foot">
+          <span class="fld-hint">their threads · reviews · comments · replies load on the live page · viewers can also report a profile</span>
+          <button type="button" class="linky" id="acct-viewer-live">Open the live page ↗</button>
+        </div>
+      </div>
+    </section>`;
+  // background — same pipeline shape as the real sheet (SDK-derived URL only)
+  const bgRef = (typeof p.bgRef === 'string' && /^uploads\/[A-Za-z0-9_-]{1,128}\/profilebg\/[A-Za-z0-9_-]{1,120}$/.test(p.bgRef)) ? p.bgRef : '';
+  const sheet = host.querySelector('.profile-sheet');
+  if (bgRef && sheet) {
+    try {
+      const url = await getDownloadURL(storageRef(getStorage(), bgRef));
+      sheet.classList.add('has-bg');
+      const wrap = document.createElement('div');
+      wrap.className = 'profile-bg-wrap'; wrap.setAttribute('aria-hidden', 'true');
+      const img = document.createElement('img'); img.className = 'profile-bg'; img.alt = ''; img.decoding = 'async';
+      freezeIfReduced(img);
+      img.src = url;
+      wrap.appendChild(img);
+      sheet.insertBefore(wrap, sheet.firstChild);
+    } catch (_) { /* dangling ref — the veil panel stands */ }
+  }
+  // the featured pin — the owner's own saved pick
+  if (typeof p.featuredAnime === 'string' && /^[A-Za-z0-9:_-]{1,120}$/.test(p.featuredAnime)) {
+    try {
+      const fs = await getDoc(doc(db, 'reviews', p.featuredAnime, 'items', user.uid));
+      if (fs.exists() && !(fs.data() || {}).removed) {
+        const fv = fs.data() || {};
+        const flabel = p.featuredAnime.indexOf('al:') === 0 ? 'a season' : p.featuredAnime.replace(/-/g, ' ');
+        const slot = host.querySelector('.profile-featured-slot');
+        if (slot) slot.innerHTML = `<div class="profile-featured">
+            <span class="profile-featured-kicker">📌 PINNED REVIEW</span>
+            <span class="profile-item-title">${esc(fv.title || '(review)')}</span>
+            <span class="profile-item-sub">${esc(flabel)} · ${esc(String(fv.rating || ''))}/10</span>
+          </div>`;
+      }
+    } catch (_) {}
+  }
+  document.getElementById('acct-viewer-live')?.addEventListener('click', () => {
+    location.href = 'index.html#profile=' + encodeURIComponent(user.uid);
+  });
+}
+
+// the Edit ↔ Public-view toggle
+function initModeToggle(user) {
+  const editBtn = document.getElementById('acct-mode-edit');
+  const viewBtn = document.getElementById('acct-mode-view');
+  const editMode = document.getElementById('acct-edit-mode');
+  const viewMode = document.getElementById('acct-viewer-mode');
+  if (!editBtn || !viewBtn || !editMode || !viewMode || editBtn._wired) return;
+  editBtn._wired = true;
+  const setMode = (m) => {
+    const isEdit = m === 'edit';
+    editBtn.classList.toggle('is-active', isEdit); editBtn.setAttribute('aria-selected', String(isEdit));
+    viewBtn.classList.toggle('is-active', !isEdit); viewBtn.setAttribute('aria-selected', String(!isEdit));
+    editMode.toggleAttribute('hidden', !isEdit);
+    viewMode.toggleAttribute('hidden', isEdit);
+    if (!isEdit) renderViewerMode(user);
+  };
+  editBtn.addEventListener('click', () => setMode('edit'));
+  viewBtn.addEventListener('click', () => setMode('view'));
+}
+
+// round 2 — the consent DEAD-END fix: the banner shows while the rules are
+// unaccepted; "Read the rules" opens the SAME branded modal the index uses
+// (consent.js — acceptRules CF mints the doc server-side, never self-attested).
+async function initConsentBanner(user) {
+  const banner = document.getElementById('acct-consent-banner');
+  const openBtn = document.getElementById('acct-consent-open');
+  if (!banner || !openBtn || banner._wired) return;
+  banner._wired = true;
+  // wire the button FIRST — the save handler may unhide the banner later (a
+  // cancelled consent), and its button must work regardless of the boot peek.
+  openBtn.addEventListener('click', async () => {
+    const res = await ensureConsent(user, db, functions, { adminUid: RAR_ADMIN_UID });
+    if (res === 'ok') {
+      banner.hidden = true;
+      statusEl.textContent = 'Rules accepted — your profile is unlocked. 🔓';
+    }
+  });
+  const d = await peekConsent(user, db, { adminUid: RAR_ADMIN_UID });
+  if (d === 'consent') banner.hidden = false;   // ok / suspended / unknown stay hidden (suspended surfaces on action)
+}
+
 // load the saved customization into the studio
 async function initProfileStudio(user) {
   try {
@@ -337,6 +558,9 @@ async function initProfileStudio(user) {
     addProfTag(tagInput.value); tagInput.value = '';
   });
   initBgPicker();
+  initTagDropdown();        // round 2 — the curated catalog
+  initModeToggle(user);     // round 2 — Edit ↔ Public view
+  initConsentBanner(user);  // round 2 — accept the rules in place
   document.getElementById('acct-view-public')?.addEventListener('click', () => {
     location.href = 'index.html#profile=' + encodeURIComponent(user.uid);
   });
@@ -730,8 +954,8 @@ function renderSaved(listEl, emptyEl, items, kind, uid) {
 // type) over the live snapshot. The snapshot stays the model; the controls
 // only change how it reads. al:<id> + #open=/#secondary= routing untouched.
 const savedView = {
-  watchlist: { items: [], filter: '', sort: 'recent', type: 'all' },
-  favorites: { items: [], filter: '', sort: 'recent', type: 'all' },
+  watchlist: { items: [], filter: '', sort: 'recent', type: 'all', view: 'list' },
+  favorites: { items: [], filter: '', sort: 'recent', type: 'all', view: 'list' },
 };
 function applySavedView(kind) {
   const st = savedView[kind];
@@ -752,6 +976,7 @@ function repaintSaved(kind, uid) {
   const st = savedView[kind];
   const v = applySavedView(kind);
   if (emptyEl) emptyEl.textContent = (st.items.length && !v.length) ? 'No matches in this view.' : (kind === 'watchlist' ? 'No watchlist yet.' : 'No favorites yet.');
+  if (listEl) listEl.classList.toggle('is-grid', st.view === 'grid');   // round 2 — cover view
   renderSaved(listEl, emptyEl, v, kind, uid);
 }
 function initSavedControls(uid) {
@@ -769,6 +994,18 @@ function initSavedControls(uid) {
         repaintSaved(kind, uid);
       });
     });
+    // round 2 — list ↔ cover view (the panel-head toggle)
+    const vm = document.querySelector(`[data-viewmode="${kind}"]`);
+    if (vm && !vm._wired) {
+      vm._wired = true;
+      vm.querySelectorAll('.saved-view-btn').forEach((b) => {
+        b.addEventListener('click', () => {
+          st.view = b.getAttribute('data-view') || 'list';
+          vm.querySelectorAll('.saved-view-btn').forEach((c) => c.classList.toggle('is-active', c === b));
+          repaintSaved(kind, uid);
+        });
+      });
+    }
   });
 }
 
@@ -889,7 +1126,7 @@ verifyBtn?.addEventListener('click', async () => {
   try {
     await sendEmailVerification(u);
     verifyMsg.textContent = 'Verification email sent. Check your inbox.';
-    verifyMsg.style.color = '#ffdf96';
+    verifyMsg.style.color = '#cbb0ff';   // purple-family notice (gold-adjacent #ffdf96 read as Blake's temperature)
   } catch (e) {
     alert('Could not send verification email: ' + e.message);
   }
@@ -972,6 +1209,18 @@ saveBtn.addEventListener('click', async () => {
 
   saveBtn.disabled = true;
   try {
+    // round 2 — the consent dead-end fix: a gated save offers the rules IN
+    // PLACE (the same CF-minted flow as the first post). 'cancelled' falls
+    // through to the legacy name/photo save with the honest message below;
+    // 'ok' proceeds with the full profile write. Already-consented users hit
+    // the session cache (no modal, ≤1 read).
+    const consentRes = await ensureConsent(u, db, functions, { adminUid: RAR_ADMIN_UID });
+    const consentOk = consentRes === 'ok';
+    if (consentOk) {
+      const cb = document.getElementById('acct-consent-banner');
+      if (cb) cb.hidden = true;
+    }
+
     let photo = u.photoURL || null;
 
     // If a new avatar was picked, upload it
@@ -984,7 +1233,10 @@ saveBtn.addEventListener('click', async () => {
       photo = await getDownloadURL(ref);
     }
 
-    await updateProfile(u, { displayName: name, photoURL: photo });
+    // round-2 walk catch: the Auth API rejects photoURL:null ("photourl must be
+    // string"), which ABORTED the whole save for any avatar-less account. Only
+    // send the field when there is a photo.
+    await updateProfile(u, photo ? { displayName: name, photoURL: photo } : { displayName: name });
     await setDoc(doc(db, 'users', u.uid), { username: name, photoURL: photo }, { merge: true });
 
     // dream-profile — stage the background upload BEFORE the profiles write so
@@ -994,18 +1246,20 @@ saveBtn.addEventListener('click', async () => {
     // everything else still proceeds.
     let nextBgRef = profState.bgRemove ? null : (profState.bgRef || null);
     let bgUploadErr = '';
-    if (profState.bgStagedBlob && !profState.bgRemove) {
+    if (profState.bgStagedBlob && !profState.bgRemove && consentOk) {
       try {
         const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
         const path = `uploads/${u.uid}/profilebg/${id}`;
         await uploadBytes(storageRef(getStorage(), path), profState.bgStagedBlob, { contentType: profState.bgStagedMime });
         nextBgRef = path;
       } catch (bgErr) {
+        // honest partial-save copy (adversarial LOW): the rest of the profile
+        // still saves below — say so instead of implying nothing did.
         bgUploadErr = !u.emailVerified
-          ? 'Background not saved — verify your email first (uploads are email-verified only).'
+          ? 'Saved — but the background didn\'t upload: verify your email first (uploads are email-verified only).'
           : (/permission|unauthorized|403/i.test(String(bgErr?.message || bgErr))
-              ? 'Background not saved — uploads unlock after you accept the community rules (open any discussion to read them).'
-              : 'Background upload failed — ' + (bgErr?.message || String(bgErr)));
+              ? 'Saved — but the background didn\'t upload: uploads unlock once the community rules are accepted (the 🔓 banner above).'
+              : 'Saved — but the background upload failed: ' + (bgErr?.message || String(bgErr)));
       }
     }
 
@@ -1014,8 +1268,8 @@ saveBtn.addEventListener('click', async () => {
     // Best-effort: the staged rules consent-gate profiles writes, so a
     // pre-consent save must not break the legacy path above — but it now SAYS
     // so instead of failing silent.
-    let profWriteOk = true;
-    try {
+    let profWriteOk = consentOk;   // a declined consent skips the public write cleanly
+    if (consentOk) try {
       const pref = doc(db, 'profiles', u.uid);
       const pSnap = await getDoc(pref);
       const pData = {
@@ -1038,7 +1292,15 @@ saveBtn.addEventListener('click', async () => {
 
     if (bgUploadErr) { errEl.textContent = bgUploadErr; saveBtn.disabled = false; return; }
     if (!profWriteOk) {
-      errEl.textContent = 'Your name is saved. The public profile bits (bio, tags, background…) unlock after you accept the community rules — open any discussion to read and accept them.';
+      // round-2 adversarial MED: 'suspended' must not get the accept-the-rules
+      // copy (the suspended modal already fired; a banned account can't comply).
+      if (consentRes === 'suspended') {
+        errEl.textContent = 'Your account is suspended — public profile changes are paused.';
+      } else {
+        const cb = document.getElementById('acct-consent-banner');
+        if (cb) cb.hidden = false;   // make sure the pointer we give is real
+        errEl.textContent = 'Your name is saved. The public profile bits (bio, tags, background…) unlock once you accept the community rules — the 🔓 banner above opens them right here.';
+      }
       saveBtn.disabled = false; return;
     }
 
@@ -1068,7 +1330,7 @@ onAuthStateChanged(auth, (user) => {
   profName.value  = name;
   avatarPick.innerHTML = avatarHTML(photo, name);
   verifyMsg.textContent = user.emailVerified ? 'Email verified' : 'Email not verified';
-  verifyMsg.style.color = user.emailVerified ? '#b7ffbf' : '#ffdf96';
+  verifyMsg.style.color = user.emailVerified ? '#b7ffbf' : '#cbb0ff';   // purple notice, not gold-adjacent
   if (verifyBtn && resendBtn) {
     const show = !user.emailVerified;
     verifyBtn.style.display = show ? '' : 'none';
@@ -1079,6 +1341,14 @@ onAuthStateChanged(auth, (user) => {
   // header buttons
   const headerSignoutBtn = document.querySelector('#signout-btn');
   if (headerSignoutBtn) headerSignoutBtn.style.display = '';
+  // round 2 — the Settings panel's session card
+  const so2 = document.getElementById('acct-signout-2');
+  if (so2 && !so2._wired) { so2._wired = true; so2.addEventListener('click', doSignOut); }
+  const sinceEl = document.getElementById('set-member-since');
+  if (sinceEl) {
+    const t = user.metadata && user.metadata.creationTime;
+    sinceEl.textContent = t ? ('Member since ' + new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })) : '';
+  }
   subscribeSavedLists(user);
   // adversarial perf MED: DON'T subscribe activity on load — it's ~110 reads +
   // 2 live collection-group listeners for a tab that starts HIDDEN (Profile is
