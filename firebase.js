@@ -63,5 +63,4 @@ window.auth = auth;
 window.db = db;
 window.functions = functions;
 window.rarStorage = storage; // gate 12 — script.js upload UI (window.storage would shadow nothing, but stay explicit)
-
 console.log("✅ Firebase initialized");

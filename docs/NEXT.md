@@ -105,6 +105,26 @@ v1.8.4 “Discovery & Blend” SHIPPED 2026-06-06. Its gate-0 design study, buil
 - **Still owed, carried:** spoiler `||spoiler||` (gate 11 = NEXT — no hook left, build fresh in `markdown.js` + one `RarComposer` button), **Storage/images gates 12-14** (the `📷` hook is already placed in the new-thread `.hub-nt-media` slot; **lock the bucket FIRST** — gitignore↔firebase discipline for Storage; forum-posts-only, **NO image DMs**; NCMEC runbook; `uploadsEnabled` kill-switch), profiles 15-16, account redesign + Inbox + watchlist cover-art fix (gate 17), admin-floor "Message Blake" DM (gate 18), per-season comments (gate 19), welcome catch-up + gold-flip cherries (gate 20), the **CUTOVER (gate 21)** close-out (on Blake's explicit "ship it" ONLY).
 
 <!-- author: Code | date: 2026-06-09 -->
+## 💭 Code's wants — POST-ROUND-3 (gates 0-19 + 3 account rounds built; 20→21 remain). PLANS ONLY CODE KNOWS — hand forward, do not lose.
+> 🔑 **The gate-0 study (`docs/v1.10.0-DESIGN-STUDY.md`) is STILL the load-bearing spec + soul for gates 20-21** — welcome catch-up + cherries and THE CUTOVER RUNBOOK live there and NOWHERE else. Do not build gate 20 or run gate 21 without re-reading it (§6 gate map, §3 the safety spine, §4-5 the heart through-line: gold = Blake ONLY, community purple + count-free except the ONE profile-like carve-out).
+
+**Deliberate round-1/2/3 calls the code can't explain itself (don't "fix" these):**
+- **consent.js is THE one consent implementation** (both pages import it) — round 1's HIGH was a fix landing in one of two lantern copies; never re-duplicate the modal. `ensureConsent` ALWAYS re-reads the gate doc (no positive cache on the WRITE gate — a mid-session ban must surface); only `peekConsent` caches.
+- **subscribeComments' unsub arrays are PER-INSTANCE on purpose** (round-3 HIGH: gate 19 runs two rooms concurrently; statics cross-killed listeners). Never re-staticize.
+- **The season room is WATCHED-gated** (`isWatched` in renderSecondaryModal) — rooms only where Blake's presence precedes (H5 + moderation reach). If Blake ever wants rooms-everywhere, it needs an explicit non-watched lead-in block, not just ungating.
+- **Inbox gold is IDENTITY-keyed** (`.is-blake` from senderUid) — never perspective (`is-mine`); a future peer DM must NOT gild strangers.
+- **The focus floor** (`:focus`/`:focus-visible` at style.css's end) deliberately exempts `.rar-live` + `.filter-narrow` (own glow; floor double-ringed them). The secondary/tertiary dialogs take programmatic focus with suppressed container rings (welcome-door precedent).
+- The saved toast + 1.8s reload (consistency reload is intentional); the lantern ::before uses the `content:"🏮" / ""` alt-text form (a11y).
+
+**Pre-cutover work I want (fold into gate 20 or a 20.5):**
+1. **The imageRefs edit-strip sweeper** — STILL the one gap: `onProfileWritten` covers profile backgrounds; the 5 imageRefs surfaces (forum thread/post, comment, review, reply) still orphan objects on EDIT. Mirror `bgSweepDecision`'s shape.
+2. **Decouple the season room from the AniList fetch** — on detail-error the room never mounts though the key needs only the id (isWatchedAniListId works WITHOUT detail); also re-arm the deep-link halo on `.secondary-retry`. Cold/429 = late halo today (16s runway is the mitigation).
+3. **Secondary-modal hardening trio:** Tab containment (focus lands but isn't trapped); a loadSecondary GENERATION TOKEN (slow fetch A overwrites fast fetch B — state corruption on throttled networks); the 280ms close window can wire comments into a closed sheet (guard on `.active`, not `hidden`).
+4. **The reviews/al: tripwire:** account activity rows already emit reviews/al: paths + the featured picker anticipates them — when per-season REVIEWS ship, the secondary must wire subscribeReviews + consume pendingReviewDeepLink, or those rows half-land.
+5. **A recurring e2e for the al: deep-link landing** needs an AniList GraphQL stub (page.route) — verified by real-pixel walk + an in-page flash-log this round; the flash (2.4s) EXPIRES before `load` resolves on slow asset loads, so naive waitForSelector probes race it.
+6. Orphan reaper + admin text-report image preview + users/{uid} email tightening (carried from the post-mega list, still open). consent.js + lantern.js need ?v= cache-busting post-cutover. An admin-pages keyboard walk (they DO load style.css — the focus floor reaches them, spot-checked benign).
+
+**Ops traps refreshed this session:** e2e needs practice WARM (first-run ERR_CONNECTION_REFUSED right after boot = the documented race — re-run before debugging); walks must wait for "PRACTICE MODE READY" in practice.log (the static server answers BEFORE seeding — an early gate-doc read sees a half-seeded sandbox and shows the consent banner for seeded users).
 ## 💭 Code's wants — POST-MEGA-BATCH (gates 0-18 built; 19→21 remain). PLANS ONLY CODE KNOWS — hand forward, do not lose.
 > 🔑 **The gate-0 study (`docs/v1.10.0-DESIGN-STUDY.md`) is STILL the load-bearing spec + soul for gates 19-21** — per-season comments (Blake's left-of-modal idea, his Q7a answer), welcome catch-up + cherries, and the cutover runbook live there and NOWHERE else. Read it before any remaining gate. The heart through-line (gold = Blake ONLY; community purple + count-free; his 44 + his voice the permanent center) is §4-5.
 
