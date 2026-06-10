@@ -588,6 +588,19 @@ const titleById = (() => {
   return map;
 })();
 
+// round 3 — slug → cover image (the activity rows show the anime's thumbnail).
+const imageById = (() => {
+  const arr = (window.__ANIME_DATA__ && Array.isArray(window.__ANIME_DATA__)) ? window.__ANIME_DATA__ : [];
+  const map = new Map();
+  arr.forEach(a => {
+    const t = a?.Title;
+    if (!t || !a.image) return;
+    const id = slugFromTitle(t);
+    if (id) map.set(id, String(a.image));
+  });
+  return map;
+})();
+
 function clearActivityUI() {
   if (activityListEl) activityListEl.innerHTML = '';
   if (activityEmptyEl) {
@@ -609,9 +622,35 @@ function renderActivity(items) {
 
   activityEmptyEl.style.display = 'none';
 
+  const KIND_GLYPH = { comment: '💬', reply: '↩', thread: '📜', review: '✍' };   // no gold stars — the heart rule
   items.forEach((it) => {
     const li = document.createElement('li');
     li.className = 'saved-item activity-item';
+
+    // round 3 — the whole row deep-links to the EXACT comment/reply/review with
+    // the halo (#notif= rides the gate-6f landing machinery; al: keys land on
+    // the secondary modal via the gate-19 bridge). Forum items keep #forum=.
+    const go = () => {
+      const href = it.path ? `index.html#notif=${encodeURIComponent(it.path)}`
+        : (it.href || (it.animeId ? `index.html#open=${encodeURIComponent(it.animeId)}` : ''));
+      if (href) location.href = href;
+    };
+
+    const glyph = document.createElement('span');
+    glyph.className = 'act-glyph';
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.textContent = KIND_GLYPH[it.kind] || '✦';
+
+    // review rows carry the anime's cover for the at-a-glance scan
+    const img = it.kind === 'review' ? imageById.get(it.animeId) : null;
+    let thumbEl = null;
+    if (img && /^[A-Za-z0-9._-]+$/.test(img)) {
+      thumbEl = document.createElement('img');
+      thumbEl.className = 'act-thumb';
+      thumbEl.alt = ''; thumbEl.loading = 'lazy';
+      thumbEl.onerror = () => { try { thumbEl.replaceWith(glyph); } catch (_) {} };   // a missing asset falls back to the glyph, never a broken-image box
+      thumbEl.src = 'assets/' + img;
+    }
 
     const main = document.createElement('div');
     main.className = 'activity-main';
@@ -620,11 +659,8 @@ function renderActivity(items) {
     openBtn.className = 'saved-open';
     openBtn.type = 'button';
     openBtn.textContent = it.title || it.animeId;
-    openBtn.title = 'Open details';
-    openBtn.addEventListener('click', () => {
-      // dream-profile: forum items carry their own deep-link
-      location.href = it.href || `index.html#open=${encodeURIComponent(it.animeId)}`;
-    });
+    openBtn.title = 'Open in place (with the halo)';
+    openBtn.addEventListener('click', go);
 
     const desc = document.createElement('div');
     desc.className = 'activity-desc';
@@ -637,8 +673,12 @@ function renderActivity(items) {
     main.appendChild(openBtn);
     main.appendChild(desc);
 
+    if (thumbEl) li.appendChild(thumbEl); else li.appendChild(glyph);
     li.appendChild(main);
     li.appendChild(dateEl);
+    // the row itself is clickable too (intuitive target, not just the title)
+    li.addEventListener('click', (e) => { if (!e.target.closest('button')) go(); });
+    li.classList.add('is-linked');
 
     activityListEl.appendChild(li);
   });
@@ -708,14 +748,14 @@ function subscribeActivity(user) {
       const root = path[0];
       const animeId = path[1];
       if (!animeId) return;
-      const title = titleById.get(animeId) || animeId;
+      const title = titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the 44)' : animeId);
       const ms = toMillis(data.editedAt || data.updatedAt || data.createdAt);
       if (root === 'comments') {
-        next.push({ animeId, title, ms, kind: 'comment', desc: `Commented: ${shorten(data.text)}` });
+        next.push({ animeId, title, ms, kind: 'comment', path: d.ref.path, desc: `Commented: ${shorten(data.text)}` });
       } else if (root === 'reviews') {
         const rt = (data.title || '').trim();
         const r = (typeof data.rating === 'number') ? data.rating : null;
-        next.push({ animeId, title, ms, kind: 'review', desc: r ? `Reviewed (${r}/10): ${shorten(rt)}` : `Reviewed: ${shorten(rt)}` });
+        next.push({ animeId, title, ms, kind: 'review', path: d.ref.path, desc: r ? `Reviewed (${r}/10): ${shorten(rt)}` : `Reviewed: ${shorten(rt)}` });
       }
     });
     streams.items = next;
@@ -742,9 +782,9 @@ function subscribeActivity(user) {
       // reviews/{animeId}/items/{reviewUid}/threads/{tid}
       const animeId = path[1];
       if (!animeId) return;
-      const title = titleById.get(animeId) || animeId;
+      const title = titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the 44)' : animeId);
       const ms = toMillis(data.editedAt || data.updatedAt || data.createdAt);
-      next.push({ animeId, title, ms, kind: 'reply', desc: `Discussion comment: ${shorten(data.text)}` });
+      next.push({ animeId, title, ms, kind: 'reply', path: d.ref.path, desc: `Discussion comment: ${shorten(data.text)}` });
     });
     streams.discussions = next;
     rerender();
@@ -762,8 +802,8 @@ function subscribeActivity(user) {
         if (data.removed) return;
         const animeId = d.ref.path.split('/')[1];
         if (!animeId) return;
-        next.push({ animeId, title: titleById.get(animeId) || animeId, ms: toMillis(data.editedAt || data.updatedAt || data.createdAt),
-          kind: 'reply', desc: `Replied: ${shorten(data.text)}` });
+        next.push({ animeId, title: titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the 44)' : animeId), ms: toMillis(data.editedAt || data.updatedAt || data.createdAt),
+          kind: 'reply', path: d.ref.path, desc: `Replied: ${shorten(data.text)}` });
       });
       gotAny = true; streams.replies = next; rerender();
     }).catch(() => { gotAny = true; rerender(); });
@@ -1304,8 +1344,17 @@ saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = false; return;
     }
 
-    // Full-page reload to signal saved state (your request #3)
-    location.reload();
+    // round 3 — a branded "saved" toast lands FIRST (a bare hard reload read as
+    // a glitch, not a confirmation); the reload still follows so every header
+    // token / preview repaints consistently (the original request #3 intact).
+    try {
+      const toast = document.createElement('div');
+      toast.className = 'acct-toast';
+      toast.setAttribute('role', 'status');
+      toast.innerHTML = '<span class="acct-toast-glyph" aria-hidden="true">✓</span> Saved — looking sharp.';
+      document.body.appendChild(toast);
+    } catch (_) {}
+    setTimeout(() => location.reload(), 1800);   // round-3: a real runway — SRs finish the announcement, eyes catch the toast
     } catch (err) {
     console.error('Avatar/Profile save failed:', err);
     const code = err?.code ? ` (${err.code})` : '';
@@ -1442,7 +1491,10 @@ function initInbox(user) {
       snap.forEach((d) => {
         const m = d.data() || {};
         const mine = m.senderUid === user.uid;
-        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}">${escText(m.text || '')}</div>`);
+        // round-3 adversarial (heart): gold keys on IDENTITY — a letter wears
+        // Blake's gold edge when BLAKE sent it, on every viewer's screen.
+        const fromBlake = m.senderUid === RAR_ADMIN_UID;
+        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}${fromBlake ? ' is-blake' : ''}">${escText(m.text || '')}</div>`);
       });
       msgsEl.innerHTML = rows.length ? rows.join('') : '<p class="muted">Say hello — this goes straight to Blake.</p>';
       msgsEl.scrollTop = msgsEl.scrollHeight;

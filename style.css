@@ -9841,3 +9841,117 @@ html[data-surface="account"] .side-link.is-active {
   .acct-preview--hero::before { animation: none !important; opacity: 0.55; }
   .account-v2 .side-link::before, .acct-tag-dd-btn .acct-dd-chev { transition: none !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   ROUND 3 — the polish pass ("jaw dropped" bar) + GATE 19 (the season room).
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── FOCUS DISCIPLINE (Blake, recurring): ZERO browser-default focus chrome
+   anywhere — every focusable element wears the ONE branded purple ring on
+   :focus-visible. Component-specific rings (more specific selectors) still
+   win where they exist; this is the floor that catches everything else,
+   including the inputs/selects the per-component sweep kept missing. ── */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+/* round-3 adversarial MED: two flat single-class components carry their OWN
+   branded focus glow and were getting DOUBLE-ringed (their outline:none base
+   ties the floor at (0,1,0) and loses on source order). Their glow stays the
+   one indicator. The secondary/tertiary dialogs take programmatic focus on
+   open (a11y) — suppress the container ring like the welcome-door precedent. */
+.rar-live:focus-visible, .filter-narrow:focus-visible { outline: none; }
+.secondary-modal:focus, .secondary-modal:focus-visible,
+.tertiary-modal:focus, .tertiary-modal:focus-visible { outline: none; }
+
+/* ── headings go BRIGHT + big, with a lantern on the door (Blake: "every
+   heading looks dark and small… maybe add some lanterns as decoration").
+   The sway is transform-only on the glyph. ── */
+.panel-head-text .acct-kicker {
+  display: flex; align-items: center; gap: 11px;
+  font-size: 1.22rem; letter-spacing: 0.13em;
+  color: #f6efff; text-shadow: 0 0 20px rgba(187, 134, 252, 0.55), 0 0 44px rgba(185, 0, 255, 0.25);
+}
+.panel-head-text .acct-kicker .jp-mini { font-size: 0.8rem; opacity: 0.85; color: #d9c9ff; }
+.panel-head-text .acct-kicker::before {
+  content: "🏮" / "";   /* alt-text form — decoration must not narrate on every heading */
+  font-size: 1.06rem; display: inline-block; transform-origin: top center;
+  filter: drop-shadow(0 0 8px rgba(255, 79, 216, 0.5));
+  animation: acctLanternSway 5.4s ease-in-out infinite;
+}
+@keyframes acctLanternSway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+.acct-section-sub { color: #cdbce8; font-size: 0.88rem; }
+
+/* ── My Activity reads scannable: cover thumbs on reviews, type glyphs on the
+   rest, the whole row a deep-link target ── */
+.activity-item.is-linked { cursor: pointer; }
+.activity-item.is-linked:hover { border-color: rgba(187, 134, 252, 0.65); background: rgba(187, 134, 252, 0.07); }
+.act-thumb { width: 44px; height: 60px; object-fit: cover; border-radius: 8px; flex: 0 0 auto;
+  border: 1px solid rgba(187, 134, 252, 0.4); }
+.act-glyph { width: 34px; height: 34px; flex: 0 0 auto; display: inline-grid; place-items: center;
+  border-radius: 10px; background: rgba(187, 134, 252, 0.12); border: 1px solid rgba(187, 134, 252, 0.4);
+  font-size: 0.95rem; }
+
+/* ── the Inbox reads complete: a letter room, not a stub. Blake's letters wear
+   his gold edge (Blake-origin = gold, the dm precedent); yours stay purple. ── */
+.inbox-blake-card { border-radius: 14px; padding: 18px 20px; margin-bottom: 16px;
+  background: linear-gradient(120deg, rgba(187, 134, 252, 0.13), rgba(255, 79, 216, 0.07));
+  border: 1px solid rgba(187, 134, 252, 0.5); }
+.inbox-blake-head { font: 800 1rem 'Montserrat', sans-serif; letter-spacing: 0.06em; color: #f6efff;
+  text-shadow: 0 0 16px rgba(187, 134, 252, 0.5); margin-bottom: 6px; }
+.inbox-blake-card .muted { color: #cdbce8; }
+.inbox-blake-card .btn { margin-top: 10px; }
+.inbox-people-locked { border-radius: 14px; padding: 14px 18px; margin-top: 16px;
+  border: 1px dashed rgba(187, 134, 252, 0.35); background: rgba(255, 255, 255, 0.02); }
+.inbox-people-head { font: 700 0.86rem 'Montserrat', sans-serif; color: #d9c9ff; margin-bottom: 4px; }
+.inbox-messages { display: flex; flex-direction: column; gap: 9px; padding: 14px 4px; min-height: 200px; }
+/* round-3 adversarial MED (heart): gold keys on IDENTITY (.is-blake — set when
+   senderUid is Blake's), never on perspective — on Blake's own view the old
+   perspective rule gilded MEMBER letters and purpled his. */
+.inbox-msg { max-width: 72%; padding: 10px 14px; border-radius: 14px 14px 14px 5px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.35);
+  border-left: 3px solid rgba(187, 134, 252, 0.45);
+  color: #f1e9ff; line-height: 1.5; align-self: flex-start; }
+.inbox-msg.is-blake { border-left: 3px solid rgba(255, 213, 74, 0.55); }   /* Blake's letters — his gold edge */
+.inbox-msg.is-mine { align-self: flex-end; border-radius: 14px 14px 5px 14px;
+  background: rgba(187, 134, 252, 0.14); border: 1px solid rgba(187, 134, 252, 0.5);
+  border-left: none; border-right: 3px solid rgba(187, 134, 252, 0.75); }
+.inbox-msg.is-mine.is-blake { border-right: 3px solid rgba(255, 213, 74, 0.55); }   /* Blake's own view of his replies */
+.inbox-composer { display: flex; gap: 10px; align-items: flex-end; padding-top: 10px;
+  border-top: 1px solid rgba(187, 134, 252, 0.2); }
+.inbox-composer textarea { flex: 1 1 auto; min-height: 64px; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 12px; color: #fff; padding: 10px 12px; }
+
+/* ── settings: the professional finish ── */
+.set-card { transition: border-color 0.15s ease; }
+.set-card:hover { border-color: rgba(187, 134, 252, 0.5); }
+#prof-email-verify { display: inline-block; margin: 8px 0 0; padding: 3px 11px; border-radius: 999px;
+  font: 600 0.72rem 'Montserrat', sans-serif; background: rgba(187, 134, 252, 0.1);
+  border: 1px solid rgba(187, 134, 252, 0.4); }
+#prof-email-verify:empty { display: none; }
+
+/* ── the saved toast ── */
+.acct-toast { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%) translateY(8px);
+  z-index: 9000; padding: 11px 20px; border-radius: 999px; display: flex; align-items: center; gap: 9px;
+  background: rgba(26, 8, 52, 0.97); border: 1px solid rgba(187, 134, 252, 0.65);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 22px rgba(185, 0, 255, 0.25);
+  color: #f1e9ff; font: 600 0.88rem 'Montserrat', sans-serif; opacity: 0;
+  animation: acctToastIn 0.3s ease forwards; }
+.acct-toast-glyph { color: #b7ffbf; font-weight: 800; }
+@keyframes acctToastIn { to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* ── GATE 19 — the season room on the secondary sheet (LEFT column, BELOW
+   Blake's review — the H5 invariant is the DOM order above this block).
+   Purple vocabulary; the one gold nearby is his review's rating. ── */
+.secondary-community { margin-top: 18px; }
+.secondary-community-head { margin-bottom: 4px; }
+.secondary-community-title { color: #e9dbff !important; }
+.secondary-community-sub { display: block; margin: 2px 0 10px; color: #b8a8d8; font-size: 0.78rem; font-style: italic; }
+.secondary-community .comments-section { background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(187, 134, 252, 0.22);
+  border-radius: 14px; padding: 14px 16px; }
+.secondary-community .comments-header h3 { color: #e9dbff; }
+
+/* — reduced motion: round-3 silencer — */
+@media (prefers-reduced-motion: reduce) {
+  .panel-head-text .acct-kicker::before, .acct-toast { animation: none !important; }
+  .acct-toast { opacity: 1; transform: translateX(-50%); }
+  .set-card { transition: none !important; }
+}

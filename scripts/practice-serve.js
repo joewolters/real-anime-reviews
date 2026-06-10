@@ -266,6 +266,21 @@ async function seed() {
     )).png().toBuffer(), {
       resumable: false, metadata: { contentType: 'image/png', metadata: { cfProcessed: 'true' } },
     });
+    // (5) gate 19 — the per-season room: seed comments under al:21386 (One
+    // Punch Man SEASON 2 — a watched-not-primary id, so the secondary modal
+    // opens it and mounts the season comments below Blake's review).
+    const sCol = db.collection('comments/al:21386/items');
+    await sCol.doc('seed-s0').set({
+      uid: 'prac-yuki', displayName: 'Yuki', photoURL: null,
+      text: 'Season 2 on its own: the **animation dip** is real but the Garou arc carries it.',
+      createdAt: TS.fromMillis(Date.now() - 5400000), likesCount: 3, dislikesCount: 0, pinned: false,
+    });
+    await sCol.doc('seed-s1').set({
+      uid: 'prac-ren', displayName: 'Ren', photoURL: null,
+      text: 'Hot take: ||the hero association subplot|| is the best part of this season.',
+      createdAt: TS.fromMillis(Date.now() - 2700000), likesCount: 1, dislikesCount: 1, pinned: false,
+    });
+
     await db.doc('profiles/prac-mika').set({
       bio: 'Back-half believer. If the finale lands, I forgive everything.',
       status: 'rewatching the big fight, again',

@@ -1,46 +1,46 @@
 <!-- author: Code | date: 2026-06-09 -->
-# v1.10.0 — ACCOUNT/PROFILE OVERHAUL ROUND 2: a real social platform. DONE · STAGED · NO deploy
+# v1.10.0 — ROUND 3 account polish + GATE 19: the season room. DONE · STAGED · NO deploy
 
-Mode **ULTRAMAX**. One pushed checkpoint. The **5-lens adversarial review caught 2 HIGH + 4 MED + 4 LOW** — all fixed, all re-proven. **All tracks green. Production untouched. Nothing deploys.**
+Mode **ULTRAMAX**. One pushed checkpoint. The **5-lens adversarial review caught 3 HIGH + 4 MED + 4 LOW** — all fixed, all re-proven. **All tracks green. Production untouched. Nothing deploys.**
 
 ## Design vision (1 para)
-The account becomes a **real settings platform**: a grouped Discord-style rail (Identity · Collections · Community · Settings) where every section owns a **full-width panel**; the profile editor goes wide under a **social-grade hero preview** (your background full-bleed, avatar overlapping, name/status/tags composed like a real platform header); an **Edit ↔ 👁 Public view** toggle shows the saved identity exactly as the room sees it; and the community-rules consent happens **in place** — a 🔓 banner + the branded modal, no more "go comment somewhere to accept the terms." Every label is a pill, every animation is compositor-only, and the heart law holds: gold is Blake's, Appreciate stays the one purple count.
+Round 3 makes the account read **finished** — full-bright lantern-lit headings, Blake-voiced lines under every one, a site-wide branded focus ring (zero browser blue anywhere), an Activity list that *takes you to the exact thing with the halo* (covers on review rows), a letter-room Inbox where Blake's letters wear his gold edge, and a saved-toast instead of a bare reload — while **gate 19** opens his banked idea: every season on the secondary modal gets its own room, **directly below his review** (his voice always precedes the room), running the full comments machinery (live composer, spoilers, images, consent, report/mod) on a per-season `al:<id>` key with zero new schema.
 
-## Blake's items, one by one
-1. **Widen + enlarge** — 1340px canvas, full-column panels, a 2-col editor grid of branded field cards, the ~240px hero preview with a breathing ring.
-2. **See what viewers see** — the 👁 toggle renders the SAVED profile with the live sheet's exact pieces (markdown bio, accent, tags, bg, featured pin, the Appreciate row), honest about the deltas ("activity loads on the live page · viewers can also report a profile"), and honest in the edge states: a suspended account previews the tombstone viewers actually get; Blake previews "your name leads home to the Den."
-3. **Each section its own surface** — six dedicated panels behind the grouped rail; Watchlist/Favorites add a **list ↔ cover-grid** view toggle on top of the filter/sort/type controls.
-4. **Settings split out** — Email / Password / Session set-cards under their own "Account" nav item (member-since flair + sign-out).
-5. **More + unique tags via a dropdown** — a branded grouped catalog (Genres · Watch style · Identity, ~40 anime-flavored entries: Sakuga nerd, Lore historian, Waifu connoisseur, Gacha survivor, Night-shift watcher…), tick-marked when worn, multi-pick; custom tags still typed in; the 6-cap and tints intact.
-6. **The consent dead-end — FIXED (the real bug):** consent now lives in ONE shared module (`consent.js`, imported by both pages — the round-1 "fix landed in only one copy" lesson applied). The account shows the 🔓 unlock banner, the branded modal opens right there, "I agree" mints consent through the `acceptRules` CF (never self-attested). Proven end-to-end in the emulator: fresh user → banner → modal → accept → unlocked → a full customization save persists.
-7. **Unique animations** — panel slide-ins, the hero breathe ring, tag-chip pops, the dropdown drop, the floating 🔓, the Appreciate heart-beat, the rail's accent bar — all transform/opacity-only, all silent under reduced-motion.
+## Part A — his items (2–8)
+2/3. Headings bright + big + 🏮 (swaying, decorative-only, reduced-motion-silent); unique Blake-voiced subtext per panel.
+4. **The focus sweep:** a global floor — every focusable element site-wide gets the purple ring on keyboard focus, nothing on mouse; two components that carry their own glow are exempted (they were double-ringing); real-pixel specs guard it. Honest note: admin pages also load style.css (the floor reaches them; spot-checked benign — worth one keyboard pass when you're in the admin).
+5. Activity rows **deep-link with the halo** (comments → the exact bubble; discussions → the review, which now **auto-expands**); review rows carry the **cover thumbnail**; whole row clickable.
+6. Inbox reads complete: letter bubbles, your purple right edge, **Blake's gold edge on HIS letters** (identity-keyed — the panel caught it inverted on your own view), premium Message-Blake card.
+7. Settings: professional pass (verify state as a pill; the gold-ish amber text went purple).
+8. Go-all-out: the **saved toast**, the auto-expand landing, a 16s halo runway for slow loads, per-surface edit sweeps (no more silently eaten drafts on the other modal).
 
-## The new information architecture
-**Identity** → Profile (hero + editor + public view) · **Collections** → Watchlist, Favorites (filter/sort/type + list/grid) · **Community** → My Activity (typed chips), Inbox (Message Blake) · **Settings** → Account (email/password/session).
+## Part B — Gate 19: THIS SEASON'S ROOM 話せ
+- LEFT column, **directly below BLAKE'S REVIEW** — the H5 invariant verified in DOM order (`review → community → synopsis`).
+- The full comments treatment via `communityKey()` → `comments/al:<id>/items`: live-in-box composer, consent-gated, spoilers + inline images, report/lock/mod, votes + rate-limits — all the primary modal's machinery, zero new schema.
+- **Deep-linkable:** a `comments/al:<id>` notification opens the secondary modal and halos the exact comment (proven live — flash at t≈1.8s).
+- **Rooms only where your presence precedes:** gated to WATCHED ids (an arbitrary never-watched AniList page gets no composer — no spam rooms you'd never visit).
 
-## Adversarial findings → fixes (all in this checkpoint)
-- **HIGH:** `addDoc` was used by the gate-18 inbox but never imported — **every "Message Blake"/Send has thrown since the mega-batch**; no spec drove the flow. Fixed + a new e2e performs a REAL send.
-- **HIGH:** the round-1 520px tab clamp caged the new panels — the editor spilled ~670px past the card. Unlocked + a computed-style spec.
-- **MED×4:** mid-session bans now re-checked on every gated action (no stale "ok" cache); suspended users get suspended copy (not "accept the rules"); viewer mode honors `isBanned` + special-cases Blake; the preview bio renders the same markdown as the live page.
-- **LOW×4:** the rail's unread dot ignored `[hidden]` (painted forever — same trap class the walk caught on the banner); viewer name no longer falls back to auth PII; the Appreciate row always previews (coerced 0); honest partial-save copy + the gold-adjacent verify text went purple.
+## Adversarial findings → fixes
+- **HIGH×3:** gate 19's two-concurrent-rooms situation exposed `subscribeComments`' SHARED unsub arrays (either room killed the other's live listeners — now per-instance); a permanent auth-observer leak per composer (now torn down with the surface, and a locked thread stays locked through auth events); the secondary dialog never took/restored keyboard focus (now it does — the gate-19 composer was Tab-unreachable).
+- **MED×4 + LOW×4:** the never-watched room gate, the inbox gold inversion, closed-box review landings, the double-ring, draft-eating sweeps, lantern a11y, thumb fallbacks, toast runway.
+- **Accepted + noted:** the season room depends on a live AniList fetch (slow networks = late halo; 16s runway; decoupling is the clean follow-up) · a recurring e2e for the al: landing needs an AniList stub (verified by real-pixel walk + an in-page flash log this round) · two pre-existing secondary-modal races (generation token + the 280ms close window) go on the cutover-polish list.
 
 ## Tests — ALL GREEN
-`npm test` **166** · `test:rules` **126** · `test:functions` **56** · `test:cf` **57** · e2e **10** (incl. the real Message-Blake send). Real-pixel walk re-shot every panel; the spill measured fixed (offset == scroll).
+`npm test` **170** · `test:rules` **126** · `test:functions` **56** · `test:cf` **57** · e2e **10**. (e2e needs practice WARM — first-run connection refusals are the documented boot race; re-run before believing a red.)
 
 ## Checkpoint / deploy
-One pushed checkpoint. APP_VERSION stays **1.9.1** (staged). **NO deploy.** Cutover note: `consent.js` is a new hosted file (verified not firebase-ignored); it joins lantern.js in the post-cutover ?v= version-busting item.
+One pushed checkpoint. APP_VERSION stays **1.9.1**. **NO deploy.** Remaining: gate 20 (welcome catch-up + cherries + the imageRefs edit-strip sweeper) → gate 21 THE CUTOVER.
 
 ## YOUR NUMBERED SMOKE (practice is up + seeded: http://127.0.0.1:8765/?emu=1)
-**Sign-ins:** `prac-mika`…`prac-sora` / `practice123`; admin `blake@practice.test` / `practice123`. **prac-newbie is the consent smoke** (fresh account, never accepted).
+**Sign-ins:** `prac-mika`…`prac-sora` / `practice123`; admin `blake@practice.test` / `practice123`.
 
-1. **The new shape:** sign in as Mika → Account. The left rail is grouped (Identity / Collections / Community / Settings); each item opens its **own full panel** with a slide-in.
-2. **The wide editor:** Profile fills the column — the **hero preview** composes your identity over your background; every label is a pill; the panel **contains** everything (no spill past the card).
-3. **👁 Public view:** flip the toggle — your saved profile renders exactly as viewers see it (badge says so), with your pinned review and the Appreciate row. Flip back to ✎ Edit.
-4. **The tag dropdown:** in Tags, hit **⬡ Browse tags** — pick from Genres / Watch style / Identity (picked ones tick ✓); type a custom one too; 6 max.
-5. **The consent fix (the bug you called):** sign in as **prac-newbie** → Account. The **🔓 unlock banner** sits on the Profile panel → **Read the rules** → the branded modal opens RIGHT THERE → **I agree** → banner gone, "your profile is unlocked." Now customize + Save — it sticks. No comment-section detour.
-6. **Settings split:** the **Account** nav item owns email/password/session (member-since pill + sign out). The profile editor no longer mentions passwords.
-7. **Collections:** Watchlist/Favorites — try the **▦ cover view** toggle next to the filter/sort/type controls.
-8. **The inbox actually sends now:** as any member → Inbox → **Message Blake** → send a line (this was silently dead since the mega-batch — the adversarial review caught it; an e2e now drives the real send every run).
+1. **The season room (your idea):** open **One Punch Man → More Info → Season 2** (the secondary modal). On the **left, right under BLAKE'S REVIEW**: "THIS SEASON'S ROOM 話せ" with two seeded takes (one behind a spoiler pill). Post one — the live composer, images, everything works here.
+2. **Season deep-link:** sign in as **Yuki**, like Mika's season comment… or simpler: paste `#notif=comments/al:21386/items/seed-s0` onto the index URL → the **secondary** opens and the exact comment **halos**.
+3. **Headings + lanterns:** Account — every panel head is bright, big, with a gently swaying 🏮.
+4. **Focus ring:** Tab around anywhere (account, modals, the Tavern) — every stop shows the **purple ring**, never a blue rectangle. Click with the mouse — no ring at all.
+5. **Activity → exact landings:** Account → My Activity — review rows show **cover art**; click a comment row → it lands on the exact bubble **with the halo**; click a "Discussion comment" row → the review opens **already expanded**.
+6. **The inbox:** letters look like letters; **my replies carry the gold edge on YOUR screen too** (sign in as a member to see it from their side).
+7. **The saved toast:** edit your profile → Save → "Saved — looking sharp ✓" lands before the refresh.
 
 ## One-liner reply
-Round 2 rebuilt the account into a **real settings platform** — a grouped Discord-style rail where Profile/Watchlist/Favorites/Activity/Inbox/**Account-settings** each own a full panel, the profile editor went wide under a **hero preview** with an **Edit ↔ Public-view toggle**, tags moved into a **branded grouped dropdown** (~40 curated anime-flavored entries + custom), every label became a pill and every animation is compositor-cheap — and the **consent dead-end you called out is fixed in place** (a 🔓 banner + the branded modal wired to the acceptRules CF via ONE shared consent.js, proven end-to-end: fresh user accepts in the account and their customization saves); the 5-lens adversarial review then caught **2 HIGH** — the gate-18 inbox's send was silently DEAD since the mega-batch (`addDoc` never imported; fixed + a real-send e2e now guards it) and the round-1 520px clamp made the new editor **spill 670px past its card** (unlocked + spec'd) — plus 4 MED + 4 LOW (mid-session-ban re-checks, suspended-state honesty in copy + viewer mode, Blake's viewer special-case, the forever-lit unread dot, markdown-true bio preview), all fixed with `npm test` **166** · rules **126** · functions **56** · cf **57** · e2e **10** green; **practice is up + seeded, the checkpoint is pushed, APP_VERSION stays 1.9.1, nothing deploys.**
+Round 3 landed the completeness bar — bright lantern-lit headings with your voice under them, a **site-wide purple focus ring** (zero browser blue, spec-guarded in real pixels), an Activity list that **deep-links to the exact comment with the halo** and shows cover art on reviews, a letter-room Inbox with **your gold edge keyed to your identity** (the panel caught it inverted on your own view), and a saved-toast — and **gate 19 shipped your left-side idea**: every watched season's secondary modal now carries **THIS SEASON'S ROOM directly below your review** (full live composer/spoilers/images/consent/mod, per-season `al:<id>` key, zero new schema, deep-linkable with the halo — proven live), with the adversarial panel catching **3 HIGH** (the two-concurrent-rooms listener cross-kill, a per-composer auth-observer leak, and the secondary dialog never taking keyboard focus) + 4 MED + 4 LOW, all fixed and re-proven at `npm test` **170** · rules **126** · functions **56** · cf **57** · e2e **10** green; **practice is up + seeded, the checkpoint is pushed, APP_VERSION stays 1.9.1, and nothing deploys — gate 20 and the cutover are what's left.**

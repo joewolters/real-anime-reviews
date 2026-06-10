@@ -1870,7 +1870,7 @@ function scrollHighlightNotif(getEl) {
       } catch (_) {}
       return;
     }
-    if (++tries < 40) setTimeout(tick, 150);   // up to ~6s for the list to render
+    if (++tries < 80) setTimeout(tick, 200);   // ~16s runway — the gate-19 secondary lands after a live AniList fetch
   };
   setTimeout(tick, 300);   // give the modal a beat to open
 }
@@ -2094,6 +2094,13 @@ function toggleLanternCenter() {
 
 function openAnimeFromId(animeId) {
   if (!animeId) return;
+
+  // gate 19 — an al:<id> community key belongs to the SECONDARY modal (the
+  // per-season room), not the catalog list.
+  if (/^al:\d+$/.test(String(animeId))) {
+    if (typeof window.openSecondaryFromKey === 'function') window.openSecondaryFromKey(animeId);
+    return;
+  }
 
   const list =
     (typeof animeData !== 'undefined' && Array.isArray(animeData)) ? animeData :
@@ -4275,7 +4282,10 @@ function positionFeaturedDrop() {
   if (typeof window !== 'undefined') window.communityKey = communityKey;
 
   function commentsMarkup(anime) {
-  const s = animeSlug(anime);
+  // gate 19 — keyed by communityKey: identical to animeSlug for catalog anime
+  // (ctx has a Title); 'al:<id>' for the secondary modal's per-season context.
+  // All element lookups are getElementById (colon-safe ids like comments-al:123).
+  const s = communityKey(anime);
   return [
     '<section class="comments-section" id="comments-' + s + '">',
     '  <div class="comments-header">',
@@ -4483,7 +4493,7 @@ function setVoteUI(li, value) {
 
 
   function subscribeComments(anime) {
-  const s = animeSlug(anime);
+  const s = communityKey(anime);   // gate 19 — catalog slug OR al:<id> (per-season)
   const listEl  = document.getElementById(`comments-list-${s}`);
   const countEl = document.getElementById(`comments-count-${s}`);
   const sortEl  = document.getElementById(`comments-sort-${s}`);
@@ -4491,8 +4501,13 @@ function setVoteUI(li, value) {
 
   const qref = query(collection(db, 'comments', s, 'items'), orderBy('createdAt', 'desc'));
 
-  if (!subscribeComments._authorUnsubs) subscribeComments._authorUnsubs = [];
-  if (!subscribeComments._voteUnsubs) subscribeComments._voteUnsubs = [];
+  // round-3 adversarial HIGH: PER-INSTANCE unsub arrays. These were statics on
+  // the function object — fine while only ONE comments surface ever existed;
+  // gate 19 runs the primary's room and the secondary's al: room CONCURRENTLY,
+  // and either room's snapshot/teardown was killing the OTHER's live author +
+  // vote listeners (frozen names; vote highlights dying mid-click).
+  const authorUnsubs = [];
+  const voteUnsubs = [];
 
   let lastRows = [];
 
@@ -4538,12 +4553,12 @@ sortEl?.addEventListener('change', onSortChange);
 
   const unsubMain = onSnapshot(qref, (snap) => {
     // stop previous per-author listeners
-    try { subscribeComments._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
-    subscribeComments._authorUnsubs = [];
+    try { authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
+    authorUnsubs.length = 0;
 
     // stop previous per-vote listeners
-    try { subscribeComments._voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
-    subscribeComments._voteUnsubs = [];
+    try { voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
+    voteUnsubs.length = 0;
 
     // close any open reply-panel listeners before the list is rebuilt
     sweepReplies();
@@ -4602,7 +4617,7 @@ sortEl?.addEventListener('change', onSortChange);
             }
           }
         });
-        subscribeComments._authorUnsubs.push(unsubAuthor);
+        authorUnsubs.push(unsubAuthor);
       }
 
       // live vote state (current user only)
@@ -4613,7 +4628,7 @@ sortEl?.addEventListener('change', onSortChange);
           const val = (vs.exists() && typeof vs.data()?.value === 'number') ? vs.data().value : 0;
           setVoteUI(li, val);
         });
-        subscribeComments._voteUnsubs.push(unsubVote);
+        voteUnsubs.push(unsubVote);
       }
 
       // up-front reply count so the toggle reads "💬 N replies" BEFORE opening
@@ -4639,11 +4654,11 @@ sortEl?.addEventListener('change', onSortChange);
   return () => {
     try { unsubMain(); } catch (_) {}
     try { sortEl && sortEl.removeEventListener('change', onSortChange); } catch (_) {}
-    try { subscribeComments._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
-    try { subscribeComments._voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
+    try { authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
+    try { voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     sweepReplies();
-    subscribeComments._authorUnsubs = [];
-    subscribeComments._voteUnsubs = [];
+    authorUnsubs.length = 0;
+    voteUnsubs.length = 0;
   };
 }
 
@@ -4658,7 +4673,7 @@ function markPostedNow() {
 }
 
   function wireComments(anime) {
-    const s = animeSlug(anime);
+    const s = communityKey(anime);   // gate 19 — catalog slug OR al:<id> (per-season)
     const input   = document.getElementById(`composer-input-${s}`);
     const counter = document.getElementById(`composer-count-${s}`);
     const postBtn = document.getElementById(`composer-post-${s}`);
@@ -4689,7 +4704,12 @@ function markPostedNow() {
     input.addEventListener('focus', (e) => { ensureAuthOrOpen(e); });
     input.addEventListener('input', () => { syncAuthUI(auth.currentUser); });
 
-    onAuthStateChanged(auth, (u) => { syncAuthUI(u); });
+    // round-3 adversarial: (1) keep the unsubscribe — this leaked one PERMANENT
+    // auth observer (pinning the detached composer DOM) per call, multiplied by
+    // every gate-19 season hop; (2) route through the LOCK — an auth event was
+    // re-enabling a composer Blake had locked (cosmetic — rules still deny —
+    // but a lying composer).
+    const unsubAuth = onAuthStateChanged(auth, (u) => { if (threadLocked) applyLockState(); else syncAuthUI(u); });
     syncAuthUI(auth.currentUser);
 
     let posting = false;
@@ -4850,7 +4870,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
   if (id.startsWith('pending-')) return;
 
   // close any other open comment editor
-  document.querySelectorAll('.comment-item .inline-edit').forEach((wrap) => {
+  (editBtn.closest('.comments-section') || document).querySelectorAll('.comment-item .inline-edit').forEach((wrap) => {   // round-3: scope to THIS surface — never eat the other modal's draft
     const b = wrap.closest('.bubble');
     const p = b?.querySelector('p');
     const actions = b?.querySelector('.actions');
@@ -5036,6 +5056,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     return () => {
       try { unsubscribe(); } catch (_) {}
       try { unsubLock && unsubLock(); } catch (_) {}
+      try { unsubAuth && unsubAuth(); } catch (_) {}   // round-3: the auth observer goes down WITH the surface
       try { window.removeEventListener('rar:admin-change', renderAdminLock); } catch (_) {}
     };
   }
@@ -7373,7 +7394,7 @@ function subscribeReviews(anime) {
     if (id.startsWith('pending-')) return;
 
     // close any other open editor
-    document.querySelectorAll('.comment-item .inline-edit').forEach((wrap) => {
+    (editBtn.closest('.comments-section') || document).querySelectorAll('.comment-item .inline-edit').forEach((wrap) => {   // round-3: scope to THIS surface — never eat the other modal's draft
       const b = wrap.closest('.bubble');
       const p = b?.querySelector('p');
       const actions = b?.querySelector('.actions');
@@ -7474,6 +7495,15 @@ function subscribeReviews(anime) {
     // outer box-shadow to nothing → the carried "invisible halo" bug. An element's own
     // outset box-shadow is NOT clipped by its own overflow, so on the row it renders as
     // a visible purple card glow (matching how the comment halo lands on the `.bubble`).
+    // round-3 adversarial: discussion (threads-CG) deep-links land on this row too —
+    // auto-EXPAND it so the landing is never a closed box.
+    const dEl = target.querySelector('.row-detail');
+    if (dEl && dEl.hasAttribute('hidden')) {
+      dEl.removeAttribute('hidden');
+      const tEl = target.querySelector('.row-toggle');
+      if (tEl) tEl.setAttribute('aria-expanded', 'true');
+      openReviewIds.add(p.id);
+    }
     const el = target;
     // Add the class only if MISSING — do NOT reflow-restart on every render. A freshly
     // rebuilt row plays the 2.4s glow from its start anyway; re-appending the SAME row
@@ -9035,6 +9065,8 @@ function closeModal() {
   let secondaryScrollEl = null;    // inner scroll container that holds the content
   let secondaryCtx = null;         // { sourceTitle, moreInfoContent, currentId }
   let secondaryViewingRow = null;  // row in the primary More Info panel we highlighted
+  let secondaryCommentsUnsub = null;   // gate 19 — the per-season comments teardown
+  let secondaryPrevFocus = null;       // round-3 a11y — the opener, restored on close
   // v1.7.4 (gate 2b) — replace-content navigation history: [{ id, title }] in the
   // order visited. Back steps BACKWARD one entry; emptying it returns to primary.
   let secondaryHistory = [];
@@ -9207,6 +9239,16 @@ function closeModal() {
   // Entry point — replaces the window.open hook. sourceAnime + moreInfoContent
   // come from the primary modal's open closure (for the Back label + the
   // currently-viewing highlight).
+  // gate 19 — the deep-link bridge: a comments/al:<id> notif target lands HERE
+  // (openAnimeFromId can't see this scope; the #notif= halo machinery then finds
+  // the comment in the secondary DOM via its document-wide data scan).
+  if (typeof window !== 'undefined') {
+    window.openSecondaryFromKey = (alKey) => {
+      const m = /^al:(\d+)$/.exec(String(alKey || ''));
+      if (m) openSecondaryModal(Number(m[1]), null, null);
+    };
+  }
+
   function openSecondaryModal(aniListId, sourceAnime, moreInfoContent) {
     const id = Number(aniListId);
     if (!id) return;
@@ -9221,6 +9263,11 @@ function closeModal() {
     secondaryEl.classList.add('active');
     document.documentElement.style.overflow = 'hidden';
     document.addEventListener('keydown', onSecondaryKeydown);
+    // round-3 adversarial HIGH (a11y): the dialog takes focus on open — keyboard
+    // focus otherwise stayed BEHIND the overlay (the gate-19 composer was
+    // Tab-unreachable in practice). Restored to the opener on close.
+    secondaryPrevFocus = document.activeElement;
+    try { const sm = secondaryEl.querySelector('.secondary-modal'); if (sm) sm.focus({ preventScroll: true }); } catch (_) {}
     secondaryHistory = [{ id, title: null }];   // seed the navigation history
     loadSecondary(id);
   }
@@ -9280,16 +9327,28 @@ function closeModal() {
     // Stash the loaded detail so the save pills (gate 1) can snapshot title/cover/
     // format/year at click-time without a re-fetch.
     if (secondaryCtx) secondaryCtx.currentDetail = detail || null;
-    const meta = { sourceTitle, backTitle: secondaryBackTitle(), inFranchise: !!secondaryViewingRow, seasonReview };
+    const meta = { sourceTitle, backTitle: secondaryBackTitle(), inFranchise: !!secondaryViewingRow, seasonReview, alId: detail ? id : null };
+    // gate 19 — tear down the previous season's comment subscriptions BEFORE the
+    // innerHTML swap orphans their DOM (loadSecondary re-renders on every nav).
+    if (secondaryCommentsUnsub) { try { secondaryCommentsUnsub(); } catch (_) {} secondaryCommentsUnsub = null; }
     secondaryScrollEl.innerHTML = renderSecondaryModal(detail ? 'success' : 'error', detail, meta);
     secondaryScrollEl.scrollTop = 0;
     wireReviewNav(secondaryScrollEl);   // v1.8.2 — jump pills + scroll-spy on BLAKE'S REVIEW
+    // gate 19 — wire the per-season comments (same machinery as the primary
+    // modal; the ctx has no Title so communityKey resolves to al:<id>).
+    if (detail) {
+      try { secondaryCommentsUnsub = wireComments({ aniListId: id }); } catch (_) { secondaryCommentsUnsub = null; }
+    }
   }
 
   function closeSecondaryModal() {
     if (!secondaryEl || secondaryEl.hidden) return;
+    // gate 19 — release the per-season comment listeners with the sheet
+    if (secondaryCommentsUnsub) { try { secondaryCommentsUnsub(); } catch (_) {} secondaryCommentsUnsub = null; }
     secondaryEl.classList.remove('active');
     document.removeEventListener('keydown', onSecondaryKeydown);
+    if (secondaryPrevFocus && secondaryPrevFocus.focus) { try { secondaryPrevFocus.focus({ preventScroll: true }); } catch (_) {} }
+    secondaryPrevFocus = null;
     restoreViewingHighlight();
     secondaryHistory = [];
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -9611,6 +9670,23 @@ function closeModal() {
         '</section>';
     }
 
+    // gate 19 — PER-SEASON COMMENTS (Blake's left-side idea, study Q7a): the
+    // community block lives in the LEFT column DIRECTLY BELOW Blake's review —
+    // the H5 invariant (his voice always precedes the room) is DOM order here.
+    // Keyed comments/al:<id>/items via communityKey({aniListId}) — zero new
+    // schema; the live composer / consent gate / images / spoilers / report /
+    // mod machinery is the SAME code the primary modal runs. Purple, count-free
+    // cards; the one gold above it is Blake's review.
+    const communityHtml = (meta && meta.alId && isWatched)   // round-3 adversarial MED: rooms only where Blake's presence precedes (H5) — never on arbitrary never-watched ids
+      ? '<section class="secondary-section secondary-community">' +
+          '<div class="secondary-community-head">' +
+            '<h3 class="secondary-section-title secondary-community-title">THIS SEASON’S ROOM <span class="jp-mini">話せ</span></h3>' +
+            '<span class="secondary-community-sub">Talk about this season — spoilers behind the tag, please.</span>' +
+          '</div>' +
+          commentsMarkup({ aniListId: meta.alId }) +
+        '</section>'
+      : '';
+
     // synopsis (collapsible past ~420 chars)
     const descText = stripAniListHtml(detail.description);
     let descHtml = '';
@@ -9715,7 +9791,7 @@ function closeModal() {
 
     const body =
       '<div class="secondary-body">' +
-        '<div class="secondary-col secondary-col--main">' + reviewHtml + descHtml + episodesHtml + genresHtml + tagsHtml + trailerHtml + '</div>' +
+        '<div class="secondary-col secondary-col--main">' + reviewHtml + communityHtml + descHtml + episodesHtml + genresHtml + tagsHtml + trailerHtml + '</div>' +
         '<div class="secondary-col secondary-col--side">' + whereToWatchHtml + charsHtml + staffHtml + linksHtml + '</div>' +
       '</div>';
 
