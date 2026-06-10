@@ -624,35 +624,42 @@ exports.processUploadedImage = onObjectFinalized(
     // per user (the same panel from two DIFFERENT users stays legal). Hash the
     // ORIGINAL bytes (the re-encode below isn't byte-stable; the raw upload is)
     // and consult the uploadHashes registry.
-    const hash = sha256Hex(buf);
-    const hashRef = db.doc('uploadHashes/' + hashDocId(parsed.uid, hash));
-    const hashSnap = await hashRef.get();
-    if (hashSnap.exists && hashSnap.data().path !== obj.name) {
-      const [oldExists] = await bucket.file(hashSnap.data().path).exists();
-      if (oldExists) {
-        // the registered original is still live -> this upload is a DUPLICATE.
-        await file.delete({ ignoreNotFound: true });
-        return;
-      }
-      // SELF-HEAL: hash docs are never cascade-swept, so a stale doc (the user
-      // deleted the original / a cascade swept it) must not permanently block a
-      // legitimate re-upload — repoint the registry at the new object and go on.
-      await hashRef.set({ path: obj.name, at: FieldValue.serverTimestamp() }, { merge: true });
-    } else if (!hashSnap.exists) {
-      // CLAIM the hash atomically — .create() fails if a RACING twin upload of
-      // the same bytes registered first (the plain read-then-set raced: both
-      // saw !exists, both published — adversarial review, LOW). The loser
-      // deletes its own object, so "no 2 same images" holds even under a
-      // deliberate simultaneous double upload.
-      try {
-        await hashRef.create({ uid: parsed.uid, hash, path: obj.name, at: FieldValue.serverTimestamp() });
-      } catch (_conflict) {
-        const again = await hashRef.get();
-        const winnerPath = again.exists ? again.data().path : null;
-        if (winnerPath && winnerPath !== obj.name) {
-          const [winnerLive] = await bucket.file(winnerPath).exists();
-          if (winnerLive) { await file.delete({ ignoreNotFound: true }); return; }
-          await hashRef.set({ path: obj.name, at: FieldValue.serverTimestamp() }, { merge: true });
+    // round-4 adversarial MED: profile BACKGROUNDS are exempt — a background is
+    // one-per-user (duplicate-spam is meaningless there), and re-picking the
+    // SAME file (GIFs skip the cropper, so bytes match exactly) uploaded to a
+    // fresh path while bgRef still pointed at the old object: dedupe deleted
+    // the NEW object, the bgRef write then dangled at a deleted path forever.
+    if (parsed.docId !== 'profilebg') {
+      const hash = sha256Hex(buf);
+      const hashRef = db.doc('uploadHashes/' + hashDocId(parsed.uid, hash));
+      const hashSnap = await hashRef.get();
+      if (hashSnap.exists && hashSnap.data().path !== obj.name) {
+        const [oldExists] = await bucket.file(hashSnap.data().path).exists();
+        if (oldExists) {
+          // the registered original is still live -> this upload is a DUPLICATE.
+          await file.delete({ ignoreNotFound: true });
+          return;
+        }
+        // SELF-HEAL: hash docs are never cascade-swept, so a stale doc (the user
+        // deleted the original / a cascade swept it) must not permanently block a
+        // legitimate re-upload — repoint the registry at the new object and go on.
+        await hashRef.set({ path: obj.name, at: FieldValue.serverTimestamp() }, { merge: true });
+      } else if (!hashSnap.exists) {
+        // CLAIM the hash atomically — .create() fails if a RACING twin upload of
+        // the same bytes registered first (the plain read-then-set raced: both
+        // saw !exists, both published — adversarial review, LOW). The loser
+        // deletes its own object, so "no 2 same images" holds even under a
+        // deliberate simultaneous double upload.
+        try {
+          await hashRef.create({ uid: parsed.uid, hash, path: obj.name, at: FieldValue.serverTimestamp() });
+        } catch (_conflict) {
+          const again = await hashRef.get();
+          const winnerPath = again.exists ? again.data().path : null;
+          if (winnerPath && winnerPath !== obj.name) {
+            const [winnerLive] = await bucket.file(winnerPath).exists();
+            if (winnerLive) { await file.delete({ ignoreNotFound: true }); return; }
+            await hashRef.set({ path: obj.name, at: FieldValue.serverTimestamp() }, { merge: true });
+          }
         }
       }
     }

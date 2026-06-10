@@ -109,6 +109,7 @@
             <ul class="side-nav" role="tablist" aria-orientation="vertical">
               <li><button data-tab="watchlist" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">◷</span>Watchlist</button></li>
               <li><button data-tab="favorites" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">♥</span>Favorites</button></li>
+              <li><button data-tab="collections" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">⊞</span>Personal collections</button></li>
             </ul>
           </div>
           <div class="side-group">
@@ -136,7 +137,7 @@
   <header class="panel-head">
     <div class="panel-head-text">
       <h3 class="acct-kicker">Your Constellation <span class="jp-mini">星座</span></h3>
-      <p class="acct-section-sub">This is your corner of my site — shape it, color it, sign it.</p>
+      <p class="acct-section-sub">Customize your profile, bio, send messages and more — all from here!</p>
     </div>
     <div class="panel-head-actions">
       <div class="acct-mode-toggle" role="tablist" aria-label="Editor mode">
@@ -206,9 +207,10 @@
       <div class="form-row form-row--full">
         <span class="fld-pill">🌌 Background</span>
         <span class="fld-hint">image or GIF — your sky</span>
+        <!-- round 4 (item 4): the picker rides the previews — hover the hero (or
+             this thumb) to change; the old "Choose" button row is gone -->
         <div class="acct-bg-row">
-          <span class="acct-bg-thumb" id="acct-bg-thumb">none yet</span>
-          <button type="button" id="acct-bg-pick" class="inline-header-btn small">Choose image / GIF</button>
+          <button type="button" class="acct-bg-thumb" id="acct-bg-thumb" aria-label="Change background">none yet</button>
           <button type="button" id="acct-bg-remove" class="linky" hidden>Remove</button>
           <input type="file" id="acct-bg-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
           <span class="acct-bg-note">Up to 5 MB · JPEG/PNG/WebP/GIF · email-verified accounts · backgrounds follow the community rules and can be reported.</span>
@@ -218,9 +220,7 @@
       <div class="form-row form-row--full">
         <span class="fld-pill">📌 Pinned review</span>
         <span class="fld-hint">leads your profile</span>
-        <select id="acct-featured" class="acct-featured-select">
-          <option value="">None — let the latest speak</option>
-        </select>
+        <div id="acct-featured-host" aria-live="off"></div>
       </div>
     </div>
 
@@ -300,11 +300,7 @@
   <!-- dream-profile gate: precise controls (filter · sort · type) -->
   <div class="saved-controls" data-saved-controls="watchlist">
     <input type="search" class="saved-filter" placeholder="Filter by title…" aria-label="Filter watchlist" />
-    <select aria-label="Sort watchlist">
-      <option value="recent">Recently added</option>
-      <option value="alpha">A → Z</option>
-      <option value="year">By year</option>
-    </select>
+    <div data-sort-dd aria-live="off"></div>
     <button type="button" class="saved-type-chip is-active" data-type="all">All</button>
     <button type="button" class="saved-type-chip" data-type="catalog">Blake's 44</button>
     <button type="button" class="saved-type-chip" data-type="anilist">Beyond</button>
@@ -344,11 +340,7 @@
   <!-- dream-profile gate: precise controls (filter · sort · type) -->
   <div class="saved-controls" data-saved-controls="favorites">
     <input type="search" class="saved-filter" placeholder="Filter by title…" aria-label="Filter favorites" />
-    <select aria-label="Sort favorites">
-      <option value="recent">Recently added</option>
-      <option value="alpha">A → Z</option>
-      <option value="year">By year</option>
-    </select>
+    <div data-sort-dd aria-live="off"></div>
     <button type="button" class="saved-type-chip is-active" data-type="all">All</button>
     <button type="button" class="saved-type-chip" data-type="catalog">Blake's 44</button>
     <button type="button" class="saved-type-chip" data-type="anilist">Beyond</button>
@@ -370,6 +362,34 @@
 </article>
 
 
+
+        <!-- PERSONAL COLLECTIONS — round 4 (Blake item 7): user-made shelves,
+             each public or private; public ones show on the live profile -->
+        <article class="account-card account-panel-card is-tab" id="tab-collections" hidden>
+  <header class="panel-head">
+    <div class="panel-head-text">
+      <h3 class="acct-kicker">Personal Collections <span class="jp-mini">蔵書</span></h3>
+      <p class="acct-section-sub">Your own shelves — name them, fill them, share the ones you're proud of.</p>
+    </div>
+    <div class="panel-head-actions">
+      <button type="button" id="col-new" class="inline-header-btn small">＋ New collection</button>
+    </div>
+  </header>
+
+  <!-- the new-collection composer (hidden until ＋) -->
+  <div class="col-composer" id="col-composer" hidden>
+    <input id="col-name" type="text" maxlength="60" placeholder="Name your shelf — “Peak fiction”, “Comfort rewatches”…" />
+    <div id="col-visibility-host" aria-live="off"></div>
+    <button type="button" id="col-create" class="inline-header-btn small">Create</button>
+    <button type="button" id="col-cancel" class="linky">Cancel</button>
+    <p class="col-note">Public shelves appear on your profile — collection names follow the community rules.</p>
+  </div>
+
+  <div class="tab-scroll">
+    <div id="col-list" class="col-list" aria-label="Your collections"></div>
+    <div class="muted saved-empty" id="col-empty" hidden>No shelves yet — make your first one.</div>
+  </div>
+</article>
 
         <!-- ACTIVITY — round 2: its own full surface, separated by type -->
         <article class="account-card account-panel-card is-tab" id="tab-activity" hidden>

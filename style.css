@@ -179,9 +179,14 @@ html.veil-pulse-active body::after {
 #discover-view .discover-block-sub { text-shadow: 0 1px 6px rgba(6,1,14,0.72); }
 
 
-/* Header container */
-header {
-  position: sticky;              
+/* Header container — SCOPED to the page-level site header (round 4).
+   These rules used to target bare `header`, which also matched every semantic
+   <header> inside the app (the account panel-heads, the Tavern hub-headers):
+   the ::before scrim below painted ABOVE their static text = the recurring
+   "dim headings" bug. Page headers are direct body children on every page;
+   nothing nested may ever inherit this block. */
+body > header {
+  position: sticky;
   top: 0;
   z-index: 2000;
   width: 100%;
@@ -196,7 +201,7 @@ header {
   box-sizing: border-box;
 }
 /* Fixed/reveal header behavior (pinned while scrolling) */
-header.is-fixed {
+body > header.is-fixed {
   position: fixed;
   top: 0; left: 0; right: 0;
   transform: translateY(0);
@@ -206,23 +211,23 @@ header.is-fixed {
   will-change: transform;
 }
 
-header.is-fixed.is-hidden {
+body > header.is-fixed.is-hidden {
   transform: translateY(-100%);
   box-shadow: none;
 }
 
 
-header.is-fixed.is-hidden {
+body > header.is-fixed.is-hidden {
   transform: translateY(-100%);
   box-shadow: none;
 }
 
 /* Header hover background overlay (covers the 2-row right side cleanly) */
-header{
+body > header{
   isolation: isolate; /* lets us layer ::before behind content */
 }
 
-header::before{
+body > header::before{
   content: "";
   position: absolute;
   left: 0;
@@ -249,12 +254,12 @@ header::before{
 }
 
 /* deepen on hover */
-header:hover::before{
+body > header:hover::before{
   opacity: 1;
 }
 
 /* keep header content above the overlay */
-header .header-inner{
+body > header .header-inner{
   position: relative;
   z-index: 1;
 }
@@ -269,13 +274,13 @@ header .header-inner{
 }
 
 /* Never hide while any modal or the filter panel is open */
-body.modal-open header,
-body.filter-open header {
+body.modal-open > header,
+body.filter-open > header {
   transform: none !important;
 }
 
 
-header h1 {
+body > header h1 {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 2.4rem;
     font-weight: 700;
@@ -293,7 +298,7 @@ header h1 {
 }
 
 .logo-link:hover,
-header h1:hover {
+body > header h1:hover {
   color: #cfc7d9; /* darker text on hover so the change is visible */
 }
 
@@ -1363,8 +1368,8 @@ html { scrollbar-width: thin; scrollbar-color: #7c4dd0 rgba(20,6,38,0.55); }
   letter-spacing: 0.3px;
 }
 /* While any modal or the filter panel is open, force header visible */
-body.modal-open header.is-fixed,
-body.filter-open header.is-fixed {
+body.modal-open > header.is-fixed,
+body.filter-open > header.is-fixed {
   transform: translateY(0) !important;
 }
 
@@ -3174,7 +3179,7 @@ backface-visibility: hidden;
   .spotlight-stack .card { transition: none !important; }
   .spotlight-stack .card:hover { transform: translate(-50%, -50%) scale(1) !important; }
   .spotlight-stack.manual-nav .card.active { animation: none !important; }
-  header { transition: none !important; }
+  body > header { transition: none !important; }
   html:focus-within { scroll-behavior: auto; }
 }
 
@@ -3379,7 +3384,7 @@ backface-visibility: hidden;
    "the search bar still floats up when the cursor hovers over it" — he doesn't want
    that). It's fully visible and STATIC; only the cluster glow on direct hover/focus
    (`.search-wrap:hover`) remains as a cue. */
-header .search-wrap {
+body > header .search-wrap {
   opacity: 1;
   transform: none;
   pointer-events: auto;
@@ -3387,8 +3392,8 @@ header .search-wrap {
   transition: filter .2s ease;
 }
 
-header:hover .search-wrap,
-header:focus-within .search-wrap {
+body > header:hover .search-wrap,
+body > header:focus-within .search-wrap {
   opacity: 1;
   transform: none;
   filter: none;
@@ -3397,7 +3402,7 @@ header:focus-within .search-wrap {
 
 /* Touch devices (no hover) — keep it visible to remain usable */
 @media (hover: none), (pointer: coarse) {
-  header .search-wrap {
+  body > header .search-wrap {
     opacity: 1;
     transform: none;
     pointer-events: auto;
@@ -5802,15 +5807,17 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 }
 
 /* v1.7.5 (gate 3) — green ✓ REVIEWED affordance on catalog (reviewed) saved rows.
-   Matches the established green checkmark vocabulary (secondary-reviewed-kicker). */
+   Matches the established green checkmark vocabulary (secondary-reviewed-kicker).
+   round 4: catalog rows ride .saved-open--rich (cover + meta column) like
+   AniList rows; the ✓ pill lives inside .saved-meta now. */
 .saved-open--catalog{
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 12px;
 }
+.saved-open--catalog .saved-reviewed{ align-self: flex-start; }
 .saved-open--catalog:hover{ text-decoration: none; }
-.saved-open--catalog:hover .saved-title-text{ text-decoration: underline; }
+.saved-open--catalog:hover .saved-title{ text-decoration: underline; }
 .saved-reviewed{
   flex: 0 0 auto;
   font: 800 .56rem/1 'Montserrat', sans-serif;
@@ -7569,7 +7576,10 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 .secondary-context::before { content: "↳ "; color: #bb86fc; }
 .secondary-context--discover { background: rgba(40,18,70,0.28); }
 
-/* ── Body: two columns (main + side), single column when narrow ── */
+/* ── Body: two columns (main + side), single column when narrow ──
+   round 4 (Blake item 9): a WATCHED season adds .has-room → a third, SMALL
+   column on the LEFT carrying THIS SEASON'S ROOM (a chat-rail feel). The room
+   is DOM-second (Blake's review precedes it — H5) but grid-placed first. */
 .secondary-body {
   display: grid;
   grid-template-columns: 1.55fr 1fr;
@@ -7577,6 +7587,23 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   padding: clamp(18px, 2.6vw, 30px);
 }
 .secondary-col { min-width: 0; display: flex; flex-direction: column; gap: clamp(18px, 2.4vw, 26px); }
+
+/* the room rail — small, left, self-scrolling so a long thread never
+   stretches the whole modal. adversarial MED: three tracks only when the
+   modal is genuinely wide (≥1150px) — at 900-1149px they squeezed BLAKE'S
+   REVIEW to ~320px (the heart column must never be the cramped one); in that
+   band the room spans full width BELOW the two columns instead. */
+@media (min-width: 1150px) {
+  .secondary-body.has-room { grid-template-columns: minmax(225px, 0.78fr) 1.5fr 1fr; }
+  .secondary-body.has-room .secondary-col--room { grid-column: 1; grid-row: 1; }
+  .secondary-body.has-room .secondary-col--main { grid-column: 2; grid-row: 1; }
+  .secondary-body.has-room .secondary-col--side { grid-column: 3; grid-row: 1; }
+}
+@media (min-width: 901px) and (max-width: 1149.98px) {
+  .secondary-body.has-room .secondary-col--room { grid-column: 1 / -1; grid-row: 2; }
+}
+.secondary-col--room .comments-list { max-height: 56vh; overflow: auto; padding: 2px 4px; }
+.secondary-col--room .secondary-community { margin-top: 0; }
 
 .secondary-section { min-width: 0; }
 .secondary-section-title {
@@ -7868,7 +7895,12 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 /* Narrow stack (<900px) — single-column body, drawer goes full-width */
 @media (max-width: 900px) {
   .secondary-modal { width: 100vw; border-left: none; }
-  .secondary-body { grid-template-columns: 1fr; }
+  .secondary-body, .secondary-body.has-room { grid-template-columns: 1fr; }
+  /* stacked: review/main first (H5), then the room, then the side column */
+  .secondary-body.has-room .secondary-col--main { grid-column: auto; grid-row: auto; }
+  .secondary-body.has-room .secondary-col--room { grid-column: auto; grid-row: auto; }
+  .secondary-body.has-room .secondary-col--side { grid-column: auto; grid-row: auto; }
+  .secondary-col--room .comments-list { max-height: none; overflow: visible; }
   .secondary-header-body { flex-direction: row; }
   .secondary-cover { width: clamp(92px, 26vw, 120px); }
   /* gate 2b: collapse the Request pill to icon-only so the action row stays tidy */
@@ -8915,6 +8947,10 @@ html.rar-welcome-pending::before {
 .hub-empty-sub { margin: 0 auto; max-width: 380px; font-size: 0.9rem; line-height: 1.5; color: rgba(255, 255, 255, 0.6); }
 
 /* Thread detail */
+/* round 4 — the tavern header row owns its layout now. It used to inherit
+   flex/height/padding from the bare `header` site-header rules (now scoped to
+   body > header); these are the same metrics, declared where they belong. */
+.hub-header--tavern { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 80px; padding: 0 40px; }
 .hub-header--thread { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .hub-header--thread .hub-close { position: static; flex: 0 0 auto; }
 .hub-thread-lantern { font-size: 1.3rem; line-height: 1; filter: drop-shadow(0 0 9px rgba(255, 184, 92, 0.7)); animation: hub-lantern-flicker 4.5s ease-in-out infinite; }
@@ -9157,7 +9193,9 @@ html.rar-welcome-pending::before {
   border: 1px solid rgba(187, 134, 252, 0.35); border-radius: 18px;
   padding: 18px 22px 26px; box-shadow: 0 0 50px rgba(185, 0, 255, 0.18);
 }
-.profile-kicker { display: flex; align-items: center; gap: 8px; font: 700 0.72rem 'Montserrat', sans-serif; letter-spacing: 0.1em; color: #cbb0ff; }
+/* round 4 — profile headings join the full-bright rule (Blake: "every single
+   heading from profile to account"); #cbb0ff was the last declared-dim kicker. */
+.profile-kicker { display: flex; align-items: center; gap: 8px; font: 800 0.78rem 'Montserrat', sans-serif; letter-spacing: 0.1em; color: #f6efff; text-shadow: 0 0 14px rgba(187, 134, 252, 0.5); }
 .profile-kicker .jp-mini { font-size: 0.66rem; opacity: 0.8; }
 .profile-close { margin-left: auto; width: 34px; height: 34px; border-radius: 9px; background: rgba(30, 10, 60, 0.9);
   border: 1px solid rgba(187, 134, 252, 0.5); color: #fff; font-size: 1.15rem; cursor: pointer; }
@@ -9505,14 +9543,38 @@ html.rar-welcome-pending::before {
 .rar-ava-link:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
 
 /* accent — the curated six (deliberately gold-free) */
-.profile-sheet { --pf-accent: #bb86fc; }
-.profile-sheet[data-accent="violet"] { --pf-accent: #bb86fc; }
-.profile-sheet[data-accent="ember"]  { --pf-accent: #ff8a65; }
-.profile-sheet[data-accent="teal"]   { --pf-accent: #4dd0e1; }
-.profile-sheet[data-accent="rose"]   { --pf-accent: #f48fb1; }
-.profile-sheet[data-accent="sky"]    { --pf-accent: #81d4fa; }
-.profile-sheet[data-accent="moss"]   { --pf-accent: #a5d6a7; }
-.profile-sheet[data-accent] .profile-avatar { border-color: var(--pf-accent); }
+.profile-sheet { --pf-accent: #bb86fc; --pf-accent2: #bb86fc; }
+/* round 4 (item 3) — ONE accent map for the live sheet AND the account hero
+   (16 keys = the rules enum: 10 solids, 6 gradients; --pf-accent2 carries the
+   second stop, solids repeat their color). No gold key exists — gold = Blake. */
+:is(.profile-sheet, .acct-preview)[data-accent="violet"]  { --pf-accent: #bb86fc; --pf-accent2: #bb86fc; }
+:is(.profile-sheet, .acct-preview)[data-accent="ember"]   { --pf-accent: #ff8a65; --pf-accent2: #ff8a65; }
+:is(.profile-sheet, .acct-preview)[data-accent="teal"]    { --pf-accent: #4dd0e1; --pf-accent2: #4dd0e1; }
+:is(.profile-sheet, .acct-preview)[data-accent="rose"]    { --pf-accent: #f48fb1; --pf-accent2: #f48fb1; }
+:is(.profile-sheet, .acct-preview)[data-accent="sky"]     { --pf-accent: #81d4fa; --pf-accent2: #81d4fa; }
+:is(.profile-sheet, .acct-preview)[data-accent="moss"]    { --pf-accent: #a5d6a7; --pf-accent2: #a5d6a7; }
+:is(.profile-sheet, .acct-preview)[data-accent="crimson"] { --pf-accent: #e57373; --pf-accent2: #e57373; }
+:is(.profile-sheet, .acct-preview)[data-accent="indigo"]  { --pf-accent: #7986cb; --pf-accent2: #7986cb; }
+:is(.profile-sheet, .acct-preview)[data-accent="peach"]   { --pf-accent: #ffab91; --pf-accent2: #ffab91; }
+:is(.profile-sheet, .acct-preview)[data-accent="pearl"]   { --pf-accent: #e3e1ec; --pf-accent2: #e3e1ec; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-nebula"] { --pf-accent: #bb86fc; --pf-accent2: #f48fb1; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-ember"]  { --pf-accent: #ff8a65; --pf-accent2: #e57373; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-ocean"]  { --pf-accent: #4dd0e1; --pf-accent2: #81d4fa; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-meadow"] { --pf-accent: #a5d6a7; --pf-accent2: #4dd0e1; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-dusk"]   { --pf-accent: #7986cb; --pf-accent2: #bb86fc; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-sakura"] { --pf-accent: #f48fb1; --pf-accent2: #ffab91; }
+/* adversarial MED: the hero preview is .acct-preview, NOT .profile-sheet — a
+   solid accent with glow off showed NO visible change there. One :is() map. */
+:is(.profile-sheet, .acct-preview)[data-accent] .profile-avatar { border-color: var(--pf-accent); }
+/* gradients wear both stops: solid border in stop-1 + an outer ring in stop-2 */
+:is(.profile-sheet, .acct-preview)[data-accent^="g-"] .profile-avatar {
+  box-shadow: 0 0 0 3px var(--pf-accent2); }
+/* the glow switch — an aura in the accent, frame + avatar */
+:is(.profile-sheet, .acct-preview)[data-accent-glow] { box-shadow: 0 0 26px -6px var(--pf-accent); }
+:is(.profile-sheet, .acct-preview)[data-accent-glow] .profile-avatar {
+  box-shadow: 0 0 18px var(--pf-accent); }
+:is(.profile-sheet, .acct-preview)[data-accent-glow][data-accent^="g-"] .profile-avatar {
+  box-shadow: 0 0 0 3px var(--pf-accent2), 0 0 18px var(--pf-accent); }
 
 /* the profile BACKGROUND layer — under everything, behind a dark floor so the
    sheet's text never fights the art. The img may be swapped for a one-frame
@@ -9557,7 +9619,7 @@ html.rar-welcome-pending::before {
   border: 1px solid var(--pf-accent, #bb86fc); }
 .profile-featured:hover { background: rgba(187, 134, 252, 0.15); }
 .profile-featured:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
-.profile-featured-kicker { font: 700 0.64rem 'Montserrat', sans-serif; letter-spacing: 0.12em; color: #cbb0ff; }
+.profile-featured-kicker { font: 800 0.68rem 'Montserrat', sans-serif; letter-spacing: 0.12em; color: #f6efff; text-shadow: 0 0 12px rgba(187, 134, 252, 0.45); }
 
 /* activity, separated by type */
 .profile-acts { display: flex; gap: 7px; margin: 18px 0 10px; flex-wrap: wrap; }
@@ -9604,12 +9666,7 @@ html[data-surface="account"] .side-link.is-active {
 .acct-preview-bg img, .acct-preview-bg canvas { width: 100%; height: 100%; object-fit: cover; opacity: 0.38; display: block; }
 .acct-preview-bg::after { content: ""; position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(14, 4, 30, 0.35) 0%, rgba(14, 4, 30, 0.9) 100%); }
-.acct-preview[data-accent="violet"] { --pf-accent: #bb86fc; }
-.acct-preview[data-accent="ember"]  { --pf-accent: #ff8a65; }
-.acct-preview[data-accent="teal"]   { --pf-accent: #4dd0e1; }
-.acct-preview[data-accent="rose"]   { --pf-accent: #f48fb1; }
-.acct-preview[data-accent="sky"]    { --pf-accent: #81d4fa; }
-.acct-preview[data-accent="moss"]   { --pf-accent: #a5d6a7; }
+/* (round 4 — the .acct-preview accent map merged into the shared :is() map above) */
 .acct-preview-open { margin-top: 10px; }
 
 /* tag editor — chips you can remove + an adder */
@@ -9624,39 +9681,88 @@ html[data-surface="account"] .side-link.is-active {
 /* (round 2: the flat tag-suggest strip was replaced by the branded dropdown —
    .acct-tag-dd in the ROUND 2 block below.) */
 
-/* accent swatches */
-.acct-accents { display: flex; gap: 9px; flex-wrap: wrap; }
+/* accent swatches — round 4: the complete little menu (grouped solids +
+   gradient pills + the glow switch) */
+.acct-accents { display: flex; flex-direction: column; gap: 6px; }
+.acct-accent-group { font: 800 0.62rem 'Montserrat', sans-serif; letter-spacing: 0.14em;
+  text-transform: uppercase; color: #d9c9ff; margin-top: 4px; }
+.acct-accent-group .jp-mini { font-size: 0.58rem; opacity: 0.8; }
+.acct-accent-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
 .acct-accent { width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
   border: 2px solid rgba(255, 255, 255, 0.25); }
 .acct-accent.is-active { border-color: #fff; box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.45); }
 .acct-accent:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
-.acct-accent[data-accent="violet"] { background: #bb86fc; }
-.acct-accent[data-accent="ember"]  { background: #ff8a65; }
-.acct-accent[data-accent="teal"]   { background: #4dd0e1; }
-.acct-accent[data-accent="rose"]   { background: #f48fb1; }
-.acct-accent[data-accent="sky"]    { background: #81d4fa; }
-.acct-accent[data-accent="moss"]   { background: #a5d6a7; }
+.acct-accent[data-accent="violet"]  { background: #bb86fc; }
+.acct-accent[data-accent="ember"]   { background: #ff8a65; }
+.acct-accent[data-accent="teal"]    { background: #4dd0e1; }
+.acct-accent[data-accent="rose"]    { background: #f48fb1; }
+.acct-accent[data-accent="sky"]     { background: #81d4fa; }
+.acct-accent[data-accent="moss"]    { background: #a5d6a7; }
+.acct-accent[data-accent="crimson"] { background: #e57373; }
+.acct-accent[data-accent="indigo"]  { background: #7986cb; }
+.acct-accent[data-accent="peach"]   { background: #ffab91; }
+.acct-accent[data-accent="pearl"]   { background: #e3e1ec; }
+/* gradient swatches read as what they are — small pills, two stops */
+.acct-accent[data-accent^="g-"] { width: 44px; border-radius: 999px; }
+.acct-accent[data-accent="g-nebula"] { background: linear-gradient(120deg, #bb86fc, #f48fb1); }
+.acct-accent[data-accent="g-ember"]  { background: linear-gradient(120deg, #ff8a65, #e57373); }
+.acct-accent[data-accent="g-ocean"]  { background: linear-gradient(120deg, #4dd0e1, #81d4fa); }
+.acct-accent[data-accent="g-meadow"] { background: linear-gradient(120deg, #a5d6a7, #4dd0e1); }
+.acct-accent[data-accent="g-dusk"]   { background: linear-gradient(120deg, #7986cb, #bb86fc); }
+.acct-accent[data-accent="g-sakura"] { background: linear-gradient(120deg, #f48fb1, #ffab91); }
+/* the glow switch */
+.acct-glow-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 6px 13px;
+  border-radius: 999px; border: 1px solid rgba(187, 134, 252, 0.45); cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); color: #e9dbff; font: 700 0.72rem 'Montserrat', sans-serif; }
+.acct-glow-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.3);
+  transition: background 0.15s ease, box-shadow 0.15s ease; }
+.acct-glow-toggle.is-on { border-color: rgba(187, 134, 252, 0.9); color: #fff; }
+.acct-glow-toggle.is-on .acct-glow-dot { background: #bb86fc; box-shadow: 0 0 10px #bb86fc; }
+@media (prefers-reduced-motion: reduce) { .acct-glow-dot { transition: none; } }
 
 /* background uploader row */
 .acct-bg-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .acct-bg-thumb { width: 96px; height: 54px; border-radius: 9px; overflow: hidden;
   border: 1px solid rgba(187, 134, 252, 0.4); background: rgba(187, 134, 252, 0.08);
-  display: grid; place-items: center; color: #b8a8d8; font-size: 0.66rem; }
+  display: grid; place-items: center; color: #b8a8d8; font-size: 0.66rem;
+  padding: 0; cursor: pointer; font-family: inherit; }   /* round 4: it's a <button> now */
+.acct-bg-thumb:hover { border-color: rgba(187, 134, 252, 0.8); }
 .acct-bg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .acct-bg-note { flex-basis: 100%; color: #b8a8d8; font-size: 0.72rem; }
 
-/* featured-review picker */
-.acct-featured-select { width: 100%; background: rgba(255, 255, 255, 0.06); color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; padding: 8px 10px; }
-.acct-featured-select option { background: #1a0834; }
+/* round 4 (item 4) — the hover pickers: opaque pills that surface on the hero.
+   Always reachable by keyboard (focus shows them) and always visible on touch. */
+.acct-hover-pill { position: absolute; z-index: 3; opacity: 0; pointer-events: none;
+  padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(187, 134, 252, 0.65);
+  background: rgba(18, 5, 38, 0.92); color: #f1e9ff; cursor: pointer;
+  font: 700 0.72rem 'Montserrat', sans-serif; letter-spacing: 0.04em;
+  box-shadow: 0 6px 18px rgba(6, 1, 14, 0.6); transition: opacity 0.15s ease; }
+.acct-preview:hover .acct-hover-pill, .acct-preview:focus-within .acct-hover-pill,
+.acct-hover-pill:focus { opacity: 1; pointer-events: auto; }
+.acct-hover-bg { top: 14px; right: 14px; }
+.profile-avatar { position: relative; }
+.acct-hover-avatar { inset: 0; width: 100%; height: 100%; border-radius: inherit;
+  display: grid; place-items: center; text-align: center; line-height: 1.25;
+  background: rgba(18, 5, 38, 0.72); border: none; padding: 0; }
+@media (hover: none), (pointer: coarse) {
+  .acct-hover-pill { opacity: 1; pointer-events: auto; }
+  /* adversarial MED: a full-cover always-on veil HID the avatar on touch —
+     collapse to a small ✎ band on the circle's lower third instead */
+  .acct-hover-avatar { opacity: 1; inset: auto 0 0 0; height: 34%; border-radius: 0;
+    font-size: 0.56rem; line-height: 1.1; background: rgba(18, 5, 38, 0.78); }
+}
+@media (prefers-reduced-motion: reduce) { .acct-hover-pill { transition: none; } }
+
+/* featured-review picker — round 4: now a brandSelect (.acct-dd-*); the old
+   native-select rules are gone with the element. */
+#acct-featured-host .acct-dd-btn { max-width: 100%; }
 
 /* watchlist/favorites precise controls */
 .saved-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 10px; }
 .saved-controls .saved-filter { flex: 1 1 160px; min-width: 140px; background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; color: #fff; padding: 7px 10px; }
-.saved-controls select { background: rgba(255, 255, 255, 0.06); color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; padding: 7px 9px; }
-.saved-controls select option { background: #1a0834; }
+/* (round 4 — the sort dropdowns are brandSelects now; native-select rules removed) */
+.saved-controls .acct-dd-btn { padding: 7px 12px; font-size: 0.78rem; }
 .saved-type-chip { padding: 5px 11px; border-radius: 999px; font: 600 0.7rem 'Montserrat', sans-serif;
   color: #d9c9ff; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.3); cursor: pointer; }
 .saved-type-chip.is-active { background: rgba(187, 134, 252, 0.2); border-color: rgba(187, 134, 252, 0.7); color: #fff; }
@@ -9791,6 +9897,36 @@ html[data-surface="account"] .side-link.is-active {
 @keyframes acctChipPop { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
 .acct-tag-chip { animation: acctChipPop 0.18s ease both; }
 
+/* — round 4 (recurring #2): the branded SELECT — a button + listbox wearing
+   the site's purple, replacing every native <select> on the account page
+   (the OS popup's white outline can't be themed; this can). — */
+.acct-dd-wrap { position: relative; display: inline-block; }
+.acct-dd-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px;
+  border-radius: 999px; border: 1px solid rgba(187, 134, 252, 0.45);
+  background: linear-gradient(120deg, rgba(187, 134, 252, 0.14), rgba(120, 40, 200, 0.10));
+  color: #efe6ff; font: 600 0.84rem 'Montserrat', sans-serif; cursor: pointer;
+  max-width: min(420px, 80vw); transition: border-color 0.15s ease, background 0.15s ease; }
+.acct-dd-btn:hover { border-color: rgba(187, 134, 252, 0.8); background: rgba(187, 134, 252, 0.18); }
+.acct-dd-btn.is-open .acct-dd-chev { transform: rotate(180deg); }
+.acct-dd-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-dd-chev { flex: 0 0 auto; font-size: 0.7rem; color: #cbb0ff; transition: transform 0.15s ease; }
+.acct-dd-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  min-width: max(100%, 220px); max-width: min(480px, 86vw); max-height: 300px; overflow: auto;
+  padding: 6px; border-radius: 13px; border: 1px solid rgba(187, 134, 252, 0.5);
+  background: rgba(18, 5, 38, 0.97); box-shadow: 0 14px 34px rgba(6, 1, 14, 0.7);
+  display: flex; flex-direction: column; gap: 2px; animation: acctDdIn 0.16s ease; }
+.acct-dd-opt { display: block; width: 100%; text-align: left; padding: 8px 12px; border: none;
+  border-radius: 9px; background: transparent; color: #e9dbff; cursor: pointer;
+  font: 500 0.84rem 'Montserrat', sans-serif;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-dd-opt:hover { background: rgba(187, 134, 252, 0.14); }
+.acct-dd-opt.is-on { background: rgba(187, 134, 252, 0.22); color: #fff; font-weight: 700; }
+.acct-dd-opt.is-on::before { content: "✓ "; color: #cbb0ff; }
+@media (prefers-reduced-motion: reduce) {
+  .acct-dd-menu { animation: none; }
+  .acct-dd-chev { transition: none; }
+}
+
 /* — the settings (Account) cards — */
 .set-card { border: 1px solid rgba(187, 134, 252, 0.28); border-radius: 14px; padding: 16px 18px;
   margin-bottom: 14px; background: rgba(255, 255, 255, 0.025); }
@@ -9817,6 +9953,64 @@ html[data-surface="account"] .side-link.is-active {
 .saved-list.is-grid .saved-cover { width: 100%; height: 190px; border-radius: 9px; object-fit: cover; }
 .saved-list.is-grid .saved-cover--ph { height: 190px; width: 100%; }
 .saved-list.is-grid .saved-date { display: none; }
+
+/* — round 4 (item 7): PERSONAL COLLECTIONS — the user's own shelves — */
+.col-composer { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 14px;
+  padding: 12px 14px; border-radius: 13px; border: 1px solid rgba(187, 134, 252, 0.4);
+  background: rgba(187, 134, 252, 0.06); }
+.col-composer input[type="text"] { flex: 1 1 240px; min-width: 200px; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; color: #fff; padding: 8px 11px; }
+.col-note { flex-basis: 100%; margin: 0; color: #b8a8d8; font-size: 0.72rem; }
+.col-list { display: flex; flex-direction: column; gap: 14px; }
+.col-card { border: 1px solid rgba(187, 134, 252, 0.3); border-radius: 14px; padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.025); }
+.col-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.col-card-name { font: 800 1rem 'Montserrat', sans-serif; color: #f6efff; }
+.col-rename-input { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(187, 134, 252, 0.6);
+  border-radius: 8px; color: #fff; padding: 4px 9px; font: 700 0.92rem 'Montserrat', sans-serif; }
+.col-vis { padding: 4px 11px; border-radius: 999px; cursor: pointer; font: 700 0.68rem 'Montserrat', sans-serif;
+  color: #d9c9ff; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.4); }
+.col-vis.is-public { color: #fff; background: rgba(187, 134, 252, 0.22); border-color: rgba(187, 134, 252, 0.8); }
+.col-count { font: 600 0.72rem 'Montserrat', sans-serif; color: #b8a8d8; }
+.col-card-tools { margin-left: auto; display: inline-flex; gap: 12px; }
+.col-items { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.col-item { position: relative; }
+.col-item-cover { width: 52px; height: 74px; object-fit: cover; border-radius: 8px; display: block;
+  border: 1px solid rgba(187, 134, 252, 0.4); }
+.col-item-cover--ph { width: 52px; height: 74px; display: grid; place-items: center; border-radius: 8px;
+  background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.4); color: #d9c9ff;
+  font: 800 1.1rem 'Montserrat', sans-serif; }
+.col-item-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid rgba(187, 134, 252, 0.7); background: rgba(18, 5, 38, 0.95); color: #f1e9ff;
+  font-size: 0.72rem; line-height: 1; cursor: pointer; display: grid; place-items: center; }
+.col-items-empty { font-size: 0.78rem; font-style: italic; }
+/* the add-picker overlay */
+.col-adder-overlay { position: fixed; inset: 0; z-index: 7100; display: flex; align-items: center;
+  justify-content: center; background: rgba(6, 1, 14, 0.72); }
+.col-adder { width: min(520px, 92vw); max-height: min(640px, 86vh); display: flex; flex-direction: column;
+  gap: 10px; padding: 16px 18px; border-radius: 16px; border: 1px solid rgba(187, 134, 252, 0.5);
+  background: linear-gradient(180deg, rgba(40, 12, 72, 0.98), rgba(24, 6, 46, 0.98)); }
+.col-adder-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.col-adder-close { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(187, 134, 252, 0.5);
+  background: transparent; color: #f1e9ff; cursor: pointer; font-size: 1rem; }
+.col-adder-search { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9px; color: #fff; padding: 9px 12px; }
+.col-adder-list { overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.col-adder-row { display: flex; align-items: center; gap: 12px; padding: 6px 8px; border: none;
+  border-radius: 10px; background: transparent; cursor: pointer; text-align: left; }
+.col-adder-row:hover { background: rgba(187, 134, 252, 0.12); }
+.col-adder-row .saved-cover { width: 34px; height: 48px; }
+/* the public profile's shelves strip (index page) — purple, count-free */
+.profile-collections { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.profile-col { border: 1px solid rgba(187, 134, 252, 0.28); border-radius: 12px; padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.02); }
+.profile-col-name { display: block; font: 700 0.84rem 'Montserrat', sans-serif; color: #efe6ff; margin-bottom: 7px; }
+.profile-col-strip { display: flex; gap: 6px; flex-wrap: wrap; }
+.profile-col-cover { width: 40px; height: 56px; object-fit: cover; border-radius: 6px;
+  border: 1px solid rgba(187, 134, 252, 0.35); }
+.profile-col-cover--ph { width: 40px; height: 56px; display: grid; place-items: center; border-radius: 6px;
+  background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.35); color: #d9c9ff;
+  font: 800 0.9rem 'Montserrat', sans-serif; }
 
 /* — the heart beats once when you appreciate (transform only) — */
 @keyframes pfHeartBeat { 0% { transform: scale(1); } 30% { transform: scale(1.28); } 60% { transform: scale(0.94); } 100% { transform: scale(1); } }
@@ -9879,6 +10073,17 @@ html[data-surface="account"] .side-link.is-active {
 }
 @keyframes acctLanternSway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
 .acct-section-sub { color: #cdbce8; font-size: 0.88rem; }
+/* round 4 (Blake item 8) — the heading subtext pops as a soft pill under the
+   lantern line instead of floating as faint loose text. */
+.panel-head-text .acct-section-sub {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin-top: 7px; padding: 5px 13px; border-radius: 999px;
+  color: #efe6ff; font-size: 0.83rem;
+  background: linear-gradient(120deg, rgba(187, 134, 252, 0.16), rgba(255, 79, 216, 0.08));
+  border: 1px solid rgba(187, 134, 252, 0.38);
+  box-shadow: 0 0 14px rgba(187, 134, 252, 0.18);
+  text-shadow: 0 1px 3px rgba(6, 1, 14, 0.7);
+}
 
 /* ── My Activity reads scannable: cover thumbs on reviews, type glyphs on the
    rest, the whole row a deep-link target ── */
@@ -9948,6 +10153,13 @@ html[data-surface="account"] .side-link.is-active {
 .secondary-community .comments-section { background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(187, 134, 252, 0.22);
   border-radius: 14px; padding: 14px 16px; }
 .secondary-community .comments-header h3 { color: #e9dbff; }
+/* round 4 — the LEFT rail wears the room compact (a chat rail, not a feature
+   column): tighter paddings, smaller type, the composer trimmed */
+.secondary-col--room .comments-section { padding: 10px 11px; }
+.secondary-col--room .comments-header h3 { font-size: 0.8rem; }
+.secondary-col--room .comment-card, .secondary-col--room .comment-item { font-size: 0.84rem; }
+.secondary-col--room .comment-composer textarea { min-height: 54px; font-size: 0.84rem; }
+.secondary-col--room .secondary-community-sub { font-size: 0.72rem; }
 
 /* — reduced motion: round-3 silencer — */
 @media (prefers-reduced-motion: reduce) {

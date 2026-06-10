@@ -741,3 +741,111 @@ test('report: happy profile report (targetType profile, optional bg imagePath)',
     imagePath: 'uploads/mallory/profilebg/bg1', createdAt: serverTimestamp(),
   }));
 });
+
+// ============================================================================
+// ROUND 4 — PERSONAL COLLECTIONS (users/{uid}/collections) + the accent
+// expansion. Private collections are watchlist-parity (owner-only, ungated);
+// PUBLISHING (public:true) is the community surface and gates on gateOk().
+// delete stays ungated (cleanup — the unvote precedent). Public read is
+// get + a public==true-FILTERED list only.
+// ============================================================================
+const { collection } = require('firebase/firestore');
+const col = (over = {}) => ({
+  name: 'Shounen Starters', public: false, items: [],
+  createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...over,
+});
+// snapshot-row entry (saved-row pattern) — rules validate list+size only
+const colItem = (i) => ({ animeId: 'a' + i, title: 'T', coverImage: 'c.jpg', format: 'TV', year: 2020 });
+
+test('collections: happy owner creates a PRIVATE collection (with snapshot items)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'users/alice/collections/colPriv1'),
+    col({ items: [colItem(1), colItem(2)] })));
+});
+test('collections: owner creates a PUBLIC collection (consented roster user)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'users/alice/collections/colPub1'),
+    col({ public: true })));
+});
+test('collections: un-consented user may keep a PRIVATE collection but is DENIED publishing', async () => {
+  // 'newbie' has no moderationGate doc — private is watchlist-parity (ungated):
+  await assertSucceeds(setDoc(doc(as('newbie'), 'users/newbie/collections/colNew1'), col()));
+  // ...but public:true is the community surface — the gate holds:
+  await assertFails(setDoc(doc(as('newbie'), 'users/newbie/collections/colNew2'),
+    col({ public: true })));
+});
+test('collections: HOSTILE create into someone else\'s collections is DENIED', async () => {
+  await assertFails(setDoc(doc(as('mallory'), 'users/alice/collections/colHax1'), col()));
+});
+test('collections: HOSTILE non-owner get of a PRIVATE collection is DENIED', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice/collections/colPriv2'),
+    { name: 'Hidden', public: false, items: [], createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+  await assertFails(getDoc(doc(as('bob'), 'users/alice/collections/colPriv2')));
+  await assertFails(getDoc(doc(anon(), 'users/alice/collections/colPriv2')));
+});
+test('collections: non-owner get of a PUBLIC collection is allowed', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice/collections/colPub2'),
+    { name: 'Shared', public: true, items: [], createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+  await assertSucceeds(getDoc(doc(as('bob'), 'users/alice/collections/colPub2')));
+});
+test('collections: non-owner list MUST filter public==true (unfiltered list DENIED; owner unfiltered OK)', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice/collections/colPub3'),
+    { name: 'Shelf', public: true, items: [], createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+  await assertSucceeds(getDocs(query(collection(as('bob'), 'users/alice/collections'), where('public', '==', true))));
+  await assertFails(getDocs(collection(as('bob'), 'users/alice/collections')));
+  await assertSucceeds(getDocs(collection(as('alice'), 'users/alice/collections')));
+});
+test('collections: flipping public→true without consent DENIED; consented flip OK; delete always allowed', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'users/newbie/collections/colFlip1'),
+      { name: 'Mine', public: false, items: [], createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    await setDoc(doc(db, 'users/alice/collections/colFlip2'),
+      { name: 'Hers', public: false, items: [], createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    await gate(db, 'badcol', { banned: true });
+    await setDoc(doc(db, 'users/badcol/collections/colFlip3'),
+      { name: 'His', public: false, items: [], createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+  });
+  // un-consented owner cannot PUBLISH an existing collection:
+  await assertFails(updateDoc(doc(as('newbie'), 'users/newbie/collections/colFlip1'),
+    { public: true, updatedAt: serverTimestamp() }));
+  // consented owner can:
+  await assertSucceeds(updateDoc(doc(as('alice'), 'users/alice/collections/colFlip2'),
+    { public: true, updatedAt: serverTimestamp() }));
+  // delete is ungated — un-consented AND banned owners may always clean up:
+  await assertSucceeds(deleteDoc(doc(as('newbie'), 'users/newbie/collections/colFlip1')));
+  await assertSucceeds(deleteDoc(doc(as('badcol'), 'users/badcol/collections/colFlip3')));
+});
+test('collections: HOSTILE 61-char name + unknown extra key are DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'users/alice/collections/colBad1'),
+    col({ name: 'x'.repeat(61) })));
+  await assertFails(setDoc(doc(as('alice'), 'users/alice/collections/colBad2'),
+    col({ hax: true })));
+});
+test('collections: HOSTILE 201-entry items list is DENIED (cap 200)', async () => {
+  const tooMany = Array.from({ length: 201 }, (_, i) => colItem(i));
+  await assertFails(setDoc(doc(as('alice'), 'users/alice/collections/colBad3'),
+    col({ items: tooMany })));
+  // the cap itself (200) is allowed:
+  await assertSucceeds(setDoc(doc(as('alice'), 'users/alice/collections/colCap1'),
+    col({ items: tooMany.slice(0, 200) })));
+});
+test('collections: ADMIN may read + delete a private collection (moderation); foreign user still cannot', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice/collections/colMod1'),
+    { name: 'Reported', public: false, items: [], createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+  await assertSucceeds(getDoc(doc(as(ADMIN), 'users/alice/collections/colMod1')));
+  await assertFails(deleteDoc(doc(as('mallory'), 'users/alice/collections/colMod1')));
+  await assertSucceeds(deleteDoc(doc(as(ADMIN), 'users/alice/collections/colMod1')));
+});
+
+// ---------------- round 4 — accent expansion + accentGlow ----------------
+test('dream: expanded palette — gradient accent g-nebula accepted; gold STAYS denied', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', accent: 'g-nebula', joinedAt: serverTimestamp() }));
+  // the heart rule holds across the expansion — no gold family, ever:
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', accent: 'gold', joinedAt: serverTimestamp() }));
+});
+test('dream: accentGlow bool accepted; HOSTILE string accentGlow is DENIED', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', accent: 'crimson', accentGlow: true, joinedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', accentGlow: 'yes', joinedAt: serverTimestamp() }));
+});

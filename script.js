@@ -5742,11 +5742,16 @@ function openInlineCommentEditor(editBtn, itemRef) {
       : { name: (userDoc.username || userDoc.displayName), photo: userDoc.photoURL, bio: '', sinceMs: 0 };
 
     // accent — curated palette only (the palette holds no gold/yellow, so a
-    // profile can never dress itself in Blake's color).
+    // profile can never dress itself in Blake's color). round 4: 16 keys +
+    // the glow switch — this list mirrors account.js PROF_ACCENTS + the rules
+    // enum EXACTLY; change all three together.
     const sheet = layer.querySelector('.profile-sheet');
     const accent = (prof && typeof prof.accent === 'string'
-      && ['violet', 'ember', 'teal', 'rose', 'sky', 'moss'].indexOf(prof.accent) !== -1) ? prof.accent : '';
+      && ['violet', 'ember', 'teal', 'rose', 'sky', 'moss',
+          'crimson', 'indigo', 'peach', 'pearl',
+          'g-nebula', 'g-ember', 'g-ocean', 'g-meadow', 'g-dusk', 'g-sakura'].indexOf(prof.accent) !== -1) ? prof.accent : '';
     if (accent && sheet) sheet.setAttribute('data-accent', accent);
+    if (prof && prof.accentGlow === true && sheet) sheet.setAttribute('data-accent-glow', '');
 
     // profile BACKGROUND — rides the same pipeline as every other upload
     // (own-prefix pinned in the rules, magic-byte + EXIF re-encode in the CF,
@@ -5803,6 +5808,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
 
     bodyEl.innerHTML = profileHeaderHtml(ident)
       + '<div class="profile-featured-slot"></div>'
+      + '<div class="profile-collections-slot"></div>'
       + '<div class="profile-acts" role="tablist" aria-label="Their activity">'
       +   '<button type="button" class="profile-act-chip is-active" data-act="threads" role="tab" aria-selected="true">Threads</button>'
       +   '<button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>'
@@ -5859,6 +5865,47 @@ function openInlineCommentEditor(editBtn, itemRef) {
             </div>`;
         }
       } catch (_) {}
+    }
+
+    // round 4 — PUBLIC personal collections (their public shelves; the where
+    // clause IS the rules contract: only public==true is listable by a
+    // non-owner). Purple chrome, escape-first names, scheme-gated covers
+    // (assets/ or https only — the hubSafeCover discipline on a new sink).
+    try {
+      const colSnap = await getDocs(query(
+        collection(db, 'users', uid, 'collections'),
+        where('public', '==', true), orderBy('updatedAt', 'desc'), limit(8)));
+      const colSlot = bodyEl.querySelector('.profile-collections-slot');
+      if (colSlot && !colSnap.empty) {
+        const safeCov = (s) => {
+          const v = String(s || '');
+          return (/^assets\/[A-Za-z0-9._-]{1,120}$/.test(v) || /^https:\/\/[^"'<>\s]{1,400}$/.test(v)) ? v : '';
+        };
+        let html = '<div class="profile-collections">'
+          + '<span class="profile-featured-kicker">⊞ THEIR SHELVES <span class="jp-mini">蔵書</span></span>';
+        colSnap.forEach((d) => {
+          const c = d.data() || {};
+          const items = Array.isArray(c.items) ? c.items.slice(0, 10) : [];
+          html += '<div class="profile-col">'
+            + '<span class="profile-col-name">' + escapeHtml(String(c.name || '(shelf)').slice(0, 60)) + '</span>'
+            + '<span class="profile-col-strip">'
+            + items.map((it) => {
+                const cov = safeCov(it && it.coverImage);
+                const title = escapeHtml(String((it && it.title) || '').slice(0, 80));
+                return cov
+                  ? '<img class="profile-col-cover" src="' + escapeHtml(cov) + '" alt="" loading="lazy" title="' + title + '">'
+                  : '<span class="profile-col-cover profile-col-cover--ph" title="' + title + '">' + escapeHtml(String((it && it.title) || '?').charAt(0)) + '</span>';
+              }).join('')
+            + (items.length ? '' : '<span class="muted">an empty shelf, lovingly dusted</span>')
+            + '</span></div>';
+        });
+        colSlot.innerHTML = html + '</div>';
+      }
+    } catch (e) {
+      // the slot stays empty for visitors, but say WHY in the console — a
+      // missing composite index would otherwise read as "nobody has shelves"
+      // forever (adversarial LOW).
+      try { console.warn('[profile] public shelves failed to load:', e && e.message); } catch (_) {}
     }
 
     // PUBLIC activity, separated by type — count-free rows (no totals anywhere).
@@ -9789,9 +9836,16 @@ function closeModal() {
     // v1.7.5 (gate 3e) — WHERE TO WATCH leads the side column (actionable, high-value).
     const whereToWatchHtml = renderSecondaryPlatforms(detail.externalLinks);
 
+    // round 4 (Blake item 9) — the season room moves to a SMALL column of its
+    // OWN on the modal's LEFT edge ("a small area to the LEFT that works kinda
+    // like community reviews"). H5 stands: BLAKE'S REVIEW is still the first
+    // thing in the DOM (his voice precedes the room); the grid places the room
+    // visually left of it on wide screens. Under 1100px everything stacks —
+    // review first, room after the main column.
     const body =
-      '<div class="secondary-body">' +
-        '<div class="secondary-col secondary-col--main">' + reviewHtml + communityHtml + descHtml + episodesHtml + genresHtml + tagsHtml + trailerHtml + '</div>' +
+      '<div class="secondary-body' + (communityHtml ? ' has-room' : '') + '">' +
+        '<div class="secondary-col secondary-col--main">' + reviewHtml + descHtml + episodesHtml + genresHtml + tagsHtml + trailerHtml + '</div>' +
+        (communityHtml ? '<div class="secondary-col secondary-col--room">' + communityHtml + '</div>' : '') +
         '<div class="secondary-col secondary-col--side">' + whereToWatchHtml + charsHtml + staffHtml + linksHtml + '</div>' +
       '</div>';
 

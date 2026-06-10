@@ -144,6 +144,8 @@ service cloud.firestore {
     //   • accent — a CURATED enum, not free hex: an arbitrary color would let a
     //     profile dress itself gold (#ffd54a). The palette deliberately
     //     contains no gold/yellow — the heart stays Blake's by construction.
+    //     Round 4: grew 6→16 (4 new solids + 6 g-* gradients) + optional
+    //     accentGlow:bool (a glow toggle, not a color) — STILL no gold family.
     //   • status — one short line under the name.
     //   • bgRef — the profile background: ONE Storage path pinned to the
     //     caller's own uploads/{uid}/profilebg/ prefix (same own-prefix pin as
@@ -156,7 +158,11 @@ service cloud.firestore {
       return (!('tags' in request.resource.data)
             || (request.resource.data.tags is list && request.resource.data.tags.size() <= 6))
         && (!('accent' in request.resource.data)
-            || request.resource.data.accent in ['violet', 'ember', 'teal', 'rose', 'sky', 'moss'])
+            || request.resource.data.accent in ['violet', 'ember', 'teal', 'rose', 'sky', 'moss',
+                                                'crimson', 'indigo', 'peach', 'pearl',
+                                                'g-nebula', 'g-ember', 'g-ocean', 'g-meadow', 'g-dusk', 'g-sakura'])
+        && (!('accentGlow' in request.resource.data)
+            || request.resource.data.accentGlow is bool)
         && (!('status' in request.resource.data)
             || (request.resource.data.status is string && request.resource.data.status.size() <= 80))
         && (!('bgRef' in request.resource.data)
@@ -167,6 +173,23 @@ service cloud.firestore {
             || request.resource.data.featuredAnime == null
             || (request.resource.data.featuredAnime is string
                 && request.resource.data.featuredAnime.matches('[A-Za-z0-9:_-]{1,120}')));
+    }
+
+    // Personal-collection doc shape (round 4 — create + update; update sees the
+    // MERGED doc, so the full shape re-validates on every write). items is a
+    // list of ≤200 snapshot maps (animeId/title/coverImage/format/year, the
+    // saved-row pattern) — rules can't iterate list entries, so only list+size
+    // is enforced here; entries are escaped at render (display-inert).
+    function collectionDocOk() {
+      return request.resource.data.keys().hasOnly(['name', 'public', 'items', 'createdAt', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.public is bool
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 200
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
     }
 
     // =========================================================================
@@ -187,6 +210,24 @@ service cloud.firestore {
       }
       match /watchlist/{animeId} {
         allow get, list, create, update, delete: if isOwner(uid);
+      }
+
+      // PERSONAL COLLECTIONS (round 4) — owner-curated anime shelves. Private
+      // by default; `public: true` opens read-only access (get + a list that
+      // MUST filter public==true — the public-profile shelf query; an
+      // unfiltered foreign list stays denied). PUBLISHING is the community
+      // surface, so it gates: a banned/un-consented user may keep PRIVATE
+      // collections (watchlist parity) but cannot publish one. delete is
+      // ungated — cleanup must always work (the unvote precedent). Admin may
+      // read + delete for moderation (the day-1 mod-tool shape).
+      match /collections/{colId} {
+        allow get: if isOwner(uid) || resource.data.public == true || isAdmin();
+        allow list: if isOwner(uid) || resource.data.public == true || isAdmin();
+        allow create: if isOwner(uid) && collectionDocOk()
+          && (request.resource.data.public != true || gateOk());
+        allow update: if isOwner(uid) && collectionDocOk()
+          && (request.resource.data.public != true || gateOk());
+        allow delete: if isOwner(uid) || isAdmin();
       }
 
       // NOTIFICATIONS — H3: create is Cloud-Function-only (Admin SDK bypasses
@@ -553,12 +594,12 @@ service cloud.firestore {
       allow get, list: if true;
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt',
-                                                 'tags', 'accent', 'status', 'bgRef', 'featuredAnime'])
+                                                 'tags', 'accent', 'accentGlow', 'status', 'bgRef', 'featuredAnime'])
         && profileFieldsOk()
         && gateOk();
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt',
-                                                                             'tags', 'accent', 'status', 'bgRef', 'featuredAnime'])
+                                                                             'tags', 'accent', 'accentGlow', 'status', 'bgRef', 'featuredAnime'])
         && profileFieldsOk()
         && gateOk();
       allow delete: if false; // account deletion is the onUserDelete cascade CF

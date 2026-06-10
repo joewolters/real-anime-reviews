@@ -18,7 +18,7 @@ test('account.html wears the account surface + the identity-studio scaffolding',
   expect(html).toContain('id="acct-tag-input"');
   expect(html).toContain('id="acct-accents"');
   expect(html).toContain('id="acct-bg-file"');
-  expect(html).toContain('id="acct-featured"');
+  expect(html).toContain('id="acct-featured-host"');   // round 4: the picker is a brandSelect now (zero native <select>)
   expect(html).toContain('data-saved-controls="watchlist"');
   expect(html).toContain('data-saved-controls="favorites"');
   expect(html).toContain('id="acct-act-chips"');

@@ -28,6 +28,7 @@ import { initLantern } from './lantern.js';
 // account page accepts the community rules IN PLACE (Blake: "its dumb for
 // users to have to go comment to accept the terms").
 import { ensureConsent, peekConsent } from './consent.js';
+import { openCropper } from './cropper.js';   // round 4 — frame-it crop/reposition (item 2)
 
 
 const $  = (sel) => document.querySelector(sel);
@@ -57,7 +58,7 @@ const errEl     = $('#profile-error');
 // split out of the profile editor — Blake's Discord/Reddit IA). The panel-in
 // class drives the slide+fade entrance (transform/opacity only; reduced-motion
 // nulls it in CSS).
-const tabs = ['profile','watchlist','favorites','activity','inbox','settings'];
+const tabs = ['profile','watchlist','favorites','collections','activity','inbox','settings'];   // round 4: + personal collections
 function activateTab(name){
   $$('.side-link').forEach(btn => {
     const on = btn.dataset.tab === name;
@@ -80,12 +81,20 @@ function activateTab(name){
 $$('.side-link').forEach(btn => {
   btn.addEventListener('click', () => {
     activateTab(btn.dataset.tab);
-    if (btn.dataset.tab === 'activity') ensureActivity();   // lazy — see boot block
+    if (btn.dataset.tab === 'activity') ensureActivity();        // lazy — see boot block
+    if (btn.dataset.tab === 'collections') ensureCollections();  // round 4 — lazy too
   });
 });
 // deep-link: #inbox lands on the Inbox tab (the Lantern's dm pings route here);
-// #settings lands on the split-out account settings.
-activateTab(location.hash === '#inbox' ? 'inbox' : (location.hash === '#settings' ? 'settings' : 'profile'));
+// #settings lands on the split-out account settings; #collections on the shelves.
+activateTab(location.hash === '#inbox' ? 'inbox'
+  : (location.hash === '#settings' ? 'settings'
+  : (location.hash === '#collections' ? 'collections' : 'profile')));
+if (location.hash === '#collections') {
+  // the subscription needs auth — retry once the user lands (same lazy shape
+  // as ensureActivity's boot block)
+  onAuthStateChanged(auth, (u) => { if (u) ensureCollections(); });
+}
 
 // ===== Favorites + Watchlist UI =====
 const favListEl = document.getElementById('favoritesList');
@@ -141,7 +150,16 @@ function esc(s) {
 // wear, staged here and written to profiles/{uid} on Save. The accent palette
 // mirrors the rules enum exactly (curated, gold-free).
 // =============================================================================
-const PROF_ACCENTS = ['violet', 'ember', 'teal', 'rose', 'sky', 'moss'];
+// round 4 (item 3) — the palette grows up: 10 solids + 6 gradients + a glow
+// switch. Keys mirror the rules enum EXACTLY (and script.js's viewer list);
+// still curated, still gold-free — gold is Blake's.
+const PROF_ACCENTS = ['violet', 'ember', 'teal', 'rose', 'sky', 'moss',
+  'crimson', 'indigo', 'peach', 'pearl',
+  'g-nebula', 'g-ember', 'g-ocean', 'g-meadow', 'g-dusk', 'g-sakura'];
+const PROF_ACCENT_GROUPS = [
+  ['Solids', '色', PROF_ACCENTS.slice(0, 10)],
+  ['Gradients', '移ろい', PROF_ACCENTS.slice(10)],
+];
 // round 2 — the CURATED tag catalog behind the branded dropdown (Blake: "More
 // unique tags. Dropdown list should be included"). Grouped, anime-flavored;
 // custom tags still ride the input. Every entry ≤24 chars (the render clamp).
@@ -151,7 +169,7 @@ const PROF_TAG_CATALOG = [
   ['Identity', '正体', ['Manga reader', 'Light-novel reader', 'AMV maker', 'Cosplayer', 'Figure collector', 'Tier-list maker', 'OST enjoyer', 'Sakuga nerd', 'Lore historian', 'Power-scaler', 'Theory crafter', 'Waifu connoisseur', 'Husbando defender', 'Filler apologist', 'Subtitle purist', 'Con-goer', 'Gacha survivor', 'Spoiler-phobic']],
 ];
 const profState = {
-  bio: '', status: '', tags: [], accent: '', bgRef: '', featuredAnime: '',
+  bio: '', status: '', tags: [], accent: '', accentGlow: false, bgRef: '', featuredAnime: '',
   bgStagedBlob: null, bgStagedMime: '', bgStagedUrl: '', bgRemove: false, bgCurrentUrl: '',
 };
 
@@ -203,10 +221,13 @@ function renderProfPreview() {
   const tags = profState.tags.length
     ? `<div class="profile-tags">${profState.tags.slice(0, 6).map((t) => `<span class="profile-tag">${esc(String(t).slice(0, 24))}</span>`).join('')}</div>` : '';
   host.setAttribute('data-accent', PROF_ACCENTS.indexOf(profState.accent) !== -1 ? profState.accent : 'violet');
+  host.toggleAttribute('data-accent-glow', !!profState.accentGlow);
   syncPreviewBg(host);   // bg layer: untouched unless its URL changed
   let head = host.querySelector('.profile-head');
   if (!head) { head = document.createElement('div'); head.className = 'profile-head'; host.appendChild(head); }
-  head.innerHTML = `<div class="profile-avatar">${avatar}</div>
+  head.innerHTML = `<div class="profile-avatar">${avatar}
+        <button type="button" class="acct-hover-pill acct-hover-avatar" aria-label="Change avatar">✎ Change<br>avatar</button>
+      </div>
       <h2 class="profile-name">${name}</h2>
       ${status ? `<div class="profile-status">${esc(status.slice(0, 80))}</div>` : ''}
       ${tags}
@@ -288,20 +309,118 @@ function addProfTag(raw) {
   renderTagEditor(); renderProfPreview();
 }
 
+// round 4 (Blake recurring #2) — the branded SELECT. Native <select> popups
+// can't be themed (the OS white outline he kept reporting), so every dropdown
+// on this page is now a button + listbox wearing the site's purple. Fully
+// keyboard-driven: Enter/Space/ArrowDown opens, arrows rove, Home/End jump,
+// Esc closes back to the button. There must be ZERO native <select> here —
+// a spec pins that.
+function brandSelect({ host, label, options, value, onChange }) {
+  if (!host) return null;
+  let cur = value || '';
+  host.innerHTML = '';
+  host.classList.add('acct-dd-wrap');
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'acct-dd-btn';
+  btn.setAttribute('aria-haspopup', 'listbox');
+  btn.setAttribute('aria-expanded', 'false');
+  if (label) btn.setAttribute('aria-label', label);
+  const txt = document.createElement('span'); txt.className = 'acct-dd-text';
+  const chev = document.createElement('span'); chev.className = 'acct-dd-chev'; chev.setAttribute('aria-hidden', 'true'); chev.textContent = '▾';
+  btn.appendChild(txt); btn.appendChild(chev);
+  const menu = document.createElement('div');
+  menu.className = 'acct-dd-menu'; menu.setAttribute('role', 'listbox');
+  if (label) menu.setAttribute('aria-label', label);
+  menu.hidden = true;
+  host.appendChild(btn); host.appendChild(menu);
+
+  const labelFor = (v) => { const o = options.find((x) => x.value === v); return o ? o.label : (options[0] ? options[0].label : ''); };
+  const paint = () => {
+    txt.textContent = labelFor(cur);
+    menu.querySelectorAll('.acct-dd-opt').forEach((b) => {
+      const on = b.getAttribute('data-value') === cur;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+  };
+  options.forEach((o) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'acct-dd-opt';
+    b.setAttribute('role', 'option'); b.setAttribute('data-value', o.value);
+    b.textContent = o.label;
+    b.addEventListener('click', () => { cur = o.value; paint(); setOpen(false); btn.focus(); if (onChange) onChange(cur); });
+    menu.appendChild(b);
+  });
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    btn.classList.toggle('is-open', open);
+    if (open) (menu.querySelector('.acct-dd-opt.is-on') || menu.querySelector('.acct-dd-opt'))?.focus();
+  };
+  btn.addEventListener('click', () => setOpen(menu.hidden));
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setOpen(true); }
+  });
+  menu.addEventListener('keydown', (e) => {
+    const opts = Array.from(menu.querySelectorAll('.acct-dd-opt'));
+    const i = opts.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); (opts[i + 1] || opts[0]).focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); (opts[i - 1] || opts[opts.length - 1]).focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); opts[0]?.focus(); }
+    else if (e.key === 'End') { e.preventDefault(); opts[opts.length - 1]?.focus(); }
+    else if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); btn.focus(); }
+  });
+  host.addEventListener('focusout', (e) => {
+    if (!menu.hidden && !host.contains(e.relatedTarget)) setOpen(false);
+  });
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !host.contains(e.target)) setOpen(false);
+  });
+  paint();
+  return {
+    get value() { return cur; },
+    set value(v) { cur = v || ''; paint(); },
+  };
+}
+
+// round 4 (item 3) — the accent MENU: grouped solids + gradients, plus the
+// glow switch. Click toggles; the live hero repaints immediately.
 function renderAccentPicker() {
   const host = document.getElementById('acct-accents');
   if (!host) return;
   host.innerHTML = '';
-  PROF_ACCENTS.forEach((a) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'acct-accent'; b.setAttribute('data-accent', a);
-    b.setAttribute('role', 'radio'); b.title = a;
-    const on = profState.accent === a;
-    b.classList.toggle('is-active', on);
-    b.setAttribute('aria-checked', String(on));
-    b.addEventListener('click', () => { profState.accent = (profState.accent === a) ? '' : a; renderAccentPicker(); renderProfPreview(); });
-    host.appendChild(b);
+  PROF_ACCENT_GROUPS.forEach(([label, jp, keys]) => {
+    const head = document.createElement('div');
+    head.className = 'acct-accent-group';
+    const jpEl = document.createElement('span'); jpEl.className = 'jp-mini'; jpEl.textContent = jp;
+    head.textContent = label + ' '; head.appendChild(jpEl);
+    host.appendChild(head);
+    const row = document.createElement('div');
+    row.className = 'acct-accent-row';
+    keys.forEach((a) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'acct-accent'; b.setAttribute('data-accent', a);
+      b.setAttribute('role', 'radio'); b.title = a.replace(/^g-/, '');
+      const on = profState.accent === a;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-checked', String(on));
+      b.addEventListener('click', () => { profState.accent = (profState.accent === a) ? '' : a; renderAccentPicker(); renderProfPreview(); });
+      row.appendChild(b);
+    });
+    host.appendChild(row);
   });
+  // the glow switch — an outer aura on the frame + avatar, any accent
+  const glowRow = document.createElement('div');
+  glowRow.className = 'acct-accent-row acct-accent-row--glow';
+  const glow = document.createElement('button');
+  glow.type = 'button'; glow.className = 'acct-glow-toggle';
+  glow.setAttribute('role', 'switch');
+  glow.setAttribute('aria-checked', String(!!profState.accentGlow));
+  glow.classList.toggle('is-on', !!profState.accentGlow);
+  glow.innerHTML = `<span class="acct-glow-dot" aria-hidden="true"></span> Glow <span class="jp-mini">灯り</span>`;
+  glow.addEventListener('click', () => { profState.accentGlow = !profState.accentGlow; renderAccentPicker(); renderProfPreview(); });
+  glowRow.appendChild(glow);
+  host.appendChild(glowRow);
 }
 
 // background staging — upload happens on Save (the onProfileWritten CF sweeps
@@ -318,37 +437,67 @@ function renderBgThumb() {
   if (removeBtn) removeBtn.hidden = !url;
 }
 function initBgPicker() {
-  const pick = document.getElementById('acct-bg-pick');
+  const thumb = document.getElementById('acct-bg-thumb');
   const file = document.getElementById('acct-bg-file');
   const removeBtn = document.getElementById('acct-bg-remove');
-  if (!pick || !file) return;
-  pick.addEventListener('click', () => file.click());
+  if (!thumb || !file) return;
+  thumb.addEventListener('click', () => file.click());   // round 4 — the thumb IS the picker now
   removeBtn?.addEventListener('click', () => {
     profState.bgRemove = true; profState.bgStagedBlob = null; profState.bgStagedMime = '';
     if (profState.bgStagedUrl) { try { URL.revokeObjectURL(profState.bgStagedUrl); } catch (_) {} profState.bgStagedUrl = ''; }
     renderBgThumb(); renderProfPreview();
   });
-  file.addEventListener('change', (e) => {
+  file.addEventListener('change', async (e) => {
     const f = e.target.files?.[0];
     file.value = '';
     if (!f) return;
     if (PROF_BG_TYPES.indexOf(f.type) === -1) { errEl.textContent = 'Background must be JPEG, PNG, WebP, or GIF.'; return; }
     if (f.size > 5 * 1024 * 1024) { errEl.textContent = 'Background is over 5 MB — choose a smaller file.'; return; }
     errEl.textContent = '';
-    // GIFs upload as-is (a canvas downscale would freeze the animation); the
-    // server pipeline re-encodes + strips metadata regardless.
-    profState.bgStagedBlob = f; profState.bgStagedMime = f.type; profState.bgRemove = false;
+    // GIFs upload as-is (a canvas crop would freeze the animation); the server
+    // pipeline re-encodes + strips metadata regardless. Stills go through the
+    // FRAME THE NIGHT cropper first (round 4, item 2).
+    let staged = f, mime = f.type;
+    if (f.type !== 'image/gif') {
+      const cropped = await openCropper({ file: f, mode: 'background' });
+      if (!cropped) return;   // cancelled — keep the previous background
+      if (cropped.blob.size > 5 * 1024 * 1024) { errEl.textContent = 'Background is over 5 MB after crop — choose a smaller file.'; return; }
+      staged = cropped.blob; mime = cropped.mime;
+    }
+    profState.bgStagedBlob = staged; profState.bgStagedMime = mime; profState.bgRemove = false;
     if (profState.bgStagedUrl) { try { URL.revokeObjectURL(profState.bgStagedUrl); } catch (_) {} }
-    profState.bgStagedUrl = URL.createObjectURL(f);
+    profState.bgStagedUrl = URL.createObjectURL(staged);
     renderBgThumb(); renderProfPreview();
+  });
+}
+
+// round 4 (item 4) — pro-site hover pickers: the hero preview IS the picker.
+// Hovering (or focusing into) the hero raises two opaque pills — "Change
+// avatar" on the circle, "Change background" top-right — wired straight to the
+// existing hidden file inputs. Delegated, because the head rebuilds per
+// keystroke; the bg pill is a persistent sibling of the head.
+function initHeroPickers() {
+  const host = document.getElementById('acct-preview');
+  if (!host || host._pickersWired) return;
+  host._pickersWired = true;
+  const bgBtn = document.createElement('button');
+  bgBtn.type = 'button';
+  bgBtn.className = 'acct-hover-pill acct-hover-bg';
+  bgBtn.textContent = '🌌 Change background';
+  host.appendChild(bgBtn);
+  bgBtn.addEventListener('click', () => document.getElementById('acct-bg-file')?.click());
+  host.addEventListener('click', (e) => {
+    if (e.target.closest('.acct-hover-avatar')) avatarFile?.click();
   });
 }
 
 // featured-review picker — only the user's OWN reviews can be pinned (the
 // public sheet fetches reviews/{key}/items/{their uid}, so it's structural).
+// round 4: rides brandSelect (recurring #2 — no native <select> on this page).
 async function loadFeaturedChoices(uid) {
-  const sel = document.getElementById('acct-featured');
-  if (!sel) return;
+  const host = document.getElementById('acct-featured-host');
+  if (!host) return;
+  const options = [{ value: '', label: 'None — let the latest speak' }];
   try {
     const snap = await getDocs(query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(60)));
     snap.forEach((d) => {
@@ -356,15 +505,20 @@ async function loadFeaturedChoices(uid) {
       const v = d.data() || {}; if (v.removed) return;
       const key = d.ref.path.split('/')[1] || '';
       const label = (titleById.get(key) || (key.indexOf('al:') === 0 ? 'a season' : key.replace(/-/g, ' ')));
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = `${label} — “${String(v.title || '(review)').slice(0, 60)}”`;
-      sel.appendChild(opt);
+      options.push({ value: key, label: `${label} — “${String(v.title || '(review)').slice(0, 60)}”` });
     });
-    sel.value = profState.featuredAnime || '';
-    if (sel.value !== (profState.featuredAnime || '')) sel.value = '';
-  } catch (_) { /* leave the None option */ }
-  sel.addEventListener('change', () => { profState.featuredAnime = sel.value || ''; });
+  } catch (_) { /* just the None option */ }
+  const saved = profState.featuredAnime || '';
+  // adversarial MED (3 lenses): NEVER write the dropdown's value back into
+  // profState here — a failed/evicted fetch (the items CG is limit-60 across
+  // reviews AND comments) would coerce the saved pin to '' and the next Save
+  // of an unrelated edit would silently unpin. The pin changes ONLY on an
+  // explicit user pick (onChange).
+  brandSelect({
+    host, label: 'Pinned review', options,
+    value: options.some((o) => o.value === saved) ? saved : '',
+    onChange: (v) => { profState.featuredAnime = v || ''; },
+  });
 }
 
 // round 2 — "see what viewers see": renders the SAVED public identity with the
@@ -429,7 +583,7 @@ async function renderViewerMode(user) {
   // count to 0) — the preview must too, or a fresh profile under-promises.
   const likesCount = (typeof p.likesCount === 'number') ? p.likesCount : 0;
   const likes = `<div class="profile-like-row"><button type="button" class="profile-like-btn" disabled title="Viewers can appreciate you here"><span class="profile-like-heart" aria-hidden="true">♥</span><span class="profile-like-verb">Appreciate</span></button><span class="profile-like-count" aria-label="appreciations">${Math.max(0, likesCount)}</span></div>`;
-  host.innerHTML = `<section class="profile-sheet acct-viewer-sheet"${accent ? ` data-accent="${esc(accent)}"` : ''}>
+  host.innerHTML = `<section class="profile-sheet acct-viewer-sheet"${accent ? ` data-accent="${esc(accent)}"` : ''}${p.accentGlow === true ? ' data-accent-glow' : ''}>
       <div class="profile-kicker">MEMBER <span class="jp-mini">旅人</span>
         <span class="acct-viewer-badge">as last saved — exactly what viewers see</span></div>
       <div class="profile-body">
@@ -533,6 +687,7 @@ async function initProfileStudio(user) {
       profState.status = typeof p.status === 'string' ? p.status : '';
       profState.tags = Array.isArray(p.tags) ? p.tags.slice(0, 6).map((t) => String(t).slice(0, 24)) : [];
       profState.accent = (PROF_ACCENTS.indexOf(p.accent) !== -1) ? p.accent : '';
+      profState.accentGlow = p.accentGlow === true;
       profState.bgRef = typeof p.bgRef === 'string' ? p.bgRef : '';
       profState.featuredAnime = typeof p.featuredAnime === 'string' ? p.featuredAnime : '';
     }
@@ -558,6 +713,7 @@ async function initProfileStudio(user) {
     addProfTag(tagInput.value); tagInput.value = '';
   });
   initBgPicker();
+  initHeroPickers();        // round 4 — hover-to-change on the hero preview
   initTagDropdown();        // round 2 — the curated catalog
   initModeToggle(user);     // round 2 — Edit ↔ Public view
   initConsentBanner(user);  // round 2 — accept the rules in place
@@ -952,11 +1108,20 @@ function renderSaved(listEl, emptyEl, items, kind, uid) {
     } else {
       // v1.7.5 (gate 3) — catalog (reviewed) rows get a subtle green ✓ REVIEWED
       // affordance, matching the established checkmark vocabulary (secondary-modal
-      // reviewed kicker / carousel ✓ badge). Row stays a text link to the review.
-      openBtn.classList.add('saved-open--catalog');
-      openBtn.innerHTML =
-        '<span class="saved-title-text">' + esc(it.title || it.animeId) + '</span>' +
-        '<span class="saved-reviewed" title="Reviewed by Blake">✓ REVIEWED</span>';
+      // reviewed kicker / carousel ✓ badge).
+      // round 4 (Blake item 6: "load the preview png") — catalog rows now carry
+      // the catalog cover too (imageById, the Activity-thumb pattern), so list
+      // AND grid read as covers for both row types.
+      openBtn.classList.add('saved-open--catalog', 'saved-open--rich');
+      const asset = imageById.get(it.animeId);
+      const cover = asset
+        ? `<img class="saved-cover" src="assets/${esc(asset)}" alt="" loading="lazy">`
+        : `<span class="saved-cover saved-cover--ph" aria-hidden="true"></span>`;
+      openBtn.innerHTML = cover +
+        `<span class="saved-meta">` +
+          `<span class="saved-title">${esc(it.title || it.animeId)}</span>` +
+          `<span class="saved-reviewed" title="Reviewed by Blake">✓ REVIEWED</span>` +
+        `</span>`;
       openBtn.addEventListener('click', () => {
         // Send them to index and auto-open the modal there
         location.href = `index.html#open=${encodeURIComponent(it.animeId)}`;
@@ -1026,7 +1191,18 @@ function initSavedControls(uid) {
     host._wired = true;
     const st = savedView[kind];
     host.querySelector('.saved-filter')?.addEventListener('input', (e) => { st.filter = e.target.value.trim(); repaintSaved(kind, uid); });
-    host.querySelector('select')?.addEventListener('change', (e) => { st.sort = e.target.value; repaintSaved(kind, uid); });
+    // round 4 — the sort rides brandSelect (recurring #2: zero native <select>)
+    brandSelect({
+      host: host.querySelector('[data-sort-dd]'),
+      label: `Sort ${kind}`,
+      options: [
+        { value: 'recent', label: 'Recently added' },
+        { value: 'alpha', label: 'A → Z' },
+        { value: 'year', label: 'By year' },
+      ],
+      value: st.sort || 'recent',
+      onChange: (v) => { st.sort = v; repaintSaved(kind, uid); },
+    });
     host.querySelectorAll('.saved-type-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         st.type = chip.getAttribute('data-type') || 'all';
@@ -1047,6 +1223,236 @@ function initSavedControls(uid) {
       });
     }
   });
+}
+
+// =============================================================================
+// PERSONAL COLLECTIONS — round 4 (Blake item 7): user-made shelves under
+// users/{uid}/collections/{id} {name, public, items[], createdAt, updatedAt}.
+// Private by default; flipping public is consent-gated (rules-enforced, and
+// pre-flighted here with the shared consent modal). Public shelves render on
+// the live profile (script.js). Items are snapshots {animeId, title,
+// coverImage} — same shape as saved rows, so covers paint without a network.
+// =============================================================================
+let unsubCollections = null;
+let _colWired = false;
+
+// cover sources are pinned to our own assets or https (hubSafeCover discipline
+// — a collection item is a render sink like any other cover).
+function colSafeCover(src) {
+  const s = String(src || '');
+  if (/^assets\/[A-Za-z0-9._-]{1,120}$/.test(s)) return s;
+  if (/^https:\/\/[^"'<>\s]{1,400}$/.test(s)) return s;
+  return '';
+}
+function colId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+// candidates for the add-picker: Blake's catalog + the user's saved entries
+function colCandidates() {
+  const out = new Map();
+  const arr = (window.__ANIME_DATA__ && Array.isArray(window.__ANIME_DATA__)) ? window.__ANIME_DATA__ : [];
+  arr.forEach((a) => {
+    const t = a?.Title; if (!t) return;
+    const id = slugFromTitle(t); if (!id) return;
+    out.set(id, { animeId: id, title: String(t).slice(0, 120), coverImage: a.image ? 'assets/' + String(a.image) : '' });
+  });
+  ['watchlist', 'favorites'].forEach((kind) => {
+    (savedView[kind].items || []).forEach((it) => {
+      if (!out.has(it.animeId)) out.set(it.animeId, {
+        animeId: String(it.animeId).slice(0, 130),
+        title: String(it.title || it.animeId).slice(0, 120),
+        coverImage: String(it.coverImage || '').slice(0, 400),
+      });
+    });
+  });
+  return Array.from(out.values()).sort((a, b) => a.title.localeCompare(b.title));
+}
+
+async function colWrite(uid, id, data) {
+  await setDoc(doc(db, 'users', uid, 'collections', id),
+    { ...data, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+// the add-picker — a small branded overlay: search, click to add
+function openColAdder(uid, col) {
+  const existing = new Set((col.items || []).map((x) => x.animeId));
+  const overlay = document.createElement('div');
+  overlay.className = 'col-adder-overlay';
+  overlay.innerHTML = `<div class="col-adder" role="dialog" aria-modal="true" aria-label="Add anime to ${esc(col.name)}">
+      <div class="col-adder-head"><span class="fld-pill">＋ Add to “${esc(String(col.name).slice(0, 40))}”</span>
+        <button type="button" class="col-adder-close" aria-label="Close">×</button></div>
+      <input type="search" class="col-adder-search" placeholder="Search your anime…" aria-label="Search anime" />
+      <div class="col-adder-list" role="list"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const listEl = overlay.querySelector('.col-adder-list');
+  const searchEl = overlay.querySelector('.col-adder-search');
+  const all = colCandidates();
+  const paint = (q) => {
+    const needle = String(q || '').toLowerCase();
+    listEl.innerHTML = '';
+    all.filter((c) => !existing.has(c.animeId) && (!needle || c.title.toLowerCase().includes(needle)))
+      .slice(0, 60)
+      .forEach((c) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'col-adder-row';
+        const cov = colSafeCover(c.coverImage);
+        b.innerHTML = (cov ? `<img class="saved-cover" src="${esc(cov)}" alt="" loading="lazy">`
+          : '<span class="saved-cover saved-cover--ph" aria-hidden="true"></span>')
+          + `<span class="saved-title">${esc(c.title)}</span>`;
+        b.addEventListener('click', async () => {
+          // adversarial MED: at the 200-item rules cap, concat+slice dropped
+          // the NEW item and the write "succeeded" — silent false-success.
+          // Say so instead.
+          if ((col.items || []).length >= 200) { alert('This shelf is full — 200 titles max. Make another shelf!'); return; }
+          b.disabled = true;
+          try {
+            const items = (col.items || []).concat([c]);
+            await colWrite(uid, col.id, { items });
+            existing.add(c.animeId); col.items = items;
+            paint(searchEl.value);
+          } catch (e) { alert('Could not add: ' + (e.message || e)); b.disabled = false; }
+        });
+        listEl.appendChild(b);
+      });
+    if (!listEl.children.length) listEl.innerHTML = '<p class="muted">Nothing to add — save some anime first.</p>';
+  };
+  paint('');
+  searchEl.addEventListener('input', () => paint(searchEl.value));
+  const close = () => { try { overlay.remove(); } catch (_) {} document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('.col-adder-close')) close(); });
+  searchEl.focus();
+}
+
+function renderCollections(uid, cols) {
+  const host = document.getElementById('col-list');
+  const empty = document.getElementById('col-empty');
+  if (!host || !empty) return;
+  host.innerHTML = '';
+  empty.hidden = !!cols.length;
+  cols.forEach((col) => {
+    const card = document.createElement('section');
+    card.className = 'col-card';
+    const isPub = col.public === true;
+    card.innerHTML = `<div class="col-card-head">
+        <span class="col-card-name">${esc(col.name || '(unnamed)')}</span>
+        <button type="button" class="col-vis ${isPub ? 'is-public' : ''}" title="${isPub ? 'Public — on your profile. Click to make private.' : 'Private — only you. Click to publish.'}"
+          role="switch" aria-checked="${isPub}">${isPub ? '🌐 Public' : '🔒 Private'}</button>
+        <span class="col-count">${(col.items || []).length} title${(col.items || []).length === 1 ? '' : 's'}</span>
+        <span class="col-card-tools">
+          <button type="button" class="linky col-rename">Rename</button>
+          <button type="button" class="linky col-del">Delete</button>
+        </span>
+      </div>
+      <div class="col-items"></div>
+      <button type="button" class="col-add inline-header-btn small">＋ Add anime</button>`;
+    const itemsEl = card.querySelector('.col-items');
+    (col.items || []).forEach((it, i) => {
+      const row = document.createElement('span');
+      row.className = 'col-item';
+      const cov = colSafeCover(it.coverImage);
+      row.innerHTML = (cov ? `<img class="col-item-cover" src="${esc(cov)}" alt="" loading="lazy" title="${esc(it.title || '')}">`
+        : `<span class="col-item-cover col-item-cover--ph" title="${esc(it.title || '')}">${esc(String(it.title || '?').charAt(0))}</span>`)
+        + `<button type="button" class="col-item-x" aria-label="Remove ${esc(it.title || 'item')}">×</button>`;
+      row.querySelector('.col-item-x').addEventListener('click', async () => {
+        try {
+          const items = col.items.slice(); items.splice(i, 1);
+          await colWrite(uid, col.id, { items });
+        } catch (e) { alert('Could not remove: ' + (e.message || e)); }
+      });
+      itemsEl.appendChild(row);
+    });
+    if (!(col.items || []).length) itemsEl.innerHTML = '<span class="muted col-items-empty">empty shelf — add something you love</span>';
+    card.querySelector('.col-add').addEventListener('click', () => openColAdder(uid, col));
+    card.querySelector('.col-vis').addEventListener('click', async () => {
+      try {
+        if (!isPub) {
+          // publishing is a community act — the shared consent gate fronts it
+          const res = await ensureConsent(auth.currentUser, db, functions, { adminUid: RAR_ADMIN_UID });
+          if (res !== 'ok') return;
+        }
+        await colWrite(uid, col.id, { public: !isPub });
+      } catch (e) { alert('Could not change visibility: ' + (e.message || e)); }
+    });
+    card.querySelector('.col-del').addEventListener('click', async () => {
+      if (!card.dataset.confirmDel) {
+        card.dataset.confirmDel = '1';
+        card.querySelector('.col-del').textContent = 'Really delete?';
+        setTimeout(() => { try { delete card.dataset.confirmDel; card.querySelector('.col-del').textContent = 'Delete'; } catch (_) {} }, 2600);
+        return;
+      }
+      try { await deleteDoc(doc(db, 'users', uid, 'collections', col.id)); } catch (e) { alert('Could not delete: ' + (e.message || e)); }
+    });
+    card.querySelector('.col-rename').addEventListener('click', () => {
+      const nameEl = card.querySelector('.col-card-name');
+      const input = document.createElement('input');
+      input.type = 'text'; input.maxLength = 60; input.value = col.name || ''; input.className = 'col-rename-input';
+      nameEl.replaceWith(input); input.focus(); input.select();
+      const commit = async () => {
+        const v = input.value.trim().slice(0, 60);
+        if (v && v !== col.name) { try { await colWrite(uid, col.id, { name: v }); } catch (e) { alert('Rename failed: ' + (e.message || e)); } }
+        else renderCollections(uid, cols);
+      };
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderCollections(uid, cols); });
+      input.addEventListener('blur', commit);
+    });
+    host.appendChild(card);
+  });
+}
+
+function ensureCollections() {
+  const u = auth.currentUser;
+  if (!u) return;
+  if (!_colWired) {
+    _colWired = true;
+    const composer = document.getElementById('col-composer');
+    const nameEl = document.getElementById('col-name');
+    let visDd = null;
+    document.getElementById('col-new')?.addEventListener('click', () => {
+      composer.hidden = !composer.hidden;
+      if (!composer.hidden) {
+        if (!visDd) visDd = brandSelect({
+          host: document.getElementById('col-visibility-host'), label: 'Visibility',
+          options: [{ value: '', label: '🔒 Private — only you' }, { value: 'pub', label: '🌐 Public — on your profile' }],
+          value: '',
+        });
+        nameEl.focus();
+      }
+    });
+    document.getElementById('col-cancel')?.addEventListener('click', () => { composer.hidden = true; });
+    document.getElementById('col-create')?.addEventListener('click', async () => {
+      const name = (nameEl.value || '').trim().slice(0, 60);
+      if (!name) { nameEl.focus(); return; }
+      const wantPub = visDd && visDd.value === 'pub';
+      try {
+        if (wantPub) {
+          const res = await ensureConsent(auth.currentUser, db, functions, { adminUid: RAR_ADMIN_UID });
+          if (res !== 'ok') return;
+        }
+        await setDoc(doc(db, 'users', u.uid, 'collections', colId()), {
+          name, public: !!wantPub, items: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        });
+        nameEl.value = ''; composer.hidden = true;
+      } catch (e) { alert('Could not create: ' + (e.message || e)); }
+    });
+    nameEl?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('col-create')?.click(); });
+  }
+  if (unsubCollections) return;   // already live
+  unsubCollections = onSnapshot(
+    query(collection(db, 'users', u.uid, 'collections'), orderBy('updatedAt', 'desc')),
+    (snap) => {
+      // adversarial MED (the comment-list rebuild class): a snapshot landing
+      // mid-RENAME would innerHTML the open input away and eat the typing.
+      // Defer — the rename's own commit writes, which triggers the next
+      // snapshot and repaints everything anyway.
+      if (document.querySelector('.col-rename-input')) return;
+      const cols = [];
+      snap.forEach((d) => { const v = d.data() || {}; cols.push({ id: d.id, name: v.name, public: v.public, items: Array.isArray(v.items) ? v.items : [] }); });
+      renderCollections(u.uid, cols);
+    },
+    (err) => console.error('Collections failed:', err)
+  );
 }
 
 function subscribeSavedLists(user) {
@@ -1212,16 +1618,35 @@ resetPassBtn?.addEventListener('click', async () => {
 
 avatarPick?.addEventListener('click', () => avatarFile?.click());
 
+let _avatarPreviewUrl = '';   // adversarial LOW: revoke across re-picks
 avatarFile?.addEventListener('change', async (e) => {
   const file = e.target.files?.[0];
+  e.target.value = '';   // re-picking the same file must re-fire change
   if (!file) return;
   try {
-    const { blob, mime } = await downscaleImage(file, 512);
-    newAvatarBlob = blob;
-    newAvatarMime = mime;
+    let staged;
+    // round 4 (item 2) — the FRAME IT cropper: drag/zoom the circle like a
+    // modern social app. GIFs skip it (canvas would freeze the animation) and
+    // ride the legacy downscale, same as before.
+    if (/image\/(jpeg|png|webp)/.test(file.type || '')) {
+      const cropped = await openCropper({ file, mode: 'avatar' });
+      if (!cropped) return;   // cancelled — keep whatever was staged before
+      staged = cropped;
+    } else {
+      staged = await downscaleImage(file, 512);
+    }
+    // adversarial LOW: the avatars/ storage rule caps at 2 MB (the old 5 MB
+    // check was dead letter — the upload would bounce at Save).
+    if (staged.blob.size > 2 * 1024 * 1024) throw new Error('Avatar is over 2 MB after processing. Use a smaller image.');
+    newAvatarBlob = staged.blob;
+    newAvatarMime = staged.mime;
     // Preview the chosen image in the circle
-    const url = URL.createObjectURL(blob);
-    avatarPick.innerHTML = `<img src="${url}" alt="">`;
+    if (_avatarPreviewUrl) { try { URL.revokeObjectURL(_avatarPreviewUrl); } catch (_) {} }
+    _avatarPreviewUrl = URL.createObjectURL(staged.blob);
+    avatarPick.innerHTML = `<img src="${_avatarPreviewUrl}" alt="">`;
+    renderProfPreview();      // the hero circle updates live too
+    avatarPick.focus();       // adversarial LOW: the hero pill the crop started
+                              // from is rebuilt — land focus somewhere real
   } catch (err) {
     alert(err.message || String(err));
     newAvatarBlob = null;
@@ -1320,6 +1745,7 @@ saveBtn.addEventListener('click', async () => {
         // the accent enum has no null — clearing means REMOVING the key
         // (post-merge the key is gone, so the rules' `in`-check is skipped).
         accent: (PROF_ACCENTS.indexOf(profState.accent) !== -1) ? profState.accent : deleteField(),
+        accentGlow: profState.accentGlow === true ? true : deleteField(),
         bgRef: nextBgRef,
         featuredAnime: profState.featuredAnime || null,
       };
@@ -1405,6 +1831,9 @@ onAuthStateChanged(auth, (user) => {
   // page deep-links straight to activity, run it now.
   activityUserPending = user;
   if (document.querySelector('.side-link[data-tab="activity"].is-active')) ensureActivity();
+  // adversarial LOW: a collections-tab click BEFORE auth resolved bounced off
+  // ensureCollections' auth guard and left the panel blank — catch up now.
+  if (document.querySelector('.side-link[data-tab="collections"].is-active')) ensureCollections();
   initProfileStudio(user);   // dream-profile — the identity studio
   initInbox(user);   // gate 18 — the Message-Blake DM
   // Notifications (Lantern) subscribe to auth on their own inside initLantern().
