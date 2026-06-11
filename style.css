@@ -7404,6 +7404,11 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   box-shadow: 0 12px 36px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.4);
 }
 .secondary-cover--ph { background: rgba(40,18,70,0.7); }
+/* gate 20.7 (Blake item 4) — the cover column: the 👁 demand chip docks
+   neatly under the thumbnail (moved out of the top action bar). */
+.secondary-cover-col { display: flex; flex-direction: column; align-items: center;
+  gap: 8px; flex-shrink: 0; min-width: 0; }
+.secondary-cover-col .secondary-requested-chip { justify-content: center; }
 .secondary-titleblock { min-width: 0; flex: 1; padding-bottom: 4px; }
 .secondary-kickers { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .secondary-unreviewed-kicker {
@@ -7599,9 +7604,10 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 }
 .secondary-col { min-width: 0; display: flex; flex-direction: column; gap: clamp(18px, 2.4vw, 26px); }
 
-/* gate 20 (cherry) — the requested-demand chip beside the Request affordance:
-   purple, count-as-demand-signal (Blake's ask; LIST stays admin-only so it
-   can never become a leaderboard) */
+/* gate 20 (cherry) — the requested-demand chip: purple, count-as-demand-signal
+   (Blake's ask; LIST stays admin-only so it can never become a leaderboard).
+   gate 20.7 (item 4): it docks UNDER the cover thumbnail (.secondary-cover-col),
+   no longer beside the Request affordance. */
 .secondary-requested-chip { display: inline-flex; align-items: center; gap: 5px;
   padding: 5px 12px; border-radius: 999px; font: 700 0.7rem 'Montserrat', sans-serif;
   color: #e9dbff; background: rgba(187, 134, 252, 0.14);
@@ -8628,6 +8634,44 @@ html.rar-welcome-pending::before {
 .welcome-catchup-sub:hover { background: rgba(187, 134, 252, 0.2); }
 @media (prefers-reduced-motion: reduce) {
   .welcome-catchup-btn { transition: none; }
+}
+
+/* gate 20.7 (item 5c) — the MID-SESSION sign-in catch-up strip: a compact,
+   dismissible echo of the door's strip, fixed under the header. Removed from
+   the DOM on click/dismiss (no [hidden] state to mirror). Below every modal
+   layer (z 4800 < the 5000+ stack). */
+.signin-catchup { position: fixed; top: 76px; left: 50%; transform: translateX(-50%);
+  z-index: 4800; display: inline-flex; align-items: center; gap: 8px;
+  /* gate-20.7 adversarial MED: fixed+left:50% shrink-to-fit caps the bar at
+     ~50vw — at phone widths the label wrapped to five lines. Size to content,
+     bounded like the door strip's 560px. */
+  width: max-content; max-width: min(92vw, 560px);
+  animation: signinCatchupIn 0.35s ease both; }
+.signin-catchup-btn { flex-wrap: wrap; justify-content: center; }
+.signin-catchup-btn { display: inline-flex; align-items: center; gap: 10px; padding: 10px 20px;
+  border-radius: 999px; cursor: pointer; font: 700 0.86rem 'Montserrat', sans-serif;
+  color: #fff; background: linear-gradient(120deg, rgba(56, 22, 96, 0.97), rgba(34, 10, 64, 0.97));
+  border: 1px solid rgba(187, 134, 252, 0.7);
+  box-shadow: 0 6px 20px rgba(6, 1, 14, 0.55); }
+.signin-catchup-btn:hover { border-color: rgba(216, 180, 254, 0.95); }
+.signin-catchup-btn .sc-go { font-size: 1.1em; color: #d9c9ff; }
+.signin-catchup-x { width: 30px; height: 30px; border-radius: 9px; cursor: pointer;
+  background: rgba(30, 10, 60, 0.92); border: 1px solid rgba(187, 134, 252, 0.45);
+  color: #d9c9ff; font-size: 0.85rem; line-height: 1; }
+.signin-catchup-x:hover { border-color: rgba(187, 134, 252, 0.85); color: #fff; }
+.signin-catchup :is(.signin-catchup-btn, .signin-catchup-x):focus-visible {
+  outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+@keyframes signinCatchupIn { from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+/* narrow viewports: the three flex items (🏮 / label / ›) would STACK when the
+   label can't fit one line — flow them inline instead so the text wraps like
+   a sentence (two tidy lines, not a tower). */
+@media (max-width: 560px) {
+  .signin-catchup-btn { display: block; text-align: center; font-size: 0.8rem; padding: 9px 16px; }
+  .signin-catchup-btn :is(.sc-label, .sc-go) { display: inline; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signin-catchup { animation: none; }
 }
 
 /* ── gate 20.5 (item 3) — THE CATCH-UP SHEET: the door buttons' destination.
@@ -9924,6 +9968,13 @@ html[data-surface="account"] .side-link.is-active {
   color: #d7c6f2; font-size: 0.66rem; letter-spacing: 0.02em; white-space: nowrap; }
 .acct-bg-fine { flex-basis: 100%; color: #9b8abc; font-size: 0.68rem; }
 .avatar-preview[hidden] { display: none; }   /* gate 20: it's an offscreen staging buffer now */
+/* gate 20.7 (Blake item 1) — the "public view is the true render" note. Its
+   own full-width line under the open-page row; [hidden] twin per the rule. */
+.acct-crop-note { display: block; flex-basis: 100%; color: #cdbce8; font-size: 0.74rem;
+  padding: 6px 10px; border-radius: 9px; background: rgba(187, 134, 252, 0.08);
+  border: 1px solid rgba(187, 134, 252, 0.28); }
+.acct-crop-note b { color: #e9dbff; }
+.acct-crop-note[hidden] { display: none; }
 .acct-preview-open { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .acct-preview-open .acct-bg-note { flex-basis: auto; margin-left: auto;
   justify-content: flex-end; max-width: 100%; }

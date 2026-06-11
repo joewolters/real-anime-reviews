@@ -322,6 +322,24 @@ async function seed() {
   // have a fake user trigger that type — the CF won't write a notification).
   await db.doc('users/prac-mika/notifPrefs/prefs').set({ muted: { new_season: true } }, { merge: true });
 
+  // gate 20.7 (Blake item 5) — YUKI gets a GUARANTEED-UNREAD inbox on every
+  // seed, so the welcome door's WHILE-YOU-WERE-AWAY strip always has its 🏮
+  // signal for the demo recipe (Blake twice followed a recipe whose letter
+  // had been consumed/never seeded — this makes the state restart-proof).
+  // No lastSeenAt is written for Yuki: every letter below counts as unread.
+  const yukiNotifs = [
+    { type: 'blake_message', fromUid: ADMIN_UID, fromDisplayName: 'Blake', verb: 'sent you a message', targetPath: 'conversations/seed-yuki', createdAt: now - 120000 },
+    // (adversarial MED: the targetPath is YUKI's OWN comment — seed-2 in the
+    // comment loop — matching the real CF's parentRef.path semantics; seed-1
+    // is Ren's and would halo the wrong bubble on Blake's demo click.)
+    { type: 'comment_vote', fromUid: 'prac-mika', fromDisplayName: 'Mika', value: 1, verb: 'liked your comment', animeId: 'one-punch-man', targetPath: 'comments/one-punch-man/items/seed-2', createdAt: now - 600000 },
+  ];
+  const YCOL = db.collection('users/prac-yuki/notifications');
+  for (let i = 0; i < yukiNotifs.length; i++) {
+    const n = yukiNotifs[i];
+    await YCOL.doc('seed-yn' + i).set({ toUid: 'prac-yuki', read: false, ...n, createdAt: TS.fromMillis(n.createdAt) });
+  }
+
   return titles;
 }
 

@@ -2180,6 +2180,10 @@ notifBtn?.addEventListener('click', (e) => {
         await signInWithEmailAndPassword(auth, email, pass);
       }
       closeAuth();
+      // gate 20.7 (Blake item 5c) — a mid-session sign-in gets its catch-up
+      // moment too (the door's strip only exists at door time). No-op when
+      // nothing is unread or the door is still up.
+      try { window._rarSignInCatchup && window._rarSignInCatchup(auth.currentUser); } catch (_) {}
     } catch (err) {
       authError.textContent = prettyAuthError(err, authMode);
     } finally {
@@ -5638,9 +5642,15 @@ function openInlineCommentEditor(editBtn, itemRef) {
   // doc has NO photoURL field validation in the rules (unlike profiles/), so an
   // author could point their avatar at an arbitrary origin and IP-beacon every
   // viewer. Mirror the rules' profiles allowlist here before any <img src>.
+  // gate 20.7 (Blake item 2): the practice Storage emulator hands out
+  // http://127.0.0.1:9199 URLs — honored ONLY when the page itself runs on
+  // localhost (practice mode). On prod hostnames the gate stays https-only.
   function safeAvatar(u) {
-    return (typeof u === 'string'
-      && /^https:\/\/(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)\//.test(u)) ? u : '';
+    if (typeof u !== 'string') return '';
+    if (/^https:\/\/(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)\//.test(u)) return u;
+    if ((location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+      && /^http:\/\/127\.0\.0\.1:9199\//.test(u)) return u;
+    return '';
   }
   function authorLiveSub(uid, cb) {
     let userUnsub = null;
@@ -5839,8 +5849,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
       + '<div class="profile-acts" role="tablist" aria-label="Their activity">'
       +   '<button type="button" class="profile-act-chip is-active" data-act="threads" role="tab" aria-selected="true">Threads</button>'
       +   '<button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>'
-      +   '<button type="button" class="profile-act-chip" data-act="comments" role="tab" aria-selected="false">Comments</button>'
-      +   '<button type="button" class="profile-act-chip" data-act="replies" role="tab" aria-selected="false">Replies</button>'
+      // gate 20.7 (Blake item 3): Comments + Replies tabs removed from the
+      // PUBLIC profile — "No need to go that deep." Threads + Reviews stay.
       + '</div>'
       + '<ul class="profile-list" data-profile-acts><li class="hub-loading">Looking…</li></ul>';
 
@@ -5938,15 +5948,16 @@ function openInlineCommentEditor(editBtn, itemRef) {
     }
 
     // PUBLIC activity, separated by type — count-free rows (no totals anywhere).
-    // ONE items-CG fetch feeds BOTH reviews and comments (they share the
-    // `items` subcollection name); threads/replies load on their chips.
+    // gate 20.7 (item 3): Threads + Reviews ONLY — the Comments/Replies tabs,
+    // their loaders, and the shortAct snippet helper all left together.
     const actCache = {};
     const actListEl = bodyEl.querySelector('[data-profile-acts]');
     const actLabel = (key) => key.indexOf('al:') === 0 ? 'a season' : key.replace(/-/g, ' ');
-    const shortAct = (s, max) => { const t = String(s || '').trim(); const m = max || 90; return t.length <= m ? t : t.slice(0, m - 1) + '…'; };
+    // gate 20.7 (item 3): the comments half of this split is GONE with the
+    // public Comments tab — the items CG read now keeps only reviews/ rows.
     async function loadItemsSplit() {
       if (actCache.reviews) return;
-      const rows = { reviews: [], comments: [] };
+      const rows = { reviews: [] };
       try {
         const snap = await getDocs(query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(60)));
         snap.forEach((d) => {
@@ -5954,17 +5965,13 @@ function openInlineCommentEditor(editBtn, itemRef) {
           const key = d.ref.path.split('/')[1] || '';
           if (d.ref.path.startsWith('reviews/')) {
             rows.reviews.push(`<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(v.title || '(review)')}</span><span class="profile-item-sub">${escapeHtml(actLabel(key))} · ${escapeHtml(String(v.rating || ''))}/10</span></li>`);
-          } else if (d.ref.path.startsWith('comments/')) {
-            rows.comments.push(`<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(shortAct(v.text))}</span><span class="profile-item-sub">on ${escapeHtml(actLabel(key))}</span></li>`);
           }
         });
       } catch (_) {}
       actCache.reviews = rows.reviews.slice(0, 12);
-      actCache.comments = rows.comments.slice(0, 12);
     }
-    // adversarial perf LOW: memoize threads/replies like reviews/comments —
-    // toggling chips on a sheet (it opens from any author name site-wide) must
-    // not re-query Firestore on every click.
+    // adversarial perf LOW: memoize both tabs — toggling chips on a sheet (it
+    // opens from any author name site-wide) must not re-query Firestore per click.
     const actLoaders = {
       threads: async () => {
         if (actCache.threads) return actCache.threads;
@@ -5978,30 +5985,9 @@ function openInlineCommentEditor(editBtn, itemRef) {
         return rows;
       },
       reviews: async () => { await loadItemsSplit(); return actCache.reviews; },
-      comments: async () => { await loadItemsSplit(); return actCache.comments; },
-      replies: async () => {
-        if (actCache.replies) return actCache.replies;
-        // comment replies + review-discussion replies, merged newest-first.
-        const merged = [];
-        const pull = async (cg, sub) => {
-          try {
-            const snap = await getDocs(query(collectionGroup(db, cg), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(15)));
-            snap.forEach((d) => {
-              const v = d.data() || {}; if (v.removed) return;
-              const key = d.ref.path.split('/')[1] || '';
-              merged.push({ ms: v.createdAt && v.createdAt.toMillis ? v.createdAt.toMillis() : 0,
-                html: `<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(shortAct(v.text))}</span><span class="profile-item-sub">${sub} · ${escapeHtml(actLabel(key))}</span></li>` });
-            });
-          } catch (_) {}
-        };
-        await pull('replies', 'a reply');
-        await pull('threads', 'in a discussion');
-        merged.sort((a, b) => b.ms - a.ms);
-        actCache.replies = merged.slice(0, 12).map((m) => m.html);
-        return actCache.replies;
-      },
+      // gate 20.7 (item 3): the comments + replies loaders left with their tabs.
     };
-    const ACT_EMPTY = { threads: 'No threads yet.', reviews: 'No reviews yet.', comments: 'No comments yet.', replies: 'No replies yet.' };
+    const ACT_EMPTY = { threads: 'No threads yet.', reviews: 'No reviews yet.' };
     async function showAct(kind) {
       bodyEl.querySelectorAll('.profile-act-chip').forEach((c) => {
         const on = c.getAttribute('data-act') === kind;
@@ -9414,6 +9400,11 @@ function closeModal() {
     const sourceTitle = secondaryCtx ? secondaryCtx.sourceTitle : '';
     secondaryScrollEl.innerHTML = renderSecondaryModal('loading', null, { backTitle: secondaryBackTitle() });
     applyViewingHighlight(id);
+    // gate-20.7 adversarial LOW: start the demand-chip count read NOW, in
+    // parallel with the (slower) detail fetch — the chip then docks in the
+    // same paint as the header instead of popping in ~200ms later and
+    // shifting the hero (it sits in the cover column since item 4).
+    const reqCountP = getDoc(doc(db, 'suggestionCounts', String(id))).catch(() => null);
     // Detail + the season-review index in parallel (index resolves once, cached).
     const [detail] = await Promise.all([fetchAnimeDetailCached(id, forceRefresh), getSeasonReviewIndex()]);
     if (!stillMine()) return;   // backed out / superseded mid-fetch
@@ -9449,22 +9440,23 @@ function closeModal() {
       try { secondaryCommentsUnsub = wireComments({ aniListId: id }); } catch (_) { secondaryCommentsUnsub = null; }
     }
     if (detail) {
-      wireRequestedChip(id);   // gate 20 — the "👁 N requested" demand chip
+      wireRequestedChip(reqCountP);   // gate 20 — the "👁 N requested" demand chip
     }
   }
 
   // gate 20 (cherry) — the "👁 N requested" chip: one public suggestionCounts
-  // GET keyed by the AniList id; renders beside the Request affordance ONLY
-  // while the title is un-reviewed and still wanted (status new). Purple,
-  // non-interactive, fire-and-forget (a failed read just means no chip).
-  async function wireRequestedChip(aniListId) {
+  // GET keyed by the AniList id (the read STARTS at the top of loadSecondary,
+  // in parallel with the detail fetch — 20.7: no late pop-in/layout shift);
+  // renders under the cover ONLY while the title is un-reviewed and still
+  // wanted (status new). Purple, fire-and-forget (a failed read = no chip).
+  async function wireRequestedChip(countPromise) {
     try {
       const reqEl = secondaryScrollEl.querySelector('.secondary-request');
       if (!reqEl || secondaryScrollEl.querySelector('.secondary-requested-chip')) return;
       // the rollup is keyed by the BARE anilistId (aggregateSuggestionCounts:
       // suggestionCounts/<anilistId>), not the al:-prefixed community key
-      const snap = await getDoc(doc(db, 'suggestionCounts', String(aniListId)));
-      if (!snap.exists()) return;
+      const snap = await countPromise;
+      if (!snap || !snap.exists()) return;
       const v = snap.data() || {};
       const n = typeof v.count === 'number' ? v.count : 0;
       if (n < 1 || v.status === 'reviewed') return;
@@ -9476,7 +9468,12 @@ function closeModal() {
       // (adversarial MED, accepted: it's a demand signal on the title's own
       // page, not a trust surface; the cap bounds how silly it can look)
       chip.textContent = '👁 ' + (n === 1 ? '1 request' : (n > 99 ? '99+' : n) + ' requested');
-      reqEl.insertAdjacentElement('afterend', chip);
+      // gate 20.7 (Blake item 4): the chip docks UNDER the cover thumbnail
+      // ("so its actually visible"), not in the crowded top action bar. The
+      // .secondary-request guard above still keys it to unreviewed titles.
+      const coverCol = secondaryScrollEl.querySelector('.secondary-cover-col');
+      if (coverCol) coverCol.appendChild(chip);
+      else reqEl.insertAdjacentElement('afterend', chip);   // fallback: the old spot
     } catch (_) { /* no chip — never block the modal */ }
   }
 
@@ -9801,7 +9798,12 @@ function closeModal() {
         '<div class="secondary-banner-scrim"></div>' +
         buildHeaderBar(editReviewBtn + requestBtn + saveBtns) +
         '<div class="secondary-header-body">' +
+          // gate 20.7 (Blake item 4): the cover rides a COLUMN so the 👁
+          // demand chip can dock neatly under the thumbnail (visible, not
+          // buried in the top action bar).
+          '<div class="secondary-cover-col">' +
           (cover ? '<img class="secondary-cover" src="' + escapeHtml(cover) + '" alt="" loading="lazy">' : '<div class="secondary-cover secondary-cover--ph"></div>') +
+          '</div>' +
           '<div class="secondary-titleblock">' +
             '<div class="secondary-kickers">' + reviewKicker + '</div>' +
             '<h2 class="secondary-title">' + escapeHtml(english) + '</h2>' +
@@ -11103,6 +11105,60 @@ function onScrollHeader() {
       return wrap;
     }
 
+    // gate 20.7 (Blake item 5c, Code's latitude) — a user who signs in MID-
+    // SESSION never saw the door's strip (it exists only at door time). After
+    // a real sign-in, run the same unread check; if letters are waiting, show
+    // a compact dismissible strip that opens the SAME catch-up sheet. The door
+    // behavior is untouched (this only runs when the door is already gone).
+    async function maybeShowSignInCatchup(user) {
+      if (!user || !splash.hidden) return;            // door-time belongs to the door
+      if (document.querySelector('.signin-catchup')) return;
+      try {
+        const [notifSnap, prefSnap] = await Promise.all([
+          getDocs(query(collection(db, 'users', user.uid, 'notifications'), orderBy('createdAt', 'desc'), limit(10))),
+          getDoc(doc(db, 'users', user.uid, 'notifPrefs', 'prefs')),
+        ]);
+        const seenMs = (() => { try { return prefSnap.exists() ? (prefSnap.data().lastSeenAt?.toMillis() || 0) : 0; } catch (_) { return 0; } })();
+        const unread = [];
+        notifSnap.forEach((d) => { try { if ((d.data().createdAt?.toMillis() || 0) > seenMs) unread.push(d.data()); } catch (_) {} });
+        if (!unread.length) return;
+        catchupState.pings = unread;                   // the sheet renders these
+        const bar = document.createElement('div');
+        bar.className = 'signin-catchup';
+        bar.dataset.uid = user.uid;                    // teardown key (auth change)
+        bar.setAttribute('role', 'status');
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'signin-catchup-btn';
+        btn.innerHTML = '<span aria-hidden="true">🏮</span> <span class="sc-label"></span> <span class="sc-go" aria-hidden="true">›</span>';
+        // '+' only when the unread set fills the whole fetch window (a 10-doc
+        // inbox with 3 unread provably has no MORE unread — the unread set is
+        // a prefix of the createdAt-desc order; adversarial LOW).
+        btn.querySelector('.sc-label').textContent = 'While you were away — '
+          + unread.length + ' new lantern ping' + (unread.length === 1 ? '' : 's')
+          + (unread.length >= 10 ? '+' : '');
+        btn.addEventListener('click', () => { try { bar.remove(); } catch (_) {} openCatchupSheet('lantern'); });
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'signin-catchup-x';
+        x.setAttribute('aria-label', 'Dismiss');
+        x.textContent = '✕';
+        x.addEventListener('click', () => { try { bar.remove(); } catch (_) {} });
+        bar.appendChild(btn); bar.appendChild(x);
+        document.body.appendChild(bar);
+      } catch (_) {}
+    }
+    window._rarSignInCatchup = maybeShowSignInCatchup;
+    // gate-20.7 adversarial MED: the strip (and its in-memory ping cache) must
+    // not outlive the account that earned it — a cross-tab sign-out propagates
+    // auth-null here while the strip still hangs in this tab's DOM. Any auth
+    // change tears it down (the strip stores the uid it was built for).
+    onAuthStateChanged(auth, (user) => {
+      const bar = document.querySelector('.signin-catchup');
+      if (bar && (!user || bar.dataset.uid !== user.uid)) {
+        try { bar.remove(); } catch (_) {}
+        catchupState.pings = [];
+      }
+    });
+
     // ── THE CATCH-UP SHEET — a real destination on the veil ──
     function openCatchupSheet(section) {
       const sheet = document.getElementById('catchup-sheet');
@@ -11264,7 +11320,9 @@ function onScrollHeader() {
           if (unreadDocs.length > 0 && !splash.hidden) {
             catchupState.pings = unreadDocs;   // the sheet renders these as letters
             catchupAdd(catchupButton(
-              '🏮 ' + unreadDocs.length + ' new lantern ping' + (unreadDocs.length === 1 ? '' : 's') + (notifSnap.size >= 10 ? '+' : ''),
+              // (20.7 adversarial LOW: '+' only when the unread set fills the
+              // whole fetch window — same fix as the sign-in strip)
+              '🏮 ' + unreadDocs.length + ' new lantern ping' + (unreadDocs.length === 1 ? '' : 's') + (unreadDocs.length >= 10 ? '+' : ''),
               'lantern'
             ));
           }

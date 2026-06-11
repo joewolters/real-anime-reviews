@@ -167,6 +167,11 @@
     <input type="file" id="acct-bg-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
     <div class="acct-preview-open">
       <button type="button" id="acct-view-public" class="linky">Open your live public page ↗</button>
+      <!-- gate 20.7 (Blake item 1): the editor hero and the public card render
+           at different widths, so the same crop reads differently. Blake's
+           call: don't change the preview — just say so. Shown while a
+           background is set/staged (account.js syncPreviewBg toggles it). -->
+      <span class="acct-crop-note" id="acct-crop-note" hidden>👁 This hero is the editor's window — <b>Public view</b> (or your live page) shows the background the way everyone actually sees it.</span>
       <!-- gate 20.6 (Blake item 8): the requirements line as branded spec chips,
            not a comma-run of fine print. -->
       <span class="acct-bg-note">

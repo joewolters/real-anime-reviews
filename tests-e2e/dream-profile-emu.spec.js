@@ -29,18 +29,19 @@ test.describe('dream-profile — the sheet, the banner, and the pfp link (emulat
     expect(html).not.toContain('#ffd866');
   });
 
-  test('activity separated by type — the chips drive real collection-group reads', async ({ page }) => {
+  test('activity tabs — Threads + Reviews ONLY (gate 20.7: Comments/Replies left the public card)', async ({ page }) => {
     await page.goto('/index.html?emu=1#profile=prac-mika');
     await expect(page.locator('.profile-acts')).toBeVisible({ timeout: 25000 });
-    // Reviews → her seeded review lands
+    // Blake item 3: "Take out replies and comments on a public display page."
+    await expect(page.locator('.profile-act-chip')).toHaveCount(2);
+    await expect(page.locator('.profile-act-chip[data-act="comments"]')).toHaveCount(0);
+    await expect(page.locator('.profile-act-chip[data-act="replies"]')).toHaveCount(0);
+    // Reviews → her seeded review still drives a real collection-group read
     await page.locator('.profile-act-chip[data-act="reviews"]').click();
     await expect(page.locator('[data-profile-acts] .profile-item').first()).toBeVisible({ timeout: 20000 });
     await expect(page.locator('.profile-act-chip[data-act="reviews"]')).toHaveClass(/is-active/);
-    // Comments → her seeded comments land
-    await page.locator('.profile-act-chip[data-act="comments"]').click();
-    await expect(page.locator('[data-profile-acts] .profile-item').first()).toBeVisible({ timeout: 20000 });
-    // Replies → honest state either way (Mika has none seeded → the empty line, never a dead spinner)
-    await page.locator('.profile-act-chip[data-act="replies"]').click();
+    // Threads → honest state either way (rows or the empty line, never a dead spinner)
+    await page.locator('.profile-act-chip[data-act="threads"]').click();
     await expect(page.locator('[data-profile-acts] .profile-item, [data-profile-acts] .profile-empty').first())
       .toBeVisible({ timeout: 20000 });
   });

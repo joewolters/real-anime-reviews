@@ -267,6 +267,23 @@ test('profile: HOSTILE arbitrary external photoURL is DENIED (M2)', async () => 
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
     { displayName: 'Alice', photoURL: 'https://evil.example.com/track.png' }));
 });
+// gate 20.7 (Blake item 2) — the practice Storage emulator's getDownloadURL
+// origin is allowed so sandbox avatar saves work (the loosening is exactly one
+// origin, host + port pinned). Prod inertness = the client safeAvatar hostname
+// gates + the viewer-loopback target (NOT mixed-content blocking — browsers
+// exempt loopback); every new photoURL render sink must use safeAvatar.
+test('profile: the practice-emulator photoURL origin is ALLOWED (gate 20.7)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', photoURL: 'http://127.0.0.1:9199/v0/b/demo/o/avatars%2Falice%2Fprofile.jpg?alt=media' }));
+});
+test('profile: HOSTILE near-miss localhost origins stay DENIED (gate 20.7)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', photoURL: 'http://localhost:9199/v0/b/x' }));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', photoURL: 'http://127.0.0.1:9999/v0/b/x' }));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', photoURL: 'https://evil.example.com/http://127.0.0.1:9199/x' }));
+});
 
 // ---------------- SUGGESTIONCOUNTS (CF-only writes; gate 20: public GET) ----
 test('suggestionCounts: HOSTILE client write is DENIED', async () => {

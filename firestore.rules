@@ -134,7 +134,18 @@ service cloud.firestore {
         && (!('photoURL' in request.resource.data)
             || request.resource.data.photoURL == null
             || (request.resource.data.photoURL is string
-                && request.resource.data.photoURL.matches('https://(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)/.*')))
+                // gate 20.7 (Blake item 2): the practice Storage emulator's
+                // getDownloadURL origin (http://127.0.0.1:9199) is allowed so
+                // avatar saves work in the sandbox. ⚠️ Prod inertness rests on
+                // TWO legs (NOT on mixed-content blocking — loopback is a
+                // potentially-trustworthy origin and browsers EXEMPT it):
+                // (1) every render sink runs the client hostname gates
+                // (script.js safeAvatar / account.js / lantern.js — https-only
+                // on prod hosts), and (2) the URL targets the VIEWER's own
+                // loopback, never an attacker origin (no beacon). Any NEW
+                // photoURL render sink MUST go through safeAvatar — the gate
+                // class has needed two retrofits already.
+                && request.resource.data.photoURL.matches('(https://(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)|http://127[.]0[.]0[.]1:9199)/.*')))
         && profileCustomFieldsOk();
     }
     // Dream-profile gate — the customization fields. All optional:

@@ -187,6 +187,11 @@ const profBio     = () => document.getElementById('prof-bio');
 let _previewBgUrl = null;
 function syncPreviewBg(host) {
   const bgUrl = profState.bgRemove ? '' : (profState.bgStagedUrl || profState.bgCurrentUrl);
+  // gate 20.7 (Blake item 1): with a background in play, say plainly that the
+  // PUBLIC card is the true render (the editor hero is a different width —
+  // the crop reads wider there; Blake's call: a note, not a geometry change).
+  const cropNote = document.getElementById('acct-crop-note');
+  if (cropNote) cropNote.hidden = !bgUrl;
   if (bgUrl === _previewBgUrl) return;   // unchanged — never touch the live GIF
   _previewBgUrl = bgUrl;
   let wrap = host.querySelector('.acct-preview-bg');
@@ -599,6 +604,11 @@ function freezeIfReduced(img) {
   }, { once: true });
 }
 const VIEWER_AVATAR_RE = /^https:\/\/(firebasestorage\.googleapis\.com|lh3\.googleusercontent\.com)\//;
+// gate 20.7 (Blake item 2): practice-emulator avatar origin, localhost-only
+// (mirrors script.js safeAvatar — keep the three client gates in sync).
+const PRACTICE_AVATAR_OK = (u) =>
+  (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+  && /^http:\/\/127\.0\.0\.1:9199\//.test(String(u || ''));
 async function renderViewerMode(user) {
   const host = document.getElementById('acct-viewer');
   if (!host) return;
@@ -626,7 +636,7 @@ async function renderViewerMode(user) {
   // reads auth) — an auth-name fallback here would present private PII as public.
   const name = esc(String(p.displayName || 'Member').slice(0, 40));
   const initial = esc((p.displayName || '?').toString().trim().charAt(0).toUpperCase() || '?');
-  const photo = (typeof p.photoURL === 'string' && VIEWER_AVATAR_RE.test(p.photoURL)) ? p.photoURL : '';
+  const photo = (typeof p.photoURL === 'string' && (VIEWER_AVATAR_RE.test(p.photoURL) || PRACTICE_AVATAR_OK(p.photoURL))) ? p.photoURL : '';
   const accent = (PROF_ACCENTS.indexOf(p.accent) !== -1) ? p.accent : '';
   const since = p.joinedAt && p.joinedAt.toMillis
     ? `<div class="profile-since">here since ${esc(new Date(p.joinedAt.toMillis()).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }))}</div>` : '';

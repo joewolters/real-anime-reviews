@@ -275,8 +275,12 @@ function renderLanternRow(n) {
   // dream-profile fix: origin-gate the notif avatar too — senderIdentity's
   // users/ fallback photoURL is rules-unvalidated, so a hostile origin could
   // ride a notification into every recipient's lantern (IP beacon).
+  // (gate 20.7: + the practice-emulator origin, localhost-only — mirrors
+  // script.js safeAvatar; keep the three client gates in sync.)
   const safePhoto = (typeof n.fromPhotoURL === 'string'
-    && /^https:\/\/(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)\//.test(n.fromPhotoURL)) ? n.fromPhotoURL : '';
+    && (/^https:\/\/(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)\//.test(n.fromPhotoURL)
+      || ((location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+        && /^http:\/\/127\.0\.0\.1:9199\//.test(n.fromPhotoURL)))) ? n.fromPhotoURL : '';
   const avatar = safePhoto
     ? `<img src="${escapeHtml(safePhoto)}" alt="">`
     : `<span>${escapeHtml(String(name).trim().slice(0,1).toUpperCase() || '?')}</span>`;
