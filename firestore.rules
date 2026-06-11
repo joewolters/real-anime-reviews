@@ -181,10 +181,14 @@ service cloud.firestore {
     // saved-row pattern) — rules can't iterate list entries, so only list+size
     // is enforced here; entries are escaped at render (display-inert).
     function collectionDocOk() {
-      return request.resource.data.keys().hasOnly(['name', 'public', 'items', 'createdAt', 'updatedAt'])
+      return request.resource.data.keys().hasOnly(['name', 'description', 'public', 'items', 'createdAt', 'updatedAt'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 60
+        // description (gate 20) is OPTIONAL — shown under the shelf title.
+        && (!('description' in request.resource.data)
+            || (request.resource.data.description is string
+                && request.resource.data.description.size() <= 200))
         && request.resource.data.public is bool
         && request.resource.data.items is list
         && request.resource.data.items.size() <= 200
@@ -634,11 +638,15 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // SUGGESTION COUNTS — CF-only writes, admin-only reads (visitor-visible
-    // counts would invite brigading a title up the list).
+    // SUGGESTION COUNTS — CF-only writes. gate 20: single-doc GET is public
+    // now (Blake's "👁 N requested" chip on the secondary modal — a demand
+    // signal on the title's OWN page). LIST stays admin-only, which keeps the
+    // original anti-brigading intent: no visitor can enumerate or rank the
+    // request queue, they can only see the count where they already are.
     // =========================================================================
     match /suggestionCounts/{anilistId} {
-      allow get, list: if isAdmin();
+      allow get: if true;
+      allow list: if isAdmin();
       allow create, update, delete: if false;
     }
 

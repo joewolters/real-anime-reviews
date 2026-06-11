@@ -13,6 +13,9 @@
 // backlog), Remove content (admin hard-delete of the target doc), Dismiss (resolve
 // the report). Ban + Remove are gated by the branded confirm modal.
 //
+// gate 20 — a TEXT report whose live target doc carries imageRefs also previews
+// those attached images as thumbs (SDK getDownloadURL only, like gate 14).
+//
 // Author: Code | v1.10.0 gate 4 — admin reports queue.
 
 import { auth, db, functions, storage } from '../firebase.js';
@@ -101,7 +104,8 @@ function renderSkeleton() {
 // ---- Live-content re-fetch (snapshot is reporter-supplied / unverified) -----
 
 // Reads the LIVE doc at targetPath so the admin reviews real current content, not
-// the reporter's (possibly stale/forged) snapshot. Returns { state, html }.
+// the reporter's (possibly stale/forged) snapshot. Returns { state, html } plus,
+// for text docs, the shape-validated imageRefs (≤4) for the gate-20 thumbs.
 async function fetchLive(targetPath) {
   if (!targetPath) return { state: 'none', html: '<em>No target path on this report.</em>' };
   let ref;
@@ -122,8 +126,17 @@ async function fetchLive(targetPath) {
       return bits ? { state: 'live', html: safeHtml(bits) } : { state: 'empty', html: '<em>(a bare profile — no bio/status/tags)</em>' };
     }
     const text = d.text || d.body || d.title || '';
-    if (!text) return { state: 'empty', html: '<em>(no text content)</em>' };
-    return { state: 'live', html: safeHtml(text) };
+    // gate 20 — carry the doc's ATTACHED image pointers out so TEXT reports can
+    // preview them (a reported comment's images were invisible unless the image
+    // itself was reported). Shape-validate each ref here (same charset/segment
+    // caps as the gate-14 imagePath check) and honor the rules' ≤4 cap; the
+    // queue resolves them via SDK getDownloadURL ONLY — never doc-built URLs.
+    const imageRefs = Array.isArray(d.imageRefs)
+      ? d.imageRefs.filter((p) => typeof p === 'string'
+          && /^uploads\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,100}\/[A-Za-z0-9_-]{1,120}$/.test(p)).slice(0, 4)
+      : [];
+    if (!text) return { state: 'empty', html: '<em>(no text content)</em>', imageRefs };
+    return { state: 'live', html: safeHtml(text), imageRefs };
   } catch (_e) {
     return { state: 'error', html: '<em>Couldn\'t load live content.</em>' };
   }
@@ -227,6 +240,44 @@ async function renderQueue(rows) {
       } catch (_e) {
         const gone = document.createElement('em');
         gone.textContent = ' (the image object is already gone from Storage)';
+        content.appendChild(gone);
+      }
+    }
+    // gate 20 — a TEXT report whose live target doc carries imageRefs previews
+    // those ATTACHED images as small thumbs under the live text (Blake sees a
+    // reported comment's images without needing an image-specific report).
+    // Disjoint from the gate-14 branch above ('image'/'profile' are excluded
+    // here), same safe resolution: shape-validated refs (in fetchLive) → SDK
+    // getDownloadURL only. Thumbs lazy-load; click opens the full image in a
+    // new tab. A dead pointer is skipped; all-dead shows a quiet note. If the
+    // doc itself is unreachable/deleted, fetchLive already rendered the quiet
+    // "content no longer exists" note above and returns no refs.
+    const TEXT_TYPES = ['comment', 'reply', 'review', 'thread', 'forum', 'post'];
+    if (content && TEXT_TYPES.indexOf(g.targetType) !== -1 && res.imageRefs && res.imageRefs.length) {
+      const urls = await Promise.all(res.imageRefs.slice(0, 4).map((p) =>
+        getDownloadURL(storRef(storage, p)).catch(() => null)));
+      const wrap = document.createElement('div');
+      wrap.className = 'report-attached-thumbs';
+      urls.forEach((url) => {
+        if (!url) return;
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener';
+        a.className = 'attached-thumb';
+        a.title = 'Open full image in a new tab';
+        const img = document.createElement('img');
+        img.src = url; img.alt = 'Attached image'; img.loading = 'lazy';
+        a.appendChild(img);
+        wrap.appendChild(a);
+      });
+      if (wrap.children.length) {
+        const label = document.createElement('span');
+        label.className = 'attached-thumbs-label';
+        label.textContent = 'Attached images';
+        content.appendChild(label);
+        content.appendChild(wrap);
+      } else {
+        const gone = document.createElement('em');
+        gone.textContent = ' (the attached image objects are already gone from Storage)';
         content.appendChild(gone);
       }
     }

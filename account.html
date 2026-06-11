@@ -158,8 +158,15 @@
   <div id="acct-edit-mode">
     <!-- the HERO preview (account.js renders; bg/accent/tags compose live) -->
     <div class="acct-preview acct-preview--hero" id="acct-preview" aria-label="Profile preview"></div>
+    <!-- gate 20 (item 2): the hover pills on the hero are the ONE way to change
+         avatar/background — the old form rows are gone; these hidden nodes are
+         the staging buffers + file inputs the pills drive. -->
+    <button id="avatar-pick" class="avatar-preview" hidden aria-hidden="true" tabindex="-1"></button>
+    <input type="file" id="avatar-file" accept="image/*" hidden />
+    <input type="file" id="acct-bg-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
     <div class="acct-preview-open">
       <button type="button" id="acct-view-public" class="linky">Open your live public page ↗</button>
+      <span class="acct-bg-note">Backgrounds: up to 5 MB · JPEG/PNG/WebP/GIF · email-verified accounts · they follow the community rules and can be reported.</span>
     </div>
 
     <div class="card-body acct-editor-grid">
@@ -168,12 +175,7 @@
         <span class="fld-pill">✦ Display name</span>
         <input id="prof-name" type="text" maxlength="40" />
       </div>
-      <!-- Avatar upload -->
-      <div class="form-row">
-        <span class="fld-pill">◉ Avatar</span>
-        <button type="button" id="avatar-pick" class="avatar-preview" aria-label="Upload avatar"></button>
-        <input type="file" id="avatar-file" accept="image/*" hidden />
-      </div>
+      <!-- (gate 20 item 2: the Avatar row is gone — hover the hero circle) -->
       <!-- Status line -->
       <div class="form-row">
         <span class="fld-pill">❝ Status</span>
@@ -203,19 +205,7 @@
           </div>
         </div>
       </div>
-      <!-- Profile background -->
-      <div class="form-row form-row--full">
-        <span class="fld-pill">🌌 Background</span>
-        <span class="fld-hint">image or GIF — your sky</span>
-        <!-- round 4 (item 4): the picker rides the previews — hover the hero (or
-             this thumb) to change; the old "Choose" button row is gone -->
-        <div class="acct-bg-row">
-          <button type="button" class="acct-bg-thumb" id="acct-bg-thumb" aria-label="Change background">none yet</button>
-          <button type="button" id="acct-bg-remove" class="linky" hidden>Remove</button>
-          <input type="file" id="acct-bg-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
-          <span class="acct-bg-note">Up to 5 MB · JPEG/PNG/WebP/GIF · email-verified accounts · backgrounds follow the community rules and can be reported.</span>
-        </div>
-      </div>
+      <!-- (gate 20 item 2: the Background row is gone — hover the hero, top-right) -->
       <!-- Featured review -->
       <div class="form-row form-row--full">
         <span class="fld-pill">📌 Pinned review</span>
@@ -244,7 +234,7 @@
   <header class="panel-head">
     <div class="panel-head-text">
       <h3 class="acct-kicker">Account <span class="jp-mini">管理</span></h3>
-      <p class="acct-section-sub">The keys to your door — email, password, session.</p>
+      <p class="acct-section-sub">Manage your email, password, and sign-in.</p>
     </div>
   </header>
 
@@ -287,7 +277,7 @@
   <header class="panel-head">
     <div class="panel-head-text">
       <h3 class="acct-kicker">Watchlist <span class="jp-mini">観る</span></h3>
-      <p class="acct-section-sub">Everything you're meaning to watch — no judgment on the backlog.</p>
+      <p class="acct-section-sub">Anime you plan to watch — saved and sorted your way.</p>
     </div>
     <div class="panel-head-actions">
       <div class="saved-viewmode" data-viewmode="watchlist" role="group" aria-label="View mode">
@@ -327,7 +317,7 @@
   <header class="panel-head">
     <div class="panel-head-text">
       <h3 class="acct-kicker">Favorites <span class="jp-mini">推し</span></h3>
-      <p class="acct-section-sub">The ones that stayed with you after the credits rolled.</p>
+      <p class="acct-section-sub">Your favorite anime, all in one place.</p>
     </div>
     <div class="panel-head-actions">
       <div class="saved-viewmode" data-viewmode="favorites" role="group" aria-label="View mode">
@@ -369,7 +359,7 @@
   <header class="panel-head">
     <div class="panel-head-text">
       <h3 class="acct-kicker">Personal Collections <span class="jp-mini">蔵書</span></h3>
-      <p class="acct-section-sub">Your own shelves — name them, fill them, share the ones you're proud of.</p>
+      <p class="acct-section-sub">Make your own lists — keep them private or show them on your profile.</p>
     </div>
     <div class="panel-head-actions">
       <button type="button" id="col-new" class="inline-header-btn small">＋ New collection</button>
@@ -382,7 +372,8 @@
     <div id="col-visibility-host" aria-live="off"></div>
     <button type="button" id="col-create" class="inline-header-btn small">Create</button>
     <button type="button" id="col-cancel" class="linky">Cancel</button>
-    <p class="col-note">Public shelves appear on your profile — collection names follow the community rules.</p>
+    <textarea id="col-desc" maxlength="200" rows="2" placeholder="Optional description — what's this shelf about?"></textarea>
+    <p class="col-note">Public shelves appear on your profile — names and descriptions follow the community rules.</p>
   </div>
 
   <div class="tab-scroll">
@@ -396,7 +387,7 @@
   <header class="panel-head">
     <div class="panel-head-text">
       <h3 class="acct-kicker">My Activity <span class="jp-mini">足跡</span></h3>
-      <p class="acct-section-sub">Every mark you've left in the room — takes, threads, replies.</p>
+      <p class="acct-section-sub">Your comments, reviews, threads, and replies — all in one feed.</p>
     </div>
   </header>
 
@@ -416,15 +407,21 @@
           <header class="panel-head">
             <div class="panel-head-text">
               <h3 class="acct-kicker">Inbox <span class="jp-mini">受信箱</span></h3>
-              <p class="acct-section-sub">Letters in and out — I read every single one myself.</p>
+              <p class="acct-section-sub">Your messages — send me one anytime, I read them all.</p>
             </div>
           </header>
 
+          <!-- gate 20 (item 8, the 4th ask) — the Message-Blake surface goes
+               PREMIUM: a real hero card with the swaying lantern, branded
+               primary actions, a chip back, a finished composer. -->
           <div id="inbox-home">
             <div class="inbox-blake-card">
-              <div class="inbox-blake-head">🏮 <b>Message Blake</b></div>
-              <p class="muted">Got a question, a request, or just a take you want to land directly? This goes straight to me — I read everything myself.</p>
-              <button type="button" id="inbox-message-blake" class="btn">Message Blake</button>
+              <span class="inbox-blake-lantern" aria-hidden="true">🏮</span>
+              <div class="inbox-blake-body">
+                <div class="inbox-blake-head">Message Blake <span class="jp-mini">便り</span></div>
+                <p class="inbox-blake-sub">A question, a request, or a take you want to land directly? It goes straight to me — I read everything myself.</p>
+                <button type="button" id="inbox-message-blake" class="inbox-blake-btn">✉ Write to Blake</button>
+              </div>
             </div>
             <ul id="inbox-list" class="inbox-list" aria-label="Conversations"></ul>
             <div class="inbox-people-locked">
@@ -434,11 +431,14 @@
           </div>
 
           <div id="inbox-thread" hidden>
-            <button type="button" id="inbox-back" class="action-btn">← Inbox</button>
+            <div class="inbox-thread-bar">
+              <button type="button" id="inbox-back" class="inbox-back-chip">← Inbox</button>
+              <span class="inbox-thread-title">🏮 Writing to <b>Blake</b> <span class="jp-mini">便り</span></span>
+            </div>
             <div id="inbox-messages" class="inbox-messages" aria-live="polite"></div>
             <div class="inbox-composer">
               <textarea id="inbox-input" maxlength="2000" placeholder="Write to Blake…"></textarea>
-              <button type="button" id="inbox-send" class="btn" disabled>Send</button>
+              <button type="button" id="inbox-send" class="inbox-send-btn" disabled>Send ➤</button>
             </div>
           </div>
         </article>

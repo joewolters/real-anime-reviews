@@ -427,26 +427,16 @@ function renderAccentPicker() {
 // the OLD object once bgRef changes, so no client-side delete dance).
 const PROF_BG_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 function renderBgThumb() {
-  const thumb = document.getElementById('acct-bg-thumb');
+  // gate 20 (item 2): the form-row thumb is gone — this now keeps the hero's
+  // Remove-background pill in sync with whether a background exists.
   const removeBtn = document.getElementById('acct-bg-remove');
-  if (!thumb) return;
+  if (!removeBtn) return;
   const url = profState.bgRemove ? '' : (profState.bgStagedUrl || profState.bgCurrentUrl);
-  thumb.innerHTML = '';
-  if (url) { const img = document.createElement('img'); img.alt = ''; img.src = url; thumb.appendChild(img); }
-  else thumb.textContent = 'none yet';
-  if (removeBtn) removeBtn.hidden = !url;
+  removeBtn.hidden = !url;
 }
 function initBgPicker() {
-  const thumb = document.getElementById('acct-bg-thumb');
   const file = document.getElementById('acct-bg-file');
-  const removeBtn = document.getElementById('acct-bg-remove');
-  if (!thumb || !file) return;
-  thumb.addEventListener('click', () => file.click());   // round 4 — the thumb IS the picker now
-  removeBtn?.addEventListener('click', () => {
-    profState.bgRemove = true; profState.bgStagedBlob = null; profState.bgStagedMime = '';
-    if (profState.bgStagedUrl) { try { URL.revokeObjectURL(profState.bgStagedUrl); } catch (_) {} profState.bgStagedUrl = ''; }
-    renderBgThumb(); renderProfPreview();
-  });
+  if (!file) return;
   file.addEventListener('change', async (e) => {
     const f = e.target.files?.[0];
     file.value = '';
@@ -486,6 +476,20 @@ function initHeroPickers() {
   bgBtn.textContent = '🌌 Change background';
   host.appendChild(bgBtn);
   bgBtn.addEventListener('click', () => document.getElementById('acct-bg-file')?.click());
+  // gate 20 (item 2): with the form row gone, Remove lives on the hero too —
+  // a second pill under Change, visible only while a background exists.
+  const rmBtn = document.createElement('button');
+  rmBtn.type = 'button';
+  rmBtn.id = 'acct-bg-remove';
+  rmBtn.className = 'acct-hover-pill acct-hover-bg-remove';
+  rmBtn.textContent = '✕ Remove background';
+  rmBtn.hidden = true;
+  host.appendChild(rmBtn);
+  rmBtn.addEventListener('click', () => {
+    profState.bgRemove = true; profState.bgStagedBlob = null; profState.bgStagedMime = '';
+    if (profState.bgStagedUrl) { try { URL.revokeObjectURL(profState.bgStagedUrl); } catch (_) {} profState.bgStagedUrl = ''; }
+    renderBgThumb(); renderProfPreview();
+  });
   host.addEventListener('click', (e) => {
     if (e.target.closest('.acct-hover-avatar')) avatarFile?.click();
   });
@@ -779,6 +783,19 @@ function renderActivity(items) {
   activityEmptyEl.style.display = 'none';
 
   const KIND_GLYPH = { comment: '💬', reply: '↩', thread: '📜', review: '✍' };   // no gold stars — the heart rule
+
+  // gate 20 (Blake item 8) — snippets read like sentences, not source: image
+  // tokens become 🖼, markdown markers are stripped. Render stays textContent
+  // (plain text in, plain text out — no new HTML sink).
+  function activityPlain(s) {
+    let t = String(s || '');
+    t = t.replace(/\[img:\d+\]/gi, '🖼');
+    t = t.replace(/\|\|/g, '');                         // spoiler pipes (your own feed shows your own text)
+    t = t.replace(/(\*\*|__|\*|_|~~)([^*_~]+)\1/g, '$2');   // **bold** *italic* ~~strike~~
+    t = t.replace(/^#{1,4}\s+/gm, '');
+    t = t.replace(/\s+/g, ' ').trim();
+    return t;
+  }
   items.forEach((it) => {
     const li = document.createElement('li');
     li.className = 'saved-item activity-item';
@@ -820,7 +837,7 @@ function renderActivity(items) {
 
     const desc = document.createElement('div');
     desc.className = 'activity-desc';
-    desc.textContent = it.desc || '';
+    desc.textContent = activityPlain(it.desc);
 
     const dateEl = document.createElement('span');
     dateEl.className = 'saved-date';
@@ -1248,23 +1265,29 @@ function colId() { return Date.now().toString(36) + Math.random().toString(36).s
 
 // candidates for the add-picker: Blake's catalog + the user's saved entries
 function colCandidates() {
+  // gate 20 (item 6): the user's OWN saves lead the list (Blake: "should also
+  // include anime that they've already added to their favorites or watchlist
+  // not just my reviewed list"); the 44 follow.
   const out = new Map();
-  const arr = (window.__ANIME_DATA__ && Array.isArray(window.__ANIME_DATA__)) ? window.__ANIME_DATA__ : [];
-  arr.forEach((a) => {
-    const t = a?.Title; if (!t) return;
-    const id = slugFromTitle(t); if (!id) return;
-    out.set(id, { animeId: id, title: String(t).slice(0, 120), coverImage: a.image ? 'assets/' + String(a.image) : '' });
-  });
   ['watchlist', 'favorites'].forEach((kind) => {
     (savedView[kind].items || []).forEach((it) => {
       if (!out.has(it.animeId)) out.set(it.animeId, {
         animeId: String(it.animeId).slice(0, 130),
         title: String(it.title || it.animeId).slice(0, 120),
         coverImage: String(it.coverImage || '').slice(0, 400),
+        src: 'saved',
       });
     });
   });
-  return Array.from(out.values()).sort((a, b) => a.title.localeCompare(b.title));
+  const arr = (window.__ANIME_DATA__ && Array.isArray(window.__ANIME_DATA__)) ? window.__ANIME_DATA__ : [];
+  arr.forEach((a) => {
+    const t = a?.Title; if (!t) return;
+    const id = slugFromTitle(t); if (!id) return;
+    if (!out.has(id)) out.set(id, { animeId: id, title: String(t).slice(0, 120), coverImage: a.image ? 'assets/' + String(a.image) : '', src: 'catalog' });
+  });
+  const rows = Array.from(out.values());
+  rows.sort((a, b) => (a.src === b.src ? a.title.localeCompare(b.title) : (a.src === 'saved' ? -1 : 1)));
+  return rows;
 }
 
 async function colWrite(uid, id, data) {
@@ -1272,7 +1295,9 @@ async function colWrite(uid, id, data) {
     { ...data, updatedAt: serverTimestamp() }, { merge: true });
 }
 
-// the add-picker — a small branded overlay: search, click to add
+// the add-picker — a branded overlay: your saves + the 44 up front, and a LIVE
+// wider-world search as you type (gate 20 item 6 — the Discover search infra,
+// debounced + abortable; no provider names in the copy).
 function openColAdder(uid, col) {
   const existing = new Set((col.items || []).map((x) => x.animeId));
   const overlay = document.createElement('div');
@@ -1280,45 +1305,94 @@ function openColAdder(uid, col) {
   overlay.innerHTML = `<div class="col-adder" role="dialog" aria-modal="true" aria-label="Add anime to ${esc(col.name)}">
       <div class="col-adder-head"><span class="fld-pill">＋ Add to “${esc(String(col.name).slice(0, 40))}”</span>
         <button type="button" class="col-adder-close" aria-label="Close">×</button></div>
-      <input type="search" class="col-adder-search" placeholder="Search your anime…" aria-label="Search anime" />
+      <input type="search" class="col-adder-search" placeholder="Search anime — yours, or anything out there…" aria-label="Search anime" />
       <div class="col-adder-list" role="list"></div>
     </div>`;
   document.body.appendChild(overlay);
   const listEl = overlay.querySelector('.col-adder-list');
   const searchEl = overlay.querySelector('.col-adder-search');
   const all = colCandidates();
+  let extRows = [];        // live wider-world results for the current needle
+  let extAbort = null;
+  let extTimer = null;
+  let extLoading = false;
+
+  const rowFor = (c) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'col-adder-row';
+    const cov = colSafeCover(c.coverImage);
+    b.innerHTML = (cov ? `<img class="saved-cover" src="${esc(cov)}" alt="" loading="lazy">`
+      : '<span class="saved-cover saved-cover--ph" aria-hidden="true"></span>')
+      + `<span class="saved-title">${esc(c.title)}</span>`;
+    b.addEventListener('click', async () => {
+      // adversarial MED: at the 200-item rules cap, concat+slice dropped the
+      // NEW item and the write "succeeded" — silent false-success. Say so.
+      if ((col.items || []).length >= 200) { alert('This shelf is full — 200 titles max. Make another shelf!'); return; }
+      b.disabled = true;
+      try {
+        const items = (col.items || []).concat([{ animeId: c.animeId, title: c.title, coverImage: c.coverImage }]);
+        await colWrite(uid, col.id, { items });
+        existing.add(c.animeId); col.items = items;
+        paint(searchEl.value);
+      } catch (e) { alert('Could not add: ' + (e.message || e)); b.disabled = false; }
+    });
+    return b;
+  };
+  const group = (label, jp) => {
+    const h = document.createElement('div');
+    h.className = 'col-adder-group';
+    h.innerHTML = `${esc(label)} <span class="jp-mini">${esc(jp)}</span>`;
+    return h;
+  };
   const paint = (q) => {
     const needle = String(q || '').toLowerCase();
     listEl.innerHTML = '';
-    all.filter((c) => !existing.has(c.animeId) && (!needle || c.title.toLowerCase().includes(needle)))
-      .slice(0, 60)
-      .forEach((c) => {
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'col-adder-row';
-        const cov = colSafeCover(c.coverImage);
-        b.innerHTML = (cov ? `<img class="saved-cover" src="${esc(cov)}" alt="" loading="lazy">`
-          : '<span class="saved-cover saved-cover--ph" aria-hidden="true"></span>')
-          + `<span class="saved-title">${esc(c.title)}</span>`;
-        b.addEventListener('click', async () => {
-          // adversarial MED: at the 200-item rules cap, concat+slice dropped
-          // the NEW item and the write "succeeded" — silent false-success.
-          // Say so instead.
-          if ((col.items || []).length >= 200) { alert('This shelf is full — 200 titles max. Make another shelf!'); return; }
-          b.disabled = true;
-          try {
-            const items = (col.items || []).concat([c]);
-            await colWrite(uid, col.id, { items });
-            existing.add(c.animeId); col.items = items;
-            paint(searchEl.value);
-          } catch (e) { alert('Could not add: ' + (e.message || e)); b.disabled = false; }
-        });
-        listEl.appendChild(b);
-      });
-    if (!listEl.children.length) listEl.innerHTML = '<p class="muted">Nothing to add — save some anime first.</p>';
+    const locals = all.filter((c) => !existing.has(c.animeId) && (!needle || c.title.toLowerCase().includes(needle))).slice(0, 60);
+    if (locals.length) {
+      listEl.appendChild(group('Your lists & the 44', '棚'));
+      locals.forEach((c) => listEl.appendChild(rowFor(c)));
+    }
+    const ext = extRows.filter((c) => !existing.has(c.animeId) && !all.some((l) => l.animeId === c.animeId));
+    if (needle.length >= 3 && (ext.length || extLoading)) {
+      listEl.appendChild(group('From the wider world', '検索'));
+      if (extLoading && !ext.length) {
+        const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Searching…';
+        listEl.appendChild(p);
+      }
+      ext.forEach((c) => listEl.appendChild(rowFor(c)));
+    }
+    if (!listEl.children.length) listEl.innerHTML = '<p class="muted">No matches — try a different title.</p>';
+  };
+  const extSearch = (q) => {
+    const term = String(q || '').trim();
+    clearTimeout(extTimer);
+    if (extAbort) { try { extAbort.abort(); } catch (_) {} extAbort = null; }
+    if (term.length < 3 || !window.franchiseFetch?.searchMediaList) { extRows = []; extLoading = false; return; }
+    extLoading = true;
+    extRows = [];   // a new needle clears the previous term's rows immediately
+    extTimer = setTimeout(async () => {
+      extAbort = new AbortController();
+      const got = await window.franchiseFetch.searchMediaList(term, 12, extAbort.signal);
+      // a stale response must not clobber a newer query's rows (case-folded
+      // BOTH sides — adversarial LOW)
+      if (searchEl.value.trim().toLowerCase() !== term.trim().toLowerCase()) return;
+      extRows = (got || []).map((m) => ({
+        animeId: 'al:' + m.id,
+        title: String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 120),
+        coverImage: String(m.coverImage?.large || '').slice(0, 400),
+      }));
+      extLoading = false;
+      paint(searchEl.value);
+    }, 350);
   };
   paint('');
-  searchEl.addEventListener('input', () => paint(searchEl.value));
-  const close = () => { try { overlay.remove(); } catch (_) {} document.removeEventListener('keydown', onKey, true); };
+  searchEl.addEventListener('input', () => { extSearch(searchEl.value); paint(searchEl.value); });
+  const close = () => {
+    clearTimeout(extTimer);
+    if (extAbort) { try { extAbort.abort(); } catch (_) {} }
+    try { overlay.remove(); } catch (_) {}
+    document.removeEventListener('keydown', onKey, true);
+  };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('.col-adder-close')) close(); });
@@ -1342,9 +1416,11 @@ function renderCollections(uid, cols) {
         <span class="col-count">${(col.items || []).length} title${(col.items || []).length === 1 ? '' : 's'}</span>
         <span class="col-card-tools">
           <button type="button" class="linky col-rename">Rename</button>
+          <button type="button" class="linky col-describe">${col.description ? 'Edit description' : 'Add description'}</button>
           <button type="button" class="linky col-del">Delete</button>
         </span>
       </div>
+      ${col.description ? `<p class="col-card-desc">${esc(col.description)}</p>` : ''}
       <div class="col-items"></div>
       <button type="button" class="col-add inline-header-btn small">＋ Add anime</button>`;
     const itemsEl = card.querySelector('.col-items');
@@ -1384,17 +1460,53 @@ function renderCollections(uid, cols) {
       }
       try { await deleteDoc(doc(db, 'users', uid, 'collections', col.id)); } catch (e) { alert('Could not delete: ' + (e.message || e)); }
     });
+    // gate 20 (item 7) — the description editor, same inline shape as rename
+    card.querySelector('.col-describe').addEventListener('click', () => {
+      if (card.querySelector('.col-desc-input')) return;
+      const input = document.createElement('textarea');
+      input.maxLength = 200; input.rows = 2; input.className = 'col-desc-input';
+      input.value = col.description || '';
+      input.placeholder = "What's this shelf about?";
+      const anchor = card.querySelector('.col-card-desc');
+      if (anchor) anchor.replaceWith(input);
+      else card.querySelector('.col-card-head').insertAdjacentElement('afterend', input);
+      input.focus();
+      // gate-20 adversarial MED (4 lenses): the input must REMOVE ITSELF on
+      // commit — the snapshot repaint defers while any editor is open, so a
+      // lingering input deadlocked the panel (and blur double-committed).
+      const commit = async () => {
+        if (input.dataset.done) return;
+        input.dataset.done = '1';
+        const v = input.value.trim().slice(0, 200);
+        try { input.remove(); } catch (_) {}
+        if (v !== (col.description || '')) {
+          try { await colWrite(uid, col.id, { description: v || deleteField() }); }
+          catch (e) { alert('Could not save the description: ' + (e.message || e)); renderCollections(uid, cols); }
+        } else renderCollections(uid, cols);
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { input.dataset.done = '1'; renderCollections(uid, cols); }
+      });
+      input.addEventListener('blur', commit);
+    });
     card.querySelector('.col-rename').addEventListener('click', () => {
       const nameEl = card.querySelector('.col-card-name');
       const input = document.createElement('input');
       input.type = 'text'; input.maxLength = 60; input.value = col.name || ''; input.className = 'col-rename-input';
       nameEl.replaceWith(input); input.focus(); input.select();
       const commit = async () => {
+        if (input.dataset.done) return;   // same deadlock class as the description editor
+        input.dataset.done = '1';
         const v = input.value.trim().slice(0, 60);
-        if (v && v !== col.name) { try { await colWrite(uid, col.id, { name: v }); } catch (e) { alert('Rename failed: ' + (e.message || e)); } }
+        try { input.remove(); } catch (_) {}
+        if (v && v !== col.name) { try { await colWrite(uid, col.id, { name: v }); } catch (e) { alert('Rename failed: ' + (e.message || e)); renderCollections(uid, cols); } }
         else renderCollections(uid, cols);
       };
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderCollections(uid, cols); });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') { input.dataset.done = '1'; renderCollections(uid, cols); }
+      });
       input.addEventListener('blur', commit);
     });
     host.appendChild(card);
@@ -1425,15 +1537,19 @@ function ensureCollections() {
       const name = (nameEl.value || '').trim().slice(0, 60);
       if (!name) { nameEl.focus(); return; }
       const wantPub = visDd && visDd.value === 'pub';
+      const descEl = document.getElementById('col-desc');
+      const desc = (descEl?.value || '').trim().slice(0, 200);
       try {
         if (wantPub) {
           const res = await ensureConsent(auth.currentUser, db, functions, { adminUid: RAR_ADMIN_UID });
           if (res !== 'ok') return;
         }
-        await setDoc(doc(db, 'users', u.uid, 'collections', colId()), {
+        const data = {
           name, public: !!wantPub, items: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-        });
-        nameEl.value = ''; composer.hidden = true;
+        };
+        if (desc) data.description = desc;   // optional — gate 20 item 7
+        await setDoc(doc(db, 'users', u.uid, 'collections', colId()), data);
+        nameEl.value = ''; if (descEl) descEl.value = ''; composer.hidden = true;
       } catch (e) { alert('Could not create: ' + (e.message || e)); }
     });
     nameEl?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('col-create')?.click(); });
@@ -1443,12 +1559,12 @@ function ensureCollections() {
     query(collection(db, 'users', u.uid, 'collections'), orderBy('updatedAt', 'desc')),
     (snap) => {
       // adversarial MED (the comment-list rebuild class): a snapshot landing
-      // mid-RENAME would innerHTML the open input away and eat the typing.
-      // Defer — the rename's own commit writes, which triggers the next
-      // snapshot and repaints everything anyway.
-      if (document.querySelector('.col-rename-input')) return;
+      // mid-RENAME (or mid-description, gate 20) would innerHTML the open
+      // input away and eat the typing. Defer — the commit's own write triggers
+      // the next snapshot and repaints everything anyway.
+      if (document.querySelector('.col-rename-input, .col-desc-input')) return;
       const cols = [];
-      snap.forEach((d) => { const v = d.data() || {}; cols.push({ id: d.id, name: v.name, public: v.public, items: Array.isArray(v.items) ? v.items : [] }); });
+      snap.forEach((d) => { const v = d.data() || {}; cols.push({ id: d.id, name: v.name, public: v.public, description: typeof v.description === 'string' ? v.description : '', items: Array.isArray(v.items) ? v.items : [] }); });
       renderCollections(u.uid, cols);
     },
     (err) => console.error('Collections failed:', err)
@@ -1658,7 +1774,12 @@ avatarFile?.addEventListener('change', async (e) => {
 // Sign out (both spots)
 async function doSignOut() {
   try { await signOut(auth); }
-  finally { location.href = 'index.html'; }
+  finally {
+    // gate 20 (Blake item 1) — sign-out is a fresh arrival: let the door greet
+    // again (it's once-per-session; an in-tab sign-out otherwise skipped it).
+    try { sessionStorage.removeItem('rar:welcomed'); } catch (_) {}
+    location.href = 'index.html';
+  }
 }
 signoutA?.addEventListener('click', doSignOut);
 
@@ -1925,7 +2046,10 @@ function initInbox(user) {
         const fromBlake = m.senderUid === RAR_ADMIN_UID;
         rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}${fromBlake ? ' is-blake' : ''}">${escText(m.text || '')}</div>`);
       });
-      msgsEl.innerHTML = rows.length ? rows.join('') : '<p class="muted">Say hello — this goes straight to Blake.</p>';
+      msgsEl.innerHTML = rows.length ? rows.join('')
+        : '<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">🏮</span>'
+          + '<p>Say hello — this goes straight to Blake.</p>'
+          + '<p class="inbox-empty-sub">He reads every letter himself.</p></div>';
       msgsEl.scrollTop = msgsEl.scrollHeight;
       // read receipt (rules-legal: reads/{uid} is owner-writable for participants)
       setDoc(doc(db, 'conversations', convId, 'reads', user.uid), { lastReadAt: serverTimestamp() }, { merge: true })

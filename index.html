@@ -668,12 +668,14 @@
 </div>
 
 
+  <!-- gate 20 (cherry) — the footer joins the veil era: kicker vocabulary +
+       premium panels + scroll-reveal. Blake's copy untouched. -->
   <footer>
   <div class="footer-wrap">
 
     <!-- About / Contact -->
-    <div class="footer-box">
-      <h3 class="footer-heading">About Me:</h3>
+    <div class="footer-box reveal">
+      <h3 class="footer-heading"><span class="footer-kicker">ABOUT ME <span class="jp-mini">自己紹介</span></span></h3>
       <p class="footer-text">
         Hey people I'm Blake and this has been a pet project of mine for a couple months now and I'm super happy that it's finally out. 
         This orignally started off as a place where I would "just leave my reviews" for my friends/family to look at so they know which 
@@ -681,7 +683,7 @@
         wrong feel free to reach out to me via Instagram. I plan to continue updating this little site and I hope to see y'all around. 
       </p>
 
-      <h3 class="footer-heading">Contact Me:</h3>
+      <h3 class="footer-heading"><span class="footer-kicker">CONTACT ME <span class="jp-mini">連絡</span></span></h3>
       <p>
         <a href="https://www.instagram.com/wolters.blake" target="_blank" rel="noopener noreferrer" class="instagram-link">
           <img src="assets/instagram-icon.png" class="instagram-icon" alt="Instagram">Instagram
@@ -690,7 +692,7 @@
     </div>
 
     <!-- Credits -->
-    <div class="credit-box" aria-label="Credits">
+    <div class="credit-box reveal" aria-label="Credits">
       <div class="credit-head">
         <span class="credit-dot" aria-hidden="true"></span>
         <div class="credit-title">
@@ -736,11 +738,20 @@
         <span class="welcome-kicker">ようこそ<span class="welcome-kicker-en">WELCOME</span></span>
         <h2 class="welcome-wordmark">Real Anime Reviews</h2>
         <p class="welcome-tagline">A late-night anime den &mdash; one person's honest takes, ranked, reviewed, and watched in full.</p>
-        <button type="button" id="welcome-enter" class="welcome-enter">
-          Enter<span class="welcome-enter-arrow" aria-hidden="true">&#9656;</span>
-        </button>
+        <div class="welcome-actions">
+          <button type="button" id="welcome-enter" class="welcome-enter">
+            Enter<span class="welcome-enter-arrow" aria-hidden="true">&#9656;</span>
+          </button>
+          <!-- gate 20 (cherry) — roll the dice straight from the door -->
+          <button type="button" id="welcome-surprise" class="welcome-surprise" title="Open one of Blake's 44 at random">🎲 Surprise me</button>
+        </div>
       </div>
     </div>
+    <!-- gate 20 — the catch-up: returning users get deep-link buttons for what
+         moved while they were away (JS fills; hidden when quiet). A bottom
+         strip OUTSIDE the card — late-arriving buttons must never re-center
+         the card under the cursor (adversarial MED). -->
+    <div id="welcome-catchup" class="welcome-catchup" hidden></div>
   </div>
 
 

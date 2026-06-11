@@ -60,6 +60,10 @@ const NOTIF_TYPE_META = {
   // dream-profile — the heart carve-out ping. Deterministic doc id (pl_<liker>)
   // server-side, so a like-unlike-like cycle re-lights ONE row, never spams.
   profile_like:        { glyph: '♥', label: 'Profile',     verb: 'liked your profile' },
+  // gate 20 — the gold-flip: Blake reviewed something you requested. Blake-
+  // origin (fromUid = ADMIN), so the row wears his gold; lands on the title's
+  // secondary modal via targetPath secondary/<anilistId>.
+  request_done:        { glyph: '✍', label: 'From Blake',  verb: 'reviewed it — you asked for this one' },
 };
 
 async function cleanupOldNotifications(uid, snapDocs) {
@@ -230,6 +234,8 @@ function parseNotifTarget(targetPath) {
   const mp = /^profiles\/([A-Za-z0-9_-]{1,128})$/.exec(path);   // dream-profile — profile_like
   if (mp) return { kind: 'profile', uid: mp[1] };
   if (/^(forum|conversations)\//.test(path)) return { kind: 'hash', path };
+  const ms = /^secondary\/(\d{1,10})$/.exec(path);   // gate 20 — request_done lands on the deep-dive
+  if (ms) return { kind: 'secondary', id: ms[1] };
   return { kind: 'none' };
 }
 
@@ -242,6 +248,7 @@ export function notifHref(targetPath, animeId) {
   if (t.kind === 'comment' || t.kind === 'review') return 'index.html#notif=' + encodeURIComponent(targetPath);
   if (t.kind === 'hash') return 'index.html#' + t.path;
   if (t.kind === 'profile') return 'index.html#profile=' + encodeURIComponent(t.uid);   // dream-profile
+  if (t.kind === 'secondary') return 'index.html#secondary=' + encodeURIComponent(t.id);   // gate 20 — request_done
   if (animeId) return 'index.html#open=' + encodeURIComponent(animeId);
   return 'index.html';
 }
@@ -320,7 +327,9 @@ function renderLanternRollup(votes, expanded) {
 
 // Compact per-type mute control strip.
 function renderLanternMutes() {
-  const types = ['reply', 'dm', 'comment_vote', 'profile_like', 'new_season', 'suggestion_accepted'];
+  // gate 20: request_done joined — the CF checks the mute server-side, so the
+  // chip must exist client-side or that check is dead letter.
+  const types = ['reply', 'dm', 'comment_vote', 'profile_like', 'new_season', 'suggestion_accepted', 'request_done'];
   const chips = types.map((t) => {
     const meta = NOTIF_TYPE_META[t] || {};
     const off = !!notifMuted[t];

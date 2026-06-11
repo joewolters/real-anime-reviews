@@ -28,8 +28,9 @@
 
 const { setGlobalOptions } = require('firebase-functions');
 const { onRequest, onCall, HttpsError } = require('firebase-functions/https');
-const { onDocumentWritten, onDocumentCreated, onDocumentDeleted } = require('firebase-functions/firestore');
+const { onDocumentWritten, onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require('firebase-functions/firestore');
 const { onObjectFinalized } = require('firebase-functions/storage'); // v1.10.0 gate 13 — image pipeline
+const { onSchedule } = require('firebase-functions/scheduler');      // gate 20 — the daily orphan reaper
 const admin = require('firebase-admin');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
@@ -47,6 +48,7 @@ const { capDecision } = require('./lib/uploadcap');   // gate 13 — per-user bu
 const images = require('./lib/images');               // gate 14 — admin atomic image removal
 const { sha256Hex, hashDocId } = require('./lib/imagehash'); // image overhaul — per-user dedupe
 const { likeDelta, shouldNotifyLike, likeNotifId, bgSweepDecision } = require('./lib/profile'); // dream profile
+const { stripSweepDecision, reapUploadsOrphans } = require('./lib/sweep'); // gate 20 — edit-strip + orphan reaper
 
 setGlobalOptions({
   region: 'us-central1',
@@ -521,6 +523,55 @@ exports.aggregateSuggestionCounts = onDocumentCreated('suggestions/{docId}', asy
   });
 });
 
+// -----------------------------------------------------------------------------
+// onSuggestionReviewed — gate 20, the GOLD-FLIP (half 1: the ping). When Blake
+// marks a suggestion 'reviewed' in the admin queue, the requester gets a
+// Blake-origin Lantern letter ("you asked for this one"). fromUid is the ADMIN
+// literal, so the Lantern's notifIsBlake gilds it — HIS review landing IS a
+// Blake surface. Also mirrors status onto the suggestionCounts rollup so the
+// public "👁 N requested" chip retires itself for reviewed titles.
+// (Half 2 — migrating an anime:al:<id> Tavern thread onto the new catalog slug
+// so it GAINS the gold verdict rail — needs catalog-truth slug mapping that
+// only the client owns; deliberately banked, designed in docs/NEXT.md.)
+// -----------------------------------------------------------------------------
+exports.onSuggestionReviewed = onDocumentUpdated('suggestions/{docId}', async (event) => {
+  if (await alreadyProcessed(event.id)) return;
+  const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  if (!before || !after) return;
+  if (before.status === 'reviewed' || after.status !== 'reviewed') return;   // only the flip TO reviewed
+
+  // mirror onto the rollup so the public chip stops advertising a filled
+  // request. UPDATE, not set-merge — a blind merge would resurrect a deleted/
+  // never-created rollup as a {status} ghost doc (adversarial LOW); update()
+  // fails on a missing doc, which is exactly the no-op we want.
+  if (after.anilistId) {
+    try {
+      await db.doc('suggestionCounts/' + after.anilistId).update({ status: 'reviewed' });
+    } catch (_) { /* rollup absent (raw-title submission / deleted) — no ghost */ }
+  }
+
+  const to = after.submitterUid;
+  if (!to || typeof to !== 'string') return;          // legacy/anon suggestion — no inbox
+  if (to === 'G2jGRa14u8bzGAmeBTkvXy8PKmr1') return;  // ADMIN_UID — no self-ping
+  const prefsSnap = await db.doc('users/' + to + '/notifPrefs/prefs').get();
+  if (prefsSnap.exists && isMuted(prefsSnap.data(), 'request_done')) return;  // mute-at-source
+  const title = String(after.englishTitle || after.title || 'your request').slice(0, 120);
+  await db.collection('users/' + to + '/notifications').add({
+    fromUid: 'G2jGRa14u8bzGAmeBTkvXy8PKmr1',          // ADMIN_UID (status-quo literal, as in lib/moderation.js)
+    fromDisplayName: 'Blake',
+    fromPhotoURL: null,
+    type: 'request_done',
+    verb: 'reviewed it — you asked for this one',
+    animeTitle: title,
+    anilistId: after.anilistId || null,
+    targetPath: after.anilistId ? ('secondary/' + after.anilistId) : null,
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + NOTIF_TTL_DAYS * DAY_MS),
+  });
+});
+
 // =============================================================================
 // v1.10.0 GATE 2 — the MODERATION SPINE CFs (ban + community-rules consent).
 // STAGED — deploy with the rest of v1.10.0 at the cutover. The gate-1 rules read
@@ -715,8 +766,12 @@ async function handleRemovedTransition(event, prefixOf) {
     await event.data.after.ref.update({ imageRefs: FieldValue.delete() }).catch(() => {});
   }
 }
-exports.onForumPostRemoved = onDocumentWritten('forum/{threadId}/posts/{postId}',
-  (e) => handleRemovedTransition(e, (uid, p) => 'uploads/' + uid + '/' + p.postId + '/'));
+exports.onForumPostRemoved = onDocumentWritten('forum/{threadId}/posts/{postId}', async (e) => {
+  // gate 20 — the imageRefs EDIT-strip rides this SAME written trigger (a
+  // second registration on this path would double-fire every post event).
+  await sweepStrippedRefs(e, 'authorUid');
+  await handleRemovedTransition(e, (uid, p) => 'uploads/' + uid + '/' + p.postId + '/');
+});
 
 // A thread soft-remove (the ONLY moderator/owner takedown — hard delete is
 // rules-denied) must take down the WHOLE thread's images, not just the OP's:
@@ -724,6 +779,10 @@ exports.onForumPostRemoved = onDocumentWritten('forum/{threadId}/posts/{postId}'
 // uploader, who is NOT the thread author), so the OP-prefix sweep alone leaves
 // abusive reply images live + world-readable. (Adversarial review, MED.)
 exports.onForumThreadRemoved = onDocumentWritten('forum/{threadId}', async (event) => {
+  // gate 20 — the imageRefs EDIT-strip rides this SAME written trigger (never
+  // double-register a path). It no-ops on create/delete edges and on the
+  // count/hotScore merges that hit this doc constantly.
+  await sweepStrippedRefs(event, 'authorUid');
   const b = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
   const a = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
   if (!a || !b) return;
@@ -902,3 +961,53 @@ exports.onProfileWritten = onDocumentWritten('profiles/{uid}', async (event) => 
   if (!dec.sweep) return; // unchanged / no bg / foreign-prefix ref — touch nothing
   await uploadsBucket().file(dec.path).delete({ ignoreNotFound: true }).catch(() => {});
 });
+
+// =============================================================================
+// v1.10.0 GATE 20 — STORAGE GC (STAGED, deploys at the cutover): the imageRefs
+// EDIT-STRIP sweepers + the daily ORPHAN REAPER. Gate 14 swept the DELETE and
+// REMOVE paths; these close the last two world-readable-forever holes (the one
+// pre-prod gap, NEXT.md — the legal-trap class): (a) an owner EDIT dropping a
+// ref from imageRefs, (b) an upload whose doc-create never landed (tab closed
+// mid-flow). Decision cores in lib/sweep.js (pure / db-injected — testable
+// without the scheduler). No cfProcessed markers: an object delete is
+// naturally idempotent (the onProfileWritten precedent).
+// =============================================================================
+
+// sweepStrippedRefs — wire stripSweepDecision to an updated/written event and
+// delete EXACTLY the dropped objects. Owner sourced from BEFORE (the side that
+// held the refs; the author field is immutable per rules either way). The
+// forum thread/post surfaces call this from their existing written-triggers
+// above — comments / replies / reviews get their own onDocumentUpdated below.
+function sweepStrippedRefs(event, ownerField) {
+  const b = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const a = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  const dec = stripSweepDecision(b, a, b ? b[ownerField] : null);
+  if (!dec.sweep) return Promise.resolve();
+  return Promise.all(dec.paths.map((p) => uploadsBucket().file(p).delete({ ignoreNotFound: true }).catch(() => {})));
+}
+
+// Comments / replies / reviews have no written-trigger to ride (their existing
+// triggers are create/delete — DIFFERENT event types, so these don't double-
+// fire anything). Review reply-threads carry NO imageRefs (the rules give them
+// no slot) — no trigger needed there.
+exports.onCommentEdited = onDocumentUpdated('comments/{anime}/items/{cid}',
+  (e) => sweepStrippedRefs(e, 'uid'));
+exports.onCommentReplyEdited = onDocumentUpdated('comments/{anime}/items/{cid}/replies/{rid}',
+  (e) => sweepStrippedRefs(e, 'uid'));
+exports.onReviewEdited = onDocumentUpdated('reviews/{anime}/items/{uid}',
+  (e) => sweepStrippedRefs(e, 'uid'));
+
+// reapOrphanUploads — the daily pass over uploads/ for objects older than 24h
+// with NO referencing doc (imageRefs/thumbImage across the five surfaces, or
+// profiles bgRef for profilebg). All judgment lives in lib/sweep.js and is
+// conservative by construction: unparsed path, young object, or a FAILED doc
+// lookup all KEEP the object; one run deletes at most ORPHAN_DELETE_CAP.
+exports.reapOrphanUploads = onSchedule(
+  // gate-20 adversarial LOW: the default 60s/256MiB can't finish a pass once
+  // the bucket is populated (full list + per-user reference queries) — give
+  // the daily sweep room; the 500-delete cap still bounds cost per run.
+  { schedule: 'every 24 hours', timeoutSeconds: 540, memory: '512MiB' },
+  async () => {
+    await reapUploadsOrphans(db, uploadsBucket(), { nowMs: Date.now() });
+  }
+);

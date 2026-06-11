@@ -538,3 +538,46 @@
 #uploads-toggle.danger { border-color: rgba(255, 125, 125, 0.65); color: #ffd2d2; }
 #uploads-toggle.danger::before { background: #ff7d7d; box-shadow: 0 0 8px rgba(255, 100, 100, 0.8); }
 @media (prefers-reduced-motion: reduce) { #uploads-toggle { transition: none; } }
+
+/* gate 20 — TEXT reports preview the target doc's ATTACHED images (imageRefs,
+   ≤4 by the rules): small lazy thumbs under the live text; click opens the full
+   image in a new tab. Same purple-frame vocabulary as the gate-14 image-report
+   preview (rgba(187,134,252,.4) border, 8px radius). */
+.attached-thumbs-label {
+  display: block;
+  margin-top: 10px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+.report-attached-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.report-attached-thumbs .attached-thumb {
+  display: block;
+  border-radius: 8px;
+  border: 1px solid rgba(187, 134, 252, 0.4);
+  overflow: hidden;
+  line-height: 0;
+  background: rgba(15, 5, 28, 0.45);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.report-attached-thumbs .attached-thumb:hover,
+.report-attached-thumbs .attached-thumb:focus-visible {
+  border-color: rgba(187, 134, 252, 0.72);
+  box-shadow: 0 0 10px rgba(187, 134, 252, 0.35);
+}
+.report-attached-thumbs .attached-thumb img {
+  display: block;
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+}
+@media (prefers-reduced-motion: reduce) {
+  .report-attached-thumbs .attached-thumb { transition: none; }
+}

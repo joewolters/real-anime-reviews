@@ -268,13 +268,16 @@ test('profile: HOSTILE arbitrary external photoURL is DENIED (M2)', async () => 
     { displayName: 'Alice', photoURL: 'https://evil.example.com/track.png' }));
 });
 
-// ---------------- SUGGESTIONCOUNTS (CF-only, admin-read) ----------------
+// ---------------- SUGGESTIONCOUNTS (CF-only writes; gate 20: public GET) ----
 test('suggestionCounts: HOSTILE client write is DENIED', async () => {
   await assertFails(setDoc(doc(as('alice'), 'suggestionCounts/101922'), { count: 9999 }));
 });
-test('suggestionCounts: HOSTILE non-admin read is DENIED', async () => {
+// gate 20 — the contract FLIPPED for the "👁 N requested" chip: single-doc GET
+// is public now (this test used to assert the opposite); enumeration (LIST)
+// stays admin-only — the dedicated gate-20 tests at the bottom pin both sides.
+test('suggestionCounts: non-admin single-doc GET is allowed (the requested chip)', async () => {
   await seed((db) => setDoc(doc(db, 'suggestionCounts/101922'), { count: 3, status: 'new' }));
-  await assertFails(getDoc(doc(as('alice'), 'suggestionCounts/101922')));
+  await assertSucceeds(getDoc(doc(as('alice'), 'suggestionCounts/101922')));
 });
 test('suggestionCounts: admin read is allowed', async () => {
   await seed((db) => setDoc(doc(db, 'suggestionCounts/101922'), { count: 3, status: 'new' }));
@@ -848,4 +851,42 @@ test('dream: accentGlow bool accepted; HOSTILE string accentGlow is DENIED', asy
     { displayName: 'Alice', accent: 'crimson', accentGlow: true, joinedAt: serverTimestamp() }));
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
     { displayName: 'Alice', accentGlow: 'yes', joinedAt: serverTimestamp() }));
+});
+
+// ---------------- gate 20 — optional collection description ----------------
+test('collections: create WITH a 150-char description is allowed', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'users/alice/collections/colDesc1'),
+    col({ description: 'd'.repeat(150) })));
+});
+test('collections: HOSTILE 201-char description is DENIED (cap 200)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'users/alice/collections/colDesc2'),
+    col({ description: 'd'.repeat(201) })));
+});
+test('collections: HOSTILE non-string description is DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'users/alice/collections/colDesc3'),
+    col({ description: 12345 })));
+});
+test('collections: update ADDING a description to an existing doc is allowed', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice/collections/colDesc4'),
+    { name: 'Plain', public: false, items: [], createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+  await assertSucceeds(updateDoc(doc(as('alice'), 'users/alice/collections/colDesc4'),
+    { description: 'now with a blurb under the title', updatedAt: serverTimestamp() }));
+});
+test('collections: PUBLIC shelf WITH a description is readable by a non-owner', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice/collections/colDesc5'),
+    { name: 'Shared Shelf', description: 'a public blurb under the title', public: true, items: [],
+      createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+  await assertSucceeds(getDoc(doc(as('bob'), 'users/alice/collections/colDesc5')));
+});
+
+// gate 20 — the "👁 N requested" chip: public single-doc GET on
+// suggestionCounts; LIST stays admin-only (no queue enumeration).
+test('gate 20: anyone can GET one suggestionCounts doc (the requested chip)', async () => {
+  await seed(async (db) => { await db.doc('suggestionCounts/al-20-chip').set({ count: 3, status: 'new' }); });
+  await assertSucceeds(anon().doc('suggestionCounts/al-20-chip').get());
+  await assertSucceeds(as('alice').doc('suggestionCounts/al-20-chip').get());
+});
+test('gate 20: non-admin LIST of suggestionCounts stays denied (anti-brigading)', async () => {
+  await assertFails(as('alice').collection('suggestionCounts').get());
+  await assertFails(anon().collection('suggestionCounts').get());
 });

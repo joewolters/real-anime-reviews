@@ -1414,31 +1414,42 @@ footer {
 }
 
 
+/* gate 20 (cherry) — the footer joins the veil era: a premium panel (gradient
+   + purple frame + hover glow) and the kicker vocabulary instead of the old
+   underlined headings. Blake's copy itself is untouched. */
 .footer-box {
-    background-color: rgba(30, 0, 60, 0.9);
+    background: linear-gradient(165deg, rgba(40, 12, 72, 0.92), rgba(24, 6, 46, 0.94));
+    border: 1px solid rgba(187, 134, 252, 0.35);
+    box-shadow: 0 14px 40px rgba(6, 1, 14, 0.45);
     padding: 30px 50px;
     border-radius: 20px;
     text-align: left;
     max-width: 620px;
     flex: 1 1 560px;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
-
+.footer-box:hover {
+    border-color: rgba(187, 134, 252, 0.65);
+    box-shadow: 0 16px 44px rgba(6, 1, 14, 0.5), 0 0 30px rgba(185, 0, 255, 0.12);
+}
 
 .footer-heading {
-    color: white;
-    font-size: 1.6rem;
-    font-weight: bold;
-    margin: 25px auto 15px;
-    text-align: center;
-    display: inline-block;
-    border-bottom: 2px solid #bb86fc;
-    padding-bottom: 5px;
+    margin: 22px 0 13px;
+    display: block;
 }
+.footer-heading:first-child { margin-top: 0; }
+.footer-kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: 800 0.82rem 'Montserrat', sans-serif;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: #f6efff; text-shadow: 0 0 16px rgba(187, 134, 252, 0.5);
+}
+.footer-kicker .jp-mini { font-size: 0.66rem; color: #d9c9ff; opacity: 0.9; }
 
 .footer-text {
-    font-size: 1.1rem;
-    line-height: 1.7;
-    color: #ddd;
+    font-size: 1.02rem;
+    line-height: 1.75;
+    color: #d9cfec;
     margin-bottom: 25px;
 }
 
@@ -7588,22 +7599,20 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 }
 .secondary-col { min-width: 0; display: flex; flex-direction: column; gap: clamp(18px, 2.4vw, 26px); }
 
-/* the room rail — small, left, self-scrolling so a long thread never
-   stretches the whole modal. adversarial MED: three tracks only when the
-   modal is genuinely wide (≥1150px) — at 900-1149px they squeezed BLAKE'S
-   REVIEW to ~320px (the heart column must never be the cramped one); in that
-   band the room spans full width BELOW the two columns instead. */
-@media (min-width: 1150px) {
-  .secondary-body.has-room { grid-template-columns: minmax(225px, 0.78fr) 1.5fr 1fr; }
-  .secondary-body.has-room .secondary-col--room { grid-column: 1; grid-row: 1; }
-  .secondary-body.has-room .secondary-col--main { grid-column: 2; grid-row: 1; }
-  .secondary-body.has-room .secondary-col--side { grid-column: 3; grid-row: 1; }
-}
-@media (min-width: 901px) and (max-width: 1149.98px) {
-  .secondary-body.has-room .secondary-col--room { grid-column: 1 / -1; grid-row: 2; }
-}
-.secondary-col--room .comments-list { max-height: 56vh; overflow: auto; padding: 2px 4px; }
-.secondary-col--room .secondary-community { margin-top: 0; }
+/* gate 20 (cherry) — the requested-demand chip beside the Request affordance:
+   purple, count-as-demand-signal (Blake's ask; LIST stays admin-only so it
+   can never become a leaderboard) */
+.secondary-requested-chip { display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 999px; font: 700 0.7rem 'Montserrat', sans-serif;
+  color: #e9dbff; background: rgba(187, 134, 252, 0.14);
+  border: 1px solid rgba(187, 134, 252, 0.5); white-space: nowrap; }
+
+/* gate 20 (Blake item 9) — THIS SEASON'S ROOM is a full-width band at the
+   modal's bottom (after LINKS, before MORE LIKE THIS — his circled spot). A
+   long thread scrolls inside the band, never stretches the modal. */
+.secondary-room-band { padding: 0 clamp(18px, 2.6vw, 30px) clamp(18px, 2.6vw, 30px); }
+.secondary-room-band .secondary-community { margin-top: 0; }
+.secondary-room-band .comments-list { max-height: 56vh; overflow: auto; padding: 2px 4px; }
 
 .secondary-section { min-width: 0; }
 .secondary-section-title {
@@ -7895,12 +7904,9 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 /* Narrow stack (<900px) — single-column body, drawer goes full-width */
 @media (max-width: 900px) {
   .secondary-modal { width: 100vw; border-left: none; }
-  .secondary-body, .secondary-body.has-room { grid-template-columns: 1fr; }
-  /* stacked: review/main first (H5), then the room, then the side column */
-  .secondary-body.has-room .secondary-col--main { grid-column: auto; grid-row: auto; }
-  .secondary-body.has-room .secondary-col--room { grid-column: auto; grid-row: auto; }
-  .secondary-body.has-room .secondary-col--side { grid-column: auto; grid-row: auto; }
-  .secondary-col--room .comments-list { max-height: none; overflow: visible; }
+  .secondary-body { grid-template-columns: 1fr; }
+  /* the room band breathes on small screens — no nested scroll regions */
+  .secondary-room-band .comments-list { max-height: none; overflow: visible; }
   .secondary-header-body { flex-direction: row; }
   .secondary-cover { width: clamp(92px, 26vw, 120px); }
   /* gate 2b: collapse the Request pill to icon-only so the action row stays tidy */
@@ -8585,6 +8591,41 @@ html.rar-welcome-pending::before {
 .welcome-enter:focus-visible { outline: 2px solid #d7bcff; outline-offset: 3px; }
 .welcome-enter-arrow { font-size: 1.05em; transition: transform .18s ease; }
 .welcome-enter:hover .welcome-enter-arrow { transform: translateX(3px); }
+
+/* gate 20 — the door's action row (Enter + Surprise me) + the catch-up block */
+.welcome-actions { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.welcome-surprise { margin-top: 24px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 22px; border-radius: 999px; cursor: pointer;
+  font: 700 0.8rem 'Montserrat', sans-serif; letter-spacing: 0.1em; text-transform: uppercase;
+  color: #e9dbff; background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.5);
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease; }
+.welcome-surprise:hover { transform: translateY(-2px); background: rgba(187, 134, 252, 0.2);
+  border-color: rgba(187, 134, 252, 0.85); }
+/* a bottom strip pinned to the splash — buttons arriving async never move the
+   card (the Enter button must not displace under a reaching cursor) */
+.welcome-catchup { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+  z-index: 3; display: flex; flex-direction: column; gap: 8px; align-items: center;
+  max-width: min(640px, 92vw); }
+.welcome-catchup[hidden] { display: none; }   /* [hidden] symmetry */
+.welcome-catchup-kicker { font: 800 0.64rem 'Montserrat', sans-serif; letter-spacing: 0.2em;
+  color: #d9c9ff; text-shadow: 0 1px 4px rgba(6, 1, 14, 0.8); }
+.welcome-catchup-kicker .jp-mini { font-size: 0.58rem; opacity: 0.85; }
+.welcome-catchup-row { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.welcome-catchup-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px;
+  border-radius: 999px; cursor: pointer; font: 600 0.82rem 'Montserrat', sans-serif;
+  color: #f1e9ff; background: rgba(26, 8, 52, 0.85); border: 1px solid rgba(187, 134, 252, 0.55);
+  box-shadow: 0 4px 16px rgba(6, 1, 14, 0.4);
+  transition: border-color 0.15s ease, background 0.15s ease; }
+.welcome-catchup-btn:hover { background: rgba(187, 134, 252, 0.16); border-color: rgba(187, 134, 252, 0.9); }
+.welcome-catchup-subs { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
+.welcome-catchup-subs[hidden] { display: none; }
+.welcome-catchup-sub { padding: 6px 13px; border-radius: 999px; cursor: pointer;
+  font: 600 0.74rem 'Montserrat', sans-serif; color: #e9dbff;
+  background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.4); }
+.welcome-catchup-sub:hover { background: rgba(187, 134, 252, 0.2); }
+@media (prefers-reduced-motion: reduce) {
+  .welcome-surprise, .welcome-catchup-btn { transition: none; }
+}
 /* breathing glow — a blurred pseudo behind the button, animating OPACITY only
    (compositor-friendly; no box-shadow repaint). reduced-motion kills it. */
 .welcome-enter::before {
@@ -9729,6 +9770,9 @@ html[data-surface="account"] .side-link.is-active {
 .acct-bg-thumb:hover { border-color: rgba(187, 134, 252, 0.8); }
 .acct-bg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .acct-bg-note { flex-basis: 100%; color: #b8a8d8; font-size: 0.72rem; }
+.avatar-preview[hidden] { display: none; }   /* gate 20: it's an offscreen staging buffer now */
+.acct-preview-open { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.acct-preview-open .acct-bg-note { flex-basis: auto; margin-left: auto; }
 
 /* round 4 (item 4) — the hover pickers: opaque pills that surface on the hero.
    Always reachable by keyboard (focus shows them) and always visible on touch. */
@@ -9739,7 +9783,9 @@ html[data-surface="account"] .side-link.is-active {
   box-shadow: 0 6px 18px rgba(6, 1, 14, 0.6); transition: opacity 0.15s ease; }
 .acct-preview:hover .acct-hover-pill, .acct-preview:focus-within .acct-hover-pill,
 .acct-hover-pill:focus { opacity: 1; pointer-events: auto; }
+.acct-hover-pill[hidden] { display: none; }   /* [hidden] symmetry — always */
 .acct-hover-bg { top: 14px; right: 14px; }
+.acct-hover-bg-remove { top: 56px; right: 14px; font-size: 0.66rem; }
 .profile-avatar { position: relative; }
 .acct-hover-avatar { inset: 0; width: 100%; height: 100%; border-radius: inherit;
   display: grid; place-items: center; text-align: center; line-height: 1.25;
@@ -9910,6 +9956,11 @@ html[data-surface="account"] .side-link.is-active {
 .acct-dd-btn.is-open .acct-dd-chev { transform: rotate(180deg); }
 .acct-dd-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .acct-dd-chev { flex: 0 0 auto; font-size: 0.7rem; color: #cbb0ff; transition: transform 0.15s ease; }
+/* gate 20 (Blake items 3/4/5 — ONE root cause): display:flex below BEAT the UA
+   [hidden] rule, so every brandSelect rendered permanently OPEN. The [hidden]
+   symmetry rule (the same trap as the consent banner + inbox dot) was the fix
+   — spec-pinned closed-by-default now. */
+.acct-dd-menu[hidden] { display: none; }
 .acct-dd-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
   min-width: max(100%, 220px); max-width: min(480px, 86vw); max-height: 300px; overflow: auto;
   padding: 6px; border-radius: 13px; border: 1px solid rgba(187, 134, 252, 0.5);
@@ -9973,6 +10024,14 @@ html[data-surface="account"] .side-link.is-active {
 .col-vis.is-public { color: #fff; background: rgba(187, 134, 252, 0.22); border-color: rgba(187, 134, 252, 0.8); }
 .col-count { font: 600 0.72rem 'Montserrat', sans-serif; color: #b8a8d8; }
 .col-card-tools { margin-left: auto; display: inline-flex; gap: 12px; }
+.col-card-desc { margin: -4px 0 10px; color: #c4b2e4; font-size: 0.8rem; line-height: 1.5; }
+.col-desc-input, .col-composer textarea { width: 100%; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(187, 134, 252, 0.5); border-radius: 9px; color: #fff; padding: 8px 11px;
+  font: 500 0.84rem 'Montserrat', sans-serif; resize: vertical; }
+.col-composer textarea { flex-basis: 100%; }
+.col-adder-group { font: 800 0.62rem 'Montserrat', sans-serif; letter-spacing: 0.14em;
+  text-transform: uppercase; color: #d9c9ff; margin: 6px 2px 2px; }
+.col-adder-group .jp-mini { font-size: 0.58rem; opacity: 0.8; }
 .col-items { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .col-item { position: relative; }
 .col-item-cover { width: 52px; height: 74px; object-fit: cover; border-radius: 8px; display: block;
@@ -10005,6 +10064,7 @@ html[data-surface="account"] .side-link.is-active {
 .profile-col { border: 1px solid rgba(187, 134, 252, 0.28); border-radius: 12px; padding: 9px 12px;
   background: rgba(255, 255, 255, 0.02); }
 .profile-col-name { display: block; font: 700 0.84rem 'Montserrat', sans-serif; color: #efe6ff; margin-bottom: 7px; }
+.profile-col-desc { display: block; margin: -3px 0 8px; color: #c4b2e4; font-size: 0.76rem; line-height: 1.45; }
 .profile-col-strip { display: flex; gap: 6px; flex-wrap: wrap; }
 .profile-col-cover { width: 40px; height: 56px; object-fit: cover; border-radius: 6px;
   border: 1px solid rgba(187, 134, 252, 0.35); }
@@ -10087,6 +10147,16 @@ html[data-surface="account"] .side-link.is-active {
 
 /* ── My Activity reads scannable: cover thumbs on reviews, type glyphs on the
    rest, the whole row a deep-link target ── */
+/* gate 20 (item 8) — the official pass: roomier rows, a real type hierarchy,
+   two-line snippet clamp (the snippets themselves are plain-text now). */
+.activity-item { padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(187, 134, 252, 0.22);
+  background: rgba(255, 255, 255, 0.02); align-items: center; gap: 12px; }
+.activity-main { min-width: 0; }
+.activity-main .saved-open { font: 700 0.9rem 'Montserrat', sans-serif; color: #f1e9ff; }
+.activity-desc { color: #c4b2e4; font-size: 0.8rem; line-height: 1.5; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere; }   /* long unbroken tokens wrap instead of clipping */
+.activity-item .saved-date { align-self: flex-start; font-size: 0.7rem; }
 .activity-item.is-linked { cursor: pointer; }
 .activity-item.is-linked:hover { border-color: rgba(187, 134, 252, 0.65); background: rgba(187, 134, 252, 0.07); }
 .act-thumb { width: 44px; height: 60px; object-fit: cover; border-radius: 8px; flex: 0 0 auto;
@@ -10097,17 +10167,62 @@ html[data-surface="account"] .side-link.is-active {
 
 /* ── the Inbox reads complete: a letter room, not a stub. Blake's letters wear
    his gold edge (Blake-origin = gold, the dm precedent); yours stay purple. ── */
-.inbox-blake-card { border-radius: 14px; padding: 18px 20px; margin-bottom: 16px;
-  background: linear-gradient(120deg, rgba(187, 134, 252, 0.13), rgba(255, 79, 216, 0.07));
-  border: 1px solid rgba(187, 134, 252, 0.5); }
-.inbox-blake-head { font: 800 1rem 'Montserrat', sans-serif; letter-spacing: 0.06em; color: #f6efff;
-  text-shadow: 0 0 16px rgba(187, 134, 252, 0.5); margin-bottom: 6px; }
-.inbox-blake-card .muted { color: #cdbce8; }
-.inbox-blake-card .btn { margin-top: 10px; }
+/* gate 20 (item 8, the 4th ask) — the hero card: lantern beside a real type
+   stack, a substantial primary action. The lantern sways (transform-only,
+   reduced-motion silent); the card glows on hover like the premium surfaces. */
+.inbox-blake-card { display: flex; gap: 18px; align-items: center;
+  border-radius: 16px; padding: 20px 24px; margin-bottom: 16px;
+  background: linear-gradient(120deg, rgba(187, 134, 252, 0.16), rgba(255, 79, 216, 0.07) 60%, rgba(120, 40, 200, 0.10));
+  border: 1px solid rgba(187, 134, 252, 0.55);
+  box-shadow: 0 8px 28px rgba(6, 1, 14, 0.45), inset 0 0 40px rgba(187, 134, 252, 0.05);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease; }
+.inbox-blake-card:hover { border-color: rgba(187, 134, 252, 0.85);
+  box-shadow: 0 10px 32px rgba(6, 1, 14, 0.5), 0 0 26px rgba(185, 0, 255, 0.18); }
+.inbox-blake-lantern { font-size: 2.1rem; flex: 0 0 auto; display: inline-block;
+  transform-origin: top center; filter: drop-shadow(0 0 10px rgba(255, 79, 216, 0.45));
+  animation: acctLanternSway 5.4s ease-in-out infinite; }
+.inbox-blake-body { min-width: 0; }
+.inbox-blake-head { font: 800 1.06rem 'Montserrat', sans-serif; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #f6efff; text-shadow: 0 0 16px rgba(187, 134, 252, 0.5);
+  margin-bottom: 5px; }
+.inbox-blake-head .jp-mini { font-size: 0.78rem; color: #d9c9ff; }
+.inbox-blake-sub { margin: 0 0 13px; color: #cdbce8; font-size: 0.88rem; line-height: 1.55; }
+.inbox-blake-btn, .inbox-send-btn { display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 24px; border-radius: 999px; border: 1px solid rgba(187, 134, 252, 0.75); cursor: pointer;
+  background: linear-gradient(120deg, rgba(176, 108, 255, 0.55), rgba(120, 40, 210, 0.85));
+  color: #fff; font: 700 0.9rem 'Montserrat', sans-serif; letter-spacing: 0.02em;
+  box-shadow: 0 4px 16px rgba(120, 40, 200, 0.35);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease; }
+.inbox-blake-btn:hover, .inbox-send-btn:hover:not([disabled]) { transform: translateY(-1px);
+  filter: brightness(1.08); box-shadow: 0 7px 22px rgba(120, 40, 200, 0.5); }
+.inbox-send-btn { padding: 10px 20px; flex: 0 0 auto; }
+.inbox-send-btn[disabled] { opacity: 0.45; cursor: default; box-shadow: none; }
+.inbox-back-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px;
+  border-radius: 999px; border: 1px solid rgba(187, 134, 252, 0.45); cursor: pointer;
+  background: rgba(187, 134, 252, 0.1); color: #e9dbff; font: 700 0.8rem 'Montserrat', sans-serif;
+  margin-bottom: 4px; transition: background 0.14s ease, border-color 0.14s ease; }
+.inbox-back-chip:hover { background: rgba(187, 134, 252, 0.2); border-color: rgba(187, 134, 252, 0.8); }
+@media (prefers-reduced-motion: reduce) {
+  .inbox-blake-lantern { animation: none; }
+  .inbox-blake-btn, .inbox-send-btn, .inbox-back-chip { transition: none; }
+}
 .inbox-people-locked { border-radius: 14px; padding: 14px 18px; margin-top: 16px;
   border: 1px dashed rgba(187, 134, 252, 0.35); background: rgba(255, 255, 255, 0.02); }
 .inbox-people-head { font: 700 0.86rem 'Montserrat', sans-serif; color: #d9c9ff; margin-bottom: 4px; }
-.inbox-messages { display: flex; flex-direction: column; gap: 9px; padding: 14px 4px; min-height: 200px; }
+/* gate 20 (item 8) — the thread reads like a real room: a titled bar, a framed
+   letter surface, a branded empty state (it used to be a bare floating line). */
+.inbox-thread-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+.inbox-thread-title { font: 800 0.9rem 'Montserrat', sans-serif; letter-spacing: 0.05em;
+  color: #f6efff; text-shadow: 0 0 14px rgba(187, 134, 252, 0.45); }
+.inbox-thread-title .jp-mini { font-size: 0.7rem; color: #d9c9ff; }
+.inbox-messages { display: flex; flex-direction: column; gap: 9px; padding: 16px 14px; min-height: 200px;
+  border: 1px solid rgba(187, 134, 252, 0.3); border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02); }
+.inbox-empty { margin: auto; text-align: center; color: #cdbce8; }
+.inbox-empty p { margin: 4px 0; }
+.inbox-empty-lantern { font-size: 1.7rem; display: inline-block;
+  filter: drop-shadow(0 0 8px rgba(255, 79, 216, 0.4)); }
+.inbox-empty-sub { font-size: 0.78rem; color: #b8a8d8; font-style: italic; }
 /* round-3 adversarial MED (heart): gold keys on IDENTITY (.is-blake — set when
    senderUid is Blake's), never on perspective — on Blake's own view the old
    perspective rule gilded MEMBER letters and purpled his. */
@@ -10153,13 +10268,8 @@ html[data-surface="account"] .side-link.is-active {
 .secondary-community .comments-section { background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(187, 134, 252, 0.22);
   border-radius: 14px; padding: 14px 16px; }
 .secondary-community .comments-header h3 { color: #e9dbff; }
-/* round 4 — the LEFT rail wears the room compact (a chat rail, not a feature
-   column): tighter paddings, smaller type, the composer trimmed */
-.secondary-col--room .comments-section { padding: 10px 11px; }
-.secondary-col--room .comments-header h3 { font-size: 0.8rem; }
-.secondary-col--room .comment-card, .secondary-col--room .comment-item { font-size: 0.84rem; }
-.secondary-col--room .comment-composer textarea { min-height: 54px; font-size: 0.84rem; }
-.secondary-col--room .secondary-community-sub { font-size: 0.72rem; }
+/* (gate 20 — the round-4 left-rail compact styles retired with the rail;
+   the bottom band uses the standard comments treatment at full width) */
 
 /* — reduced motion: round-3 silencer — */
 @media (prefers-reduced-motion: reduce) {

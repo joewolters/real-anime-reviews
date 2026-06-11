@@ -175,35 +175,38 @@ test('round 4: personal collections — rail item + panel + composer (hidden at 
   expect(js).toContain('function colSafeCover(');
 });
 
-test('round 4: the season room is a SMALL LEFT rail (grid contract) and the review still DOM-precedes it', async ({ page }) => {
-  // the 3-track rail is ≥1150px only (below that, Blake's review column would
-  // be the cramped one — adversarial MED; the room drops below instead)
-  await page.setViewportSize({ width: 1380, height: 900 });
+test('gate 20: the season room is a FULL-WIDTH bottom band (after the body, before MORE LIKE THIS) and the review DOM-precedes it', async ({ page }) => {
+  // round 4's left rail misread Blake's item 9 — the room now lives in a wide
+  // band under the columns (his circled spot). The contract: band markup sits
+  // BETWEEN .secondary-body and the recs block, the band spans the modal, and
+  // BLAKE'S REVIEW still precedes the room in DOM order (H5).
   await page.goto('/index.html');
   const m = await page.evaluate(() => {
-    const body = document.createElement('div');
-    body.className = 'secondary-body has-room';
-    body.style.width = '1000px';
-    body.innerHTML = '<div class="secondary-col secondary-col--main"><section class="secondary-review"></section></div>'
-      + '<div class="secondary-col secondary-col--room"></div>'
-      + '<div class="secondary-col secondary-col--side"></div>';
-    document.body.appendChild(body);
-    const cs = getComputedStyle(body);
-    const room = body.querySelector('.secondary-col--room');
-    const main = body.querySelector('.secondary-col--main');
-    const review = body.querySelector('.secondary-review');
+    const wrap = document.createElement('div');
+    wrap.style.width = '1000px';
+    wrap.innerHTML = '<div class="secondary-body"><div class="secondary-col secondary-col--main"><section class="secondary-review"></section></div>'
+      + '<div class="secondary-col secondary-col--side"></div></div>'
+      + '<div class="secondary-room-band"><section class="secondary-community"></section></div>'
+      + '<div class="secondary-recs-block"></div>';
+    document.body.appendChild(wrap);
+    const body = wrap.querySelector('.secondary-body');
+    const band = wrap.querySelector('.secondary-room-band');
+    const recs = wrap.querySelector('.secondary-recs-block');
+    const review = wrap.querySelector('.secondary-review');
     const out = {
-      tracks: cs.gridTemplateColumns.split(' ').length,
-      roomLeftOfMain: room.getBoundingClientRect().x < main.getBoundingClientRect().x,
-      roomNarrowerThanMain: room.getBoundingClientRect().width < main.getBoundingClientRect().width,
-      reviewFirst: !!(review.compareDocumentPosition(room) & Node.DOCUMENT_POSITION_FOLLOWING),
+      bandAfterBody: !!(body.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING),
+      bandBeforeRecs: !!(band.compareDocumentPosition(recs) & Node.DOCUMENT_POSITION_FOLLOWING),
+      bandWide: band.getBoundingClientRect().width >= wrap.getBoundingClientRect().width * 0.95,
+      reviewFirst: !!(review.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING),
+      scrollCap: getComputedStyle(band.querySelector('.secondary-community')).marginTop,
     };
-    body.remove(); return out;
+    wrap.remove(); return out;
   });
-  expect(m.tracks).toBe(3);                        // room | main | side
-  expect(m.roomLeftOfMain).toBe(true);             // Blake's item 9: LEFT
-  expect(m.roomNarrowerThanMain).toBe(true);       // "a small area"
+  expect(m.bandAfterBody).toBe(true);              // under the columns (LINKS included)
+  expect(m.bandBeforeRecs).toBe(true);             // above MORE LIKE THIS
+  expect(m.bandWide).toBe(true);                   // "pretty wide to fit the secondary modal"
   expect(m.reviewFirst).toBe(true);                // H5: his voice precedes the room
+  expect(m.scrollCap).toBe('0px');                 // the band styling is live
 });
 
 test('round 4: catalog saved rows wear the rich cover treatment (CSS contract)', async ({ page }) => {

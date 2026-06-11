@@ -97,3 +97,8 @@ PERSONAL.md
 
 # Working audit reports (Step 3.5) — review docs, not committed
 AUDIT_*.md
+
+# gate 20 (adversarial HIGH, the 3x-bitten leak class made STRUCTURAL):
+# Code's throwaway diagnostics/screenshots must never reach git or hosting.
+# Mirror rule: firebase.json hosting.ignore carries tmp* too.
+tmp*

@@ -1800,6 +1800,9 @@ function parseNotifTarget(targetPath) {
   // dream-profile gate — a profile_like ping leads to the liked profile.
   const mp = /^profiles\/([A-Za-z0-9_-]{1,128})$/.exec(path);
   if (mp) return { kind: 'profile', uid: mp[1] };
+  // gate 20 — a request_done ping lands on the title's secondary modal.
+  const ms = /^secondary\/(\d{1,10})$/.exec(path);
+  if (ms) return { kind: 'secondary', id: ms[1] };
   return { kind: 'none' };
 }
 if (typeof window !== 'undefined') window.parseNotifTarget = parseNotifTarget;
@@ -1840,6 +1843,12 @@ function openNotifTarget(targetPath, animeId) {
     // dream-profile gate — "appreciates your profile" lands on the profile sheet.
     if (typeof window.openProfilePage === 'function') { window.openProfilePage(t.uid); return; }
     try { window.location.hash = '#profile=' + encodeURIComponent(t.uid); } catch (_) {}
+    return;
+  }
+  if (t.kind === 'secondary') {
+    // gate 20 — "Blake reviewed it, you asked for this one" lands on the
+    // title's deep-dive (the gate-19 bridge owns the open).
+    if (typeof window.openSecondaryFromKey === 'function') { window.openSecondaryFromKey('al:' + t.id); return; }
     return;
   }
   if (animeId) openAnimeFromId(animeId);
@@ -2180,6 +2189,10 @@ notifBtn?.addEventListener('click', (e) => {
 
   signOutBtn?.addEventListener('click', async () => {
   try { await signOut(auth); } catch (_) {}
+  // gate 20 (Blake item 1) — the door is once-per-SESSION, so after an in-tab
+  // sign-out it never re-greeted (it read as "no welcome when signed out").
+  // A sign-out is a fresh arrival: clear the flag so the door shows again.
+  try { sessionStorage.removeItem('rar:welcomed'); } catch (_) {}
 });
 
 
@@ -5888,6 +5901,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
           const items = Array.isArray(c.items) ? c.items.slice(0, 10) : [];
           html += '<div class="profile-col">'
             + '<span class="profile-col-name">' + escapeHtml(String(c.name || '(shelf)').slice(0, 60)) + '</span>'
+            + (typeof c.description === 'string' && c.description.trim()
+                ? '<span class="profile-col-desc">' + escapeHtml(String(c.description).slice(0, 200)) + '</span>' : '')
             + '<span class="profile-col-strip">'
             + items.map((it) => {
                 const cov = safeCov(it && it.coverImage);
@@ -9385,7 +9400,35 @@ function closeModal() {
     // modal; the ctx has no Title so communityKey resolves to al:<id>).
     if (detail) {
       try { secondaryCommentsUnsub = wireComments({ aniListId: id }); } catch (_) { secondaryCommentsUnsub = null; }
+      wireRequestedChip(id);   // gate 20 — the "👁 N requested" demand chip
     }
+  }
+
+  // gate 20 (cherry) — the "👁 N requested" chip: one public suggestionCounts
+  // GET keyed by the AniList id; renders beside the Request affordance ONLY
+  // while the title is un-reviewed and still wanted (status new). Purple,
+  // non-interactive, fire-and-forget (a failed read just means no chip).
+  async function wireRequestedChip(aniListId) {
+    try {
+      const reqEl = secondaryScrollEl.querySelector('.secondary-request');
+      if (!reqEl || secondaryScrollEl.querySelector('.secondary-requested-chip')) return;
+      // the rollup is keyed by the BARE anilistId (aggregateSuggestionCounts:
+      // suggestionCounts/<anilistId>), not the al:-prefixed community key
+      const snap = await getDoc(doc(db, 'suggestionCounts', String(aniListId)));
+      if (!snap.exists()) return;
+      const v = snap.data() || {};
+      const n = typeof v.count === 'number' ? v.count : 0;
+      if (n < 1 || v.status === 'reviewed') return;
+      if (!reqEl.isConnected) return;   // the modal moved on while we fetched
+      const chip = document.createElement('span');
+      chip.className = 'secondary-requested-chip';
+      chip.title = 'How many people have asked Blake for this one';
+      // 99+ cap — anonymous suggestion creates make the raw number inflatable
+      // (adversarial MED, accepted: it's a demand signal on the title's own
+      // page, not a trust surface; the cap bounds how silly it can look)
+      chip.textContent = '👁 ' + (n === 1 ? '1 request' : (n > 99 ? '99+' : n) + ' requested');
+      reqEl.insertAdjacentElement('afterend', chip);
+    } catch (_) { /* no chip — never block the modal */ }
   }
 
   function closeSecondaryModal() {
@@ -9836,20 +9879,18 @@ function closeModal() {
     // v1.7.5 (gate 3e) — WHERE TO WATCH leads the side column (actionable, high-value).
     const whereToWatchHtml = renderSecondaryPlatforms(detail.externalLinks);
 
-    // round 4 (Blake item 9) — the season room moves to a SMALL column of its
-    // OWN on the modal's LEFT edge ("a small area to the LEFT that works kinda
-    // like community reviews"). H5 stands: BLAKE'S REVIEW is still the first
-    // thing in the DOM (his voice precedes the room); the grid places the room
-    // visually left of it on wide screens. Under 1100px everything stacks —
-    // review first, room after the main column.
+    // gate 20 (Blake item 9 — round 4's left rail misread his ask): THIS
+    // SEASON'S ROOM is a FULL-WIDTH band at the bottom of the modal — after
+    // the side column's LINKS, before MORE LIKE THIS (the spot he circled).
+    // H5 stands: BLAKE'S REVIEW leads the body far above it.
     const body =
-      '<div class="secondary-body' + (communityHtml ? ' has-room' : '') + '">' +
+      '<div class="secondary-body">' +
         '<div class="secondary-col secondary-col--main">' + reviewHtml + descHtml + episodesHtml + genresHtml + tagsHtml + trailerHtml + '</div>' +
-        (communityHtml ? '<div class="secondary-col secondary-col--room">' + communityHtml + '</div>' : '') +
         '<div class="secondary-col secondary-col--side">' + whereToWatchHtml + charsHtml + staffHtml + linksHtml + '</div>' +
       '</div>';
+    const roomBand = communityHtml ? '<div class="secondary-room-band">' + communityHtml + '</div>' : '';
 
-    return header + context + body + recsHtml;
+    return header + context + body + roomBand + recsHtml;
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -10878,6 +10919,14 @@ function onScrollHeader() {
         requestAnimationFrame(() => splash.classList.add('is-in'));
       }
       document.addEventListener('keydown', onWelcomeKey, true);
+      // gate-20 adversarial HIGH (4 lenses): the catch-up wiring belongs HERE,
+      // where the door is actually visible — it used to run synchronously at
+      // boot, where (a) the splash.hidden guard dropped signal 3's button 100%
+      // deterministically (openWelcome is two rAFs away), (b) warm persisted
+      // auth could resolve before the door opened and drop signals 1-2 too,
+      // and (c) the seenSlugs snapshot advanced on EVERY load, eating the
+      // new-reviews diff unseen even when the door never showed.
+      initWelcomeCatchup();
       // v1.8.4 gate 3e (item 4) — focus the DIALOG CONTAINER, not the Enter button.
       // VERIFIED root cause (Firefox): a programmatic enterBtn.focus() makes the
       // button match :focus-visible in Firefox (its heuristic treats script-focus as
@@ -10910,13 +10959,155 @@ function onScrollHeader() {
     }
 
     function onWelcomeKey(e) {
-      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeWelcome(); }
+      if (e.key !== 'Escape' && e.key !== 'Enter') return;
+      // gate-20 adversarial MED: Enter on a FOCUSED door button (Surprise-me /
+      // a catch-up row) must activate IT, not dismiss the door out from under it.
+      if (e.key === 'Enter' && e.target && e.target.closest
+        && e.target.closest('.welcome-surprise, .welcome-catchup')) return;
+      // gate-20 adversarial MED: contain the key — a deep-linked secondary
+      // modal stacked under the door must NOT also tear down on the same Esc.
+      e.preventDefault();
+      e.stopPropagation();
+      closeWelcome();
     }
 
     if (enterBtn) enterBtn.addEventListener('click', closeWelcome);
     // v1.8.4 gate 3b — entry is ONLY via the Enter button (+ Esc/Enter keys). A
     // stray backdrop click no longer dismisses the door (removed the
     // click-on-backdrop -> closeWelcome handler per Blake).
+
+    // gate 20 (cherry) — 🎲 Surprise me: enter THROUGH the door onto a random
+    // pick from the 44 (rides the existing #random-btn machinery).
+    document.getElementById('welcome-surprise')?.addEventListener('click', () => {
+      closeWelcome();
+      setTimeout(() => { try { document.getElementById('random-btn')?.click(); } catch (_) {} }, REDUCED_MOTION ? 0 : 600);
+    });
+
+    // gate 20 — WHILE YOU WERE AWAY: catch-up buttons on the door, each a
+    // deep-link. Three signals, all cheap + spoof-safe (every id/title runs
+    // through the same validators the rest of the site uses):
+    //   1) unread lantern pings (signed-in)            → opens the Lantern
+    //   2) watchlist titles airing right now (signed-in) → the deep-dive modal
+    //   3) new reviews in the 44 since your last visit  → the review modal
+    // Buttons appear progressively as data resolves; a quiet visit shows none.
+    const CATCHUP_SEEN_KEY = 'rar:seenSlugs';
+    function catchupHost() { return document.getElementById('welcome-catchup'); }
+    function catchupAdd(node) {
+      const host = catchupHost();
+      if (!host || splash.hidden) return;
+      if (host.hidden) {
+        host.hidden = false;
+        host.innerHTML = '<span class="welcome-catchup-kicker">WHILE YOU WERE AWAY <span class="jp-mini">留守の間</span></span>';
+      }
+      host.appendChild(node);
+    }
+    function catchupButton(label, onGo, subs) {
+      const wrap = document.createElement('div');
+      wrap.className = 'welcome-catchup-row';
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'welcome-catchup-btn';
+      b.textContent = label;
+      wrap.appendChild(b);
+      if (subs && subs.length) {
+        const subWrap = document.createElement('div');
+        subWrap.className = 'welcome-catchup-subs';
+        subWrap.hidden = true;
+        subs.slice(0, 4).forEach((s) => {
+          const sb = document.createElement('button');
+          sb.type = 'button'; sb.className = 'welcome-catchup-sub';
+          sb.textContent = s.label;
+          sb.addEventListener('click', () => { closeWelcome(); setTimeout(s.go, REDUCED_MOTION ? 0 : 600); });
+          subWrap.appendChild(sb);
+        });
+        wrap.appendChild(subWrap);
+        b.addEventListener('click', () => { subWrap.hidden = !subWrap.hidden; });   // expand, don't navigate
+      } else if (onGo) {
+        b.addEventListener('click', () => { closeWelcome(); setTimeout(onGo, REDUCED_MOTION ? 0 : 600); });
+      }
+      return wrap;
+    }
+    function initWelcomeCatchup() {
+      // signal 3 — new in the 44 since the last visit (works signed-out too)
+      try {
+        const list = (typeof animeData !== 'undefined' && Array.isArray(animeData)) ? animeData : [];
+        const mk = (typeof slug === 'function') ? ((t) => slug(t))
+          : ((t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+        const cur = list.map((a) => mk(a.Title)).filter(Boolean);
+        const prevRaw = localStorage.getItem(CATCHUP_SEEN_KEY);
+        localStorage.setItem(CATCHUP_SEEN_KEY, JSON.stringify(cur));
+        if (prevRaw) {
+          const prev = new Set(JSON.parse(prevRaw));
+          const fresh = list.filter((a) => !prev.has(mk(a.Title)));
+          if (fresh.length) {
+            catchupAdd(catchupButton(
+              '✍ Blake added ' + fresh.length + ' new review' + (fresh.length === 1 ? '' : 's'),
+              null,
+              fresh.slice(0, 4).map((a) => ({
+                label: String(a.Title).slice(0, 44),
+                go: () => { try { openModal(a); } catch (_) {} },
+              }))
+            ));
+          }
+        }
+      } catch (_) {}
+      // signals 1 + 2 need a signed-in user
+      onAuthStateChanged(auth, async (user) => {
+        if (!user || splash.hidden) return;
+        // signal 1 — unread lantern pings (count vs lastSeenAt, lantern-style)
+        try {
+          const [notifSnap, prefSnap] = await Promise.all([
+            getDocs(query(collection(db, 'users', user.uid, 'notifications'), orderBy('createdAt', 'desc'), limit(10))),
+            getDoc(doc(db, 'users', user.uid, 'notifPrefs', 'prefs')),
+          ]);
+          const seenMs = (() => { try { return prefSnap.exists() ? (prefSnap.data().lastSeenAt?.toMillis() || 0) : 0; } catch (_) { return 0; } })();
+          let unread = 0;
+          notifSnap.forEach((d) => { try { if ((d.data().createdAt?.toMillis() || 0) > seenMs) unread++; } catch (_) {} });
+          if (unread > 0 && !splash.hidden) {
+            catchupAdd(catchupButton(
+              '🏮 ' + unread + ' new lantern ping' + (unread === 1 ? '' : 's') + (notifSnap.size >= 10 ? '+' : ''),
+              () => { try { document.getElementById('notif-btn')?.click(); } catch (_) {} }
+            ));
+          }
+        } catch (_) {}
+        // signal 2 — watchlist titles airing now (the Discover airing pool)
+        try {
+          const ff = window.franchiseFetch;
+          if (!ff || typeof ff.fetchAiringList !== 'function') return;
+          const wlSnap = await getDocs(query(collection(db, 'users', user.uid, 'watchlist'), limit(120)));
+          const wantIds = new Set();
+          wlSnap.forEach((d) => {
+            const v = d.data() || {};
+            const n = Number(v.aniListId || (String(d.id).indexOf('al:') === 0 ? d.id.slice(3) : NaN));
+            if (Number.isFinite(n) && n > 0) wantIds.add(n);
+          });
+          if (!wantIds.size || splash.hidden) return;
+          // adversarial MED: don't hit the network per fresh session — the
+          // airing pool barely moves; a 6h localStorage cache carries the door.
+          let airing = null;
+          try {
+            const cached = JSON.parse(localStorage.getItem('rar:doorAiring') || 'null');
+            if (cached && Array.isArray(cached.list) && (Date.now() - cached.at) < 6 * 3600000) airing = cached.list;
+          } catch (_) {}
+          if (!airing) {
+            airing = await ff.fetchAiringList(50);
+            try { localStorage.setItem('rar:doorAiring', JSON.stringify({ at: Date.now(), list: (airing || []).map((m) => ({ id: m.id, title: m.title })) })); } catch (_) {}
+          }
+          const hits = (airing || []).filter((m) => m && wantIds.has(Number(m.id)));
+          if (hits.length && !splash.hidden) {
+            catchupAdd(catchupButton(
+              '📺 ' + hits.length + ' on your watchlist ' + (hits.length === 1 ? 'is' : 'are') + ' airing now',
+              null,
+              hits.slice(0, 4).map((m) => ({
+                label: String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 44),
+                go: () => { try { window.openSecondaryFromKey && window.openSecondaryFromKey('al:' + Number(m.id)); } catch (_) {} },
+              }))
+            ));
+          }
+        } catch (_) {}
+      });
+    }
+    // (called from openWelcome — the door must be VISIBLE before any signal
+    // renders or the seenSlugs snapshot advances; see the adversarial note there)
 
     let welcomed = '0';
     try { welcomed = sessionStorage.getItem(WELCOME_KEY) || '0'; } catch (_) {}
