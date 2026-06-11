@@ -15,7 +15,7 @@
 //
 // Author: Code | date: 2026-06-02 | v1.6.11 gate 3e
 
-import { db } from './firebase.js';
+import { db, auth } from './firebase.js';
 import { collection, addDoc, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
@@ -397,6 +397,11 @@ async function handleSubmit(e) {
       submittedAt: serverTimestamp(),
       status: 'new',
     };
+    // gate 20.5 (the item-11 chain audit) — Q2's submitterUid was rules-ready
+    // and admin-rendered but NEVER client-written: the gold-flip letter and
+    // the admin reply affordance both key on it. Signed-in requests carry it
+    // now (rules pin it to the caller's own uid); anonymous stays anonymous.
+    try { if (auth && auth.currentUser) docData.submitterUid = auth.currentUser.uid; } catch (_) {}
     if (reason) docData.reason = reason;
     if (selection) {
       if (selection.id != null && !Number.isNaN(selection.id)) docData.anilistId = selection.id;

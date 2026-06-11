@@ -118,12 +118,21 @@ test('round 4: the accent map carries gradients + glow + pearl, and still owns n
     el.className = 'acct-preview';
     el.setAttribute('data-accent', 'g-nebula');
     el.setAttribute('data-accent-glow', '');
+    // gate 20.5: the glow rides the injected .pf-accent-ring layer now (the
+    // TRUE-gradient edge), not the host — the spec follows the contract.
+    const ring = document.createElement('span');
+    ring.className = 'pf-accent-ring';
+    el.appendChild(ring);
     document.body.appendChild(el);
     const cs = getComputedStyle(el);
     const out = {
       a1: cs.getPropertyValue('--pf-accent').trim(),
       a2: cs.getPropertyValue('--pf-accent2').trim(),
+      // 20.5 final contract: the aura sits on the HOST (a mask clips the
+      // ring's own shadow); the ring carries the gradient edge.
       glow: cs.boxShadow,
+      ringGradient: getComputedStyle(ring).backgroundImage.includes('linear-gradient'),
+      ringAbsolute: getComputedStyle(ring).position,
     };
     el.setAttribute('data-accent', 'pearl');
     out.pearl = getComputedStyle(el).getPropertyValue('--pf-accent').trim();
@@ -131,7 +140,9 @@ test('round 4: the accent map carries gradients + glow + pearl, and still owns n
   });
   expect(m.a1).toBe('#bb86fc');
   expect(m.a2).toBe('#f48fb1');                    // a real two-stop gradient key
-  expect(m.glow).not.toBe('none');                 // the glow switch glows
+  expect(m.glow).not.toBe('none');                 // the glow switch glows (host aura)
+  expect(m.ringGradient).toBe(true);               // the ring carries the true gradient
+  expect(m.ringAbsolute).toBe('absolute');         // and never collapses in-flow (the lift-rule HIGH)
   expect(m.pearl).toBe('#e3e1ec');
   // heart: no gold-family accent may exist (Blake's color is not on this menu)
   const goldLeak = await page.evaluate(() => {

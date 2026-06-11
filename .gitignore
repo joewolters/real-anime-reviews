@@ -102,3 +102,7 @@ AUDIT_*.md
 # Code's throwaway diagnostics/screenshots must never reach git or hosting.
 # Mirror rule: firebase.json hosting.ignore carries tmp* too.
 tmp*
+
+# gate 20.5 — Blake's desktop-shortcut icon lives in the deploy root (his
+# shortcut points at it; do not move/rename). Same dual-ignore as *.bat.
+*.ico

@@ -1,4 +1,4 @@
-// account.js (ES module)
+﻿// account.js (ES module)
 import { auth, db, functions } from './firebase.js';
 import {
   onAuthStateChanged,
@@ -169,7 +169,7 @@ const PROF_TAG_CATALOG = [
   ['Identity', '正体', ['Manga reader', 'Light-novel reader', 'AMV maker', 'Cosplayer', 'Figure collector', 'Tier-list maker', 'OST enjoyer', 'Sakuga nerd', 'Lore historian', 'Power-scaler', 'Theory crafter', 'Waifu connoisseur', 'Husbando defender', 'Filler apologist', 'Subtitle purist', 'Con-goer', 'Gacha survivor', 'Spoiler-phobic']],
 ];
 const profState = {
-  bio: '', status: '', tags: [], accent: '', accentGlow: false, bgRef: '', featuredAnime: '',
+  bio: '', status: '', tags: [], accent: '', accentGlow: false, frame: '', bgRef: '', featuredAnime: '',
   bgStagedBlob: null, bgStagedMime: '', bgStagedUrl: '', bgRemove: false, bgCurrentUrl: '',
 };
 
@@ -222,6 +222,15 @@ function renderProfPreview() {
     ? `<div class="profile-tags">${profState.tags.slice(0, 6).map((t) => `<span class="profile-tag">${esc(String(t).slice(0, 24))}</span>`).join('')}</div>` : '';
   host.setAttribute('data-accent', PROF_ACCENTS.indexOf(profState.accent) !== -1 ? profState.accent : 'violet');
   host.toggleAttribute('data-accent-glow', !!profState.accentGlow);
+  // gate 20.5 (item 9b) — the frame theme wraps the hero live
+  if (profState.frame && frameKeyValid(profState.frame)) host.setAttribute('data-frame', profState.frame);
+  else host.removeAttribute('data-frame');
+  // gate 20.5 (item 9) — the accent ring is a real edge layer (true gradients)
+  if (!host.querySelector('.pf-accent-ring')) {
+    const ring = document.createElement('span');
+    ring.className = 'pf-accent-ring'; ring.setAttribute('aria-hidden', 'true');
+    host.appendChild(ring);
+  }
   syncPreviewBg(host);   // bg layer: untouched unless its URL changed
   let head = host.querySelector('.profile-head');
   if (!head) { head = document.createElement('div'); head.className = 'profile-head'; host.appendChild(head); }
@@ -423,6 +432,52 @@ function renderAccentPicker() {
   host.appendChild(glowRow);
 }
 
+// gate 20.5 (item 9b) — the FRAME picker: swatch tiles from window.RAR_FRAMES
+// (frames.js; keys mirror the rules enum in lock-step). Blake's exclusive
+// 'blake' tile renders ONLY for his account — and the RULES are what enforce
+// the exclusivity (this UI filter is courtesy, not security).
+function frameList() {
+  const list = Array.isArray(window.RAR_FRAMES) ? window.RAR_FRAMES : [];
+  const isBlake = !!(auth.currentUser && auth.currentUser.uid === RAR_ADMIN_UID);
+  return list.filter((f) => f && f.key && (!f.blakeOnly || isBlake));
+}
+function frameKeyValid(k) {
+  return frameList().some((f) => f.key === k);
+}
+function renderFramePicker() {
+  const host = document.getElementById('acct-frames');
+  if (!host) return;
+  host.innerHTML = '';
+  const mkTile = (key, label, jp, blakeOnly) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'acct-frame-tile' + (blakeOnly ? ' is-blake-tile' : '');
+    b.setAttribute('role', 'radio');
+    const on = (profState.frame || '') === key;
+    b.classList.toggle('is-active', on);
+    b.setAttribute('aria-checked', String(on));
+    const sw = document.createElement('span');
+    sw.className = 'frame-swatch';
+    if (key) sw.setAttribute('data-frame', key);
+    sw.setAttribute('aria-hidden', 'true');
+    const nm = document.createElement('span');
+    nm.className = 'acct-frame-name';
+    nm.textContent = label;
+    if (jp) { const j = document.createElement('span'); j.className = 'jp-mini'; j.textContent = ' ' + jp; nm.appendChild(j); }
+    b.appendChild(sw); b.appendChild(nm);
+    b.addEventListener('click', () => {
+      profState.frame = (profState.frame === key) ? '' : key;
+      renderFramePicker(); renderProfPreview();
+      // 20.5 LOW: the rebuild dropped keyboard focus to <body> — land it back
+      // on the picked tile.
+      try { (document.querySelector('.acct-frame-tile.is-active') || document.querySelector('.acct-frame-tile'))?.focus(); } catch (_) {}
+    });
+    return b;
+  };
+  host.appendChild(mkTile('', 'Plain', '無地', false));
+  frameList().forEach((f) => host.appendChild(mkTile(f.key, f.label || f.key, f.jp || '', !!f.blakeOnly)));
+}
+
 // background staging — upload happens on Save (the onProfileWritten CF sweeps
 // the OLD object once bgRef changes, so no client-side delete dance).
 const PROF_BG_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -587,7 +642,9 @@ async function renderViewerMode(user) {
   // count to 0) — the preview must too, or a fresh profile under-promises.
   const likesCount = (typeof p.likesCount === 'number') ? p.likesCount : 0;
   const likes = `<div class="profile-like-row"><button type="button" class="profile-like-btn" disabled title="Viewers can appreciate you here"><span class="profile-like-heart" aria-hidden="true">♥</span><span class="profile-like-verb">Appreciate</span></button><span class="profile-like-count" aria-label="appreciations">${Math.max(0, likesCount)}</span></div>`;
-  host.innerHTML = `<section class="profile-sheet acct-viewer-sheet"${accent ? ` data-accent="${esc(accent)}"` : ''}${p.accentGlow === true ? ' data-accent-glow' : ''}>
+  const vFrame = (typeof p.frame === 'string' && frameKeyValid(p.frame)) ? p.frame : '';
+  host.innerHTML = `<section class="profile-sheet acct-viewer-sheet"${accent ? ` data-accent="${esc(accent)}"` : ''}${p.accentGlow === true ? ' data-accent-glow' : ''}${vFrame ? ` data-frame="${esc(vFrame)}"` : ''}>
+      <span class="pf-accent-ring" aria-hidden="true"></span>
       <div class="profile-kicker">MEMBER <span class="jp-mini">旅人</span>
         <span class="acct-viewer-badge">as last saved — exactly what viewers see</span></div>
       <div class="profile-body">
@@ -692,6 +749,7 @@ async function initProfileStudio(user) {
       profState.tags = Array.isArray(p.tags) ? p.tags.slice(0, 6).map((t) => String(t).slice(0, 24)) : [];
       profState.accent = (PROF_ACCENTS.indexOf(p.accent) !== -1) ? p.accent : '';
       profState.accentGlow = p.accentGlow === true;
+      profState.frame = (typeof p.frame === 'string' && frameKeyValid(p.frame)) ? p.frame : '';
       profState.bgRef = typeof p.bgRef === 'string' ? p.bgRef : '';
       profState.featuredAnime = typeof p.featuredAnime === 'string' ? p.featuredAnime : '';
     }
@@ -704,7 +762,7 @@ async function initProfileStudio(user) {
       profState.bgCurrentUrl = await getDownloadURL(storageRef(getStorage(), profState.bgRef));
     } catch (_) { profState.bgCurrentUrl = ''; }
   }
-  renderTagEditor(); renderAccentPicker(); renderBgThumb(); renderProfPreview();
+  renderTagEditor(); renderAccentPicker(); renderFramePicker(); renderBgThumb(); renderProfPreview();
   loadFeaturedChoices(user.uid);
   // live preview while typing
   $('#prof-name')?.addEventListener('input', renderProfPreview);
@@ -921,7 +979,7 @@ function subscribeActivity(user) {
       const root = path[0];
       const animeId = path[1];
       if (!animeId) return;
-      const title = titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the 44)' : animeId);
+      const title = titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the reviews)' : animeId);
       const ms = toMillis(data.editedAt || data.updatedAt || data.createdAt);
       if (root === 'comments') {
         next.push({ animeId, title, ms, kind: 'comment', path: d.ref.path, desc: `Commented: ${shorten(data.text)}` });
@@ -955,7 +1013,7 @@ function subscribeActivity(user) {
       // reviews/{animeId}/items/{reviewUid}/threads/{tid}
       const animeId = path[1];
       if (!animeId) return;
-      const title = titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the 44)' : animeId);
+      const title = titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the reviews)' : animeId);
       const ms = toMillis(data.editedAt || data.updatedAt || data.createdAt);
       next.push({ animeId, title, ms, kind: 'reply', path: d.ref.path, desc: `Discussion comment: ${shorten(data.text)}` });
     });
@@ -975,7 +1033,7 @@ function subscribeActivity(user) {
         if (data.removed) return;
         const animeId = d.ref.path.split('/')[1];
         if (!animeId) return;
-        next.push({ animeId, title: titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the 44)' : animeId), ms: toMillis(data.editedAt || data.updatedAt || data.createdAt),
+        next.push({ animeId, title: titleById.get(animeId) || (String(animeId).indexOf('al:') === 0 ? 'A season (beyond the reviews)' : animeId), ms: toMillis(data.editedAt || data.updatedAt || data.createdAt),
           kind: 'reply', path: d.ref.path, desc: `Replied: ${shorten(data.text)}` });
       });
       gotAny = true; streams.replies = next; rerender();
@@ -1349,7 +1407,7 @@ function openColAdder(uid, col) {
     listEl.innerHTML = '';
     const locals = all.filter((c) => !existing.has(c.animeId) && (!needle || c.title.toLowerCase().includes(needle))).slice(0, 60);
     if (locals.length) {
-      listEl.appendChild(group('Your lists & the 44', '棚'));
+      listEl.appendChild(group("Your lists & Blake's reviews", '棚'));
       locals.forEach((c) => listEl.appendChild(rowFor(c)));
     }
     const ext = extRows.filter((c) => !existing.has(c.animeId) && !all.some((l) => l.animeId === c.animeId));
@@ -1870,6 +1928,13 @@ saveBtn.addEventListener('click', async () => {
         bgRef: nextBgRef,
         featuredAnime: profState.featuredAnime || null,
       };
+      // 20.5 adversarial LOW: if frames.js ever fails to load, frameKeyValid
+      // is false for EVERYTHING and a blanket deleteField would silently wipe
+      // the member's saved frame on an unrelated save — touch the key only
+      // when the manifest is actually present.
+      if (Array.isArray(window.RAR_FRAMES) && window.RAR_FRAMES.length) {
+        pData.frame = (profState.frame && frameKeyValid(profState.frame)) ? profState.frame : deleteField();
+      }
       if (!pSnap.exists()) pData.joinedAt = serverTimestamp();   // member-since: first write only
       await setDoc(pref, pData, { merge: true });
       profState.bgRef = nextBgRef || '';

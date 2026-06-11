@@ -5765,6 +5765,20 @@ function openInlineCommentEditor(editBtn, itemRef) {
           'g-nebula', 'g-ember', 'g-ocean', 'g-meadow', 'g-dusk', 'g-sakura'].indexOf(prof.accent) !== -1) ? prof.accent : '';
     if (accent && sheet) sheet.setAttribute('data-accent', accent);
     if (prof && prof.accentGlow === true && sheet) sheet.setAttribute('data-accent-glow', '');
+    // gate 20.5 (item 9b) — the FRAME renders for viewers (rules wrote it, but
+    // display-validate anyway: a key must exist in the manifest, and 'blake'
+    // may only ever dress BLAKE's sheet — defense-in-depth on the heart).
+    if (prof && typeof prof.frame === 'string' && sheet) {
+      const fl = Array.isArray(window.RAR_FRAMES) ? window.RAR_FRAMES : [];
+      const fdef = fl.find((f) => f && f.key === prof.frame);
+      if (fdef && (!fdef.blakeOnly || uid === NOTIF_ADMIN_UID)) sheet.setAttribute('data-frame', prof.frame);
+    }
+    // gate 20.5 (item 9) — the accent ring layer on the live sheet too
+    if (sheet && !sheet.querySelector('.pf-accent-ring')) {
+      const ring = document.createElement('span');
+      ring.className = 'pf-accent-ring'; ring.setAttribute('aria-hidden', 'true');
+      sheet.appendChild(ring);
+    }
 
     // profile BACKGROUND — rides the same pipeline as every other upload
     // (own-prefix pinned in the rules, magic-byte + EXIF re-encode in the CF,
@@ -6692,7 +6706,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const slug = hubAnimeSlugFromTag(tag);
     if (!slug) return '';
     const a = animeBySlug(slug);
-    if (!a) return `<div class="hub-verdict hub-verdict--none">Not yet in the 44 — <button type="button" class="hub-suggest-link" data-suggest="${escapeHtml(slug)}">suggest it</button>.</div>`;
+    if (!a) return `<div class="hub-verdict hub-verdict--none">Not yet in Blake's reviews — <button type="button" class="hub-suggest-link" data-suggest="${escapeHtml(slug)}">suggest it</button>.</div>`;
     const rating = String(a.Rating || '').replace(/\s*\/\s*10\s*$/, '');
     const quote = String(a.Review || a.Description || '').replace(/[#*_`>\[\]]/g, '').trim().slice(0, 160);
     return `<div class="hub-verdict" data-anime-slug="${escapeHtml(animeSlug(a))}">
@@ -9156,7 +9170,22 @@ function closeModal() {
     // Esc steps BACK one history entry (gate 2b — consistent with the Back chip
     // and backdrop). stopPropagation keeps the window-level handler (closeModal)
     // from also tearing down the primary modal beneath.
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); secondaryBack(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); secondaryBack(); return; }
+    // gate 20.5 (hardening trio, #1): TAB CONTAINMENT — round 3 gave the sheet
+    // focus but never trapped it; Tab walked out into the page beneath.
+    if (e.key === 'Tab' && secondaryEl && !secondaryEl.hidden) {
+      const sheet = secondaryEl.querySelector('.secondary-modal');
+      if (!sheet) return;
+      const focusables = Array.from(sheet.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+        .filter((el) => !el.disabled && el.offsetParent !== null);   // 20.5 LOW: skip disabled/invisible
+      if (!focusables.length) return;
+      const first = focusables[0], last = focusables[focusables.length - 1];
+      const inside = sheet.contains(document.activeElement);
+      if (!inside) { e.preventDefault(); first.focus(); return; }
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
   }
 
   function onSecondaryClick(e) {
@@ -9320,6 +9349,9 @@ function closeModal() {
       moreInfoContent: moreInfoContent || null,
       currentId: id,
     };
+    // 20.5 LOW (the trio's one gap): a reopen inside the 280ms close window
+    // must cancel the pending done-timer or it blanks the fresh sheet.
+    if (secondaryCloseTimer) { clearTimeout(secondaryCloseTimer); secondaryCloseTimer = null; }
     secondaryEl.hidden = false;
     void secondaryEl.offsetWidth;            // reflow so the slide-in transition runs
     secondaryEl.classList.add('active');
@@ -9364,9 +9396,19 @@ function closeModal() {
     return secondaryCtx ? secondaryCtx.sourceTitle : '';
   }
 
+  let secondaryLoadGen = 0;   // gate 20.5 (hardening) — the navigation generation
+  let secondaryCloseTimer = null;   // 20.5 LOW — cancellable close (reopen-in-window guard)
   async function loadSecondary(aniListId, forceRefresh) {
     const id = Number(aniListId);
     if (!id || !secondaryEl) return;
+    // gate 20.5 (hardening trio, #2): the GENERATION TOKEN — a slow fetch A
+    // must never paint over a faster, newer fetch B on a throttled network.
+    const gen = ++secondaryLoadGen;
+    // (#3): the 280ms close animation window — 'active' drops the instant a
+    // close starts, so a fetch resolving inside that window can't wire live
+    // listeners into a closing/closed sheet.
+    const stillMine = () => secondaryEl && !secondaryEl.hidden
+      && secondaryEl.classList.contains('active') && gen === secondaryLoadGen;
     if (secondaryCtx) secondaryCtx.currentId = id;
     secondaryScrollEl.scrollTop = 0;
     const sourceTitle = secondaryCtx ? secondaryCtx.sourceTitle : '';
@@ -9374,12 +9416,12 @@ function closeModal() {
     applyViewingHighlight(id);
     // Detail + the season-review index in parallel (index resolves once, cached).
     const [detail] = await Promise.all([fetchAnimeDetailCached(id, forceRefresh), getSeasonReviewIndex()]);
-    if (!secondaryEl || secondaryEl.hidden) return;   // user backed out mid-fetch
+    if (!stillMine()) return;   // backed out / superseded mid-fetch
     // Lazy-fetch Blake's written season review for this id (if the index says so).
     let seasonReview = null;
     if (detail && hasSeasonReview(id)) {
       seasonReview = await fetchSeasonReview(id);
-      if (!secondaryEl || secondaryEl.hidden) return;
+      if (!stillMine()) return;
     }
     // Backfill the current history entry's title (so future Back labels are right).
     const top = secondaryHistory[secondaryHistory.length - 1];
@@ -9389,7 +9431,10 @@ function closeModal() {
     // Stash the loaded detail so the save pills (gate 1) can snapshot title/cover/
     // format/year at click-time without a re-fetch.
     if (secondaryCtx) secondaryCtx.currentDetail = detail || null;
-    const meta = { sourceTitle, backTitle: secondaryBackTitle(), inFranchise: !!secondaryViewingRow, seasonReview, alId: detail ? id : null };
+    // gate 20.5 (the decouple): alId rides ALWAYS — the room never depended on
+    // the detail fetch (it was `detail ? id : null`, which starved the error
+    // branch's room).
+    const meta = { sourceTitle, backTitle: secondaryBackTitle(), inFranchise: !!secondaryViewingRow, seasonReview, alId: id };
     // gate 19 — tear down the previous season's comment subscriptions BEFORE the
     // innerHTML swap orphans their DOM (loadSecondary re-renders on every nav).
     if (secondaryCommentsUnsub) { try { secondaryCommentsUnsub(); } catch (_) {} secondaryCommentsUnsub = null; }
@@ -9398,8 +9443,12 @@ function closeModal() {
     wireReviewNav(secondaryScrollEl);   // v1.8.2 — jump pills + scroll-spy on BLAKE'S REVIEW
     // gate 19 — wire the per-season comments (same machinery as the primary
     // modal; the ctx has no Title so communityKey resolves to al:<id>).
-    if (detail) {
+    // gate 20.5 (the decouple): the room wires on the ID alone — a failed
+    // detail fetch renders the error state WITH a live room now.
+    if (id) {
       try { secondaryCommentsUnsub = wireComments({ aniListId: id }); } catch (_) { secondaryCommentsUnsub = null; }
+    }
+    if (detail) {
       wireRequestedChip(id);   // gate 20 — the "👁 N requested" demand chip
     }
   }
@@ -9442,8 +9491,8 @@ function closeModal() {
     restoreViewingHighlight();
     secondaryHistory = [];
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const done = () => { if (!secondaryEl) return; secondaryEl.hidden = true; secondaryScrollEl.innerHTML = ''; };
-    if (reduce) done(); else setTimeout(done, 280);
+    const done = () => { secondaryCloseTimer = null; if (!secondaryEl) return; secondaryEl.hidden = true; secondaryScrollEl.innerHTML = ''; };
+    if (reduce) done(); else secondaryCloseTimer = setTimeout(done, 280);
     // Primary modal is still mounted underneath → keep the scroll lock if it's open.
     document.documentElement.style.overflow = (modal && modal.classList.contains('active')) ? 'hidden' : '';
     secondaryCtx = null;
@@ -9617,6 +9666,24 @@ function closeModal() {
       '</section>';
   }
 
+  // gate 20.5 — the room builder, shared by the success AND error branches
+  // (the decouple: the room needs only the AniList id — never the detail
+  // fetch). Watched rooms keep their lead-in; non-watched rooms get their own
+  // (Blake's voice in the copy — no review leads them; purple, never gold).
+  function seasonRoomHtml(meta, isWatched) {
+    if (!meta || !meta.alId) return '';
+    const head = isWatched
+      ? { t: 'THIS SEASON’S ROOM', s: 'Talk about this season — spoilers behind the tag, please.' }
+      : { t: 'THE ROOM', s: 'I haven’t reviewed this one (yet) — the room’s open anyway. Keep spoilers behind the tag.' };
+    return '<section class="secondary-section secondary-community">' +
+        '<div class="secondary-community-head">' +
+          '<h3 class="secondary-section-title secondary-community-title">' + head.t + ' <span class="jp-mini">話せ</span></h3>' +
+          '<span class="secondary-community-sub">' + head.s + '</span>' +
+        '</div>' +
+        commentsMarkup({ aniListId: meta.alId }) +
+      '</section>';
+  }
+
   // Pure renderer → HTML string. states: 'loading' | 'success' | 'error'.
   function renderSecondaryModal(state, detail, meta) {
     meta = meta || {};
@@ -9643,11 +9710,21 @@ function closeModal() {
         '<div class="secondary-loading"><div class="secondary-spinner" aria-hidden="true"></div><span>Loading details…</span></div>';
     }
     if (state === 'error' || !detail) {
+      // gate 20.5 (the decouple): the ROOM still mounts on a failed detail
+      // fetch — the conversation never depended on the metadata. Adversarial
+      // MED: in the ERROR state the room is WATCHED-ids only — a successful
+      // fetch is what proves an arbitrary id exists on AniList; without it,
+      // garbage ids would mint live composers on undiscoverable graffiti keys.
+      const errWatched = (meta && meta.alId && typeof isWatchedAniListId === 'function') && isWatchedAniListId(meta.alId);
+      const errRoom = errWatched
+        ? '<div class="secondary-room-band">' + seasonRoomHtml(meta, true) + '</div>'
+        : '';
       return '<div class="secondary-header secondary-header--bare">' +
           buildHeaderBar('') +
         '</div>' +
         '<div class="secondary-empty">Couldn’t load these details right now.' +
-          ' <button type="button" class="secondary-retry">Try again</button></div>';
+          ' <button type="button" class="secondary-retry">Try again</button></div>' +
+        errRoom;
     }
 
     // ── success ──
@@ -9767,15 +9844,13 @@ function closeModal() {
     // schema; the live composer / consent gate / images / spoilers / report /
     // mod machinery is the SAME code the primary modal runs. Purple, count-free
     // cards; the one gold above it is Blake's review.
-    const communityHtml = (meta && meta.alId && isWatched)   // round-3 adversarial MED: rooms only where Blake's presence precedes (H5) — never on arbitrary never-watched ids
-      ? '<section class="secondary-section secondary-community">' +
-          '<div class="secondary-community-head">' +
-            '<h3 class="secondary-section-title secondary-community-title">THIS SEASON’S ROOM <span class="jp-mini">話せ</span></h3>' +
-            '<span class="secondary-community-sub">Talk about this season — spoilers behind the tag, please.</span>' +
-          '</div>' +
-          commentsMarkup({ aniListId: meta.alId }) +
-        '</section>'
-      : '';
+    // gate 20.5 (Blake item 10) — rooms open EVERYWHERE now ("should appear on
+    // animes I haven't reviewed as well so people still get a chance to
+    // comment" — his explicit reversal of the round-3 watched-gate). The
+    // non-watched room gets its OWN lead-in (no Blake review leads it, so his
+    // voice lives in the copy instead — purple, never gold). Same machinery,
+    // same moderation reach (report/lock/mod work on any communityKey).
+    const communityHtml = seasonRoomHtml(meta, isWatched);
 
     // synopsis (collapsible past ~420 chars)
     const descText = stripAniListHtml(detail.description);
@@ -10976,12 +11051,8 @@ function onScrollHeader() {
     // stray backdrop click no longer dismisses the door (removed the
     // click-on-backdrop -> closeWelcome handler per Blake).
 
-    // gate 20 (cherry) — 🎲 Surprise me: enter THROUGH the door onto a random
-    // pick from the 44 (rides the existing #random-btn machinery).
-    document.getElementById('welcome-surprise')?.addEventListener('click', () => {
-      closeWelcome();
-      setTimeout(() => { try { document.getElementById('random-btn')?.click(); } catch (_) {} }, REDUCED_MOTION ? 0 : 600);
-    });
+    // (gate 20.5 item 1 — the door's Surprise-me removed per Blake; the nav's
+    // Random stays the one dice.)
 
     // gate 20 — WHILE YOU WERE AWAY: catch-up buttons on the door, each a
     // deep-link. Three signals, all cheap + spoof-safe (every id/title runs
@@ -10991,6 +11062,9 @@ function onScrollHeader() {
     //   3) new reviews in the 44 since your last visit  → the review modal
     // Buttons appear progressively as data resolves; a quiet visit shows none.
     const CATCHUP_SEEN_KEY = 'rar:seenSlugs';
+    // gate 20.5 (item 3) — the signals feed a STATE the catch-up SHEET renders
+    // from; the door strip is the teaser, the sheet is the destination.
+    const catchupState = { fresh: [], pings: [], airing: [] };
     function catchupHost() { return document.getElementById('welcome-catchup'); }
     function catchupAdd(node) {
       const host = catchupHost();
@@ -11001,17 +11075,22 @@ function onScrollHeader() {
       }
       host.appendChild(node);
     }
-    function catchupButton(label, onGo, subs) {
+    // a door row: the MAIN button opens the sheet at its section (Blake: the
+    // old behavior "just brought me to my notifications — not what we're
+    // looking for"); the quick deep-link sub-chips render INLINE beneath it
+    // (they stay, per the prompt — one click, no toggle).
+    function catchupButton(label, section, subs) {
       const wrap = document.createElement('div');
       wrap.className = 'welcome-catchup-row';
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'welcome-catchup-btn';
-      b.textContent = label;
+      b.innerHTML = `<span class="wc-label"></span><span class="wc-go" aria-hidden="true">›</span>`;
+      b.querySelector('.wc-label').textContent = label;
+      b.addEventListener('click', () => { closeWelcome(); setTimeout(() => openCatchupSheet(section), REDUCED_MOTION ? 0 : 620); });
       wrap.appendChild(b);
       if (subs && subs.length) {
         const subWrap = document.createElement('div');
         subWrap.className = 'welcome-catchup-subs';
-        subWrap.hidden = true;
         subs.slice(0, 4).forEach((s) => {
           const sb = document.createElement('button');
           sb.type = 'button'; sb.className = 'welcome-catchup-sub';
@@ -11020,12 +11099,131 @@ function onScrollHeader() {
           subWrap.appendChild(sb);
         });
         wrap.appendChild(subWrap);
-        b.addEventListener('click', () => { subWrap.hidden = !subWrap.hidden; });   // expand, don't navigate
-      } else if (onGo) {
-        b.addEventListener('click', () => { closeWelcome(); setTimeout(onGo, REDUCED_MOTION ? 0 : 600); });
       }
       return wrap;
     }
+
+    // ── THE CATCH-UP SHEET — a real destination on the veil ──
+    function openCatchupSheet(section) {
+      const sheet = document.getElementById('catchup-sheet');
+      const body = document.getElementById('catchup-body');
+      if (!sheet || !body) return;
+      const esc = escapeHtml;
+      let html = '';
+      // 1 — FROM BLAKE: new reviews since the last visit, as cover cards
+      if (catchupState.fresh.length) {
+        html += '<section class="catchup-sec" data-sec="blake">'
+          + '<h3 class="catchup-sec-kicker">✍ NEW FROM BLAKE <span class="jp-mini">新作</span></h3>'
+          + '<p class="catchup-sec-sub">Reviewed since you were last here.</p>'
+          + '<div class="catchup-cards">'
+          + catchupState.fresh.slice(0, 8).map((a, i) => {
+              const img = (a.image && /^[A-Za-z0-9._-]+$/.test(a.image)) ? 'assets/' + esc(a.image) : '';
+              return `<button type="button" class="catchup-card" data-fresh="${i}">`
+                + (img ? `<img class="catchup-card-img" src="${img}" alt="" loading="lazy">` : '<span class="catchup-card-img catchup-card-img--ph"></span>')
+                + `<span class="catchup-card-title">${esc(String(a.Title).slice(0, 60))}</span></button>`;
+            }).join('')
+          + '</div></section>';
+      }
+      // 2 — YOUR LANTERN: the unread pings as letters (gold = Blake-origin)
+      if (catchupState.pings.length) {
+        html += '<section class="catchup-sec" data-sec="lantern">'
+          + '<h3 class="catchup-sec-kicker">🏮 YOUR LANTERN <span class="jp-mini">灯り</span></h3>'
+          + '<p class="catchup-sec-sub">What landed while you were out.</p>'
+          + '<div class="catchup-pings">'
+          + catchupState.pings.slice(0, 10).map((n, i) => {
+              const blake = n.fromUid === NOTIF_ADMIN_UID;
+              const who = esc(String(n.fromDisplayName || (blake ? 'Blake' : 'Someone')).slice(0, 40));
+              const verb = esc(String(n.verb || 'sent you something').slice(0, 90));
+              const title = n.animeTitle ? ` — <i>${esc(String(n.animeTitle).slice(0, 60))}</i>` : '';
+              return `<button type="button" class="catchup-ping${blake ? ' is-blake' : ''}" data-ping="${i}">`
+                + `<b>${who}</b> ${verb}${title}<span class="catchup-ping-go" aria-hidden="true">›</span></button>`;
+            }).join('')
+          + '</div></section>';
+      }
+      // 3 — AIRING FOR YOU: watchlist titles airing right now
+      if (catchupState.airing.length) {
+        html += '<section class="catchup-sec" data-sec="airing">'
+          + '<h3 class="catchup-sec-kicker">📺 AIRING FOR YOU <span class="jp-mini">放送中</span></h3>'
+          + '<p class="catchup-sec-sub">From your watchlist, on the air right now.</p>'
+          + '<div class="catchup-chips">'
+          + catchupState.airing.slice(0, 8).map((m, i) =>
+              `<button type="button" class="catchup-chip" data-air="${i}">📺 ${esc(String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 50))}</button>`
+            ).join('')
+          + '</div></section>';
+      }
+      if (!html) html = '<p class="catchup-empty">All caught up — the den is just as you left it. 🏮</p>';
+      body.innerHTML = html;
+
+      const leave = (go) => { closeCatchupSheet(); if (go) setTimeout(go, REDUCED_MOTION ? 0 : 240); };
+      body.querySelectorAll('.catchup-card').forEach((el) => el.addEventListener('click', () => {
+        const a = catchupState.fresh[Number(el.dataset.fresh)];
+        if (a) leave(() => { try { openModal(a); } catch (_) {} });
+      }));
+      body.querySelectorAll('.catchup-ping').forEach((el) => el.addEventListener('click', () => {
+        const n = catchupState.pings[Number(el.dataset.ping)];
+        if (n) leave(() => { try { openNotifTarget(n.targetPath, n.animeId); } catch (_) {} });
+      }));
+      body.querySelectorAll('.catchup-chip').forEach((el) => el.addEventListener('click', () => {
+        const m = catchupState.airing[Number(el.dataset.air)];
+        if (m) leave(() => { try { window.openSecondaryFromKey && window.openSecondaryFromKey('al:' + Number(m.id)); } catch (_) {} });
+      }));
+
+      sheet.hidden = false;
+      sheet.setAttribute('aria-hidden', 'false');
+      document.documentElement.style.overflow = 'hidden';
+      // adversarial MED: showing the lantern letters IS reading them — mark
+      // seen exactly like closing the real lantern does, or the same pings
+      // re-count as "new" on every visit forever.
+      if (catchupState.pings.length) { try { markAllNotifsRead(); } catch (_) {} }
+      if (!REDUCED_MOTION) requestAnimationFrame(() => sheet.classList.add('is-in'));
+      else sheet.classList.add('is-in');
+      // land on the asked-for section
+      if (section) { try { body.querySelector(`[data-sec="${section}"]`)?.scrollIntoView({ block: 'start' }); } catch (_) {} }
+      requestAnimationFrame(() => { try { sheet.focus({ preventScroll: true }); } catch (_) {} });
+      document.addEventListener('keydown', onCatchupKey, true);
+    }
+    function closeCatchupSheet() {
+      const sheet = document.getElementById('catchup-sheet');
+      if (!sheet || sheet.hidden) return;
+      document.removeEventListener('keydown', onCatchupKey, true);
+      sheet.classList.remove('is-in');
+      const done = () => {
+        sheet.hidden = true; sheet.setAttribute('aria-hidden', 'true');
+        // adversarial HIGH (3 lenses): the +300ms timer fired AFTER a deep-link
+        // had opened a modal (+240ms) and wiped ITS scroll lock — the deep-dive
+        // sat open over a freely-scrolling page. Release the lock only when no
+        // other locked layer is up.
+        const otherOpen = document.querySelector('.secondary-layer.active, .modal.active, .profile-layer:not([hidden])')
+          || document.body.classList.contains('modal-open');
+        if (!otherOpen) {
+          document.documentElement.style.overflow = '';
+          // adversarial LOW: focus must land somewhere real on a plain close
+          try { document.getElementById('notif-btn')?.focus({ preventScroll: true }); } catch (_) {}
+        }
+      };
+      if (REDUCED_MOTION) done(); else setTimeout(done, 300);
+    }
+    function onCatchupKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeCatchupSheet(); return; }
+      // adversarial MED — Tab containment (the secondary's trap, same shape;
+      // disabled/invisible elements filtered)
+      if (e.key === 'Tab') {
+        const sheet = document.getElementById('catchup-sheet');
+        const panel = sheet && !sheet.hidden ? sheet.querySelector('.catchup-panel') : null;
+        if (!panel) return;
+        const focusables = Array.from(panel.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+          .filter((el) => !el.disabled && el.offsetParent !== null);
+        if (!focusables.length) return;
+        const first = focusables[0], last = focusables[focusables.length - 1];
+        if (!panel.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+    document.getElementById('catchup-close')?.addEventListener('click', closeCatchupSheet);
+    document.getElementById('catchup-enter')?.addEventListener('click', closeCatchupSheet);
+    document.querySelector('#catchup-sheet .catchup-scrim')?.addEventListener('click', closeCatchupSheet);
     function initWelcomeCatchup() {
       // signal 3 — new in the 44 since the last visit (works signed-out too)
       try {
@@ -11039,9 +11237,10 @@ function onScrollHeader() {
           const prev = new Set(JSON.parse(prevRaw));
           const fresh = list.filter((a) => !prev.has(mk(a.Title)));
           if (fresh.length) {
+            catchupState.fresh = fresh;
             catchupAdd(catchupButton(
               '✍ Blake added ' + fresh.length + ' new review' + (fresh.length === 1 ? '' : 's'),
-              null,
+              'blake',
               fresh.slice(0, 4).map((a) => ({
                 label: String(a.Title).slice(0, 44),
                 go: () => { try { openModal(a); } catch (_) {} },
@@ -11060,12 +11259,13 @@ function onScrollHeader() {
             getDoc(doc(db, 'users', user.uid, 'notifPrefs', 'prefs')),
           ]);
           const seenMs = (() => { try { return prefSnap.exists() ? (prefSnap.data().lastSeenAt?.toMillis() || 0) : 0; } catch (_) { return 0; } })();
-          let unread = 0;
-          notifSnap.forEach((d) => { try { if ((d.data().createdAt?.toMillis() || 0) > seenMs) unread++; } catch (_) {} });
-          if (unread > 0 && !splash.hidden) {
+          const unreadDocs = [];
+          notifSnap.forEach((d) => { try { if ((d.data().createdAt?.toMillis() || 0) > seenMs) unreadDocs.push(d.data()); } catch (_) {} });
+          if (unreadDocs.length > 0 && !splash.hidden) {
+            catchupState.pings = unreadDocs;   // the sheet renders these as letters
             catchupAdd(catchupButton(
-              '🏮 ' + unread + ' new lantern ping' + (unread === 1 ? '' : 's') + (notifSnap.size >= 10 ? '+' : ''),
-              () => { try { document.getElementById('notif-btn')?.click(); } catch (_) {} }
+              '🏮 ' + unreadDocs.length + ' new lantern ping' + (unreadDocs.length === 1 ? '' : 's') + (notifSnap.size >= 10 ? '+' : ''),
+              'lantern'
             ));
           }
         } catch (_) {}
@@ -11094,9 +11294,10 @@ function onScrollHeader() {
           }
           const hits = (airing || []).filter((m) => m && wantIds.has(Number(m.id)));
           if (hits.length && !splash.hidden) {
+            catchupState.airing = hits;
             catchupAdd(catchupButton(
               '📺 ' + hits.length + ' on your watchlist ' + (hits.length === 1 ? 'is' : 'are') + ' airing now',
-              null,
+              'airing',
               hits.slice(0, 4).map((m) => ({
                 label: String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 44),
                 go: () => { try { window.openSecondaryFromKey && window.openSecondaryFromKey('al:' + Number(m.id)); } catch (_) {} },

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <!-- dream-profile gate — the account page wears its OWN surface: the neon-sakura
      night under the constellation veil (personal + unique, still the veil
      vocabulary). Static density; no in-page switcher. -->
@@ -29,6 +29,7 @@
   <meta name="description" content="Manage your profile and your collections." /> 
   <link rel="stylesheet" href="style.css?v=1.9.1" />
   <link rel="stylesheet" href="mobile.css?v=1.9.1" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="frames.css?v=1.9.1" />   <!-- gate 20.5 — the frame themes -->
   <link rel="stylesheet" href="admin-fab.css?v=1.9.1" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -185,8 +186,14 @@
       <!-- Accent -->
       <div class="form-row">
         <span class="fld-pill">✺ Accent</span>
-        <span class="fld-hint">tints your profile's frame</span>
+        <span class="fld-hint">tints your profile's edge</span>
         <div class="acct-accents" id="acct-accents" role="radiogroup" aria-label="Accent color"></div>
+      </div>
+      <!-- Frame — gate 20.5 (Blake item 9b): the edge your profile wears -->
+      <div class="form-row form-row--full">
+        <span class="fld-pill">🖼 Frame</span>
+        <span class="fld-hint">the design wrapped around your profile's edges</span>
+        <div class="acct-frames" id="acct-frames" role="radiogroup" aria-label="Profile frame"></div>
       </div>
       <!-- Bio -->
       <div class="form-row form-row--full">
@@ -292,7 +299,7 @@
     <input type="search" class="saved-filter" placeholder="Filter by title…" aria-label="Filter watchlist" />
     <div data-sort-dd aria-live="off"></div>
     <button type="button" class="saved-type-chip is-active" data-type="all">All</button>
-    <button type="button" class="saved-type-chip" data-type="catalog">Blake's 44</button>
+    <button type="button" class="saved-type-chip" data-type="catalog">Blake's reviews</button>
     <button type="button" class="saved-type-chip" data-type="anilist">Beyond</button>
   </div>
 
@@ -332,7 +339,7 @@
     <input type="search" class="saved-filter" placeholder="Filter by title…" aria-label="Filter favorites" />
     <div data-sort-dd aria-live="off"></div>
     <button type="button" class="saved-type-chip is-active" data-type="all">All</button>
-    <button type="button" class="saved-type-chip" data-type="catalog">Blake's 44</button>
+    <button type="button" class="saved-type-chip" data-type="catalog">Blake's reviews</button>
     <button type="button" class="saved-type-chip" data-type="anilist">Beyond</button>
   </div>
 
@@ -418,9 +425,9 @@
             <div class="inbox-blake-card">
               <span class="inbox-blake-lantern" aria-hidden="true">🏮</span>
               <div class="inbox-blake-body">
-                <div class="inbox-blake-head">Message Blake <span class="jp-mini">便り</span></div>
+                <div class="inbox-blake-head">DM Blake <span class="jp-mini">便り</span></div>
                 <p class="inbox-blake-sub">A question, a request, or a take you want to land directly? It goes straight to me — I read everything myself.</p>
-                <button type="button" id="inbox-message-blake" class="inbox-blake-btn">✉ Write to Blake</button>
+                <button type="button" id="inbox-message-blake" class="inbox-blake-btn">✉ DM Blake</button>
               </div>
             </div>
             <ul id="inbox-list" class="inbox-list" aria-label="Conversations"></ul>
@@ -433,7 +440,7 @@
           <div id="inbox-thread" hidden>
             <div class="inbox-thread-bar">
               <button type="button" id="inbox-back" class="inbox-back-chip">← Inbox</button>
-              <span class="inbox-thread-title">🏮 Writing to <b>Blake</b> <span class="jp-mini">便り</span></span>
+              <span class="inbox-thread-title">🏮 DM <b>Blake</b> <span class="jp-mini">便り</span></span>
             </div>
             <div id="inbox-messages" class="inbox-messages" aria-live="polite"></div>
             <div class="inbox-composer">
@@ -497,6 +504,7 @@
   // only to backfill cover/format/year on legacy non-catalog rows missing the
   // snapshot (new saves carry their own snapshot, so this rarely fires).
   document.write(`<script src="franchise-fetch.js?v=${v}"><\/script>`);
+  document.write(`<script src="frames.js?v=${v}"><\/script>`);
   // round 2 — the Public-view preview renders the bio through the SAME
   // escape-first markdown the live profile sheet uses (adversarial MED: an
   // esc()-only preview showed literal asterisks while the live page rendered

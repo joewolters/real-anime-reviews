@@ -1,0 +1,549 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   frames.css — v1.10.0 gate 20.5 PROFILE FRAMES (the FRAME-THEMES lane).
+   13 themes under [data-frame="<key>"] on BOTH identity surfaces:
+   the public .profile-sheet and the account .acct-preview hero.
+
+   STACKING CONTRACT (verified against style.css):
+   - both hosts are already position:relative (.profile-sheet ~9231,
+     .acct-preview ~9701) — the guard below is belt-and-braces only.
+   - the art layers (.acct-preview-bg / .profile-bg-wrap) sit at z 0;
+     .acct-preview's .profile-head sits at z 1; hover pills at z 3.
+   - the frame slots BETWEEN art and content: ::before wears z 1 (above the
+     art by z-index, below the z-1 content by tree order — generated-first
+     children paint first among equal stacking levels); ::after wears z 0
+     (above the art by tree order — it paints after real children — and
+     below the z-1 content by z-index).
+   - .profile-sheet content is only lifted to z 1 by the .has-bg rule, so a
+     framed sheet lifts its own content (the rule right after the scaffold).
+   - the hero's existing ::before (the acctHeroBreathe ring, style.css ~9881)
+     is explicitly silenced by the higher-specificity scaffold: a frame
+     REPLACES the default breathe ring rather than pulsing on top of it.
+
+   DECORATION LAW: edge-weighted only — every wash fades out by ~a third of
+   the way in; motifs hug corners and edges; the center stays clear at both
+   sizes (the ~240px-tall hero and the 680px sheet). pointer-events:none on
+   every layer. All motifs are tiny hand-authored inline SVG data-URIs
+   (single-quoted attrs inside url("..."), with < > # percent-encoded).
+   PALETTE LAW: the Den Keeper block at the very end is the ONLY place the
+   house's warm color family may appear. No other theme touches it.
+   MOTION LAW: exactly three themes shimmer (cosmos / ember / blake), all
+   opacity-only and all inside prefers-reduced-motion: no-preference.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── scaffold ──────────────────────────────────────────────────────────── */
+:is(.profile-sheet, .acct-preview)[data-frame]:where(:not([data-frame=""])) {
+  position: relative;   /* already true in style.css — harmless reinforcement */
+}
+:is(.profile-sheet, .acct-preview)[data-frame]:where(:not([data-frame=""]))::before,
+:is(.profile-sheet, .acct-preview)[data-frame]:where(:not([data-frame=""]))::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  box-shadow: none;   /* clears the hero ring — each theme sets its own */
+  animation: none;    /* silences acctHeroBreathe leaking onto ::before */
+}
+/* the slot: above the art (z 0), below the content (z 1) — see the header */
+:is(.profile-sheet, .acct-preview)[data-frame]:where(:not([data-frame=""]))::before { z-index: 1; }
+:is(.profile-sheet, .acct-preview)[data-frame]:where(:not([data-frame=""]))::after  { z-index: 0; }
+/* a framed sheet lifts its content the way .has-bg already does (style.css
+   ~9629) — without this, a bg-less sheet's static children would paint UNDER
+   the frame layers. z 2 clears both pseudo layers unambiguously. */
+/* gate-20.5 adversarial HIGH: the lift must NEVER catch .pf-accent-ring — it
+   forced the ring's position:absolute to relative, collapsing the gradient
+   edge to an in-flow blob on every framed sheet. */
+.profile-sheet[data-frame]:where(:not([data-frame=""])) > *:not(.profile-bg-wrap):not(.pf-accent-ring) {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── the picker mini-tiles (~64×40): a compressed essence of each theme —
+      one tint gradient + one motif. The orchestrator renders these with
+      <span class="frame-swatch" data-frame="…"> and nothing else. ───────── */
+.frame-swatch {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(187, 134, 252, 0.4);
+  background: linear-gradient(160deg, rgba(26, 8, 52, 0.95), rgba(14, 4, 30, 0.97));
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   1. vines — RAINFOREST VINES (Blake's seed). Living green vines + leaves
+      wrapping the edges: a garland hanging along the top, a curling stem
+      with leaves growing out of the bottom-right corner.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-vine-garland: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 26'%3E%3Cpath d='M0 6 Q30 13 60 6 T120 6' fill='none' stroke='%232e7d32' stroke-width='1.8'/%3E%3Cpath d='M16 8 q7 -1 9 6 q-8 2 -9 -6' fill='%2343a047'/%3E%3Cpath d='M46 8 q-7 -3 -9 5 q8 3 9 -5' fill='%23388e3c'/%3E%3Cpath d='M76 8 q7 -1 9 6 q-8 2 -9 -6' fill='%2343a047'/%3E%3Cpath d='M104 7 q-7 -3 -9 5 q8 3 9 -5' fill='%23388e3c'/%3E%3Ccircle cx='31' cy='10' r='1.3' fill='%2381c784'/%3E%3Ccircle cx='90' cy='10' r='1.3' fill='%2381c784'/%3E%3C/svg%3E");
+  --rarf-vine-corner: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 90 70'%3E%3Cpath d='M88 68 Q58 62 42 44 Q26 26 32 6' fill='none' stroke='%232e7d32' stroke-width='2.2'/%3E%3Cpath d='M33 8 q-9 -7 -3 -10 q8 1 3 10' fill='%2343a047'/%3E%3Cpath d='M45 46 q-15 3 -18 -10 q13 -5 18 10' fill='%23388e3c'/%3E%3Cpath d='M64 58 q-5 -15 9 -15 q7 13 -9 15' fill='%2343a047'/%3E%3Cpath d='M52 52 q11 -3 14 8' fill='none' stroke='%2366bb6a' stroke-width='1.5'/%3E%3Ccircle cx='40' cy='28' r='1.6' fill='%2381c784'/%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="vines"]::before {
+  background:
+    linear-gradient(180deg, rgba(27, 94, 32, 0.34), rgba(27, 94, 32, 0) 16%),
+    linear-gradient(0deg, rgba(27, 94, 32, 0.3), rgba(27, 94, 32, 0) 14%),
+    radial-gradient(140px 90px at 0% 0%, rgba(56, 142, 60, 0.3), transparent 70%),
+    radial-gradient(140px 90px at 100% 100%, rgba(56, 142, 60, 0.3), transparent 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(102, 187, 106, 0.55),
+    inset 0 0 26px rgba(27, 94, 32, 0.35);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="vines"]::after {
+  background-image: var(--rarf-vine-garland), var(--rarf-vine-corner);
+  background-position: left top, right -4px bottom -4px;
+  background-size: 110px 24px, 88px 68px;
+  background-repeat: repeat-x, no-repeat;
+}
+.frame-swatch[data-frame="vines"] {
+  border-color: rgba(102, 187, 106, 0.65);
+  background:
+    var(--rarf-vine-garland) left -6px top / 64px 14px repeat-x,
+    linear-gradient(160deg, #14331c, #0a1d10);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   2. stone — MOUNTAIN STONE (Blake's seed). Rugged rock edge: a jagged
+      ridge hanging from the top + rising from the bottom, granite speckle
+      in the corners, a heavy double ring like cut stone.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-stone-ridge-top: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 14'%3E%3Cpath d='M0 0 h80 v3 l-8 5 -9 -4 -10 6 -9 -5 -10 6 -9 -6 -8 4 -9 -5 -8 5 z' fill='%23898992' opacity='.75'/%3E%3Cpath d='M0 0 h80 v2 l-7 4 -8 -3 -9 6 -8 -4 -9 5 -8 -5 -8 3 -8 -4 -8 4 -7 -3 z' fill='%23606068'/%3E%3C/svg%3E");
+  --rarf-stone-ridge-btm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 14'%3E%3Cg transform='matrix(1 0 0 -1 0 14)'%3E%3Cpath d='M0 0 h80 v3 l-8 5 -9 -4 -10 6 -9 -5 -10 6 -9 -6 -8 4 -9 -5 -8 5 z' fill='%23898992' opacity='.75'/%3E%3Cpath d='M0 0 h80 v2 l-7 4 -8 -3 -9 6 -8 -4 -9 5 -8 -5 -8 3 -8 -4 -8 4 -7 -3 z' fill='%23606068'/%3E%3C/g%3E%3C/svg%3E");
+  --rarf-stone-speck: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cg fill='%23cfcfd6' opacity='.85'%3E%3Ccircle cx='6' cy='8' r='1.1'/%3E%3Ccircle cx='15' cy='4' r='.8'/%3E%3Ccircle cx='26' cy='9' r='1.2'/%3E%3Ccircle cx='9' cy='19' r='.9'/%3E%3Ccircle cx='20' cy='15' r='.7'/%3E%3Ccircle cx='31' cy='20' r='1'/%3E%3Ccircle cx='5' cy='29' r='.8'/%3E%3Ccircle cx='16' cy='26' r='1.1'/%3E%3Ccircle cx='27' cy='31' r='.9'/%3E%3C/g%3E%3Cg fill='%238d8d96' opacity='.9'%3E%3Ccircle cx='11' cy='12' r='.7'/%3E%3Ccircle cx='23' cy='22' r='.8'/%3E%3Ccircle cx='30' cy='5' r='.7'/%3E%3Ccircle cx='8' cy='33' r='.7'/%3E%3C/g%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="stone"]::before {
+  background:
+    linear-gradient(180deg, rgba(120, 120, 128, 0.5), rgba(80, 80, 86, 0) 20%),
+    linear-gradient(0deg, rgba(120, 120, 128, 0.55), rgba(80, 80, 86, 0) 20%),
+    radial-gradient(120px 80px at 0% 100%, rgba(140, 140, 148, 0.4), transparent 70%),
+    radial-gradient(120px 80px at 100% 0%, rgba(140, 140, 148, 0.4), transparent 70%);
+  box-shadow:
+    inset 0 0 0 2px rgba(176, 176, 184, 0.6),
+    inset 0 0 0 5px rgba(90, 90, 98, 0.4),
+    inset 0 0 22px rgba(40, 40, 46, 0.6);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="stone"]::after {
+  background-image:
+    var(--rarf-stone-ridge-top), var(--rarf-stone-ridge-btm),
+    var(--rarf-stone-speck), var(--rarf-stone-speck),
+    var(--rarf-stone-speck), var(--rarf-stone-speck);
+  background-position:
+    left top, left bottom,
+    left 4px top 8px, right 4px top 8px,
+    left 4px bottom 8px, right 4px bottom 8px;
+  background-size: 80px 13px, 80px 13px, 34px 34px, 34px 34px, 34px 34px, 34px 34px;
+  background-repeat: repeat-x, repeat-x, no-repeat, no-repeat, no-repeat, no-repeat;
+}
+.frame-swatch[data-frame="stone"] {
+  border-color: rgba(158, 158, 158, 0.65);
+  background:
+    var(--rarf-stone-ridge-btm) left bottom / 64px 10px repeat-x,
+    var(--rarf-stone-ridge-top) left top / 64px 10px repeat-x,
+    linear-gradient(160deg, #3a3a40, #1c1c21);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   3. cosmos — COSMIC SKY (Blake's seed). Deep purple space: nebula wisps
+      breathing in from the corners, star-fields strewn along the top and
+      bottom edges. One of the three sanctioned shimmers (the stars twinkle).
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-stars: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 30'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='10' cy='10' r='1.1'/%3E%3Ccircle cx='34' cy='20' r='.8'/%3E%3Ccircle cx='58' cy='8' r='1.3'/%3E%3Ccircle cx='82' cy='17' r='.7'/%3E%3Ccircle cx='105' cy='9' r='1'/%3E%3Ccircle cx='128' cy='19' r='.8'/%3E%3C/g%3E%3Cg fill='%23d1c4e9'%3E%3Cpath d='M46 9 l1.2 3.8 3.8 1.2 -3.8 1.2 -1.2 3.8 -1.2 -3.8 -3.8 -1.2 3.8 -1.2 z'/%3E%3Cpath d='M118 4 l1 3 3 1 -3 1 -1 3 -1 -3 -3 -1 3 -1 z'/%3E%3C/g%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="cosmos"]::before {
+  background:
+    radial-gradient(220px 140px at 0% 0%, rgba(124, 77, 255, 0.36), transparent 70%),
+    radial-gradient(200px 130px at 100% 12%, rgba(63, 81, 181, 0.34), transparent 70%),
+    radial-gradient(240px 150px at 100% 100%, rgba(156, 39, 176, 0.27), transparent 72%),
+    radial-gradient(190px 120px at 0% 100%, rgba(3, 169, 244, 0.16), transparent 70%),
+    linear-gradient(180deg, rgba(20, 8, 52, 0.5), rgba(20, 8, 52, 0) 22%, rgba(20, 8, 52, 0) 78%, rgba(20, 8, 52, 0.5));
+  box-shadow:
+    inset 0 0 0 1px rgba(179, 136, 255, 0.5),
+    inset 0 0 34px rgba(81, 45, 168, 0.45);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="cosmos"]::after {
+  background-image: var(--rarf-stars), var(--rarf-stars);
+  background-position: left 6px top 6px, left 36px bottom 6px;
+  background-size: 140px 28px;
+  background-repeat: repeat-x;
+}
+.frame-swatch[data-frame="cosmos"] {
+  border-color: rgba(179, 136, 255, 0.7);
+  background:
+    var(--rarf-stars) left top 2px / 96px 20px repeat-x,
+    radial-gradient(54px 36px at 18% 110%, rgba(156, 39, 176, 0.55), transparent 75%),
+    linear-gradient(160deg, #1c1048, #090520);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   4. witch — WITCH'S PACT (modeled after Re:Zero). Violet witch-miasma
+      seeping in from the sides and floor, pale ice-crystals in the
+      opposing corners (the cold of the loops), a thin orchid ring.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-witch-crystal: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cg stroke='%23cfeaff' stroke-width='1.4' fill='none' opacity='.9'%3E%3Cpath d='M24 4 V44 M7 14 L41 34 M41 14 L7 34'/%3E%3Cpath d='M24 11 l4 4 M24 11 l-4 4 M24 37 l4 -4 M24 37 l-4 -4 M13 17 l5 -1 M35 17 l-5 -1 M13 31 l5 1 M35 31 l-5 1'/%3E%3C/g%3E%3Ccircle cx='24' cy='24' r='2.4' fill='%23ffffff' opacity='.95'/%3E%3C/svg%3E");
+  --rarf-witch-wisp: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M4 36 q16 -6 12 -20 q-3 -10 -14 -7' fill='none' stroke='%23ba68c8' stroke-width='1.8' opacity='.8'/%3E%3Cpath d='M14 38 q12 -2 14 -12' fill='none' stroke='%239c27b0' stroke-width='1.5' opacity='.6'/%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="witch"]::before {
+  background:
+    radial-gradient(170px 240px at 0% 50%, rgba(123, 31, 162, 0.32), transparent 72%),
+    radial-gradient(170px 240px at 100% 55%, rgba(106, 27, 154, 0.28), transparent 72%),
+    radial-gradient(220px 120px at 50% 100%, rgba(74, 20, 140, 0.38), transparent 75%),
+    linear-gradient(180deg, rgba(49, 27, 146, 0.22), transparent 20%);
+  box-shadow:
+    inset 0 0 0 1px rgba(206, 147, 216, 0.5),
+    inset 0 0 30px rgba(74, 20, 140, 0.5);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="witch"]::after {
+  background-image:
+    var(--rarf-witch-crystal), var(--rarf-witch-crystal),
+    var(--rarf-witch-wisp), var(--rarf-witch-wisp);
+  background-position:
+    right 12px top 12px, left 14px bottom 14px,
+    left 8px top 32%, right 8px bottom 30%;
+  background-size: 46px 46px, 30px 30px, 36px 36px, 28px 28px;
+}
+.frame-swatch[data-frame="witch"] {
+  border-color: rgba(206, 147, 216, 0.7);
+  background:
+    var(--rarf-witch-crystal) right 4px center / 26px 26px no-repeat,
+    radial-gradient(50px 44px at 0% 100%, rgba(123, 31, 162, 0.6), transparent 75%),
+    linear-gradient(160deg, #2a0e3c, #120624);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   5. clover — FIVE-LEAF GRIMOIRE (modeled after Black Clover). Deep green,
+      a layered double ring like the edge of an old grimoire page, clover
+      leaves in the corners — and the top-right corner alone wears the
+      FIVE-leaf (devil-dark, green-rimmed).
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-clover3: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Cg fill='%232e7d32' stroke='%2381c784' stroke-width='1'%3E%3Ccircle cx='22' cy='13' r='8'/%3E%3Ccircle cx='13' cy='25' r='8'/%3E%3Ccircle cx='31' cy='25' r='8'/%3E%3C/g%3E%3Cpath d='M22 26 q-1 8 -6 13' fill='none' stroke='%232e7d32' stroke-width='2'/%3E%3C/svg%3E");
+  --rarf-clover5: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cg fill='%23132a16' stroke='%2366bb6a' stroke-width='1.2'%3E%3Ccircle cx='24' cy='11' r='6.5'/%3E%3Ccircle cx='34.5' cy='18.6' r='6.5'/%3E%3Ccircle cx='30.5' cy='30.9' r='6.5'/%3E%3Ccircle cx='17.5' cy='30.9' r='6.5'/%3E%3Ccircle cx='13.5' cy='18.6' r='6.5'/%3E%3C/g%3E%3Ccircle cx='24' cy='22' r='3' fill='%231b5e20'/%3E%3Cpath d='M24 30 q0 9 4 14' fill='none' stroke='%231b5e20' stroke-width='2'/%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="clover"]::before {
+  background:
+    linear-gradient(180deg, rgba(27, 94, 32, 0.3), transparent 16%),
+    linear-gradient(0deg, rgba(27, 94, 32, 0.34), transparent 16%),
+    linear-gradient(90deg, rgba(27, 94, 32, 0.22), transparent 10%, transparent 90%, rgba(27, 94, 32, 0.22));
+  box-shadow:
+    inset 0 0 0 1px rgba(129, 199, 132, 0.55),
+    inset 0 0 0 6px rgba(27, 94, 32, 0.18),
+    inset 0 0 0 7px rgba(129, 199, 132, 0.22),
+    inset 0 0 24px rgba(27, 94, 32, 0.35);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="clover"]::after {
+  background-image:
+    var(--rarf-clover5), var(--rarf-clover3),
+    var(--rarf-clover3), var(--rarf-clover3);
+  background-position:
+    right 10px top 10px, left 10px top 10px,
+    left 12px bottom 12px, right 14px bottom 14px;
+  background-size: 40px 40px, 30px 30px, 26px 26px, 28px 28px;
+}
+.frame-swatch[data-frame="clover"] {
+  border-color: rgba(129, 199, 132, 0.65);
+  background:
+    var(--rarf-clover5) right 5px center / 26px 26px no-repeat,
+    linear-gradient(160deg, #12301a, #081a0e);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   6. journey — LONG JOURNEY (modeled after Frieren). Twilight dusk —
+      indigo settling from above into teal at the floor — and a field of
+      tiny silver-white flowers sparkling along the bottom edge.
+      Strictly silver/white blooms.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-journey-field: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 130 24'%3E%3Cg stroke='%2390a4ae' stroke-width='1' opacity='.7'%3E%3Cpath d='M14 16 v6 M44 14 v8 M76 17 v5 M106 15 v7'/%3E%3C/g%3E%3Cg fill='%23eceff1'%3E%3Cpath d='M14 11 l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6 z'/%3E%3Cpath d='M44 9 l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6 z'/%3E%3Cpath d='M76 12 l1.4 3 3 1.4 -3 1.4 -1.4 3 -1.4 -3 -3 -1.4 3 -1.4 z'/%3E%3Cpath d='M106 10 l1.5 3.2 3.2 1.5 -3.2 1.5 -1.5 3.2 -1.5 -3.2 -3.2 -1.5 3.2 -1.5 z'/%3E%3C/g%3E%3Cg fill='%23cfd8dc'%3E%3Ccircle cx='28' cy='19' r='1'/%3E%3Ccircle cx='60' cy='20' r='1.2'/%3E%3Ccircle cx='92' cy='19' r='1'/%3E%3Ccircle cx='120' cy='20' r='1.1'/%3E%3C/g%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="journey"]::before {
+  background:
+    linear-gradient(180deg, rgba(40, 53, 147, 0.4), rgba(40, 53, 147, 0) 26%),
+    linear-gradient(0deg, rgba(38, 166, 154, 0.26), rgba(38, 166, 154, 0) 24%),
+    radial-gradient(200px 110px at 85% 100%, rgba(128, 203, 196, 0.18), transparent 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(176, 190, 197, 0.45),
+    inset 0 0 26px rgba(38, 50, 90, 0.45);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="journey"]::after {
+  background-image: var(--rarf-journey-field);
+  background-position: left 10px bottom 5px;
+  background-size: 130px 24px;
+  background-repeat: repeat-x;
+}
+.frame-swatch[data-frame="journey"] {
+  border-color: rgba(176, 190, 197, 0.6);
+  background:
+    var(--rarf-journey-field) left 2px bottom 1px / 90px 17px repeat-x,
+    linear-gradient(180deg, #1d2660, #0e3a38);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   7. shadow — SHADOW GARDEN (modeled after The Eminence in Shadow).
+      Black-violet smoke curling out of the lower-left, the deepest
+      vignette of the set — and ONE thin crimson slash across the
+      top-right corner. I am atomic.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-shadow-slash: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 70 70'%3E%3Cpath d='M2 68 L64 6 l3 3 L5 70 z' fill='%23d50000'/%3E%3Cpath d='M0 64 L62 2 l1.2 1.2 L1 65 z' fill='%23ff5252' opacity='.5'/%3E%3C/svg%3E");
+  --rarf-shadow-smoke: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 70 70'%3E%3Cpath d='M6 64 Q32 58 30 40 Q28 25 42 23 Q54 22 52 33 Q50 43 40 40' fill='none' stroke='%23512da8' stroke-width='2' opacity='.85'/%3E%3Cpath d='M14 67 Q42 64 46 46' fill='none' stroke='%23311b92' stroke-width='2.4' opacity='.65'/%3E%3Cpath d='M4 54 Q18 50 20 38' fill='none' stroke='%23673ab7' stroke-width='1.4' opacity='.5'/%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="shadow"]::before {
+  background:
+    radial-gradient(240px 150px at 0% 100%, rgba(49, 27, 146, 0.5), transparent 74%),
+    radial-gradient(220px 130px at 100% 0%, rgba(26, 10, 60, 0.6), transparent 74%),
+    linear-gradient(180deg, rgba(8, 4, 18, 0.55), transparent 24%),
+    linear-gradient(0deg, rgba(8, 4, 18, 0.6), transparent 26%);
+  box-shadow:
+    inset 0 0 0 1px rgba(94, 53, 177, 0.5),
+    inset 0 0 36px rgba(5, 2, 12, 0.75);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="shadow"]::after {
+  background-image:
+    var(--rarf-shadow-slash), var(--rarf-shadow-smoke), var(--rarf-shadow-smoke);
+  background-position:
+    right 8px top 8px, left 6px bottom 6px, right 10px bottom 16px;
+  background-size: 54px 54px, 64px 64px, 40px 40px;
+}
+.frame-swatch[data-frame="shadow"] {
+  border-color: rgba(94, 53, 177, 0.7);
+  background:
+    var(--rarf-shadow-slash) right 3px top 3px / 24px 24px no-repeat,
+    var(--rarf-shadow-smoke) left 2px bottom 1px / 26px 26px no-repeat,
+    linear-gradient(160deg, #16092e, #060312);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   8. sakura — SAKURA DRIFT. A blossom resting on the top-left, loose
+      petals drifting the whole way down the right edge and settling at
+      the bottom-left. Soft pink washes, rosy ring.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-sakura-blossom: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cg fill='%23f8bbd0'%3E%3Cpath d='M24 22 Q20 9 24 5 Q28 9 24 22'/%3E%3Cpath transform='rotate(72 24 24)' d='M24 22 Q20 9 24 5 Q28 9 24 22'/%3E%3Cpath transform='rotate(144 24 24)' d='M24 22 Q20 9 24 5 Q28 9 24 22'/%3E%3Cpath transform='rotate(216 24 24)' d='M24 22 Q20 9 24 5 Q28 9 24 22'/%3E%3Cpath transform='rotate(288 24 24)' d='M24 22 Q20 9 24 5 Q28 9 24 22'/%3E%3C/g%3E%3Ccircle cx='24' cy='24' r='2.6' fill='%23fce4ec'/%3E%3C/svg%3E");
+  --rarf-sakura-petals: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 120'%3E%3Cg fill='%23f48fb1'%3E%3Cpath d='M10 10 q5 -7 9 0 q-5 7 -9 0'/%3E%3Cpath d='M24 44 q6 -5 8 1 q-6 5 -8 -1' opacity='.85'/%3E%3Cpath d='M6 78 q5 -7 9 0 q-5 7 -9 0' opacity='.9'/%3E%3C/g%3E%3Cg fill='%23f8bbd0'%3E%3Cpath d='M28 96 q5 -6 8 0 q-5 6 -8 0'/%3E%3Cpath d='M18 62 q4 -6 8 0 q-4 6 -8 0' opacity='.8'/%3E%3C/g%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="sakura"]::before {
+  background:
+    radial-gradient(160px 100px at 0% 0%, rgba(244, 143, 177, 0.26), transparent 70%),
+    radial-gradient(150px 100px at 100% 8%, rgba(248, 187, 208, 0.2), transparent 70%),
+    linear-gradient(180deg, rgba(173, 20, 87, 0.16), transparent 18%),
+    linear-gradient(0deg, rgba(173, 20, 87, 0.14), transparent 14%);
+  box-shadow:
+    inset 0 0 0 1px rgba(244, 143, 177, 0.5),
+    inset 0 0 24px rgba(173, 20, 87, 0.22);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="sakura"]::after {
+  /* pixel-check fix: the blossom lived at the top-left, directly behind the
+     sheet's MEMBER kicker (pale-on-pale). It now rests on the right edge,
+     below the kicker-actions zone, at the head of its own petal trail. */
+  background-image:
+    var(--rarf-sakura-blossom), var(--rarf-sakura-petals), var(--rarf-sakura-petals);
+  background-position: right 10px top 58px, right 4px top, left 2px bottom -10px;
+  background-size: 40px 40px, 38px 114px, 34px 100px;
+  background-repeat: no-repeat, repeat-y, no-repeat;
+}
+.frame-swatch[data-frame="sakura"] {
+  border-color: rgba(244, 143, 177, 0.7);
+  background:
+    var(--rarf-sakura-blossom) left 4px center / 24px 24px no-repeat,
+    var(--rarf-sakura-petals) right 2px top -20px / 18px 56px no-repeat,
+    linear-gradient(160deg, #3c1228, #1c0814);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   9. ember — EMBER BREATH. A flame-licked floor: crimson-to-orange tongues
+      rising along the whole bottom edge, heat blooming up the corners.
+      Strictly crimson→orange — the fire never turns yellow. One of the
+      three sanctioned shimmers (the flames flicker).
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-ember-flames: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 84 26'%3E%3Cpath d='M0 26 v-7 q3 -13 6 0 q2 -7 5 0 q3 -15 6 0 q2 -8 5 0 q3 -12 6 0 q2 -7 5 0 q3 -16 6 0 q2 -8 5 0 q3 -11 6 0 q2 -7 5 0 q3 -14 6 0 q2 -8 5 0 q3 -13 6 0 q2 -7 5 0 q3 -10 7 0 v7 z' fill='%23d84315'/%3E%3Cpath d='M0 26 v-4 q4 -8 8 0 q3 -5 6 0 q4 -10 8 0 q3 -6 6 0 q4 -9 8 0 q3 -5 6 0 q4 -11 8 0 q3 -6 6 0 q4 -8 8 0 q3 -5 6 0 q4 -10 8 0 q3 -6 6 0 v4 z' fill='%23ff7043' opacity='.85'/%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="ember"]::before {
+  background:
+    linear-gradient(0deg, rgba(191, 54, 12, 0.5), rgba(230, 74, 25, 0.22) 12%, transparent 30%),
+    radial-gradient(180px 110px at 12% 100%, rgba(255, 87, 34, 0.34), transparent 70%),
+    radial-gradient(180px 110px at 88% 100%, rgba(229, 57, 53, 0.3), transparent 70%),
+    linear-gradient(180deg, rgba(183, 28, 28, 0.22), transparent 14%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 112, 67, 0.55),
+    inset 0 0 30px rgba(183, 28, 28, 0.4);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="ember"]::after {
+  background-image: var(--rarf-ember-flames);
+  background-position: left bottom;
+  background-size: 84px 26px;
+  background-repeat: repeat-x;
+}
+.frame-swatch[data-frame="ember"] {
+  border-color: rgba(255, 112, 67, 0.7);
+  background:
+    var(--rarf-ember-flames) left bottom / 64px 18px repeat-x,
+    linear-gradient(160deg, #401008, #1e0604);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   10. tide — DEEP TIDE. Deep ocean blues pooling at the floor, a rolling
+       wave crest (with one curling breaker and foam flecks) running the
+       whole lower edge.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-tide-waves: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 24'%3E%3Cpath d='M0 17 Q10 8 20 14 Q26 6 34 12 Q44 3 52 12 Q60 6 66 14 Q76 4 86 12 Q94 7 100 14 Q105 10 110 13 V24 H0 z' fill='%231565c0' opacity='.5'/%3E%3Cpath d='M0 17 Q10 8 20 14 Q26 6 34 12 Q44 3 52 12 Q60 6 66 14 Q76 4 86 12 Q94 7 100 14 Q105 10 110 13' fill='none' stroke='%234fc3f7' stroke-width='2'/%3E%3Cpath d='M48 11 q7 -8 0 -10 q-6 -1 -3 5' fill='none' stroke='%2381d4fa' stroke-width='1.5'/%3E%3Cg fill='%23b3e5fc'%3E%3Ccircle cx='22' cy='9' r='1'/%3E%3Ccircle cx='55' cy='5' r='1.2'/%3E%3Ccircle cx='88' cy='7' r='1'/%3E%3C/g%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="tide"]::before {
+  background:
+    linear-gradient(0deg, rgba(13, 71, 161, 0.5), rgba(21, 101, 192, 0.25) 14%, transparent 32%),
+    linear-gradient(180deg, rgba(2, 119, 189, 0.2), transparent 16%),
+    radial-gradient(200px 120px at 100% 100%, rgba(0, 151, 167, 0.3), transparent 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(79, 195, 247, 0.5),
+    inset 0 0 28px rgba(13, 71, 161, 0.45);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="tide"]::after {
+  background-image: var(--rarf-tide-waves);
+  background-position: left bottom;
+  background-size: 110px 24px;
+  background-repeat: repeat-x;
+}
+.frame-swatch[data-frame="tide"] {
+  border-color: rgba(79, 195, 247, 0.65);
+  background:
+    var(--rarf-tide-waves) left bottom / 72px 16px repeat-x,
+    linear-gradient(160deg, #0c2a52, #051430);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   11. storm — STORMCALL. Electric BLUE lightning (never yellow): one fork
+       striking down-in from the top-left corner, its mirror rising from
+       the bottom-right, storm-cloud blues banked in the corners.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-storm-fork-tl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cg fill='none'%3E%3Cpath d='M4 2 L26 26 L20 30 L44 52 L38 54 L62 78' stroke='%231e88e5' stroke-width='4' opacity='.45'/%3E%3Cpath d='M4 2 L26 26 L20 30 L44 52 L38 54 L62 78' stroke='%2340c4ff' stroke-width='2'/%3E%3Cpath d='M4 2 L26 26 L20 30 L44 52 L38 54 L62 78' stroke='%23e1f5fe' stroke-width='.8'/%3E%3Cpath d='M26 26 L38 30 M44 52 L40 62' stroke='%2340c4ff' stroke-width='1.4'/%3E%3C/g%3E%3C/svg%3E");
+  --rarf-storm-fork-br: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cg transform='rotate(180 40 40)' fill='none'%3E%3Cpath d='M4 2 L26 26 L20 30 L44 52 L38 54 L62 78' stroke='%231e88e5' stroke-width='4' opacity='.45'/%3E%3Cpath d='M4 2 L26 26 L20 30 L44 52 L38 54 L62 78' stroke='%2340c4ff' stroke-width='2'/%3E%3Cpath d='M4 2 L26 26 L20 30 L44 52 L38 54 L62 78' stroke='%23e1f5fe' stroke-width='.8'/%3E%3Cpath d='M26 26 L38 30 M44 52 L40 62' stroke='%2340c4ff' stroke-width='1.4'/%3E%3C/g%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="storm"]::before {
+  background:
+    radial-gradient(200px 130px at 0% 0%, rgba(40, 53, 147, 0.45), transparent 72%),
+    radial-gradient(200px 130px at 100% 100%, rgba(40, 53, 147, 0.45), transparent 72%),
+    radial-gradient(160px 100px at 100% 0%, rgba(84, 110, 122, 0.3), transparent 70%),
+    radial-gradient(160px 100px at 0% 100%, rgba(84, 110, 122, 0.3), transparent 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(64, 196, 255, 0.55),
+    inset 0 0 30px rgba(13, 71, 161, 0.4);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="storm"]::after {
+  background-image: var(--rarf-storm-fork-tl), var(--rarf-storm-fork-br);
+  background-position: left 6px top 6px, right 6px bottom 6px;
+  background-size: 68px 68px, 68px 68px;
+}
+.frame-swatch[data-frame="storm"] {
+  border-color: rgba(64, 196, 255, 0.7);
+  background:
+    var(--rarf-storm-fork-tl) left 2px top 2px / 30px 30px no-repeat,
+    linear-gradient(160deg, #15234e, #080f28);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   12. moonlit — MOONLIT VEIL. A silver crescent hanging in the top-right,
+       night mist drifting along the floor, the whole frame in cool
+       grey-blue silver.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-moon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Ccircle cx='20' cy='22' r='19' fill='%23cfd8dc' opacity='.1'/%3E%3Cpath d='M26 3 a19 19 0 1 0 13 32 a15 15 0 1 1 -13 -32 z' fill='%23e6edf4'/%3E%3Ccircle cx='36' cy='8' r='1.2' fill='%23eceff1'/%3E%3Ccircle cx='40' cy='18' r='.9' fill='%23cfd8dc'/%3E%3C/svg%3E");
+  --rarf-moon-mist: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 16'%3E%3Cpath d='M0 10 q15 -8 30 0 t30 0 t30 0 t30 0' fill='none' stroke='%23b0bec5' stroke-width='1.5' opacity='.45'/%3E%3Cpath d='M12 14 q18 -6 36 0 t36 0 t36 0' fill='none' stroke='%2390a4ae' stroke-width='1.2' opacity='.3'/%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="moonlit"]::before {
+  background:
+    radial-gradient(180px 120px at 86% 0%, rgba(207, 216, 220, 0.22), transparent 70%),
+    linear-gradient(180deg, rgba(96, 125, 139, 0.25), transparent 20%),
+    linear-gradient(0deg, rgba(38, 50, 72, 0.45), transparent 26%),
+    radial-gradient(220px 120px at 0% 100%, rgba(120, 144, 156, 0.2), transparent 72%);
+  box-shadow:
+    inset 0 0 0 1px rgba(207, 216, 220, 0.45),
+    inset 0 0 26px rgba(38, 50, 72, 0.5);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="moonlit"]::after {
+  background-image: var(--rarf-moon), var(--rarf-moon-mist);
+  background-position: right 14px top 12px, left bottom 4px;
+  background-size: 42px 42px, 120px 16px;
+  background-repeat: no-repeat, repeat-x;
+}
+.frame-swatch[data-frame="moonlit"] {
+  border-color: rgba(207, 216, 220, 0.55);
+  background:
+    var(--rarf-moon) right 5px top 4px / 20px 20px no-repeat,
+    var(--rarf-moon-mist) left bottom 1px / 80px 11px repeat-x,
+    linear-gradient(160deg, #1d2738, #0b101e);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   13. blake — THE DEN KEEPER. Blake's exclusive frame, and the ONE theme
+       allowed to wear GOLD (#ffd54a family — the same gold as his admin
+       marks). Gold filigree bands run the top and bottom edges, gold
+       quatrefoil studs pin three corners, and a tiny lantern hangs in the
+       fourth — its ember glows (the third sanctioned shimmer). The rules
+       lane enforces that only his account can write this key; this block
+       just makes it worthy of the house.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --rarf-den-filigree: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 12'%3E%3Cg fill='none' stroke='%23ffd54a' stroke-width='1.3'%3E%3Cpath d='M0 6 q8 -6 16 0 q8 6 16 0 q8 -6 16 0 q8 6 16 0 q8 -6 16 0 q8 6 16 0'/%3E%3Cpath d='M8 6 q4 4 8 0 M40 6 q4 4 8 0 M72 6 q4 4 8 0' opacity='.6'/%3E%3C/g%3E%3Cg fill='%23ffe082'%3E%3Ccircle cx='24' cy='6' r='1.4'/%3E%3Ccircle cx='56' cy='6' r='1.4'/%3E%3Ccircle cx='88' cy='6' r='1.4'/%3E%3C/g%3E%3Cpath d='M48 2.2 l2.6 3.8 -2.6 3.8 -2.6 -3.8 z' fill='%23ffd54a'/%3E%3C/svg%3E");
+  --rarf-den-stud: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Cg fill='%23ffd54a'%3E%3Ccircle cx='13' cy='7' r='3.4'/%3E%3Ccircle cx='13' cy='19' r='3.4'/%3E%3Ccircle cx='7' cy='13' r='3.4'/%3E%3Ccircle cx='19' cy='13' r='3.4'/%3E%3C/g%3E%3Ccircle cx='13' cy='13' r='2.6' fill='%23fff8e1'/%3E%3C/svg%3E");
+  --rarf-den-lantern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 46'%3E%3Cpath d='M15 0 v6' stroke='%23ffd54a' stroke-width='1.4'/%3E%3Crect x='9' y='6' width='12' height='4' rx='1.5' fill='%23b8860b'/%3E%3Cpath d='M8 12 q7 -4 14 0 v18 q-7 4 -14 0 z' fill='none' stroke='%23ffd54a' stroke-width='1.6'/%3E%3Ccircle cx='15' cy='22' r='8' fill='%23ff9800' opacity='.35'/%3E%3Ccircle cx='15' cy='22' r='4.5' fill='%23ffb300'/%3E%3Crect x='9' y='34' width='12' height='4' rx='1.5' fill='%23b8860b'/%3E%3C/svg%3E");
+}
+:is(.profile-sheet, .acct-preview)[data-frame="blake"]::before {
+  background:
+    radial-gradient(150px 110px at 88% 86%, rgba(255, 152, 0, 0.3), transparent 70%),
+    linear-gradient(180deg, rgba(255, 213, 74, 0.16), transparent 14%),
+    linear-gradient(0deg, rgba(255, 179, 0, 0.14), transparent 14%),
+    radial-gradient(170px 110px at 0% 0%, rgba(255, 213, 74, 0.14), transparent 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 213, 74, 0.85),
+    inset 0 0 0 4px rgba(120, 70, 10, 0.35),
+    inset 0 0 0 5px rgba(255, 213, 74, 0.3),
+    inset 0 0 30px rgba(255, 160, 30, 0.18);
+}
+:is(.profile-sheet, .acct-preview)[data-frame="blake"]::after {
+  background-image:
+    var(--rarf-den-filigree), var(--rarf-den-filigree),
+    var(--rarf-den-stud), var(--rarf-den-stud), var(--rarf-den-stud),
+    var(--rarf-den-lantern);
+  background-position:
+    left top 4px, left bottom 4px,
+    left 8px top 8px, right 8px top 8px, left 8px bottom 8px,
+    right 16px bottom 10px;
+  background-size: 96px 12px, 96px 12px, 18px 18px, 18px 18px, 18px 18px, 26px 40px;
+  background-repeat: repeat-x, repeat-x, no-repeat, no-repeat, no-repeat, no-repeat;
+}
+.frame-swatch[data-frame="blake"] {
+  border-color: rgba(255, 213, 74, 0.8);
+  background:
+    var(--rarf-den-filigree) left top 2px / 64px 8px repeat-x,
+    var(--rarf-den-lantern) right 6px bottom 2px / 14px 22px no-repeat,
+    radial-gradient(40px 30px at 80% 100%, rgba(255, 152, 0, 0.45), transparent 75%),
+    linear-gradient(160deg, #33230a, #160d03);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   MOTION — the three sanctioned shimmers, opacity-only (compositor-cheap),
+   and ONLY when the visitor has not asked for reduced motion. Everything
+   else in this file is static by construction.
+   ════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  :is(.profile-sheet, .acct-preview)[data-frame="cosmos"]::after {
+    animation: rarfTwinkle 6s ease-in-out infinite;
+  }
+  :is(.profile-sheet, .acct-preview)[data-frame="ember"]::after {
+    animation: rarfFlicker 2.6s ease-in-out infinite;
+  }
+  :is(.profile-sheet, .acct-preview)[data-frame="blake"]::before {
+    animation: rarfLantern 5.5s ease-in-out infinite;
+  }
+  @keyframes rarfTwinkle { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+  @keyframes rarfFlicker { 0%, 100% { opacity: 0.78; } 35% { opacity: 1; } 60% { opacity: 0.88; } 80% { opacity: 0.97; } }
+  @keyframes rarfLantern { 0%, 100% { opacity: 0.72; } 50% { opacity: 1; } }
+}

@@ -146,6 +146,10 @@ service cloud.firestore {
     //     contains no gold/yellow — the heart stays Blake's by construction.
     //     Round 4: grew 6→16 (4 new solids + 6 g-* gradients) + optional
     //     accentGlow:bool (a glow toggle, not a color) — STILL no gold family.
+    //   • frame — gate 20.5 (item 9b): a profile-card border theme. Same
+    //     curated-enum shape as accent (12 user keys, no gold family), PLUS
+    //     'blake' — Blake's EXCLUSIVE frame: valid only when the writer IS the
+    //     ADMIN uid, so the exclusivity is enforced HERE, not hidden in the UI.
     //   • status — one short line under the name.
     //   • bgRef — the profile background: ONE Storage path pinned to the
     //     caller's own uploads/{uid}/profilebg/ prefix (same own-prefix pin as
@@ -163,6 +167,11 @@ service cloud.firestore {
                                                 'g-nebula', 'g-ember', 'g-ocean', 'g-meadow', 'g-dusk', 'g-sakura'])
         && (!('accentGlow' in request.resource.data)
             || request.resource.data.accentGlow is bool)
+        && (!('frame' in request.resource.data)
+            || request.resource.data.frame in ['vines', 'stone', 'cosmos', 'witch', 'clover', 'journey',
+                                               'shadow', 'sakura', 'ember', 'tide', 'storm', 'moonlit']
+            || (request.resource.data.frame == 'blake'
+                && request.auth.uid == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'))
         && (!('status' in request.resource.data)
             || (request.resource.data.status is string && request.resource.data.status.size() <= 80))
         && (!('bgRef' in request.resource.data)
@@ -201,10 +210,14 @@ service cloud.firestore {
     // moderation gate is for COMMUNITY content, not a user's own saves/bell.)
     // =========================================================================
     match /users/{uid} {
-      // get stays PUBLIC (status quo). The live comment/review/thread author
-      // display cross-reads users/{otherUid} (script.js:4125/4898/5124), so
-      // tightening to owner-only would break it. Tighten only AFTER those reads
-      // migrate to profiles/{uid} (a later code gate). See docs/DATA-MODEL.md.
+      // gate 20.5 (2026-06-11): the planned owner-only GET tightening was
+      // built and REVERTED in the same gate — the adversarial panel proved it
+      // tombstones ACTIVE members ("a former member") whose identity lives
+      // only in users/{uid} (profiles/ docs are minted ONLY by the account
+      // Studio save; the index editor + pre-Studio accounts never made one).
+      // The flip is BANKED behind a profiles backfill (dual-write or a
+      // one-shot CF) — see docs/NEXT.md. Until then the public get stays: the
+      // email-field exposure is the accepted, pre-existing trade.
       allow get: if true;
       allow list: if isOwner(uid);
       allow create, update, delete: if isOwner(uid);
@@ -598,12 +611,12 @@ service cloud.firestore {
       allow get, list: if true;
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt',
-                                                 'tags', 'accent', 'accentGlow', 'status', 'bgRef', 'featuredAnime'])
+                                                 'tags', 'accent', 'accentGlow', 'frame', 'status', 'bgRef', 'featuredAnime'])
         && profileFieldsOk()
         && gateOk();
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt',
-                                                                             'tags', 'accent', 'accentGlow', 'status', 'bgRef', 'featuredAnime'])
+                                                                             'tags', 'accent', 'accentGlow', 'frame', 'status', 'bgRef', 'featuredAnime'])
         && profileFieldsOk()
         && gateOk();
       allow delete: if false; // account deletion is the onUserDelete cascade CF

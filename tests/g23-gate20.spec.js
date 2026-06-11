@@ -86,9 +86,9 @@ test('gate 20 (item 8, the 4th ask): the Message-Blake surface wears the premium
   expect(m.cursor).toBe('pointer');
 });
 
-test('gate 20 (cherries): the door carries Surprise-me + the catch-up block ([hidden] symmetric)', async ({ page, request }) => {
+test('gate 20.5: the door carries the catch-up block but NO Surprise-me (Blake item 1)', async ({ page, request }) => {
   const html = await (await request.get('/index.html')).text();
-  expect(html).toContain('id="welcome-surprise"');
+  expect(html).not.toContain('id="welcome-surprise"');   // removed per Blake — the nav's Random is the one dice
   expect(html).toContain('id="welcome-catchup"');
   await page.goto('/index.html');
   const d = await page.evaluate(() => {

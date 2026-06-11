@@ -49,6 +49,7 @@ const images = require('./lib/images');               // gate 14 — admin atomi
 const { sha256Hex, hashDocId } = require('./lib/imagehash'); // image overhaul — per-user dedupe
 const { likeDelta, shouldNotifyLike, likeNotifId, bgSweepDecision } = require('./lib/profile'); // dream profile
 const { stripSweepDecision, reapUploadsOrphans } = require('./lib/sweep'); // gate 20 — edit-strip + orphan reaper
+const migrate = require('./lib/migrate'); // gate 20.5 — the gold-flip's MIGRATION half
 
 setGlobalOptions({
   region: 'us-central1',
@@ -531,8 +532,8 @@ exports.aggregateSuggestionCounts = onDocumentCreated('suggestions/{docId}', asy
 // Blake surface. Also mirrors status onto the suggestionCounts rollup so the
 // public "👁 N requested" chip retires itself for reviewed titles.
 // (Half 2 — migrating an anime:al:<id> Tavern thread onto the new catalog slug
-// so it GAINS the gold verdict rail — needs catalog-truth slug mapping that
-// only the client owns; deliberately banked, designed in docs/NEXT.md.)
+// so it GAINS the gold verdict rail — is the migrateRequestThread callable
+// directly below; gate 20.5.)
 // -----------------------------------------------------------------------------
 exports.onSuggestionReviewed = onDocumentUpdated('suggestions/{docId}', async (event) => {
   if (await alreadyProcessed(event.id)) return;
@@ -570,6 +571,28 @@ exports.onSuggestionReviewed = onDocumentUpdated('suggestions/{docId}', async (e
     createdAt: FieldValue.serverTimestamp(),
     expiresAt: Timestamp.fromMillis(Date.now() + NOTIF_TTL_DAYS * DAY_MS),
   });
+});
+
+// -----------------------------------------------------------------------------
+// migrateRequestThread (callable, admin-only) — gate 20.5, the GOLD-FLIP's
+// MIGRATION half (half 2 of onSuggestionReviewed above). When Blake reviews a
+// requested anime, the admin suggestions page calls this to retag that title's
+// 'anime:al:<anilistId>' Tavern threads to 'anime:<slug>' — the threads GAIN
+// the gold verdict rail. WHY A CALLABLE, NOT A TRIGGER: the slug truth lives
+// only in animeData.js (client-side catalog) and AniList titles ≠ Blake's
+// Excel titles, so a CF can't derive the slug from the suggestion doc — the
+// admin picks the catalog title and the page passes the slug in. Core in
+// lib/migrate.js (cf-tests drive it directly, like the moderation cores).
+// -----------------------------------------------------------------------------
+exports.migrateRequestThread = onCall(async (request) => {
+  try {
+    return await migrate.applyMigrateRequestThread(
+      db,
+      request.auth && request.auth.uid,
+      request.data && request.data.anilistId,
+      request.data && request.data.slug
+    );
+  } catch (e) { throw new HttpsError(e.code || 'internal', e.message || 'migrateRequestThread failed'); }
 });
 
 // =============================================================================

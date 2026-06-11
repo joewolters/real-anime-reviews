@@ -890,3 +890,52 @@ test('gate 20: non-admin LIST of suggestionCounts stays denied (anti-brigading)'
   await assertFails(as('alice').collection('suggestionCounts').get());
   await assertFails(anon().collection('suggestionCounts').get());
 });
+
+// ============================================================================
+// GATE 20.5 — profile FRAME themes (item 9b) + users/{uid} email tightening.
+// frame mirrors accent: a CURATED enum (12 user keys), PLUS 'blake' — Blake's
+// EXCLUSIVE frame, valid only for the ADMIN uid. The exclusivity is
+// RULES-enforced (proven here), not UI-hidden. And users/{uid} get flips
+// PUBLIC → owner-or-admin: the doc carries email, and author-name reads are
+// profiles-first now — the stranger fallback dies.
+// ============================================================================
+test('frame: owner sets frame "witch" (a user key) — allowed', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', frame: 'witch', joinedAt: serverTimestamp() }));
+});
+test('frame: HOSTILE non-enum "gold" and numeric 99 are DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', frame: 'gold', joinedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', frame: 99, joinedAt: serverTimestamp() }));
+});
+test('frame: HOSTILE non-admin claiming "blake" is DENIED (the exclusivity)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
+    { displayName: 'Alice', frame: 'blake', joinedAt: serverTimestamp() }));
+});
+test('frame: the ADMIN uid sets "blake" on his own profile — allowed', async () => {
+  // displayName dodges the M1 denylist on purpose — 'blake' the NAME stays
+  // reserved even for the admin; the FRAME is the sanctioned exclusive.
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'profiles/' + ADMIN),
+    { displayName: 'Blake W', frame: 'blake', joinedAt: serverTimestamp() }));
+});
+test('frame: update ADDING frame to an existing profile is allowed', async () => {
+  await seed((db) => setDoc(doc(db, 'profiles/alice'),
+    { displayName: 'Alice', joinedAt: Timestamp.now() }));
+  await assertSucceeds(updateDoc(doc(as('alice'), 'profiles/alice'),
+    { frame: 'sakura' }));
+});
+
+// gate 20.5 — the users/{uid} GET tightening was built then REVERTED inside
+// the gate (adversarial: it tombstoned ACTIVE legacy members whose identity
+// lives only in users/{uid}; profiles docs are Studio-save-only). This pins
+// the RESTORED public-get contract so the flip can't sneak back without the
+// profiles backfill that must precede it (banked in NEXT).
+test('users doc: get stays PUBLIC until the profiles backfill lands (the reverted tightening)', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice'),
+    { email: 'alice@example.com', displayName: 'Alice' }));
+  await assertSucceeds(getDoc(doc(as('alice'), 'users/alice')));
+  await assertSucceeds(getDoc(doc(as('bob'), 'users/alice')));   // the legacy-identity fallback LIVES
+  await assertSucceeds(getDoc(doc(anon(), 'users/alice')));
+  await assertSucceeds(getDoc(doc(as(ADMIN), 'users/alice')));
+});

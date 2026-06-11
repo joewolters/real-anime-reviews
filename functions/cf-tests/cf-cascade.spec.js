@@ -8,6 +8,7 @@
 const { test, before, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const admin = require('firebase-admin');
+const { applyMigrateRequestThread } = require('../lib/migrate'); // gate 20.5 — gold-flip migration core
 
 const PROJECT = 'demo-rar';
 const ADMIN = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
@@ -21,7 +22,12 @@ before(() => {
 });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function waitFor(fn, { timeout = 20000, interval = 400 } = {}) {
+// gate 20.5 — default 20000 → 45000: the emulator now runs 34 functions and
+// this file front-loads the migration seeds, so the heavy paged cascades
+// (recursiveDelete / onUserDelete / the rate-limit sweep) drift past 20s
+// under full-track load. Same green outcome, honest margin (the heaviest
+// observed pass was ~20.3s — right ON the old line).
+async function waitFor(fn, { timeout = 45000, interval = 400 } = {}) {
   const start = Date.now();
   for (;;) {
     const v = await fn();
@@ -129,4 +135,55 @@ test('suggestionCounts: three suggestions for one anilistId roll up to count 3',
   });
   assert.ok(rolled, 'count should reach exactly 3');
   assert.equal(rolled.title, 'Frieren');
+});
+
+// 6) gate 20.5 — migrateRequestThread core (the gold-flip's MIGRATION half:
+//    'anime:al:<id>' threads retag to 'anime:<slug>' and GAIN the verdict rail).
+//    Drives lib/migrate.js directly, like the moderation cores in cf-moderation.
+
+const alThread = (uid, tag) => ({
+  authorUid: uid, title: 'Talk', body: 'b', tag,
+  postCount: 0, reportCount: 0, pinned: false, locked: false, removed: false,
+  createdAt: TS.now(), lastPostAt: TS.now(),
+});
+
+test('migrateRequestThread rejects a NON-admin caller (tag untouched)', async () => {
+  await db.doc('forum/tAl').set(alThread('fan1', 'anime:al:154587'));
+  await assert.rejects(() => applyMigrateRequestThread(db, 'not-admin', 154587, 'frieren'), /admin/i);
+  assert.equal((await db.doc('forum/tAl').get()).data().tag, 'anime:al:154587', 'non-admin call must not retag');
+});
+
+test('migrateRequestThread (admin) retags the anime:al: threads and leaves a different-tag thread untouched', async () => {
+  await db.doc('forum/tMig1').set(alThread('fan1', 'anime:al:154587'));
+  await db.doc('forum/tMig2').set(alThread('fan2', 'anime:al:154587'));
+  await db.doc('forum/tOther').set(alThread('fan3', 'anime:al:999'));   // a DIFFERENT title's thread
+  await db.doc('forum/tTopic').set(alThread('fan4', 'general'));        // a topic thread
+
+  // anilistId as a STRING — the admin row's dataset attribute hands one back; coercion covered.
+  const res = await applyMigrateRequestThread(db, ADMIN, '154587', 'frieren');
+  assert.equal(res.migrated, 2, 'both matching threads retagged');
+
+  const t1 = (await db.doc('forum/tMig1').get()).data();
+  assert.equal(t1.tag, 'anime:frieren');
+  assert.equal(t1.title, 'Talk', 'other fields untouched');
+  assert.equal(t1.removed, false, 'other fields untouched');
+  assert.equal((await db.doc('forum/tMig2').get()).data().tag, 'anime:frieren');
+  assert.equal((await db.doc('forum/tOther').get()).data().tag, 'anime:al:999', 'different anilistId untouched');
+  assert.equal((await db.doc('forum/tTopic').get()).data().tag, 'general', 'topic thread untouched');
+
+  // idempotent by nature — a re-run queries the OLD tag and finds 0.
+  const again = await applyMigrateRequestThread(db, ADMIN, 154587, 'frieren');
+  assert.equal(again.migrated, 0);
+});
+
+test('migrateRequestThread rejects a garbage slug / garbage anilistId (writes nothing)', async () => {
+  await db.doc('forum/tGarb').set(alThread('fan1', 'anime:al:154587'));
+  await assert.rejects(() => applyMigrateRequestThread(db, ADMIN, 154587, 'Frieren!'), /slug/i);       // case + punctuation
+  await assert.rejects(() => applyMigrateRequestThread(db, ADMIN, 154587, 'anime:frieren'), /slug/i);  // pre-prefixed
+  await assert.rejects(() => applyMigrateRequestThread(db, ADMIN, 154587, 'x'.repeat(101)), /slug/i);  // over the {1,100} rules cap
+  await assert.rejects(() => applyMigrateRequestThread(db, ADMIN, 154587, ''), /slug/i);
+  await assert.rejects(() => applyMigrateRequestThread(db, ADMIN, -5, 'frieren'), /anilistId/i);
+  await assert.rejects(() => applyMigrateRequestThread(db, ADMIN, 'abc', 'frieren'), /anilistId/i);
+  await assert.rejects(() => applyMigrateRequestThread(db, ADMIN, { anilistId: 1 }, 'frieren'), /anilistId/i);
+  assert.equal((await db.doc('forum/tGarb').get()).data().tag, 'anime:al:154587', 'garbage input must not retag');
 });

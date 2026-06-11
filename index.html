@@ -58,6 +58,7 @@
 
   <link rel="stylesheet" href="style.css?v=1.9.1">
   <link rel="stylesheet" href="mobile.css?v=1.9.1" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=1.9.1">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
   <link rel="stylesheet" href="admin-fab.css?v=1.9.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -738,13 +739,11 @@
         <span class="welcome-kicker">ようこそ<span class="welcome-kicker-en">WELCOME</span></span>
         <h2 class="welcome-wordmark">Real Anime Reviews</h2>
         <p class="welcome-tagline">A late-night anime den &mdash; one person's honest takes, ranked, reviewed, and watched in full.</p>
-        <div class="welcome-actions">
-          <button type="button" id="welcome-enter" class="welcome-enter">
-            Enter<span class="welcome-enter-arrow" aria-hidden="true">&#9656;</span>
-          </button>
-          <!-- gate 20 (cherry) — roll the dice straight from the door -->
-          <button type="button" id="welcome-surprise" class="welcome-surprise" title="Open one of Blake's 44 at random">🎲 Surprise me</button>
-        </div>
+        <!-- (gate 20.5 item 1 — the door's Surprise-me removed per Blake; the
+             nav's Random stays the one dice) -->
+        <button type="button" id="welcome-enter" class="welcome-enter">
+          Enter<span class="welcome-enter-arrow" aria-hidden="true">&#9656;</span>
+        </button>
       </div>
     </div>
     <!-- gate 20 — the catch-up: returning users get deep-link buttons for what
@@ -754,12 +753,35 @@
     <div id="welcome-catchup" class="welcome-catchup" hidden></div>
   </div>
 
+  <!-- gate 20.5 (item 3) — THE CATCH-UP SHEET: the door's buttons open a real
+       destination now — a full veil surface that walks a returning user
+       through what they missed (new reviews from Blake · their lantern ·
+       watchlist airing). JS renders the sections; hidden when unused. -->
+  <div id="catchup-sheet" class="catchup-sheet" hidden aria-hidden="true" role="dialog"
+       aria-modal="true" aria-label="While you were away" tabindex="-1">
+    <div class="catchup-scrim" aria-hidden="true"></div>
+    <div class="catchup-panel">
+      <header class="catchup-head">
+        <div class="catchup-head-text">
+          <span class="catchup-kicker">WHILE YOU WERE AWAY <span class="jp-mini">留守の間</span></span>
+          <p class="catchup-sub">The den kept a light on for you.</p>
+        </div>
+        <button type="button" id="catchup-close" class="catchup-close" aria-label="Close">×</button>
+      </header>
+      <div id="catchup-body" class="catchup-body"></div>
+      <footer class="catchup-foot">
+        <button type="button" id="catchup-enter" class="welcome-enter">Step inside<span class="welcome-enter-arrow" aria-hidden="true">&#9656;</span></button>
+      </footer>
+    </div>
+  </div>
+
 
   <script>
   const v = window.APP_VERSION || "1.0.1";
   document.write(`<script src="animeData.js?v=${v}"><\/script>`);
   document.write(`<script src="card-render.js?v=${v}"><\/script>`);
   document.write(`<script src="franchise-fetch.js?v=${v}"><\/script>`);
+  document.write(`<script src="frames.js?v=${v}"><\/script>`);
   document.write(`<script src="markdown.js?v=${v}"><\/script>`);
   document.write(`<script src="composer-toolbar.js?v=${v}"><\/script>`);
   document.write(`<script src="live-composer.js?v=${v}"><\/script>`);

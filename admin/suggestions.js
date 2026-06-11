@@ -13,12 +13,18 @@
 // confirm(); (3) reviewed rows move to a separate NEW/REVIEWED section split with
 // a 320ms cross-slide instead of dimming in place.
 //
+// v1.10.0 gate 20.5 addition: after a successful Mark-reviewed on a suggestion
+// that carries an anilistId, a branded picker (offerMigration) offers to retag
+// that title's 'anime:al:<id>' Tavern threads onto the picked catalog slug via
+// the migrateRequestThread callable — the threads GAIN the gold verdict rail.
+//
 // Author: Code | date: 2026-06-02 | v1.6.11 Suggestion Box (gate 3b UI overhaul)
 
-import { auth, db } from '../firebase.js';
+import { auth, db, functions } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import { collection, query, orderBy, getDocs, doc, updateDoc, deleteDoc, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const SKELETON_COUNT = 3;
@@ -253,6 +259,148 @@ function confirmModal(title) {
   });
 }
 
+// ---- Gold-flip migration picker (v1.10.0 gate 20.5) -------------------------
+
+// MUST match script.js's slug()/animeSlug() EXACTLY — that pair mints the
+// Hub's anime:<slug> forum tags (the verdict-rail key). NOT edit.js's
+// slugify(), which strips apostrophes for Excel-row lookups and would produce
+// a DIFFERENT slug for titles like "JoJo's Bizarre Adventure".
+function tagSlug(title) {
+  return String(title || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+// The catalog (Blake's 44) from the animeData.js bridge — same read pattern as
+// edit.js/season-reviews.js getCatalog().
+function getCatalog() {
+  const list = (window.animeData && Array.isArray(window.animeData)) ? window.animeData : [];
+  return list
+    .filter((a) => a && a.Title)
+    .map((a) => ({ slug: tagSlug(a.Title), title: a.Title }))
+    .sort((x, y) => x.title.toLowerCase().localeCompare(y.title.toLowerCase()));
+}
+
+// After a successful Mark-reviewed on a suggestion carrying an anilistId,
+// offer to migrate that title's 'anime:al:<id>' Tavern threads onto the
+// catalog slug Blake's review now lives under — they GAIN the gold verdict
+// rail. The slug truth is animeData.js (AniList titles ≠ Blake's Excel
+// titles), which is why the CF can't do this from a trigger — the admin picks
+// the title here. SKIPPABLE by design (Skip / backdrop / Escape close without
+// calling anything — not every review maps to a thread). Reuses the
+// confirmModal overlay vocabulary: double-rAF entrance, focus containment,
+// safe-option default focus.
+function offerMigration(anilistId, suggestionTitle) {
+  const catalog = getCatalog();
+  if (!catalog.length) return;            // catalog bridge failed — nothing to offer
+
+  const overlay = $('migrate-modal');
+  const card = overlay.querySelector('.confirm-card');
+  const listEl = $('migrate-list');
+  const resultEl = $('migrate-result');
+  const skipBtn = overlay.querySelector('[data-migrate="skip"]');
+
+  $('migrate-title').textContent =
+    `"${suggestionTitle}" is reviewed — move its community threads onto a catalog title's gold verdict rail?`;
+  listEl.innerHTML = catalog
+    .map((c) => `<li><button type="button" data-migrate-slug="${escapeAttr(c.slug)}">${escapeHtml(c.title)}</button></li>`)
+    .join('');
+  listEl.hidden = false;
+  resultEl.hidden = true;
+  resultEl.textContent = '';
+  skipBtn.textContent = 'Skip';
+
+  const prevFocus = document.activeElement;
+  overlay.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-open')));
+  skipBtn.focus();                        // default focus on the safe option
+
+  let busy = false;                       // a callable is in flight — hold the door
+  const close = () => {
+    overlay.removeEventListener('click', onClick);
+    document.removeEventListener('keydown', onKey);
+    card.classList.remove('is-open');
+    overlay.hidden = true;
+    if (prevFocus && prevFocus.focus) prevFocus.focus();
+  };
+
+  // Swap the list for the result line ("toast" in the page's card vocabulary);
+  // Skip becomes Done so the close affordance survives the swap.
+  const showResult = (text) => {
+    listEl.hidden = true;
+    resultEl.textContent = text;
+    resultEl.hidden = false;
+    skipBtn.textContent = 'Done';
+    skipBtn.focus();
+  };
+
+  const pick = async (slug) => {
+    if (busy) return;
+    busy = true;
+    listEl.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    skipBtn.disabled = true;
+    try {
+      const res = await httpsCallable(functions, 'migrateRequestThread')({ anilistId: Number(anilistId), slug });
+      const n = (res && res.data && res.data.migrated) || 0;
+      // gate-20.5 adversarial MED: the callable caps at 50 docs a call — a
+      // capped run must SAY more may remain, not read as complete.
+      showResult(n >= 50
+        ? `Migrated ${n} threads — that hit the per-run cap, so more may remain. Run Mark-reviewed's migration again to catch the rest.`
+        : (n > 0
+          ? `Migrated ${n} thread${n === 1 ? '' : 's'} to the verdict rail.`
+          : 'No community threads to migrate.'));
+    } catch (err) {
+      console.error('migrateRequestThread failed', err);
+      showResult('Migration failed — see console.');
+    } finally {
+      busy = false;
+      skipBtn.disabled = false;
+      skipBtn.focus();
+    }
+  };
+
+  // gate-20.5 adversarial MED: a wrong catalog pick is an irreversible bulk
+  // retag — the first click ARMS the title, the second confirms it (the
+  // col-del two-tap pattern; clicking anything else disarms).
+  let armedSlug = null;
+  const disarm = () => {
+    armedSlug = null;
+    listEl.querySelectorAll('button[data-migrate-slug]').forEach((b) => {
+      b.classList.remove('is-armed');
+      if (b.dataset.origLabel) { b.textContent = b.dataset.origLabel; delete b.dataset.origLabel; }
+    });
+  };
+  const onClick = (e) => {
+    if (busy) return;
+    if (e.target === overlay) return close();                    // backdrop = skip
+    if (e.target.closest('[data-migrate="skip"]')) return close();
+    const b = e.target.closest('button[data-migrate-slug]');
+    if (!b) return;
+    if (armedSlug === b.dataset.migrateSlug) { disarm(); pick(b.dataset.migrateSlug); return; }
+    disarm();
+    armedSlug = b.dataset.migrateSlug;
+    b.dataset.origLabel = b.textContent;
+    b.classList.add('is-armed');
+    b.textContent = `Retag threads to “${b.dataset.origLabel}”? Click again to confirm`;
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { if (!busy) { e.preventDefault(); close(); } return; }
+    if (e.key === 'Tab') {
+      // Focus containment across the modal's enabled buttons (the confirmModal
+      // two-stop trap, generalized for the N-button list).
+      const focusables = Array.from(card.querySelectorAll('button:not(:disabled)'));
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  };
+  overlay.addEventListener('click', onClick);
+  document.addEventListener('keydown', onKey);
+}
+
 // ---- Reviewed-section move (v1.6.12 item 3) --------------------------------
 
 // Moves a row from the NEW column into the REVIEWED column. v1.6.12 iteration —
@@ -324,6 +472,10 @@ function wireListClicks() {
           pill.className = 'status-pill status-reviewed';
         }
         moveToReviewed(row);   // v1.6.12 item 3 — slide row into the REVIEWED section
+        // gate 20.5 — the gold-flip's migration half: a dropdown-picked
+        // suggestion carries an anilistId, so its Tavern threads (if any) are
+        // tagged anime:al:<id>. Offer to dock them at the verdict rail.
+        if (row.dataset.anilistId) offerMigration(row.dataset.anilistId, title);
       } catch (err) {
         console.error('mark-reviewed failed', err);
         alert('Could not mark as reviewed — see console.');

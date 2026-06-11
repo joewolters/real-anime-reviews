@@ -776,3 +776,81 @@
   .suggestion-row.leaving  { transform: none; }
   .suggestion-row.entering { transform: none; }
 }
+
+/* ============================================================================
+   v1.10.0 gate 20.5 — Gold-flip migration picker
+   Reuses the .confirm-overlay/.confirm-card modal vocabulary (overlay, double-
+   rAF entrance, action-button row). The kicker + accents go GOLD because this
+   is the one admin affordance that grants a thread the verdict rail (gold =
+   Blake ONLY — this picker is the doorman, not a relaxation of the rule).
+   ============================================================================ */
+.migrate-card { max-width: 460px; }
+.migrate-card .confirm-glyph { filter: drop-shadow(0 0 12px rgba(255, 213, 74, 0.35)); }
+/* Same specificity as the red .confirm-card .confirm-kicker rules above —
+   these win on cascade order (this block is later in the file). */
+.confirm-card .migrate-kicker { color: #ffd54a; }
+.confirm-card .migrate-kicker .jp-mini { color: rgba(255, 213, 74, 0.70); }
+
+/* The catalog list — scrollable column of pickable titles. */
+.migrate-list {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid rgba(187, 134, 252, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 5, 28, 0.45);
+  text-align: left;
+}
+/* [hidden] symmetry — author display:flex would beat the UA [hidden] (the g23
+   standing rule: every new display:flex/grid component ships its twin). */
+.migrate-list[hidden] { display: none; }
+
+.migrate-list button {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: rgba(245, 242, 255, 0.92);
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.18), rgba(70, 0, 110, 0.30));
+  border: 1px solid rgba(187, 134, 252, 0.22);
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.migrate-list button:hover {
+  border-color: rgba(255, 213, 74, 0.55);
+  box-shadow: 0 0 12px rgba(255, 213, 74, 0.22);
+  filter: brightness(1.08);
+}
+.migrate-list button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+/* Result notice — the modal's "toast": swaps in where the list was, in the
+   verdict rail's own gold-on-dark voice (echoes .hub-verdict in style.css). */
+.migrate-result {
+  margin: 4px 0 20px;
+  padding: 14px 16px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.88);
+  border: 1px dashed rgba(255, 213, 74, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(60, 44, 16, 0.30), rgba(30, 20, 6, 0.24));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .migrate-list button { transition-duration: 0s !important; }
+}
+
+/* gate 20.5 — the armed (click-again-to-confirm) migration pick */
+.migrate-list button.is-armed {
+  border-color: #ffd54a;
+  color: #ffd54a;
+  font-weight: 700;
+}
