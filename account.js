@@ -1902,7 +1902,7 @@ saveBtn.addEventListener('click', async () => {
         bgUploadErr = !u.emailVerified
           ? 'Saved — but the background didn\'t upload: verify your email first (uploads are email-verified only).'
           : (/permission|unauthorized|403/i.test(String(bgErr?.message || bgErr))
-              ? 'Saved — but the background didn\'t upload: uploads unlock once the community rules are accepted (the 🔓 banner above).'
+              ? 'Saved — but the background didn\'t upload: the community-rules unlock hadn\'t caught up yet. Hit Save again to retry it.'
               : 'Saved — but the background upload failed: ' + (bgErr?.message || String(bgErr)));
       }
     }
@@ -1913,7 +1913,9 @@ saveBtn.addEventListener('click', async () => {
     // pre-consent save must not break the legacy path above — but it now SAYS
     // so instead of failing silent.
     let profWriteOk = consentOk;   // a declined consent skips the public write cleanly
-    if (consentOk) try {
+    // gate 20.6 (Blake item 6): the write is a closure so the no-dead-end retry
+    // below can run the SAME write after a re-offered consent lands.
+    const writeProfileDoc = async () => {
       const pref = doc(db, 'profiles', u.uid);
       const pSnap = await getDoc(pref);
       const pData = {
@@ -1938,23 +1940,69 @@ saveBtn.addEventListener('click', async () => {
       if (!pSnap.exists()) pData.joinedAt = serverTimestamp();   // member-since: first write only
       await setDoc(pref, pData, { merge: true });
       profState.bgRef = nextBgRef || '';
-    } catch (_profileErr) {
+    };
+    if (consentOk) try { await writeProfileDoc(); } catch (_profileErr) {
       profWriteOk = false;
     }
 
-    if (bgUploadErr) { errEl.textContent = bgUploadErr; saveBtn.disabled = false; return; }
+    // gate-20.6 adversarial MED: the bg-upload early-return used to run FIRST,
+    // which preempted the consent re-offer below whenever a background was
+    // staged — the blip scenario then showed "Saved — …" while NOTHING public
+    // had saved. The profile-write outcome (incl. the re-offer + retry) now
+    // resolves first; the bg message only stands once it's honest.
     if (!profWriteOk) {
       // round-2 adversarial MED: 'suspended' must not get the accept-the-rules
       // copy (the suspended modal already fired; a banned account can't comply).
       if (consentRes === 'suspended') {
         errEl.textContent = 'Your account is suspended — public profile changes are paused.';
+        saveBtn.disabled = false; return;
+      }
+      // gate 20.6 (Blake item 6): no banner dead-ends — the rules COME TO the
+      // save. This branch with consentRes 'ok' means the gate read degraded on
+      // a blip (the modal never showed) and the rules then denied the write —
+      // re-offer the modal IN PLACE and retry the write once. A 'cancelled'
+      // user just declined the modal seconds ago: don't nag with a second one,
+      // but tell them Save itself re-offers (no banner hunt required).
+      if (consentRes === 'ok') {
+        const again = await ensureConsent(u, db, functions, { adminUid: RAR_ADMIN_UID });
+        if (again === 'suspended') {
+          errEl.textContent = 'Your account is suspended — public profile changes are paused.';
+          saveBtn.disabled = false; return;
+        }
+        if (again === 'ok') {
+          // a consent that just landed unblocks the staged background too —
+          // retry the upload before the write so bgRef points at a real object
+          if (bgUploadErr && profState.bgStagedBlob && !profState.bgRemove) {
+            try {
+              const rid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+              const rpath = `uploads/${u.uid}/profilebg/${rid}`;
+              await uploadBytes(storageRef(getStorage(), rpath), profState.bgStagedBlob, { contentType: profState.bgStagedMime });
+              nextBgRef = rpath;
+              bgUploadErr = '';
+            } catch (_bgRetryErr) { /* the original message stands */ }
+          }
+          try { await writeProfileDoc(); profWriteOk = true; } catch (_e) {}
+        }
+        if (!profWriteOk) {
+          if (again === 'cancelled') {
+            const cb = document.getElementById('acct-consent-banner');
+            if (cb) cb.hidden = false;
+            errEl.textContent = 'Your name is saved. The public profile bits (bio, tags, background…) unlock once you accept the community rules — hit Save again and they\'ll pop right back up.';
+          } else {
+            errEl.textContent = 'Your name is saved, but the public profile changes didn\'t go through — give it a moment and hit Save again.';
+          }
+          saveBtn.disabled = false; return;
+        }
       } else {
         const cb = document.getElementById('acct-consent-banner');
-        if (cb) cb.hidden = false;   // make sure the pointer we give is real
-        errEl.textContent = 'Your name is saved. The public profile bits (bio, tags, background…) unlock once you accept the community rules — the 🔓 banner above opens them right here.';
+        if (cb) cb.hidden = false;   // secondary affordance, not the only door
+        errEl.textContent = 'Your name is saved. The public profile bits (bio, tags, background…) unlock once you accept the community rules — hit Save again and they\'ll pop right back up.';
+        saveBtn.disabled = false; return;
       }
-      saveBtn.disabled = false; return;
     }
+    // the profile write is resolved (possibly via the re-offer) — a bg error
+    // shown now is truthful: everything else DID save.
+    if (bgUploadErr) { errEl.textContent = bgUploadErr; saveBtn.disabled = false; return; }
 
     // round 3 — a branded "saved" toast lands FIRST (a bare hard reload read as
     // a glitch, not a confirmation); the reload still follows so every header

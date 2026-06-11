@@ -9674,7 +9674,7 @@ function closeModal() {
     if (!meta || !meta.alId) return '';
     const head = isWatched
       ? { t: 'THIS SEASON’S ROOM', s: 'Talk about this season — spoilers behind the tag, please.' }
-      : { t: 'THE ROOM', s: 'I haven’t reviewed this one (yet) — the room’s open anyway. Keep spoilers behind the tag.' };
+      : { t: 'THE ROOM', s: 'I haven’t reviewed this one (yet). Feel free to discuss anyway.' };
     return '<section class="secondary-section secondary-community">' +
         '<div class="secondary-community-head">' +
           '<h3 class="secondary-section-title secondary-community-title">' + head.t + ' <span class="jp-mini">話せ</span></h3>' +

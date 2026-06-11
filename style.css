@@ -9664,12 +9664,17 @@ html.rar-welcome-pending::before {
 :is(.profile-sheet, .acct-preview)[data-accent="indigo"]  { --pf-accent: #7986cb; --pf-accent2: #7986cb; }
 :is(.profile-sheet, .acct-preview)[data-accent="peach"]   { --pf-accent: #ffab91; --pf-accent2: #ffab91; }
 :is(.profile-sheet, .acct-preview)[data-accent="pearl"]   { --pf-accent: #e3e1ec; --pf-accent2: #e3e1ec; }
+/* gate 20.6 (Blake item 2) — gradients round 3: "only the purple one is
+   actually noticeable." Root cause was ANALOGOUS stop pairs (#ff8a65→#e57373
+   etc. — near-identical hues read solid on a thin ring). Every pair now has a
+   real hue/lightness gap, nebula-grade: a dark anchored stop and a bright far
+   stop, corner vs corner. Still NO gold/yellow anywhere (heart rule). */
 :is(.profile-sheet, .acct-preview)[data-accent="g-nebula"] { --pf-accent: #bb86fc; --pf-accent2: #f48fb1; }
-:is(.profile-sheet, .acct-preview)[data-accent="g-ember"]  { --pf-accent: #ff8a65; --pf-accent2: #e57373; }
-:is(.profile-sheet, .acct-preview)[data-accent="g-ocean"]  { --pf-accent: #4dd0e1; --pf-accent2: #81d4fa; }
-:is(.profile-sheet, .acct-preview)[data-accent="g-meadow"] { --pf-accent: #a5d6a7; --pf-accent2: #4dd0e1; }
-:is(.profile-sheet, .acct-preview)[data-accent="g-dusk"]   { --pf-accent: #7986cb; --pf-accent2: #bb86fc; }
-:is(.profile-sheet, .acct-preview)[data-accent="g-sakura"] { --pf-accent: #f48fb1; --pf-accent2: #ffab91; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-ember"]  { --pf-accent: #c62828; --pf-accent2: #ffab91; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-ocean"]  { --pf-accent: #283593; --pf-accent2: #4dd0e1; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-meadow"] { --pf-accent: #2e7d32; --pf-accent2: #aed581; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-dusk"]   { --pf-accent: #303f9f; --pf-accent2: #ff8a65; }
+:is(.profile-sheet, .acct-preview)[data-accent="g-sakura"] { --pf-accent: #ad1457; --pf-accent2: #f8bbd0; }
 /* adversarial MED: the hero preview is .acct-preview, NOT .profile-sheet — a
    solid accent with glow off showed NO visible change there. One :is() map. */
 :is(.profile-sheet, .acct-preview)[data-accent] .profile-avatar { border-color: var(--pf-accent); }
@@ -9686,8 +9691,13 @@ html.rar-welcome-pending::before {
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude; }
 :is(.profile-sheet, .acct-preview)[data-accent] .pf-accent-ring { opacity: 1; }
-/* gradients get a slightly bolder edge so the two stops READ */
-:is(.profile-sheet, .acct-preview)[data-accent^="g-"] .pf-accent-ring { padding: 3px; }
+/* gradients get a bolder edge + corner-anchored stops so the two colors each
+   OWN a corner before the blend (gate 20.6: a 0→100% fade across 500px+ of
+   card edge left adjacent pixels near-identical — the ring read solid). */
+:is(.profile-sheet, .acct-preview)[data-accent^="g-"] .pf-accent-ring { padding: 4px;
+  background: linear-gradient(135deg,
+    var(--pf-accent) 0%, var(--pf-accent) 22%,
+    var(--pf-accent2) 78%, var(--pf-accent2) 100%); }
 /* the glow switch — the aura sits on the HOST (adversarial MED: the ring is
    mask-composited, and a mask clips the element's own box-shadow to nothing) */
 :is(.profile-sheet, .acct-preview)[data-accent-glow] {
@@ -9695,15 +9705,42 @@ html.rar-welcome-pending::before {
 :is(.profile-sheet, .acct-preview)[data-accent-glow] .profile-avatar {
   box-shadow: 0 0 16px var(--pf-accent); }
 
-/* the profile BACKGROUND layer — under everything, behind a dark floor so the
-   sheet's text never fights the art. The img may be swapped for a one-frame
+/* the profile BACKGROUND layer. The img may be swapped for a one-frame
    canvas under reduced-motion (the GIF freeze). */
 /* adversarial perf MED: own compositor layer so an animated-GIF background
    re-rasters ONLY the bg, not the sheet's text/avatar/rows above it. */
+/* gate 20.6 (Blake item 1b) — brightness parity: the picture renders at FULL
+   opacity ("the brightness should be the same"); legibility comes from two
+   LOCALIZED caps (a top cap under the name zone, a bottom floor under bio/
+   rows) + text shadows — never a whole-card dim. The midband shows the true
+   picture. cropper.js paints the SAME caps in the FRAME-IT preview, and the
+   account hero (.acct-preview-bg) mirrors these stops — keep all three in sync. */
 .profile-bg-wrap { position: absolute; inset: 0; border-radius: 18px; overflow: hidden; z-index: 0; pointer-events: none; transform: translateZ(0); }
-.profile-bg-wrap .profile-bg { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.38; }
+.profile-bg-wrap .profile-bg { width: 100%; height: 100%; object-fit: cover; display: block; }
 .profile-bg-wrap::after { content: ""; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(14, 4, 30, 0.30) 0%, rgba(14, 4, 30, 0.78) 55%, rgba(14, 4, 30, 0.96) 100%); }
+  background:
+    linear-gradient(180deg, rgba(14, 4, 30, 0.50) 0%, rgba(14, 4, 30, 0) 26%),
+    linear-gradient(0deg, rgba(14, 4, 30, 0.88) 0%, rgba(14, 4, 30, 0.45) 22%, rgba(14, 4, 30, 0) 52%); }
+/* the localized caps can't cover every pixel behind mid-card text — the type
+   carries its own edge (large/bold + this shadow = legible on any picture) */
+.profile-sheet.has-bg :is(.profile-name, .profile-status, .profile-bio, .profile-since, .profile-empty),
+.acct-preview--hero :is(.profile-name, .profile-status, .profile-bio) {
+  text-shadow: 0 1px 2px rgba(6, 1, 14, 0.95), 0 2px 16px rgba(6, 1, 14, 0.75); }
+/* gate-20.6 adversarial MED — the midband has NO cap by design, so every
+   mid-card CONTENT surface carries its own plate when a background is live
+   (the picture stays full-brightness around them; the plates are the
+   "localized under the text" rule applied to chips/rows/panels, never a card
+   dim). Scoped to has-bg — bg-less sheets keep their translucent look. The
+   is-active tab keeps a distinct (darker purple) plate so state still reads. */
+.profile-sheet.has-bg :is(.profile-item, .profile-featured) { background: rgba(16, 5, 32, 0.72); }
+.profile-sheet.has-bg .profile-col { background: rgba(16, 5, 32, 0.66); }
+.profile-sheet.has-bg :is(.profile-tag, .profile-like-btn, .profile-report) { background: rgba(16, 5, 32, 0.64); }
+.profile-sheet.has-bg .profile-act-chip:not(.is-active) { background: rgba(16, 5, 32, 0.64); }
+.profile-sheet.has-bg .profile-act-chip.is-active { background: rgba(95, 52, 168, 0.8); }
+.profile-sheet.has-bg .profile-kicker {
+  text-shadow: 0 1px 2px rgba(6, 1, 14, 0.95), 0 0 14px rgba(187, 134, 252, 0.5); }
+.profile-sheet.has-bg .acct-viewer-badge { background: rgba(16, 5, 32, 0.74); }
+.acct-preview--hero .profile-tag { background: rgba(16, 5, 32, 0.64); }
 /* gate-20.5 adversarial HIGH: exclude the accent ring (same collapse class as
    the frames lift — the ring must stay position:absolute) */
 .profile-sheet.has-bg > *:not(.profile-bg-wrap):not(.pf-accent-ring) { position: relative; z-index: 1; }
@@ -9784,9 +9821,13 @@ html[data-surface="account"] .side-link.is-active {
 .acct-preview .profile-head { position: relative; z-index: 1; padding: 0; text-align: center; }
 .acct-preview .profile-like-row { display: none; }   /* the preview shows identity, not the count */
 .acct-preview-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; transform: translateZ(0); }
-.acct-preview-bg img, .acct-preview-bg canvas { width: 100%; height: 100%; object-fit: cover; opacity: 0.38; display: block; }
+/* gate 20.6 (item 1b) — full-brightness picture + the same localized caps as
+   .profile-bg-wrap::after (keep the stops in sync with that block + cropper.js) */
+.acct-preview-bg img, .acct-preview-bg canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
 .acct-preview-bg::after { content: ""; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(14, 4, 30, 0.35) 0%, rgba(14, 4, 30, 0.9) 100%); }
+  background:
+    linear-gradient(180deg, rgba(14, 4, 30, 0.50) 0%, rgba(14, 4, 30, 0) 26%),
+    linear-gradient(0deg, rgba(14, 4, 30, 0.88) 0%, rgba(14, 4, 30, 0.45) 22%, rgba(14, 4, 30, 0) 52%); }
 /* (round 4 — the .acct-preview accent map merged into the shared :is() map above) */
 .acct-preview-open { margin-top: 10px; }
 
@@ -9825,12 +9866,14 @@ html[data-surface="account"] .side-link.is-active {
 .acct-accent[data-accent="pearl"]   { background: #e3e1ec; }
 /* gradient swatches read as what they are — small pills, two stops */
 .acct-accent[data-accent^="g-"] { width: 44px; border-radius: 999px; }
+/* (gate 20.6 item 2 — the swatch pairs mirror the [data-accent] map above;
+   keep the two in sync when stops change) */
 .acct-accent[data-accent="g-nebula"] { background: linear-gradient(120deg, #bb86fc, #f48fb1); }
-.acct-accent[data-accent="g-ember"]  { background: linear-gradient(120deg, #ff8a65, #e57373); }
-.acct-accent[data-accent="g-ocean"]  { background: linear-gradient(120deg, #4dd0e1, #81d4fa); }
-.acct-accent[data-accent="g-meadow"] { background: linear-gradient(120deg, #a5d6a7, #4dd0e1); }
-.acct-accent[data-accent="g-dusk"]   { background: linear-gradient(120deg, #7986cb, #bb86fc); }
-.acct-accent[data-accent="g-sakura"] { background: linear-gradient(120deg, #f48fb1, #ffab91); }
+.acct-accent[data-accent="g-ember"]  { background: linear-gradient(120deg, #c62828, #ffab91); }
+.acct-accent[data-accent="g-ocean"]  { background: linear-gradient(120deg, #283593, #4dd0e1); }
+.acct-accent[data-accent="g-meadow"] { background: linear-gradient(120deg, #2e7d32, #aed581); }
+.acct-accent[data-accent="g-dusk"]   { background: linear-gradient(120deg, #303f9f, #ff8a65); }
+.acct-accent[data-accent="g-sakura"] { background: linear-gradient(120deg, #ad1457, #f8bbd0); }
 /* gate 20.5 (item 9b) — the FRAME picker tiles: a mini swatch (frames.css owns
    the per-theme art) + a name. Blake's exclusive tile wears a quiet gold edge —
    the ONE gold in this menu, and only HIS account ever sees the tile. */
@@ -9869,10 +9912,22 @@ html[data-surface="account"] .side-link.is-active {
   padding: 0; cursor: pointer; font-family: inherit; }   /* round 4: it's a <button> now */
 .acct-bg-thumb:hover { border-color: rgba(187, 134, 252, 0.8); }
 .acct-bg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.acct-bg-note { flex-basis: 100%; color: #b8a8d8; font-size: 0.72rem; }
+/* gate 20.6 (Blake item 8): the requirements line reads as branded spec chips —
+   a small kicker + three scannable pills + one quiet rules sentence. */
+.acct-bg-note { flex-basis: 100%; color: #b8a8d8; font-size: 0.72rem;
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acct-bg-note-label { font-family: 'Bebas Neue', sans-serif; font-size: 0.8rem;
+  letter-spacing: 0.08em; color: #cda9ff; }
+.acct-bg-note-label .jp-mini { font-size: 0.62rem; }
+.acct-bg-spec { display: inline-block; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid rgba(187, 134, 252, 0.35); background: rgba(187, 134, 252, 0.08);
+  color: #d7c6f2; font-size: 0.66rem; letter-spacing: 0.02em; white-space: nowrap; }
+.acct-bg-fine { flex-basis: 100%; color: #9b8abc; font-size: 0.68rem; }
 .avatar-preview[hidden] { display: none; }   /* gate 20: it's an offscreen staging buffer now */
 .acct-preview-open { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-.acct-preview-open .acct-bg-note { flex-basis: auto; margin-left: auto; }
+.acct-preview-open .acct-bg-note { flex-basis: auto; margin-left: auto;
+  justify-content: flex-end; max-width: 100%; }
+.acct-preview-open .acct-bg-fine { flex-basis: auto; }
 
 /* round 4 (item 4) — the hover pickers: opaque pills that surface on the hero.
    Always reachable by keyboard (focus shows them) and always visible on touch. */

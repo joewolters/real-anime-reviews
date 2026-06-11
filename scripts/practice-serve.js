@@ -336,6 +336,10 @@ function serve() {
   http.createServer((req, res) => {
     let urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
     if (urlPath === '/' || urlPath.endsWith('/')) urlPath += 'index.html';
+    // gate 20.6 (Blake item 5): firebase.json hosting runs cleanUrls:true, so prod
+    // resolves extensionless paths to their .html file (/suggest → suggest.html).
+    // Practice must route like prod — every in-app link is extensionless by design.
+    else if (!path.extname(urlPath)) urlPath += '.html';
     const filePath = path.join(ROOT, path.normalize(urlPath).replace(/^([/\\])+/, ''));
     if (!filePath.startsWith(ROOT)) { res.writeHead(403); return res.end('forbidden'); }
     fs.readFile(filePath, (err, data) => {

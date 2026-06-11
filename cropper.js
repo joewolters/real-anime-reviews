@@ -16,7 +16,8 @@
 //   openCropper({ file, mode }) → Promise<{ blob, mime } | null>
 //     file: File/Blob (image/jpeg|png|webp — the caller keeps GIFs away)
 //     mode: 'avatar' (320×320 stage, Ø280 circle mask, 512×512 square out)
-//         | 'background' (480×270 stage, full-bleed ~16:9 mask, ≤1280w out)
+//         | 'background' (480×360 stage, full-bleed 4:3 mask, ≤1280w out —
+//           gate 20.6: 4:3 matches the real card window; 16:9 chopped sides)
 //     null = cancelled (Esc, backdrop, ✕, Cancel). {blob,mime} = Apply.
 //
 // The circle is PRESENTATIONAL: the avatar output is the circle's bounding
@@ -37,7 +38,7 @@ let _openNow = false;        // double-open guard: second call resolves null
 // ── PURE testable model (exposed on window for Playwright) ──────────────────
 // The image is drawn at `scale` (image px × scale = view px) with its top-left
 // at (x, y) in CROP-REGION coordinates (the region the output is cut from:
-// 280×280 for avatar, 480×270 for background). "Cover" means the scaled image
+// 280×280 for avatar, 480×360 for background). "Cover" means the scaled image
 // must fully blanket that region — no blank edges ever show inside the mask:
 //   x ∈ [viewW − imgW·s, 0]   y ∈ [viewH − imgH·s, 0]   s ≥ minScale
 // Returns the clamped {x, y} plus minScale (= the cover-fit scale). If the
@@ -67,12 +68,22 @@ const GEOM = {
     title: 'Frame it', jp: '切り取り', aria: 'Crop your avatar',
   },
   background: {
-    stageW: 480, stageH: 270,
-    crop: { x: 0, y: 0, w: 480, h: 270 },
-    outW: 1280, outH: 720, fixedOut: false,
+    // gate 20.6 (Blake item 1a) — the stage was 16:9 while every render surface
+    // (the account hero, the public sheet) is a ~4:3-ish card painted with
+    // object-fit:cover, so the render systematically chopped the sides of what
+    // the preview promised. 4:3 capture ≈ the real card window; cover's residual
+    // trim is small and center-anchored.
+    stageW: 480, stageH: 360,
+    crop: { x: 0, y: 0, w: 480, h: 360 },
+    outW: 1280, outH: 960, fixedOut: false,
     title: 'Frame the night', jp: '切り取り', aria: 'Crop your profile background',
   },
 };
+// bgAspect exposed for the g25 spec — the 4:3 capture IS the gate-20.6 item-1a
+// fix; derived from GEOM so the spec and the geometry can't drift apart.
+if (typeof window !== 'undefined') {
+  window.cropperModel.bgAspect = GEOM.background.crop.w / GEOM.background.crop.h;
+}
 
 // ── self-injected styles (idempotent; purple family ONLY — never gold) ──────
 function injectCss() {
@@ -210,6 +221,7 @@ export async function openCropper({ file, mode } = {}) {
           <button type="button" class="crp-x" aria-label="Cancel crop">✕</button>
         </div>
         <p class="crp-sub">Drag to move · wheel or pinch to zoom · arrow keys nudge (Shift = big steps), + / − zoom</p>
+        ${geom === GEOM.background ? '<p class="crp-sub">The soft shading top and bottom is where your card’s text sits — the picture itself keeps its full brightness.</p>' : ''}
         <div class="crp-stage-wrap">
           <canvas class="crp-stage" tabindex="0" aria-label="Crop preview — drag or use the arrow keys to position your image"></canvas>
         </div>
@@ -238,6 +250,17 @@ export async function openCropper({ file, mode } = {}) {
     canvas.height = geom.stageH * dpr;
     canvas.style.width = geom.stageW + 'px';
     const ctx = canvas.getContext('2d');
+    // the preview caps (background mode) — built ONCE; geometry is fixed for
+    // the dialog's lifetime and paint() runs on every drag/zoom frame.
+    const capTop = ctx.createLinearGradient(0, 0, 0, geom.stageH);
+    capTop.addColorStop(0, 'rgba(14,4,30,.50)');
+    capTop.addColorStop(0.26, 'rgba(14,4,30,0)');
+    capTop.addColorStop(1, 'rgba(14,4,30,0)');
+    const capFloor = ctx.createLinearGradient(0, geom.stageH, 0, 0);
+    capFloor.addColorStop(0, 'rgba(14,4,30,.88)');
+    capFloor.addColorStop(0.22, 'rgba(14,4,30,.45)');
+    capFloor.addColorStop(0.52, 'rgba(14,4,30,0)');
+    capFloor.addColorStop(1, 'rgba(14,4,30,0)');
 
     // mutable view state — coverClamp (the exposed pure model) governs it.
     const state = { scale: 1, minScale: 1, x: 0, y: 0 };
@@ -280,6 +303,17 @@ export async function openCropper({ file, mode } = {}) {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(loadFailed ? '' : 'Loading…', geom.stageW / 2, geom.stageH / 2);
+      }
+      // gate 20.6 (Blake item 1) — preview = render: the card paints two
+      // localized caps over the background (style.css .profile-bg-wrap::after /
+      // .acct-preview-bg::after — keep the stops in sync), so the FRAME-IT
+      // preview paints the SAME caps. What you see here is what appears.
+      // (the gradients are hoisted — paint() runs per pointermove frame)
+      if (img && geom === GEOM.background) {
+        ctx.fillStyle = capTop;
+        ctx.fillRect(0, 0, geom.stageW, geom.stageH);
+        ctx.fillStyle = capFloor;
+        ctx.fillRect(0, 0, geom.stageW, geom.stageH);
       }
       // dim everything OUTSIDE the mask (evenodd punch), then the purple edge
       ctx.beginPath();
