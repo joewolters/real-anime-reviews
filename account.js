@@ -23,12 +23,14 @@ import {
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js';
 
-import { initLantern } from './lantern.js';
+// (?v= wired at the v1.10.0 cutover — these once-bare imports cache-bust now;
+// bump-version.js carries the import targets.)
+import { initLantern } from './lantern.js?v=1.10.0';
 // round 2 — the ONE consent implementation (shared with script.js): the
 // account page accepts the community rules IN PLACE (Blake: "its dumb for
 // users to have to go comment to accept the terms").
-import { ensureConsent, peekConsent } from './consent.js';
-import { openCropper } from './cropper.js';   // round 4 — frame-it crop/reposition (item 2)
+import { ensureConsent, peekConsent } from './consent.js?v=1.10.0';
+import { openCropper } from './cropper.js?v=1.10.0';   // round 4 — frame-it crop/reposition (item 2)
 
 
 const $  = (sel) => document.querySelector(sel);
@@ -2118,6 +2120,20 @@ function initInbox(user) {
 
   const isBlake = user.uid === RAR_ADMIN_UID;
   if (isBlake && blakeBtn) blakeBtn.closest('.inbox-blake-card').hidden = true;   // Blake sees the list, not himself
+
+  // gate 20.8 (fix 1): the DM composer chip wears YOUR face (origin-gated,
+  // escape-safe; the initial disc when no photo; mirrors script.js's chip).
+  try {
+    const ava = document.getElementById('inbox-self-ava');
+    if (ava) {
+      const purl = user.photoURL || '';
+      if (purl && (VIEWER_AVATAR_RE.test(purl) || PRACTICE_AVATAR_OK(purl))) {
+        ava.innerHTML = `<img src="${esc(purl)}" alt="">`;
+      } else {
+        ava.textContent = String(user.displayName || '?').trim().charAt(0).toUpperCase() || '?';
+      }
+    }
+  } catch (_) {}
 
   let convos = [];
   let myReads = {};            // convId -> lastReadAt ms

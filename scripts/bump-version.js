@@ -384,6 +384,39 @@ const TARGETS = [
   // (the runtime interpolation already updates them every bump).
 ];
 
+// gate 21 (the v1.10.0 cutover) — targets the original list predates, caught
+// when the 1.10.0 dry-run skipped them (the stale-TARGETS trap, again):
+//   • frames.css (gate 20.5) on both pages
+//   • the admin inbox/reports pages (gates 18/4) — fully ?v=-versioned assets
+//   • the once-bare ES-module import specifiers (consent/lantern/cropper),
+//     versioned at the cutover so later changes to them cache-bust too.
+const LATE_TARGETS = [
+  ['index.html',        'frames.css?v= (index)',           /(href="frames\.css\?v=)([^"]+)(")/],
+  ['account.html',      'frames.css?v= (account)',         /(href="frames\.css\?v=)([^"]+)(")/],
+  ['script.js',         "consent.js?v= import (script)",   /(from '\.\/consent\.js\?v=)([^']+)(')/],
+  ['account.js',        "lantern.js?v= import (account)",  /(from '\.\/lantern\.js\?v=)([^']+)(')/],
+  ['account.js',        "consent.js?v= import (account)",  /(from '\.\/consent\.js\?v=)([^']+)(')/],
+  ['account.js',        "cropper.js?v= import (account)",  /(from '\.\/cropper\.js\?v=)([^']+)(')/],
+  ['admin/inbox.html',  '../style.css?v= (inbox)',         /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
+  ['admin/inbox.html',  '../mobile.css?v= (inbox)',        /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
+  ['admin/inbox.html',  'inbox.css?v= (inbox)',            /(href="inbox\.css\?v=)([^"]+)(")/],
+  ['admin/inbox.html',  '../firebase.js?v= (inbox)',       /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
+  ['admin/inbox.html',  'inbox.js?v= (inbox)',             /(src="inbox\.js\?v=)([^"]+)(")/],
+  ['admin/reports.html','../style.css?v= (reports)',       /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
+  ['admin/reports.html','../mobile.css?v= (reports)',      /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
+  ['admin/reports.html','reports.css?v= (reports)',        /(href="reports\.css\?v=)([^"]+)(")/],
+  ['admin/reports.html','../markdown.js?v= (reports)',     /(src="\.\.\/markdown\.js\?v=)([^"]+)(")/],
+  ['admin/reports.html','reports-model.js?v= (reports)',   /(src="reports-model\.js\?v=)([^"]+)(")/],
+  ['admin/reports.html','../firebase.js?v= (reports)',     /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
+  ['admin/reports.html','reports.js?v= (reports)',         /(src="reports\.js\?v=)([^"]+)(")/],
+];
+for (const [file, label, pattern] of LATE_TARGETS) {
+  TARGETS.push({
+    file, label, pattern,
+    replacement: (newVersion) => (m, before, _old, after) => `${before}${newVersion}${after}`,
+  });
+}
+
 // ---- Helpers ---------------------------------------------------------------
 
 function isValidVersion(v) {

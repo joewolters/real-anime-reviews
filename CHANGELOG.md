@@ -20,6 +20,26 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-06-11 -->
+## v1.10.0 — MINOR (2026-06-11)
+
+**Overhaul: the Community Hub.** The community era — a full forum (The Tavern), a real moderation spine (community rules, reports, bans), an image pipeline with locked-down Storage, public member profiles with deep customization, DM-Blake messaging, rooms on every season, and a notification system that catches you up on what you missed. Built across 26 staged gates, adversarially reviewed each round, and shipped in one cutover: indexes → hosting → firestore rules → storage rules → functions.
+
+**Visitor-facing:**
+
+- **The Tavern** — a real community forum: threads with tags, replies (including reply-to-reply chains), helpful votes, Hot/New/Top sorting, and a "Rising" rail. Threads about an anime carry Blake's gold verdict rail; the rest is the community's purple room.
+- **Public profiles** — click any member's name or avatar to see their card: bio, tags, status, their threads and reviews. Customize your own with 16 accent colors (6 true gradients), a glow, 13 frame themes, a profile background with a real cropper, and a featured-anime pin. Blake's name leads home to the Den — and The Den Keeper frame is his alone, locked in the security rules themselves.
+- **Images in posts** — attach images to comments, replies, reviews, and Tavern posts: inline placement, a lightbox, EXIF-stripped uploads, and a 5 MB cap. Every image can be reported.
+- **Rooms everywhere** — every season's deep-dive carries a discussion room, in Blake's voice when he hasn't reviewed it yet.
+- **DM Blake** — a private letter to the host from your account's Inbox tab; his replies land in your lantern in gold.
+- **The lantern grew letters** — the notification lantern catches you up: a WHILE-YOU-WERE-AWAY strip on the welcome door (and after any sign-in), opening a full catch-up sheet of new reviews, your unread letters, and your watchlist's airing titles.
+- **Request an anime** — the suggestion page now carries a search-and-pick flow; a "👁 requested" chip shows demand under a title's cover, and when Blake reviews it, the requester gets a gold letter.
+- **Spoiler tags** — `||spoiler||` works in every composer; spoilers render blurred until tapped.
+- **Community rules + reporting** — one "I agree" before your first post; report any comment, review, post, image, or profile in two taps. Blake moderates everything himself.
+- **Composer identity** — every composer chip shows your own avatar; your face follows your posts live across the whole site.
+
+**Under the hood:** a `moderationGate` consent/ban spine on every write rule; Cloud Functions own all counts, notifications, suggestion rollups, image validation (magic-byte + EXIF strip), storage sweepers, and the ban cascade; default-deny Storage rules with an uploads kill-switch; public `profiles/` identity docs (profiles-first author reads); composite indexes for the forum and profile queries; `?v=` cache-busting extended to the once-bare module imports; the practice sandbox now routes extensionless URLs like prod and seeds deterministic demo state.
+
 <!-- author: Code | date: 2026-06-08 -->
 ## v1.9.1 — MINOR (2026-06-08)
 

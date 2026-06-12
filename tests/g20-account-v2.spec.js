@@ -62,8 +62,9 @@ test('consent is ONE shared implementation: consent.js exists, both pages import
   // both pages import the ONE module (no second copy of the modal markup)
   const scriptText = await (await request.get('/script.js')).text();
   const accountText = await (await request.get('/account.js')).text();
-  expect(scriptText).toContain("from './consent.js'");
-  expect(accountText).toContain("from './consent.js'");
+  // (?v= wired at the v1.10.0 cutover — the import is versioned but still ONE module)
+  expect(scriptText).toMatch(/from '\.\/consent\.js(\?v=[\d.]+)?'/);
+  expect(accountText).toMatch(/from '\.\/consent\.js(\?v=[\d.]+)?'/);
   expect(scriptText).not.toContain('rar-consent-rules');   // the markup lives ONLY in consent.js
   expect(accountText).not.toContain('rar-consent-rules');
 });

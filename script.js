@@ -19,7 +19,9 @@ import {
 
 import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js';
+// (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
+// imports must cache-bust; bump-version.js carries the import targets now.)
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=1.10.0';
 
 // Wrap in IIFE to avoid leaking globals
 (() => {
@@ -4323,7 +4325,8 @@ function positionFeaturedDrop() {
     '  </div>',
     '',
     '  <div class="comment-composer">',
-    '    <div class="avatar" aria-hidden="true">&#9733;</div>',
+    // gate 20.8 (fix 1): your face, not a star (composerAvaHTML — signed-out keeps ★)
+    '    ' + composerAvaHTML(),
     '    <div class="composer-body">',
     '      <textarea id="composer-input-' + s + '" placeholder="Leave a comment…" maxlength="500"></textarea>',
     '      <div class="composer-actions">',
@@ -5162,6 +5165,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     host.innerHTML = `
       <ul class="replies-list"></ul>
       <div class="reply-composer">
+        ${composerAvaHTML()}
         <textarea class="reply-input" maxlength="500" placeholder="Write a reply…"></textarea>
         <div class="hub-reply-media"></div>
         <button type="button" class="action-btn reply-post" disabled>Reply</button>
@@ -5669,6 +5673,48 @@ function openInlineCommentEditor(editBtn, itemRef) {
     return () => { try { pUnsub(); } catch (_) {} if (userUnsub) { try { userUnsub(); } catch (_) {} } };
   }
 
+  // ===========================================================================
+  // gate 20.8 (Blake fix 1) — the composer chip is YOUR face, site-wide. One
+  // live subscription to the signed-in user's OWN identity (profiles-first via
+  // authorLiveSub — the same pattern every author render uses) feeds:
+  //   • composerAvaHTML() — build-time markup for every composer template
+  //   • paintComposerAvatars() — retrofits already-mounted chips on sign-in/
+  //     sign-out and on a mid-session avatar change (live onSnapshot)
+  // Signed-out keeps the ★. Escape-first: the img src runs safeAvatar +
+  // escapeHtml; the initial renders via textContent. aria-hidden stays — the
+  // chip is decorative (the composer is already labeled).
+  // ===========================================================================
+  let _selfIdent = null;        // { photo, name } | null = signed out
+  let _selfIdentUnsub = null;
+  function composerAvaHTML() {
+    if (!_selfIdent) return '<div class="avatar composer-ava" aria-hidden="true">&#9733;</div>';
+    const safe = safeAvatar(_selfIdent.photo);
+    if (safe) return `<div class="avatar composer-ava" aria-hidden="true"><img src="${escapeHtml(safe)}" alt=""></div>`;
+    const init = String(_selfIdent.name || '?').trim().charAt(0).toUpperCase() || '?';
+    return `<div class="avatar composer-ava" aria-hidden="true">${escapeHtml(init)}</div>`;
+  }
+  function paintComposerAvatars() {
+    document.querySelectorAll('.composer-ava').forEach((av) => {
+      if (!_selfIdent) { av.innerHTML = '&#9733;'; return; }
+      const safe = safeAvatar(_selfIdent.photo);
+      if (safe) { av.innerHTML = `<img src="${escapeHtml(safe)}" alt="">`; return; }
+      av.textContent = String(_selfIdent.name || '?').trim().charAt(0).toUpperCase() || '?';
+    });
+  }
+  onAuthStateChanged(auth, (u) => {
+    if (_selfIdentUnsub) { try { _selfIdentUnsub(); } catch (_) {} _selfIdentUnsub = null; }
+    if (!u) { _selfIdent = null; paintComposerAvatars(); return; }
+    _selfIdent = { photo: u.photoURL || '', name: u.displayName || '' };   // instant
+    paintComposerAvatars();
+    _selfIdentUnsub = authorLiveSub(u.uid, (a) => {
+      // once the live snapshot lands it IS the truth — no auth-photo fallback
+      // (a profiles doc without photoURL renders the INITIAL on every public
+      // row; the chip must agree with what others see, not oversell).
+      _selfIdent = { photo: (a && a.photo) || '', name: (a && a.name) || u.displayName || '' };
+      paintComposerAvatars();
+    });
+  });
+
   // PURE — where does a profile click land? (exposed for the heart spec)
   function profileDecision(uid, prof, userDoc) {
     if (uid === NOTIF_ADMIN_UID) return 'den';                  // Blake IS the site
@@ -5717,8 +5763,15 @@ function openInlineCommentEditor(editBtn, itemRef) {
     if (typeof uid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) return;
     if (uid === NOTIF_ADMIN_UID) {
       // Blake's name leads HOME — to the Den, not a community card.
+      // gate-20.8 adversarial MED: the Den is the BASE page, so EVERY layer
+      // must come down or the scroll happens invisibly behind an open sheet
+      // (the same dead-click class fix 2 closed for member cards — this
+      // branch was the missed entry point of the audit).
       closeProfilePage();
       try { if (typeof closeHubDrawer === 'function') closeHubDrawer(); } catch (_) {}
+      try { if (typeof tertiaryEl !== 'undefined' && tertiaryEl && !tertiaryEl.hidden) closeTertiary(); } catch (_) {}
+      try { if (typeof secondaryEl !== 'undefined' && secondaryEl && !secondaryEl.hidden) closeSecondaryModal(); } catch (_) {}
+      try { if (typeof modal !== 'undefined' && modal && modal.classList.contains('active') && typeof closeModal === 'function') closeModal(); } catch (_) {}
       try { window.scrollTo({ top: 0 }); } catch (_) {}
       return;
     }
@@ -5999,15 +6052,36 @@ function openInlineCommentEditor(editBtn, itemRef) {
       actListEl.innerHTML = rows.length ? rows.join('') : `<li class="profile-empty">${ACT_EMPTY[kind]}</li>`;
     }
 
+    // gate 20.8 (Blake fix 2): the card can be open OVER the secondary sheet
+    // (a room comment's author, a Tavern post's author…) — routing a row's
+    // target without closing that sheet opened the content BEHIND it (the
+    // primary modal is z-5100, the sheet z-6000; Blake: "the background opens
+    // up the review"). Close every stale overlay first, top-down (tertiary
+    // before secondary — the detail layer lives inside the sheet), so the
+    // target always lands ON TOP: comment/review → the primary modal, haloed;
+    // thread → the hub sheet reopens clean; a deep-dive → its own new sheet
+    // (the 20.5 reopen-inside-the-close-window guard already covers that).
+    // Scroll-locks unwind through each layer's own close path.
+    function closeStaleOverlays(keepHub) {
+      try { if (typeof tertiaryEl !== 'undefined' && tertiaryEl && !tertiaryEl.hidden) closeTertiary(); } catch (_) {}
+      try { if (typeof secondaryEl !== 'undefined' && secondaryEl && !secondaryEl.hidden) closeSecondaryModal(); } catch (_) {}
+      // the Tavern rides its OWN z-6000 drawer (not the secondary) — a review
+      // routed to the primary modal (z-5100) would land behind it too. Thread
+      // targets KEEP it (openThreadById swaps the panel in place).
+      if (!keepHub) {
+        try { if (typeof hubLayerEl !== 'undefined' && hubLayerEl && !hubLayerEl.hidden) closeHubDrawer(); } catch (_) {}
+      }
+    }
     bodyEl.addEventListener('click', (e) => {
       const chip = e.target.closest('.profile-act-chip');
       if (chip) { showAct(chip.getAttribute('data-act')); return; }
       const th = e.target.closest('[data-open-thread]');
-      if (th) { closeProfilePage(); try { openThreadById(th.getAttribute('data-open-thread')); } catch (_) {} return; }
+      if (th) { closeProfilePage(); closeStaleOverlays(true); try { openThreadById(th.getAttribute('data-open-thread')); } catch (_) {} return; }
       const tg = e.target.closest('[data-open-target]');
       if (tg) {
         const p = tg.getAttribute('data-open-target');
         closeProfilePage();
+        closeStaleOverlays();
         // openNotifTarget takes the STRING path and parses internally — handing
         // it the parsed OBJECT threw-and-swallowed, making every review a dead
         // click (adversarial review, HIGH).
@@ -6612,6 +6686,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
   }
   function closeHubDrawer() {
     if (!hubLayerEl) return;
+    // gate-20.8 adversarial LOW: a re-entrant close during the fade window
+    // (e.g. a click eaten by the dying backdrop) must not re-run teardown —
+    // it would re-clear the scroll lock a freshly opened modal just set.
+    if (!hubLayerEl.classList.contains('active')) return;
     hubLayerEl.classList.remove('active');
     const tl = hubLayerEl.querySelector('.hub-thread-layer');
     if (tl) { tl.classList.remove('active'); tl.hidden = true; }   // tear down level 2 too
@@ -6923,6 +7001,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     if (locked) { host.innerHTML = '<p class="hub-locked-note">🔒 This thread is locked — no new replies.</p>'; return; }
     host.innerHTML = `<div class="hub-replyto-banner" hidden><span class="hub-replyto-text"></span><button type="button" class="hub-replyto-cancel" data-replyto-cancel aria-label="Cancel reply">&times;</button></div>
       <div class="comment-composer">
+        ${composerAvaHTML()}
         <textarea class="hub-reply-input" placeholder="${HUB_REPLY_PLACEHOLDER}" maxlength="4000"></textarea>
         <div class="hub-reply-media"></div>
         <div class="composer-actions"><span class="char-count"><span class="hub-reply-count">0</span>/4000</span>
@@ -7796,7 +7875,7 @@ function subscribeReviews(anime) {
 
         <div class="thread-panel" hidden>
           <div class="comment-composer" aria-disabled="true">
-            <div class="avatar" aria-hidden="true">&#9733;</div>
+            ${composerAvaHTML()}
             <div class="composer-body">
               <textarea class="thread-input" placeholder="Leave a comment…" maxlength="500"></textarea>
               <div class="composer-actions">
@@ -9479,6 +9558,10 @@ function closeModal() {
 
   function closeSecondaryModal() {
     if (!secondaryEl || secondaryEl.hidden) return;
+    // gate-20.8 adversarial LOW: a re-entrant close during the 280ms fade
+    // (not active, not yet hidden) would overwrite secondaryCloseTimer and
+    // ORPHAN the first timer — defeating the 20.5 reopen-in-window guard.
+    if (!secondaryEl.classList.contains('active')) return;
     // gate 19 — release the per-season comment listeners with the sheet
     if (secondaryCommentsUnsub) { try { secondaryCommentsUnsub(); } catch (_) {} secondaryCommentsUnsub = null; }
     secondaryEl.classList.remove('active');
