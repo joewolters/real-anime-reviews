@@ -397,6 +397,9 @@ const LATE_TARGETS = [
   ['account.js',        "lantern.js?v= import (account)",  /(from '\.\/lantern\.js\?v=)([^']+)(')/],
   ['account.js',        "consent.js?v= import (account)",  /(from '\.\/consent\.js\?v=)([^']+)(')/],
   ['account.js',        "cropper.js?v= import (account)",  /(from '\.\/cropper\.js\?v=)([^']+)(')/],
+  // v1.10.1 hotfix — the ONE branded-error module rides ?v= from birth
+  ['script.js',         "friendly-errors.js?v= import (script)",  /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],
+  ['account.js',        "friendly-errors.js?v= import (account)", /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],
   ['admin/inbox.html',  '../style.css?v= (inbox)',         /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
   ['admin/inbox.html',  '../mobile.css?v= (inbox)',        /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
   ['admin/inbox.html',  'inbox.css?v= (inbox)',            /(href="inbox\.css\?v=)([^"]+)(")/],

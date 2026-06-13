@@ -25,12 +25,14 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
 
 // (?v= wired at the v1.10.0 cutover — these once-bare imports cache-bust now;
 // bump-version.js carries the import targets.)
-import { initLantern } from './lantern.js?v=1.10.0';
+import { initLantern } from './lantern.js?v=1.10.1';
 // round 2 — the ONE consent implementation (shared with script.js): the
 // account page accepts the community rules IN PLACE (Blake: "its dumb for
 // users to have to go comment to accept the terms").
-import { ensureConsent, peekConsent } from './consent.js?v=1.10.0';
-import { openCropper } from './cropper.js?v=1.10.0';   // round 4 — frame-it crop/reposition (item 2)
+import { ensureConsent, peekConsent } from './consent.js?v=1.10.1';
+import { openCropper } from './cropper.js?v=1.10.1';   // round 4 — frame-it crop/reposition (item 2)
+// v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
+import { friendlyError } from './friendly-errors.js?v=1.10.1';
 
 
 const $  = (sel) => document.querySelector(sel);
@@ -1229,7 +1231,8 @@ function renderSaved(listEl, emptyEl, items, kind, uid) {
       try {
         await deleteDoc(doc(db, 'users', uid, kind, it.animeId));
       } catch (e) {
-        alert('Could not remove: ' + (e.message || String(e)));
+        console.error('saved-item remove failed', e);
+        alert('Could not remove: ' + friendlyError(e, { kind: 'save' }));
       } finally {
         removeBtn.disabled = false;
       }
@@ -1404,7 +1407,7 @@ function openColAdder(uid, col) {
         await colWrite(uid, col.id, { items });
         existing.add(c.animeId); col.items = items;
         paint(searchEl.value);
-      } catch (e) { alert('Could not add: ' + (e.message || e)); b.disabled = false; }
+      } catch (e) { console.error('shelf add failed', e); alert('Could not add: ' + friendlyError(e, { kind: 'save' })); b.disabled = false; }
     });
     return b;
   };
@@ -1505,7 +1508,7 @@ function renderCollections(uid, cols) {
         try {
           const items = col.items.slice(); items.splice(i, 1);
           await colWrite(uid, col.id, { items });
-        } catch (e) { alert('Could not remove: ' + (e.message || e)); }
+        } catch (e) { console.error('collection remove failed', e); alert('Could not remove: ' + friendlyError(e, { kind: 'save' })); }
       });
       itemsEl.appendChild(row);
     });
@@ -1519,7 +1522,7 @@ function renderCollections(uid, cols) {
           if (res !== 'ok') return;
         }
         await colWrite(uid, col.id, { public: !isPub });
-      } catch (e) { alert('Could not change visibility: ' + (e.message || e)); }
+      } catch (e) { console.error('visibility change failed', e); alert('Could not change visibility: ' + friendlyError(e, { kind: 'save' })); }
     });
     card.querySelector('.col-del').addEventListener('click', async () => {
       if (!card.dataset.confirmDel) {
@@ -1528,7 +1531,7 @@ function renderCollections(uid, cols) {
         setTimeout(() => { try { delete card.dataset.confirmDel; card.querySelector('.col-del').textContent = 'Delete'; } catch (_) {} }, 2600);
         return;
       }
-      try { await deleteDoc(doc(db, 'users', uid, 'collections', col.id)); } catch (e) { alert('Could not delete: ' + (e.message || e)); }
+      try { await deleteDoc(doc(db, 'users', uid, 'collections', col.id)); } catch (e) { console.error('collection delete failed', e); alert('Could not delete: ' + friendlyError(e, { kind: 'save' })); }
     });
     // gate 20 (item 7) — the description editor, same inline shape as rename
     card.querySelector('.col-describe').addEventListener('click', () => {
@@ -1551,7 +1554,7 @@ function renderCollections(uid, cols) {
         try { input.remove(); } catch (_) {}
         if (v !== (col.description || '')) {
           try { await colWrite(uid, col.id, { description: v || deleteField() }); }
-          catch (e) { alert('Could not save the description: ' + (e.message || e)); renderCollections(uid, cols); }
+          catch (e) { console.error('description save failed', e); alert('Could not save the description: ' + friendlyError(e, { kind: 'save' })); renderCollections(uid, cols); }
         } else renderCollections(uid, cols);
       };
       input.addEventListener('keydown', (e) => {
@@ -1570,7 +1573,7 @@ function renderCollections(uid, cols) {
         input.dataset.done = '1';
         const v = input.value.trim().slice(0, 60);
         try { input.remove(); } catch (_) {}
-        if (v && v !== col.name) { try { await colWrite(uid, col.id, { name: v }); } catch (e) { alert('Rename failed: ' + (e.message || e)); renderCollections(uid, cols); } }
+        if (v && v !== col.name) { try { await colWrite(uid, col.id, { name: v }); } catch (e) { console.error('rename failed', e); alert('Rename failed: ' + friendlyError(e, { kind: 'save' })); renderCollections(uid, cols); } }
         else renderCollections(uid, cols);
       };
       input.addEventListener('keydown', (e) => {
@@ -1620,7 +1623,7 @@ function ensureCollections() {
         if (desc) data.description = desc;   // optional — gate 20 item 7
         await setDoc(doc(db, 'users', u.uid, 'collections', colId()), data);
         nameEl.value = ''; if (descEl) descEl.value = ''; composer.hidden = true;
-      } catch (e) { alert('Could not create: ' + (e.message || e)); }
+      } catch (e) { console.error('collection create failed', e); alert('Could not create: ' + friendlyError(e, { kind: 'save' })); }
     });
     nameEl?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('col-create')?.click(); });
   }
@@ -1760,7 +1763,8 @@ verifyBtn?.addEventListener('click', async () => {
     verifyMsg.textContent = 'Verification email sent. Check your inbox.';
     verifyMsg.style.color = '#cbb0ff';   // purple-family notice (gold-adjacent #ffdf96 read as Blake's temperature)
   } catch (e) {
-    alert('Could not send verification email: ' + e.message);
+    console.error('verification email failed', e);
+    alert('Could not send the verification email — ' + friendlyError(e, { kind: 'post' }));
   }
 });
 resendBtn?.addEventListener('click', () => verifyBtn?.click());
@@ -1774,7 +1778,7 @@ changePassBtn?.addEventListener('click', async () => {
     const cred = EmailAuthProvider.credential(u.email, current);
     await reauthenticateWithCredential(u, cred);
   } catch (e) {
-    alert('Current password incorrect: ' + e.message);
+    console.error('password check failed', e); alert('That current password didn’t match — try again.');
     return;
   }
 
@@ -1788,7 +1792,7 @@ changePassBtn?.addEventListener('click', async () => {
     await updatePassword(u, next);
     alert('Password changed.');
   } catch (e) {
-    alert('Failed to change password: ' + e.message);
+    console.error('password change failed', e); alert('Failed to change the password — ' + friendlyError(e, { kind: 'save' }));
   }
 });
 
@@ -1798,7 +1802,8 @@ resetPassBtn?.addEventListener('click', async () => {
     await sendPasswordResetEmail(auth, u.email);
     alert('Reset email sent to ' + u.email);
   } catch (e) {
-    alert('Could not send reset email: ' + e.message);
+    console.error('reset email failed', e);
+    alert('Could not send the reset email — ' + friendlyError(e, { kind: 'post' }));
   }
 });
 
@@ -1834,7 +1839,8 @@ avatarFile?.addEventListener('change', async (e) => {
     avatarPick.focus();       // adversarial LOW: the hero pill the crop started
                               // from is rebuilt — land focus somewhere real
   } catch (err) {
-    alert(err.message || String(err));
+    console.error('avatar staging failed', err);   // v1.10.1: raw → console only
+    alert(friendlyError(err, { kind: 'upload', user: auth.currentUser }));
     newAvatarBlob = null;
     newAvatarMime = '';
   }
@@ -1911,11 +1917,14 @@ saveBtn.addEventListener('click', async () => {
       } catch (bgErr) {
         // honest partial-save copy (adversarial LOW): the rest of the profile
         // still saves below — say so instead of implying nothing did.
-        bgUploadErr = !u.emailVerified
-          ? 'Saved — but the background didn\'t upload: verify your email first (uploads are email-verified only).'
-          : (/permission|unauthorized|403/i.test(String(bgErr?.message || bgErr))
-              ? 'Saved — but the background didn\'t upload: the community-rules unlock hadn\'t caught up yet. Hit Save again to retry it.'
-              : 'Saved — but the background upload failed: ' + (bgErr?.message || String(bgErr)));
+        // v1.10.1 HOTFIX: the old permission branch blamed the consent gate and
+        // told Blake to "Hit Save again" forever, on prod, for a Storage-side
+        // denial the retry could never fix. The ONE branded-error module owns
+        // the truthful split now (verify-email vs site-side lock vs generic);
+        // the raw error goes to the console only.
+        console.error('background upload failed', bgErr);
+        bgUploadErr = 'Saved — but the background didn\'t upload: '
+          + friendlyError(bgErr, { kind: 'upload', user: u });
       }
     }
 
@@ -2029,8 +2038,8 @@ saveBtn.addEventListener('click', async () => {
     setTimeout(() => location.reload(), 1800);   // round-3: a real runway — SRs finish the announcement, eyes catch the toast
     } catch (err) {
     console.error('Avatar/Profile save failed:', err);
-    const code = err?.code ? ` (${err.code})` : '';
-    errEl.textContent = (err?.message || String(err)) + code;
+    // v1.10.1: the raw message + SDK code used to render here — branded only
+    errEl.textContent = friendlyError(err, { kind: 'save', user: auth.currentUser });
   } finally {
 
     saveBtn.disabled = false;
@@ -2225,7 +2234,7 @@ function initInbox(user) {
         senderUid: user.uid, text, createdAt: serverTimestamp(),
       });
       inputEl.value = '';
-    } catch (err) { alert('Could not send: ' + (err && err.message || err)); }
+    } catch (err) { console.error('DM send failed', err); alert('Could not send: ' + friendlyError(err, { kind: 'post' })); }
   });
   backBtn.addEventListener('click', closeConv);
   listEl.addEventListener('click', (e) => {
@@ -2251,7 +2260,8 @@ function initInbox(user) {
       });
       openConv(ref.id);
     } catch (err) {
-      alert('Could not start the conversation: ' + (err && err.message || err));
+      console.error('conversation start failed', err);
+      alert('Could not start the conversation: ' + friendlyError(err, { kind: 'post' }));
     } finally { blakeBtn.disabled = false; }
   });
 }

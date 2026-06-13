@@ -21,6 +21,11 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-06-11 -->
+## v1.10.1 — PATCH (2026-06-11)
+
+**Hotfix: image uploads unlocked + honest error messages.** Blake's prod verify caught two live bugs. (1) Every image upload (backgrounds, post images) was being denied: the Storage rules read consent/kill-switch state from Firestore, and the cross-service permission that read requires never landed during the cutover's storage deploy — the emulator needs no such grant, so all 154 rules tests stayed green while prod denied everyone. This ship's storage.rules carries the documentation block (and forces the ruleset re-upload that triggers the CLI's grant hook). (2) The failure copy lied: the background path blamed the consent gate and said "Hit Save again" forever, and the Tavern composer rendered a RAW SDK error — provider name and internal path — on screen. A new shared `friendly-errors.js` module now owns every failure message: truthful splits (verify-your-email vs site-side lock vs connection), branded copy only, the raw error to the console. All ~30 visitor-facing failure sinks across both pages route through it, spec-pinned so no provider-named or internal-path string can ever render again.
+
+<!-- author: Code | date: 2026-06-11 -->
 ## v1.10.0 — MINOR (2026-06-11)
 
 **Overhaul: the Community Hub.** The community era — a full forum (The Tavern), a real moderation spine (community rules, reports, bans), an image pipeline with locked-down Storage, public member profiles with deep customization, DM-Blake messaging, rooms on every season, and a notification system that catches you up on what you missed. Built across 26 staged gates, adversarially reviewed each round, and shipped in one cutover: indexes → hosting → firestore rules → storage rules → functions.

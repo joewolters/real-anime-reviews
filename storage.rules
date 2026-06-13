@@ -39,6 +39,21 @@ service firebase.storage {
     // ADMIN_UID — mirrors firestore.rules isAdmin() (same migrate-to-claim note).
     function isAdmin() { return isSignedIn() && request.auth.uid == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'; }
 
+    // ⚠️⚠️ v1.10.1 HOTFIX — THE CROSS-SERVICE GRANT IS LOAD-BEARING ⚠️⚠️
+    // Every firestore.get()/exists() below needs the Firebase Rules service
+    // agent (service-<project-number>@firebase-rules.iam.gserviceaccount.com)
+    // to hold roles/firebaserules.firestoreServiceAgent on the project. The
+    // EMULATOR never needs it (all 154 rules tests stay green without it) —
+    // but on PROD a missing grant makes every cross-read ERROR, and a rules
+    // error = DENY: every uploads/ write fails for EVERYONE (uploadsEnabled()
+    // has no admin short-circuit BY DESIGN — the kill-switch stops Blake too,
+    // a pinned contract). This was v1.10.0's first live bug: the cutover's
+    // storage deploy released the ruleset without the grant landing. The
+    // firebase CLI runs its grant hook when a NEW ruleset body is uploaded
+    // (NOT on a skipped/identical re-release) — this comment block exists
+    // partly to force that re-upload. If uploads still 403 after deploy,
+    // grant the role manually in the console (IAM → the firebase-rules agent).
+    //
     // The ban+consent spine, cross-read from Firestore (same semantics as
     // firestore.rules gateOk(): doc must exist, consented to version >= 1,
     // not banned). Admin bypasses.

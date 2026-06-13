@@ -21,7 +21,9 @@ import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=1.10.0';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=1.10.1';
+// v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
+import { friendlyError } from './friendly-errors.js?v=1.10.1';
 
 // Wrap in IIFE to avoid leaking globals
 (() => {
@@ -2581,7 +2583,8 @@ function syncFilterFormToApplied() {
       } catch (err) {
         if (turnOn) setRef.delete(animeId); else setRef.add(animeId);   // rollback
         syncSavedUIForAnime(animeId);
-        alert("Failed to save: " + (err.message || String(err)));
+        console.error('save failed', err);   // v1.10.1: raw → console only
+        alert("Failed to save: " + friendlyError(err, { kind: 'save' }));
       } finally {
         btn.disabled = false;
       }
@@ -4808,7 +4811,8 @@ postBtn.addEventListener('click', async (e) => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   } catch (err) {
     pending.remove();
-    alert('Failed to post: ' + err.message);
+    console.error('comment post failed', err);   // v1.10.1: raw → console only
+    alert('Failed to post: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
   } finally {
     posting = false;
     postBtn.disabled = false;
@@ -4873,7 +4877,7 @@ postBtn.addEventListener('click', async (e) => {
         const t = e.target.closest('.lock-toggle'); if (!t) return;
         if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
         try { await setDoc(doc(db, 'commentsMeta', s), { locked: !threadLocked }, { merge: true }); }
-        catch (err) { alert('Lock failed: ' + err.message); }
+        catch (err) { console.error('lock failed', err); alert('Lock failed: ' + friendlyError(err, { kind: 'save' })); }
       });
     }
     window.addEventListener('rar:admin-change', renderAdminLock);
@@ -4961,7 +4965,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       p.innerHTML = (window.renderMarkdownInline ? window.renderMarkdownInline(next) : escapeHtml(next)); // immediate UI update
       p.dataset.raw = next;
     } catch (err) {
-      alert('Failed to edit: ' + err.message);
+      alert('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
     } finally {
       wrap.remove();
       p.hidden = false;
@@ -5007,7 +5011,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         } catch (err) {
           // permission-denied is the expected M5 anti-spam clamp / pre-cutover
           // staged-rules state — don't alarm the visitor.
-          if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
+          if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
         }
         return;
       }
@@ -5034,7 +5038,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         } catch (err) {
           // permission-denied is the expected M5 anti-spam clamp (rapid re-vote)
           // or the pre-cutover staged-rules state — don't alarm the visitor.
-          if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
+          if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
         }
         return;
       }
@@ -5056,7 +5060,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
         const makePinned = btn.dataset.pinned !== '1';
         try { await updateDoc(itemRef, { pinned: makePinned }); }
-        catch (err) { alert('Pin failed: ' + err.message); }
+        catch (err) { console.error('pin failed', err); alert('Pin failed: ' + friendlyError(err, { kind: 'save' })); }
         return;
       }
 
@@ -5066,7 +5070,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
           message: 'This will permanently remove this comment.',
           okText: 'Delete', cancelText: 'Cancel', danger: true
         });
-        if (ok) { try { await deleteDoc(itemRef); } catch (err) { alert('Delete failed: ' + err.message); } }
+        if (ok) { try { await deleteDoc(itemRef); } catch (err) { console.error('delete failed', err); alert('Delete failed: ' + friendlyError(err, { kind: 'save' })); } }
         return;
       }
 
@@ -5268,7 +5272,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
         replyPicker.clear();
         input.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview too (8d fix #1)
       } catch (err) {
-        alert('Failed to reply: ' + err.message);
+        console.error('reply failed', err);   // v1.10.1: raw → console only
+        alert('Failed to reply: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
       } finally {
         postBtn.disabled = false;
         postBtn.textContent = 'Reply';
@@ -5365,7 +5370,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
           setTimeout(close, 2200);
         } else {
           sendBtn.disabled = false;
-          alert('Report failed: ' + err.message);
+          console.error('report failed', err); alert('Report failed: ' + friendlyError(err, { kind: 'post' }));
         }
       }
     });
@@ -6151,7 +6156,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         // then redacts the pointer — never the Firestore-only trap.
         await httpsCallable(functions, 'adminRemoveImage')({ docPath: imgRm.dataset.imgDoc || '', imagePath: imgRm.dataset.imgRemove });
         const wrap = imgRm.closest('.hub-img-wrap'); if (wrap) wrap.remove();
-      } catch (err) { imgRm.disabled = false; alert('Could not remove the image: ' + (err && err.message || err)); }
+      } catch (err) { imgRm.disabled = false; console.error('image remove failed', err); alert('Could not remove the image: ' + friendlyError(err, { kind: 'save' })); }
     }
   }, true);
   // the uploadsEnabled kill-switch (commentsMeta/uploads — admin one-write off
@@ -7056,7 +7061,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
         input.value = ''; picker.clear(); clearReplyTarget(); sync();
         input.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview too (8d fix #1)
         postBtn.textContent = 'Reply';
-      } catch (err) { alert('Could not post your reply: ' + (err && err.message || err)); postBtn.disabled = false; postBtn.textContent = 'Reply'; }
+      } catch (err) {
+        console.error('hub reply failed', err);   // v1.10.1: raw → console only
+        alert('Could not post your reply: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
+        postBtn.disabled = false; postBtn.textContent = 'Reply';
+      }
     });
   }
 
@@ -7253,7 +7262,13 @@ function openInlineCommentEditor(editBtn, itemRef) {
         }
         close();
         openThreadById(tref.id);
-      } catch (err) { createBtn.disabled = false; createBtn.textContent = 'Post thread'; errEl.textContent = 'Could not post: ' + (err && err.message || err); }
+      } catch (err) {
+        // v1.10.1 hotfix: a RAW SDK string (provider name + internal path)
+        // reached Blake's screen here. Branded copy only; the raw goes to console.
+        console.error('thread create failed', err);
+        createBtn.disabled = false; createBtn.textContent = 'Post thread';
+        errEl.textContent = 'Could not post: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser });
+      }
     });
   }
 
@@ -7335,7 +7350,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       if (!(await ensureCanParticipate())) return;
       editSave.disabled = true;
       try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { body: val, editedAt: serverTimestamp() }); hubEditing.delete(pid); _hubRawBody.set(pid, val); if (hubRepaintPosts) hubRepaintPosts(); }
-      catch (err) { editSave.disabled = false; alert('Could not save your edit: ' + (err && err.message || err)); }
+      catch (err) { editSave.disabled = false; console.error('edit save failed', err); alert('Could not save your edit: ' + friendlyError(err, { kind: 'save' })); }
       return;
     }
     const delBtn = t.closest('[data-del-post]'); if (delBtn) { hubMenuOpen.delete(delBtn.dataset.delPost); hubConfirmDel.add(delBtn.dataset.delPost); if (hubRepaintPosts) hubRepaintPosts(); return; }
@@ -7344,7 +7359,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       const pid = delConfirm.dataset.delConfirm;
       if (!(await ensureCanParticipate())) return;
       try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { removed: true, body: '' }); hubConfirmDel.delete(pid); hubEditing.delete(pid); }
-      catch (err) { alert('Could not take it down: ' + (err && err.message || err)); }
+      catch (err) { console.error('takedown failed', err); alert('Could not take it down: ' + friendlyError(err, { kind: 'save' })); }
       return;
     }
     const adminBtn = t.closest('[data-hub-admin]'); if (adminBtn && hubThreadId) { await hubAdminAction(adminBtn.dataset.hubAdmin); return; }
@@ -7358,7 +7373,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       if (action === 'pin') { const t = hubThreads.find((x) => x.id === hubThreadId); await updateDoc(tref, { pinned: !(t && t.pinned) }); }
       else if (action === 'lock') { const t = hubThreads.find((x) => x.id === hubThreadId); await updateDoc(tref, { locked: !(t && t.locked) }); }
       else if (action === 'remove') { await updateDoc(tref, { removed: true, title: '', body: '' }); closeThreadPanel(); }
-    } catch (err) { alert('Admin action failed: ' + (err && err.message || err)); }
+    } catch (err) { console.error('admin action failed', err); alert('Admin action failed: ' + friendlyError(err, { kind: 'save' })); }
   }
 
   // gate 8c extra — Blake's-pick: admin marks ONE reply per thread as the gold pick
@@ -7380,7 +7395,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         }
         await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { blakePick: true });
       }
-    } catch (err) { alert('Could not update Blake’s pick: ' + (err && err.message || err)); }
+    } catch (err) { console.error('pick update failed', err); alert('Could not update Blake’s pick: ' + friendlyError(err, { kind: 'save' })); }
   }
 
   // Render this viewer's thumb state onto a reply foot (up = purple, down = neutral white).
@@ -7604,7 +7619,7 @@ function subscribeReviews(anime) {
         await updateDoc(itemRef, { text: next, editedAt: serverTimestamp() });
         p.textContent = next;
       } catch (err) {
-        alert('Failed to edit: ' + err.message);
+        alert('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
       } finally {
         wrap.remove();
         p.hidden = false;
@@ -8154,7 +8169,8 @@ function subscribeReviews(anime) {
           threadInput.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview too (8d fix #1)
         } catch (err) {
           pending.remove();
-          alert('Failed to post: ' + err.message);
+          console.error('discussion post failed', err);   // v1.10.1: raw → console only
+          alert('Failed to post: ' + friendlyError(err, { kind: 'post', user: auth.currentUser }));
         } finally {
           posting = false;
           syncThreadComposer();
@@ -8192,7 +8208,7 @@ function subscribeReviews(anime) {
               else tx.set(voteRef, { uid: auth.currentUser.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
             });
           } catch (err) {
-            if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
+            if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
           }
           return;
         }
@@ -8437,7 +8453,8 @@ if (purl) data.photoURL = purl;
       if (reviewPicker) reviewPicker.clear();
       bodyEl.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview NOW, not on the snapshot round-trip (8d fix #1)
     } catch (err) {
-      alert('Failed to publish: ' + err.message);
+      console.error('review publish failed', err);   // v1.10.1: raw → console only
+      alert('Failed to publish: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
     } finally {
       pubBtn.textContent = 'Publish';
       sync();
@@ -8503,7 +8520,7 @@ if (action === 'like' || action === 'dislike') {
       else tx.set(voteRef, { uid: meUid, value: next, updatedAt: serverTimestamp() }, { merge: true });
     });
   } catch (err) {
-    if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
+    if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
   }
   return;
 }
@@ -8625,7 +8642,7 @@ if (action === 'like' || action === 'dislike') {
       if (ratingSpan) ratingSpan.textContent = `${rating.toFixed(1)}/10`;
       if (bodyP) bodyP.innerHTML = nl2br(escapeHtml(stripAccidentalPaste(body)));
     } catch (err) {
-      alert('Failed to edit: ' + err.message);
+      alert('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
     } finally {
       form.remove();
       if (bodyP) bodyP.hidden = false;
@@ -8721,7 +8738,7 @@ function wireOfficialVotes(anime) {
         else tx.set(voteRef, { uid: u.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
       });
     } catch (err) {
-      if (!(err && err.code === 'permission-denied')) alert('Vote failed: ' + err.message);
+      if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
     }
   }
 
@@ -10458,7 +10475,7 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
       // reflect new avatar immediately
       profAvatarPrev.innerHTML = avatarHTML(photo, name);
     } catch (err) {
-      profErr.textContent = err.message || String(err);
+      console.error('profile sheet failed', err); profErr.textContent = friendlyError(err, { kind: 'post' });
     } finally {
       profSaveBtn.disabled = false;
     }
