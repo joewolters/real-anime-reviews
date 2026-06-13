@@ -47,12 +47,14 @@ service firebase.storage {
     // but on PROD a missing grant makes every cross-read ERROR, and a rules
     // error = DENY: every uploads/ write fails for EVERYONE (uploadsEnabled()
     // has no admin short-circuit BY DESIGN — the kill-switch stops Blake too,
-    // a pinned contract). This was v1.10.0's first live bug: the cutover's
-    // storage deploy released the ruleset without the grant landing. The
-    // firebase CLI runs its grant hook when a NEW ruleset body is uploaded
-    // (NOT on a skipped/identical re-release) — this comment block exists
-    // partly to force that re-upload. If uploads still 403 after deploy,
-    // grant the role manually in the console (IAM → the firebase-rules agent).
+    // a pinned contract). This was the prime suspect for v1.10.0's first live
+    // bug (every prod upload denied). ⚠️ v1.10.1 deploy evidence: firebase-tools
+    // 15.19.1 makes NO IAM-policy calls even when uploading a NEW ruleset body
+    // (--debug-traced twice at ship) — the CLI does NOT manage this grant, and
+    // grant PRESENCE cannot be read from a gcloud-less machine. The functional
+    // probe is a verified+consented (or admin) upload on prod. If uploads 403:
+    // Firebase console → Storage → Rules shows a cross-service permission
+    // banner — its one-click grant is the designed manual path.
     //
     // The ban+consent spine, cross-read from Firestore (same semantics as
     // firestore.rules gateOk(): doc must exist, consented to version >= 1,
