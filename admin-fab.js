@@ -31,6 +31,11 @@ const ADMIN_MENU_ITEMS = [
     href: '/admin/season-reviews.html',
   },
   {
+    label: 'Curate Cards',
+    jp: '整理',
+    href: '/admin/curation.html',
+  },
+  {
     label: 'Quotes',
     jp: '名言',
     href: '/admin/quotes.html',

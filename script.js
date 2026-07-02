@@ -270,7 +270,70 @@ function applySavedStateToCard(card, animeId) {
   }
 
   card.classList.toggle("has-saved", isFav || isWatch);
+
+  // milestone B — Blake's per-anime WATCH STATUS dresses the card (his curator
+  // panel writes animeStatus/{slug}; this paints it). Runs off the SAME
+  // post-paint hook as the save state so every surface picks it up.
+  applyCuratorStatusToCard(card, animeId);
 }
+
+// milestone B — the curator status labels. Blake's status is HIS mark, so the
+// pill is gold (heart: gold = Blake). animeStatus is public-read; loaded once,
+// cached 1h. Label text is set via textContent (no XSS) from a fixed map.
+let curatorStatusMap = {};   // animeId -> status
+const CURATOR_STATUS_LABEL = {
+  watching:   { label: "Blake is watching",   jp: "視聴中" },
+  watchlist:  { label: "On Blake's list",     jp: "予定" },
+  'on-hold':  { label: "Blake paused this",   jp: "保留" },
+  finished:   { label: "Blake finished this", jp: "完" },
+  rewatching: { label: "Blake is rewatching", jp: "再視聴" },
+};
+function applyCuratorStatusToCard(card, animeId) {
+  const status = curatorStatusMap[animeId];
+  let label = card.querySelector('.card-status-label');
+  if (!status || !CURATOR_STATUS_LABEL[status]) {
+    if (label) label.remove();
+    card.classList.remove('has-curator-status');
+    return;
+  }
+  const info = card.querySelector('.info');
+  if (!label) {
+    // adversarial MED/HIGH: the label lives INSIDE .info, where `.card .info
+    // span` (gold/1rem/bold) and `.spotlight-stack .card .info span` (a full
+    // gold gradient PILL) out-specify our own rules — the exact trap the romaji
+    // fix dodged by using <i> not <span>. A <div> container + <i> children
+    // match NEITHER `span` rule, so the pill paints as designed.
+    label = document.createElement('div');
+    label.className = 'card-status-label';
+    if (info) info.appendChild(label); else card.appendChild(label);
+  }
+  label.setAttribute('data-status', status);
+  const glyph = document.createElement('i');
+  glyph.className = 'csl-glyph'; glyph.setAttribute('aria-hidden', 'true'); glyph.textContent = '🏮';
+  const txt = document.createElement('i');
+  txt.className = 'csl-text'; txt.textContent = CURATOR_STATUS_LABEL[status].label;   // textContent — no XSS
+  label.replaceChildren(glyph, txt);
+  card.classList.add('has-curator-status');
+}
+function syncAllCuratorStatus() {
+  document.querySelectorAll('.card[data-animeid]').forEach((c) => applyCuratorStatusToCard(c, c.dataset.animeid));
+}
+async function loadCuratorStatus() {
+  // warm from a 1h localStorage cache first (instant paint on repeat visits)
+  try {
+    const cached = JSON.parse(localStorage.getItem('rar:curatorStatus') || 'null');
+    if (cached && cached.m && (Date.now() - (cached.t || 0)) < 3600000) { curatorStatusMap = cached.m; syncAllCuratorStatus(); }
+  } catch (_) {}
+  try {
+    const snap = await getDocs(collection(db, 'animeStatus'));
+    const m = {};
+    snap.forEach((d) => { const v = d.data() || {}; if (CURATOR_STATUS_LABEL[v.status]) m[d.id] = v.status; });
+    curatorStatusMap = m;
+    try { localStorage.setItem('rar:curatorStatus', JSON.stringify({ t: Date.now(), m })); } catch (_) {}
+    syncAllCuratorStatus();
+  } catch (_) { /* animeStatus is public but a read failure just leaves cards plain */ }
+}
+if (typeof window !== 'undefined') window.applyCuratorStatusToCard = applyCuratorStatusToCard;
 
 function syncAllSavedUI() {
   document.querySelectorAll(".card[data-animeid]").forEach((card) => {
@@ -6010,6 +6073,63 @@ function openInlineCommentEditor(editBtn, itemRef) {
     sp.removeAttribute('title');
   });
 
+  // milestone B (item 7) — the INFO-REQUEST flow on a sparse deep-dive. A member
+  // asks Blake to fill an entry in; writes suggestions kind:'info' (NOT the
+  // review-demand rollup — the CF skips it). Inline branded mini-form, no native
+  // dialog; sessionStorage rate-limit mirrors suggest.js; all text escape-safe.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('[data-inforeq]');
+    if (!btn || btn.dataset.done === '1') return;
+    e.preventDefault(); e.stopPropagation();
+    if (!auth.currentUser) { try { openAuth('signin'); } catch (_) {} return; }
+    const anilistId = parseInt(btn.dataset.anilistId, 10);
+    const title = String(btn.dataset.title || '').slice(0, 190);
+    // swap the button for a compact ask field
+    const form = document.createElement('span');
+    form.className = 'secondary-inforeq-form';
+    form.innerHTML = '<input type="text" class="secondary-inforeq-input" maxlength="500" placeholder="What would you like to know? (optional)" aria-label="Your question about this anime">'
+      + '<button type="button" class="secondary-inforeq-send">Send</button>'
+      + '<button type="button" class="secondary-inforeq-cancel" aria-label="Cancel">×</button>';
+    btn.replaceWith(form);
+    const input = form.querySelector('.secondary-inforeq-input');
+    const sendB = form.querySelector('.secondary-inforeq-send');
+    input.focus();
+    form.querySelector('.secondary-inforeq-cancel').addEventListener('click', () => {
+      form.replaceWith(btn);
+    });
+    sendB.addEventListener('click', async () => {
+      // 60s per-title rate-limit (mirrors suggest.js's sessionStorage guard)
+      const key = 'rar:inforeq:' + anilistId;
+      try {
+        const last = parseInt(sessionStorage.getItem(key) || '0', 10);
+        if (Date.now() - last < 60000) { form.replaceChildren(Object.assign(document.createElement('span'), { className: 'secondary-inforeq-done', textContent: 'You just asked about this one — thanks!' })); return; }
+      } catch (_) {}
+      sendB.disabled = true;
+      try {
+        const docData = {
+          title: title || 'an anime', status: 'new', kind: 'info',
+          submittedAt: serverTimestamp(),
+          submitterUid: auth.currentUser.uid,
+        };
+        if (anilistId > 0) docData.anilistId = anilistId;
+        const reason = input.value.trim();
+        if (reason) docData.reason = reason.slice(0, 900);
+        await addDoc(collection(db, 'suggestions'), docData);
+        try { sessionStorage.setItem(key, String(Date.now())); } catch (_) {}
+        form.replaceChildren(Object.assign(document.createElement('span'), { className: 'secondary-inforeq-done', textContent: '✓ Sent — Blake reads every request.' }));
+      } catch (err) {
+        sendB.disabled = false;
+        // one message, never a stack (adversarial LOW): drop any prior note first
+        form.querySelectorAll('.secondary-inforeq-done').forEach((n) => n.remove());
+        const msg = document.createElement('span');
+        msg.className = 'secondary-inforeq-done';
+        msg.textContent = 'That didn\'t go through — try again.';
+        form.appendChild(msg);
+      }
+    });
+    input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); sendB.click(); } });
+  }, true);
+
   // upload the picked files under a PRE-GENERATED doc id (the doc is created
   // AFTER the uploads so imageRefs validate at create — rules pin each entry to
   // the caller's own uploads/ prefix).
@@ -9500,6 +9620,17 @@ function closeModal() {
           '<span class="secondary-request-icon" aria-hidden="true">📝</span>' +
           '<span class="secondary-request-label">Request this anime</span></a>';
 
+    // milestone B (item 7) — the INFO-REQUEST affordance on a sparse deep-dive:
+    // ask Blake to fill this entry in. Writes suggestions kind:'info' (NOT the
+    // review-demand chip — the CF skips it). Only on not-watched entries (a
+    // watched one is already on his radar). Escape-safe: title/id set via data-*.
+    const infoReqBtn = isWatched
+      ? ''
+      : '<button type="button" class="secondary-inforeq" data-inforeq data-anilist-id="' + escapeHtml(String(detail.id)) +
+          '" data-title="' + escapeHtml(english) + '" title="Ask Blake to fill in this page">' +
+          '<span class="secondary-inforeq-icon" aria-hidden="true">ⓘ</span>' +
+          '<span class="secondary-inforeq-label">Request info</span></button>';
+
     // v1.7.4 (gate 3, Surface 1) — inline "Edit season review" link, admin only
     // (the UID gate lives in admin-fab.js → window.__rarIsAdmin). Routes to the
     // dedicated admin panel pre-targeting this id.
@@ -9532,7 +9663,7 @@ function closeModal() {
       '<div class="secondary-header"' + (accent ? ' style="--accent:' + escapeHtml(accent) + '"' : '') + '>' +
         '<div class="secondary-banner"' + (banner ? ' style="background-image:url(\'' + escapeHtml(banner) + '\')"' : '') + '></div>' +
         '<div class="secondary-banner-scrim"></div>' +
-        buildHeaderBar(editReviewBtn + requestBtn + saveBtns) +
+        buildHeaderBar(editReviewBtn + requestBtn + infoReqBtn + saveBtns) +
         '<div class="secondary-header-body">' +
           // gate 20.7 (Blake item 4): the cover rides a COLUMN so the 👁
           // demand chip can dock neatly under the thumbnail (visible, not
@@ -11153,6 +11284,7 @@ function onScrollHeader() {
     lazyFillOnView(homeForyouBlock, buildHomeForYou);
     document.getElementById('home-airing-more')?.addEventListener('click', (e) => { e.preventDefault(); showDiscover(); });
     showHome();
+    loadCuratorStatus();   // milestone B — paint Blake's per-anime status on the cards (public read; cached)
     // gate 6d item 7: the account page's For You / Discover nav links land here via
     // ?place=… — honor it after the default home is set.
     try {

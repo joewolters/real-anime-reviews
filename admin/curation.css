@@ -1,0 +1,190 @@
+/* ============================================================================
+   admin/curation.css — Curator admin panel (MEGA-RUN Milestone B)
+   Layers on top of suggestions.css (.admin-main / .admin-shell / .admin-header /
+   .admin-title-line / the :focus-visible ring / .suggestions-error-card are all
+   inherited from there). This file styles only the curation-specific pieces:
+   the intro line, the search box, the row list, and each row's controls.
+   Brand vocabulary: purple-on-dark glass, 'Outfit'/'Montserrat', #bb86fc accent.
+   ============================================================================ */
+
+/* ---- Intro line ------------------------------------------------------------ */
+.curation-intro {
+  margin: 0 0 18px;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+/* ---- Header stats counter (mirrors .suggestions-stats voice) --------------- */
+.curation-stats {
+  margin-left: auto;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.curation-stats[hidden] { display: none; }
+
+/* ---- Search box ------------------------------------------------------------ */
+.curation-search-wrap {
+  margin: 0 0 20px;
+}
+.curation-search-wrap input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(187, 134, 252, 0.30);
+  background: rgba(15, 5, 28, 0.55);
+  color: #efe7ff;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.92rem;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.curation-search-wrap input::placeholder { color: rgba(255, 255, 255, 0.40); }
+.curation-search-wrap input:focus {
+  outline: none;
+  border-color: rgba(187, 134, 252, 0.62);
+  box-shadow: 0 0 14px rgba(187, 134, 252, 0.22);
+}
+
+/* ---- Row list -------------------------------------------------------------- */
+.curation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.curation-list[hidden] { display: none; }
+
+/* ---- Row ------------------------------------------------------------------- */
+.curation-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(180deg, rgba(40, 18, 70, 0.55), rgba(20, 6, 38, 0.72));
+  border: 1px solid rgba(187, 134, 252, 0.25);
+  border-radius: 10px;
+  padding: 16px 20px;
+  transition: border-color 220ms ease, box-shadow 220ms ease;
+}
+/* [hidden] symmetry — author display:flex would otherwise beat UA [hidden]
+   (the g23 standing rule: every new display:flex/grid component ships its twin). */
+.curation-row[hidden] { display: none; }
+.curation-row:hover {
+  border-color: rgba(187, 134, 252, 0.45);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.30), 0 0 14px rgba(187, 134, 252, 0.14);
+}
+
+.curation-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Controls (status select + note textarea) ------------------------------ */
+.curation-controls {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 14px 18px;
+  align-items: start;
+}
+.curation-controls[hidden] { display: none; }
+
+.curation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.curation-field[hidden] { display: none; }
+
+.curation-field-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #bb86fc;
+}
+
+.curation-status-select,
+.curation-note {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(187, 134, 252, 0.28);
+  background: rgba(15, 5, 28, 0.55);
+  color: #efe7ff;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.9rem;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.curation-status-select:focus,
+.curation-note:focus {
+  outline: none;
+  border-color: rgba(187, 134, 252, 0.62);
+  box-shadow: 0 0 12px rgba(187, 134, 252, 0.20);
+}
+/* Dropdown options render in a native menu — force dark-on-light readability so
+   the option text isn't white-on-white in some browsers. */
+.curation-status-select option {
+  color: #1a0a2e;
+  background: #efe7ff;
+}
+.curation-note {
+  resize: vertical;
+  min-height: 44px;
+  line-height: 1.45;
+}
+.curation-note::placeholder { color: rgba(255, 255, 255, 0.38); }
+
+/* ---- Per-row save feedback ------------------------------------------------- */
+.curation-row-status {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.curation-row-status[hidden] { display: none; }
+.curation-row-status.is-saved { color: #8fe3b0; }
+.curation-row-status.is-error { color: #ff9b9b; font-weight: 600; letter-spacing: 0; }
+
+/* ---- Empty (no search matches) --------------------------------------------- */
+.curation-empty {
+  margin: 8px 0 0;
+  padding: 22px 16px;
+  text-align: center;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.86rem;
+  color: rgba(255, 255, 255, 0.42);
+  border: 1px dashed rgba(187, 134, 252, 0.18);
+  border-radius: 10px;
+}
+.curation-empty[hidden] { display: none; }
+
+/* ---- Mobile reflow --------------------------------------------------------- */
+@media (max-width: 640px) {
+  .curation-controls { grid-template-columns: 1fr; gap: 12px; }
+  .curation-stats { margin-left: 0; }
+}
+
+/* ---- Reduced-motion pass --------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .curation-row,
+  .curation-search-wrap input,
+  .curation-status-select,
+  .curation-note {
+    transition-duration: 0s !important;
+  }
+}

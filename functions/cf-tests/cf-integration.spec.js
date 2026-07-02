@@ -434,6 +434,18 @@ test('A3 group add: the appended member gets the added-you ping; a leave pings n
   assert.equal(pings.length, 1, 'a leave/remove must not mint another ping');
 });
 
+// milestone B — an info-request must NOT inflate the public 👁 review-demand
+// rollup (aggregateSuggestionCounts skips kind:'info'); an anime-request does.
+test('B: an info-request skips the demand rollup; an anime-request counts', async () => {
+  await db.doc('suggestions/infoReqB').set({ title: 'PLUTO', anilistId: 770001, status: 'new', kind: 'info', submittedAt: TS.now() });
+  await db.doc('suggestions/animeReqB').set({ title: 'Monster', anilistId: 770002, status: 'new', kind: 'anime', submittedAt: TS.now() });
+  // the anime-request lands its rollup...
+  await waitFor(async () => (await db.doc('suggestionCounts/770002').get()).exists ? true : null);
+  // ...and by then the info-request (fired first) has had time to NOT land one
+  const info = await db.doc('suggestionCounts/770001').get();
+  assert.ok(!info.exists, 'an info-request must not create a demand-count rollup');
+});
+
 // 18) rate limit: the 6th rapid conversation create by one creator is undone.
 test('A1 rate limit: the 6th rapid conversation create by one creator is undone', async () => {
   for (let i = 0; i < 6; i++) {

@@ -220,6 +220,7 @@ function renderRow(snap, index) {
         <span class="timestamp">${escapeHtml(formatTimestamp(data.submittedAt))}</span>
         ${formatHtml}
         ${yearHtml}
+        ${data.kind === 'info' ? '<span class="status-pill kind-info">ⓘ INFO</span>' : ''}
         <span class="status-pill status-${escapeHtml(status)}">${escapeHtml(status)}</span>
       </div>
     </div>

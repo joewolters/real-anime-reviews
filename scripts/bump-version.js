@@ -419,6 +419,16 @@ const LATE_TARGETS = [
   ['admin/reports.html','reports-model.js?v= (reports)',   /(src="reports-model\.js\?v=)([^"]+)(")/],
   ['admin/reports.html','../firebase.js?v= (reports)',     /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
   ['admin/reports.html','reports.js?v= (reports)',         /(src="reports\.js\?v=)([^"]+)(")/],
+  // MEGA-RUN Milestone B — admin/curation.html (Curate Cards panel). 7 versioned
+  // surfaces (same static-?v= shape as the other admin pages). The shared classic
+  // animeData.js it loads is version-less there, like edit/suggestions/season-reviews.
+  ['admin/curation.html','window.APP_VERSION (curation)',  /(<script>window\.APP_VERSION=")([^"]+)(")/],
+  ['admin/curation.html','../style.css?v= (curation)',     /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
+  ['admin/curation.html','../mobile.css?v= (curation)',    /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
+  ['admin/curation.html','suggestions.css?v= (curation)',  /(href="suggestions\.css\?v=)([^"]+)(")/],
+  ['admin/curation.html','curation.css?v= (curation)',     /(href="curation\.css\?v=)([^"]+)(")/],
+  ['admin/curation.html','../firebase.js?v= (curation)',   /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
+  ['admin/curation.html','curation.js?v= (curation)',      /(src="curation\.js\?v=)([^"]+)(")/],
 ];
 for (const [file, label, pattern] of LATE_TARGETS) {
   TARGETS.push({

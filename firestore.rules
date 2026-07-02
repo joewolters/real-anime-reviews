@@ -465,6 +465,34 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // MILESTONE B — THE CURATOR PANEL. Blake's per-anime WATCH STATUS is public
+    // (it dresses the cards for everyone); his private NOTES are admin-only.
+    // Excel stays canonical for CATALOG data (rule #1) — status/notes are
+    // volatile CURATION state (a flip must be live from any device without a
+    // resync+redeploy), so Firestore is the fit. Keyed by the catalog slug.
+    // =========================================================================
+    match /animeStatus/{slug} {
+      allow get, list: if true;                 // dresses cards for everyone
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['watching', 'watchlist', 'on-hold', 'finished', 'rewatching']
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();               // clearing a status
+    }
+    match /curatorNotes/{slug} {
+      // PRIVATE — Blake's eyes only (get + list both admin-gated; a note never
+      // reaches a member's client). Separate collection because rules can't
+      // field-scope reads on a mixed public/private doc.
+      allow get, list: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['note', 'updatedAt'])
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 2000
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
     // COMMUNITY HUB — top-level `forum` (NOT `threads`, to avoid the existing
     // collection-group rule). H2: counters/mod-flags pinned at create; no
     // client branch writes a counter. H5: removing redacts the body/title.
@@ -894,10 +922,15 @@ service cloud.firestore {
     match /suggestions/{docId} {
       allow create: if request.resource.data.keys().hasOnly(['title', 'reason', 'submittedAt', 'status',
                                                              'anilistId', 'coverImage', 'format', 'year',
-                                                             'englishTitle', 'romajiTitle', 'submitterUid'])
+                                                             'englishTitle', 'romajiTitle', 'submitterUid', 'kind'])
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() < 200
+        // milestone B — `kind`: absent/'anime' = a review request (the existing
+        // path, counted in the public 👁 rollup); 'info' = an information request
+        // on a sparse deep-dive (NOT counted — the CF skips it).
+        && (!('kind' in request.resource.data)
+            || request.resource.data.kind in ['anime', 'info'])
         && (!('reason' in request.resource.data)
             || (request.resource.data.reason is string && request.resource.data.reason.size() < 1000))
         && request.resource.data.status == 'new'

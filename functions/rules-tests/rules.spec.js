@@ -337,6 +337,33 @@ test('suggestion: HOSTILE forged submitterUid is DENIED', async () => {
   await assertFails(setDoc(doc(as('alice'), 'suggestions/s3'),
     { title: 'Bleach', status: 'new', submittedAt: serverTimestamp(), submitterUid: 'bob' }));
 });
+// milestone B — the info-request kind
+test('suggestion B: kind info/anime allowed; a bogus kind DENIED', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'suggestions/sk1'),
+    { title: 'PLUTO', status: 'new', submittedAt: serverTimestamp(), submitterUid: 'alice', kind: 'info' }));
+  await assertSucceeds(setDoc(doc(anon(), 'suggestions/sk2'),
+    { title: 'Monster', status: 'new', submittedAt: serverTimestamp(), kind: 'anime' }));
+  await assertFails(setDoc(doc(anon(), 'suggestions/sk3'),
+    { title: 'x', status: 'new', submittedAt: serverTimestamp(), kind: 'malware' }));
+});
+
+// ---------------- MILESTONE B: the curator panel ----------------
+test('curator: animeStatus is PUBLIC-readable; only admin writes a valid status', async () => {
+  await seed((db) => setDoc(doc(db, 'animeStatus/one-punch-man'), { status: 'watching', updatedAt: Timestamp.now() }));
+  await assertSucceeds(getDoc(doc(anon(), 'animeStatus/one-punch-man')));          // dresses cards for everyone
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'animeStatus/frieren'), { status: 'rewatching', updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('alice'), 'animeStatus/frieren'), { status: 'watching', updatedAt: serverTimestamp() }));   // members can't set
+  await assertFails(setDoc(doc(as(ADMIN), 'animeStatus/bad'), { status: 'binging', updatedAt: serverTimestamp() }));          // enum pinned
+  await assertSucceeds(deleteDoc(doc(as(ADMIN), 'animeStatus/one-punch-man')));    // admin may clear
+});
+test('curator: curatorNotes are PRIVATE — admin-only read AND write', async () => {
+  await seed((db) => setDoc(doc(db, 'curatorNotes/one-punch-man'), { note: 'saving S3 for a rewatch', updatedAt: Timestamp.now() }));
+  await assertFails(getDoc(doc(as('alice'), 'curatorNotes/one-punch-man')));       // a member's client never sees a note
+  await assertFails(getDoc(doc(anon(), 'curatorNotes/one-punch-man')));
+  await assertSucceeds(getDoc(doc(as(ADMIN), 'curatorNotes/one-punch-man')));
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'curatorNotes/frieren'), { note: 'the goodbye arc', updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('alice'), 'curatorNotes/frieren'), { note: 'hi', updatedAt: serverTimestamp() }));
+});
 
 // ---------------- GATE 4: comment pin (admin) + thread lock ----------------
 test('comment: HOSTILE self-pin at create is DENIED', async () => {

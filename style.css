@@ -495,6 +495,29 @@ body > header h1:hover {
 }
 .blake-pin .bp-star { font-size: 0.66rem; }
 
+/* milestone B — the curator STATUS label. Blake's per-anime watch status is HIS
+   mark (heart: gold = Blake), a small gold-edged pill in the card's info block,
+   under the rating. Injected post-paint from animeStatus (script.js); absent by
+   default so untouched cards are unchanged. */
+/* the label is a <div> with <i> children (NOT <span> — dodges the
+   `.card .info span` + `.spotlight-stack .card .info span` cascade). The <i>
+   defaults to italic, so normalize it here. */
+.card-status-label {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    background: rgba(255, 213, 74, 0.12);
+    border: 1px solid rgba(255, 213, 74, 0.5);
+    max-width: 100%; overflow: hidden;
+}
+.card-status-label .csl-glyph,
+.card-status-label .csl-text {
+    font: 700 0.66rem 'Montserrat', sans-serif; font-style: normal;
+    letter-spacing: 0.03em; color: #ffe082;
+}
+.card-status-label .csl-glyph { font-size: 0.72rem; filter: drop-shadow(0 0 5px rgba(255, 179, 0, 0.5)); }
+.card-status-label .csl-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-status-label[data-status="on-hold"] { opacity: 0.9; }
+
 /* v1.8.4 gate 5 carry-over #2 — badged cards (the "Reviewed by Blake" pin or the
    "NOT REVIEWED" sticker, both top-LEFT) now STACK the save icons VERTICALLY on the
    right edge so the corner badge never crowds the heart: bookmark on top, heart below
@@ -7324,6 +7347,31 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   cursor: pointer;
   transition: background .16s ease, border-color .16s ease, transform .12s ease, box-shadow .16s ease;
 }
+/* milestone B (item 7) — the info-request button + its inline ask form. Same
+   pill family as .secondary-request but a quieter outline (it's a question,
+   not a demand). Purple — a member surface, never gold. */
+.secondary-inforeq {
+  display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 15px;
+  border-radius: 999px; background: rgba(187,134,252,0.10);
+  border: 1px solid rgba(187,134,252,0.45); color: #e9dbff;
+  font: 800 0.76rem/1 'Montserrat', sans-serif; letter-spacing: .03em;
+  white-space: nowrap; cursor: pointer;
+  transition: background .16s ease, border-color .16s ease; }
+.secondary-inforeq:hover { background: rgba(187,134,252,0.2); border-color: rgba(187,134,252,0.8); color: #fff; }
+.secondary-inforeq-form { display: inline-flex; align-items: center; gap: 6px; }
+.secondary-inforeq-input { height: 36px; min-width: 220px; max-width: 46vw; border-radius: 999px;
+  padding: 0 14px; background: rgba(255,255,255,0.07); border: 1px solid rgba(187,134,252,0.5);
+  color: #fff; font: 500 0.8rem 'Montserrat', sans-serif; }
+.secondary-inforeq-send { height: 36px; padding: 0 15px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(120deg, rgba(176,108,255,0.6), rgba(120,40,210,0.9));
+  border: 1px solid rgba(187,134,252,0.75); color: #fff; font: 700 0.76rem 'Montserrat', sans-serif; }
+.secondary-inforeq-send[disabled] { opacity: 0.5; cursor: default; }
+.secondary-inforeq-cancel { width: 32px; height: 36px; border-radius: 999px; cursor: pointer;
+  background: rgba(30,10,60,0.9); border: 1px solid rgba(187,134,252,0.4); color: #d9c9ff; }
+.secondary-inforeq-done { font: 700 0.76rem 'Montserrat', sans-serif; color: #cbb0ff; padding: 0 6px; }
+@media (max-width: 640px) { .secondary-inforeq-input { min-width: 130px; } }
+@media (prefers-reduced-motion: reduce) { .secondary-inforeq, .secondary-request { transition: none; } }
+
 .secondary-request:hover {
   background: linear-gradient(180deg, rgba(187,134,252,0.45), rgba(140,82,222,0.45));
   border-color: rgba(187,134,252,0.8);

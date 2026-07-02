@@ -107,6 +107,68 @@ test('gA5: blocking severs the peer thread + hides blocked group letters (source
   expect(js).toContain("permission-denied");
 });
 
+// ── MILESTONE B — curator tools ──────────────────────────────────────────────
+test('gB: card-status labels are Blake-gold, painted post-paint from animeStatus', async ({ page }) => {
+  const js = await (await page.request.get('/script.js')).text();
+  expect(js).toContain('function applyCuratorStatusToCard');
+  expect(js).toContain('CURATOR_STATUS_LABEL');
+  expect(js).toContain("loadCuratorStatus");
+  // set via textContent (no XSS) + injected off the save-state hook
+  expect(js).toContain('txt.textContent = CURATOR_STATUS_LABEL[status].label');
+  expect(js).toContain('applyCuratorStatusToCard(card, animeId)');
+  const css = await (await page.request.get('/style.css')).text();
+  const block = css.slice(css.indexOf('.card-status-label {'), css.indexOf('.card-status-label {') + 400);
+  expect(block).toContain('255, 213, 74');   // gold — Blake's mark
+});
+
+test('gB (visual): the status label resists the .card .info span cascade — COMPUTED pixels', async ({ page }) => {
+  // the adversarial panel caught the label's <span> children inheriting
+  // `.card .info span` (gold/1rem/bold) + the Top-10 `.spotlight-stack .card
+  // .info span` gold-gradient PILL. The fix uses <div>+<i>; pin the RESULT.
+  await page.goto('/index.html');
+  const m = await page.evaluate(() => {
+    const mk = () => window.renderAnimeCardMarkup({ Title: 'Test', Genre: 'X', Rating: '9', image: 'x.png' }, { animeId: 'test' });
+    const buildLabel = () => {
+      const label = document.createElement('div'); label.className = 'card-status-label';
+      const g = document.createElement('i'); g.className = 'csl-glyph'; g.textContent = '🏮';
+      const t = document.createElement('i'); t.className = 'csl-text'; t.textContent = 'Blake is watching';
+      label.append(g, t); return label;
+    };
+    const card = mk(); document.body.appendChild(card);
+    const label = buildLabel(); card.querySelector('.info').appendChild(label);
+    const cs = getComputedStyle(label.querySelector('.csl-text'));
+    const spot = document.createElement('div'); spot.className = 'spotlight-stack'; document.body.appendChild(spot);
+    const card2 = mk(); spot.appendChild(card2);
+    const label2 = buildLabel(); card2.querySelector('.info').appendChild(label2);
+    const cs2 = getComputedStyle(label2.querySelector('.csl-text'));
+    return { color: cs.color, fontSize: parseFloat(cs.fontSize), spotColor: cs2.color, spotBg: cs2.backgroundImage };
+  });
+  expect(m.color).toBe('rgb(255, 224, 130)');   // amber #ffe082, NOT the `gold` keyword rgb(255,215,0)
+  expect(m.fontSize).toBeLessThan(14);           // ~0.66rem, not the inherited 1rem
+  expect(m.spotColor).toBe('rgb(255, 224, 130)'); // Top-10: still amber, not gold-pill
+  expect(m.spotBg).toBe('none');                  // and NOT the gold gradient pill
+});
+
+test('gB: the info-request writes suggestions kind:info (not the review-demand rollup)', async ({ page }) => {
+  const js = await (await page.request.get('/script.js')).text();
+  expect(js).toContain('data-inforeq');
+  expect(js).toContain("kind: 'info'");
+  expect(js).toMatch(/addDoc\(collection\(db, 'suggestions'\), docData\)/);
+  // the admin queue distinguishes info rows
+  const sug = await (await page.request.get('/admin/suggestions.js')).text();
+  expect(sug).toContain("data.kind === 'info'");
+});
+
+test('gB: the curator admin page exists on the scaffold (admin-gated, no Mode-1 dep)', async ({ page }) => {
+  const html = await (await page.request.get('/admin/curation.html')).text();
+  expect(html).toContain('id="admin-gate"');
+  expect(html).toContain('id="admin-main"');
+  expect(html).toContain('curation.js');
+  expect(html).not.toContain('npm run mode1');       // pure Firestore — works on the deployed site
+  const fab = await (await page.request.get('/admin-fab.js')).text();
+  expect(fab).toContain('/admin/curation.html');     // reachable from the FAB
+});
+
 test('gA0: the live lantern still exposes the pure model on index (behavior anchor)', async ({ page }) => {
   await page.goto('/index.html');
   await page.waitForFunction(() => typeof window.lanternModel === 'function', null, { timeout: 15000 });

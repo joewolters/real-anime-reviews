@@ -541,6 +541,10 @@ exports.aggregateSuggestionCounts = onDocumentCreated('suggestions/{docId}', asy
   if (await alreadyProcessed(event.id)) return;
   const s = event.data && typeof event.data.data === 'function' ? event.data.data() : null;
   if (!s || !s.anilistId) return; // raw-title submission -> no rollup
+  // milestone B — an 'info' request (a question about a sparse deep-dive) must
+  // NOT inflate the public "👁 N requested" review-demand chip: it's not a
+  // request to review the title, just to fill it in.
+  if (s.kind === 'info') return;
   const ref = db.doc('suggestionCounts/' + s.anilistId);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -593,12 +597,16 @@ exports.onSuggestionReviewed = onDocumentUpdated('suggestions/{docId}', async (e
   const prefsSnap = await db.doc('users/' + to + '/notifPrefs/prefs').get();
   if (prefsSnap.exists && isMuted(prefsSnap.data(), 'request_done')) return;  // mute-at-source
   const title = String(after.englishTitle || after.title || 'your request').slice(0, 120);
+  // milestone B (adversarial LOW) — an INFO request marked done means Blake
+  // FILLED IT IN, not reviewed it; the copy must not frame a question as a
+  // finished review. (Same gold Blake-origin ping, kind-aware verb.)
+  const isInfo = after.kind === 'info';
   await db.collection('users/' + to + '/notifications').add({
     fromUid: 'G2jGRa14u8bzGAmeBTkvXy8PKmr1',          // ADMIN_UID (status-quo literal, as in lib/moderation.js)
     fromDisplayName: 'Blake',
     fromPhotoURL: null,
     type: 'request_done',
-    verb: 'reviewed it — you asked for this one',
+    verb: isInfo ? 'filled in the page — you asked about this one' : 'reviewed it — you asked for this one',
     animeTitle: title,
     anilistId: after.anilistId || null,
     targetPath: after.anilistId ? ('secondary/' + after.anilistId) : null,
