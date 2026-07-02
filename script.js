@@ -5721,8 +5721,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
   });
 
   // PURE — where does a profile click land? (exposed for the heart spec)
+  // v1.10.2 (Blake's 3rd ask): his name opens THE CREATOR SHEET now — the one
+  // gold sheet — instead of silently routing home. The sheet itself carries
+  // the "Visit the Den" path, so the old promise survives with a face on it.
   function profileDecision(uid, prof, userDoc) {
-    if (uid === NOTIF_ADMIN_UID) return 'den';                  // Blake IS the site
+    if (uid === NOTIF_ADMIN_UID) return 'creator';              // Blake IS the site
     if (prof && prof.isBanned === true) return 'suspended';
     if (prof) return 'profile';
     if (userDoc) return 'profile-legacy';                        // pre-migration account
@@ -5764,30 +5767,32 @@ function openInlineCommentEditor(editBtn, itemRef) {
       try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
     }
   }
+  // v1.10.2 — the relocated "his name leads home" promise: every layer comes
+  // down (the gate-20.8 close-all discipline) and the page rests at the Den.
+  // Lives on the CREATOR SHEET's gold path button now, not on the name click.
+  function goHomeToDen() {
+    closeProfilePage();
+    try { if (typeof closeHubDrawer === 'function') closeHubDrawer(); } catch (_) {}
+    try { if (typeof tertiaryEl !== 'undefined' && tertiaryEl && !tertiaryEl.hidden) closeTertiary(); } catch (_) {}
+    try { if (typeof secondaryEl !== 'undefined' && secondaryEl && !secondaryEl.hidden) closeSecondaryModal(); } catch (_) {}
+    try { if (typeof modal !== 'undefined' && modal && modal.classList.contains('active') && typeof closeModal === 'function') closeModal(); } catch (_) {}
+    try { window.scrollTo({ top: 0 }); } catch (_) {}
+  }
   async function openProfilePage(uid) {
     if (typeof uid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) return;
-    if (uid === NOTIF_ADMIN_UID) {
-      // Blake's name leads HOME — to the Den, not a community card.
-      // gate-20.8 adversarial MED: the Den is the BASE page, so EVERY layer
-      // must come down or the scroll happens invisibly behind an open sheet
-      // (the same dead-click class fix 2 closed for member cards — this
-      // branch was the missed entry point of the audit).
-      closeProfilePage();
-      try { if (typeof closeHubDrawer === 'function') closeHubDrawer(); } catch (_) {}
-      try { if (typeof tertiaryEl !== 'undefined' && tertiaryEl && !tertiaryEl.hidden) closeTertiary(); } catch (_) {}
-      try { if (typeof secondaryEl !== 'undefined' && secondaryEl && !secondaryEl.hidden) closeSecondaryModal(); } catch (_) {}
-      try { if (typeof modal !== 'undefined' && modal && modal.classList.contains('active') && typeof closeModal === 'function') closeModal(); } catch (_) {}
-      try { window.scrollTo({ top: 0 }); } catch (_) {}
-      return;
-    }
+    // v1.10.2 (Blake's 3rd ask): his name opens THE CREATOR SHEET — the one
+    // gold sheet on the site (kicker CREATOR 創り手, the Den Keeper frame by
+    // default, NO Appreciate row — gold is never counted, NO report flag on
+    // the owner) with the gold "Visit the Den" path keeping the old promise.
+    const isCreator = uid === NOTIF_ADMIN_UID;
     closeProfilePage();
     const layer = document.createElement('div');
     layer.className = 'profile-layer';
     layer.innerHTML = `<div class="profile-scrim"></div>
-      <section class="profile-sheet" role="dialog" aria-modal="true" aria-label="Member profile">
-        <div class="profile-kicker">MEMBER <span class="jp-mini">旅人</span>
+      <section class="profile-sheet${isCreator ? ' is-creator' : ''}" role="dialog" aria-modal="true" aria-label="${isCreator ? 'The Creator' : 'Member profile'}">
+        <div class="profile-kicker">${isCreator ? 'CREATOR <span class="jp-mini">創り手</span>' : 'MEMBER <span class="jp-mini">旅人</span>'}
           <span class="profile-kicker-actions">
-            <button type="button" class="profile-report" title="Report this profile" aria-label="Report this profile">⚑</button>
+            ${isCreator ? '' : '<button type="button" class="profile-report" title="Report this profile" aria-label="Report this profile">⚑</button>'}
             <button type="button" class="profile-close" aria-label="Close">&times;</button>
           </span></div>
         <div class="profile-body"><p class="hub-loading">Opening…</p></div>
@@ -5819,8 +5824,15 @@ function openInlineCommentEditor(editBtn, itemRef) {
           status: prof.status, tags: prof.tags,
           // the carve-out count renders only for a REAL profiles doc (the CF's
           // count update() needs the doc; legacy users/ rows show no like row).
-          likesCount: (typeof prof.likesCount === 'number') ? prof.likesCount : 0 }
-      : { name: (userDoc.username || userDoc.displayName), photo: userDoc.photoURL, bio: '', sinceMs: 0 };
+          // v1.10.2 HEART: the CREATOR sheet NEVER carries the count — gold is
+          // never counted (likesCount stays undefined → the row never renders;
+          // the rules already deny likes landing on his profile).
+          likesCount: isCreator ? undefined : ((typeof prof.likesCount === 'number') ? prof.likesCount : 0) }
+      : userDoc
+        ? { name: (userDoc.username || userDoc.displayName), photo: userDoc.photoURL, bio: '', sinceMs: 0 }
+        // v1.10.2: the Creator before his first Studio save — both docs may be
+        // absent; the sheet still stands (name only; the gold does the talking).
+        : { name: 'Blake', photo: '', bio: '', sinceMs: 0 };
 
     // accent — curated palette only (the palette holds no gold/yellow, so a
     // profile can never dress itself in Blake's color). round 4: 16 keys +
@@ -5841,6 +5853,9 @@ function openInlineCommentEditor(editBtn, itemRef) {
       const fdef = fl.find((f) => f && f.key === prof.frame);
       if (fdef && (!fdef.blakeOnly || uid === NOTIF_ADMIN_UID)) sheet.setAttribute('data-frame', prof.frame);
     }
+    // v1.10.2 — the Creator sheet wears THE DEN KEEPER by default (his frame,
+    // rules-locked to his account; he can still pick another in the Studio).
+    if (isCreator && sheet && !sheet.getAttribute('data-frame')) sheet.setAttribute('data-frame', 'blake');
     // gate 20.5 (item 9) — the accent ring layer on the live sheet too
     if (sheet && !sheet.querySelector('.pf-accent-ring')) {
       const ring = document.createElement('span');
@@ -5902,15 +5917,26 @@ function openInlineCommentEditor(editBtn, itemRef) {
     }
 
     bodyEl.innerHTML = profileHeaderHtml(ident)
+      // v1.10.2 — the gold path home: his name used to BE this jump; now the
+      // sheet carries it (the old promise, with a face on the door).
+      + (isCreator ? '<button type="button" class="profile-den-path">'
+          + '<span class="den-path-glyph" aria-hidden="true">🏮</span> Visit the Den '
+          + '<span class="jp-mini">隠れ家へ</span><span class="den-path-arrow" aria-hidden="true">→</span></button>' : '')
       + '<div class="profile-featured-slot"></div>'
       + '<div class="profile-collections-slot"></div>'
       + '<div class="profile-acts" role="tablist" aria-label="Their activity">'
       +   '<button type="button" class="profile-act-chip is-active" data-act="threads" role="tab" aria-selected="true">Threads</button>'
-      +   '<button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>'
+      // v1.10.2: the Creator carries no Reviews tab — his reviews ARE the site
+      // (the Den path above is that door); members keep Threads + Reviews.
+      +   (isCreator ? '' : '<button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>')
       // gate 20.7 (Blake item 3): Comments + Replies tabs removed from the
       // PUBLIC profile — "No need to go that deep." Threads + Reviews stay.
       + '</div>'
       + '<ul class="profile-list" data-profile-acts><li class="hub-loading">Looking…</li></ul>';
+    if (isCreator) {
+      const denBtn = bodyEl.querySelector('.profile-den-path');
+      if (denBtn) denBtn.addEventListener('click', goHomeToDen);
+    }
 
     // the heart carve-out — wire the like. Signed-out invites sign-in; the
     // owner's own button hides (rules deny self-likes — don't render the tease);
@@ -11523,6 +11549,45 @@ function onScrollHeader() {
       const _place = new URLSearchParams(location.search).get('place');
       if (_place === 'foryou') showForYou();
       else if (_place === 'discover') showDiscover();
+    } catch (_) {}
+    // v1.10.2 (Blake): the account page's Random/Filter tools route home with
+    // ?open=… — perform the action through the SAME wired buttons (no second
+    // implementation). TIMING IS THE WHOLE GAME HERE (adversarial HIGH+MED):
+    //   • the welcomed path defers ONE macrotask — init()'s own end-of-boot
+    //     filter reset (the classList.remove('open') below) runs in THIS task
+    //     and would force-close the panel we just opened, stranding aria/
+    //     body.filter-open in a stuck scroll-lock;
+    //   • the door path fires only after the splash is fully TORN DOWN
+    //     (hidden — finish() has reset overflow/focus), plus a grace window
+    //     longer than the catch-up hand-off (620ms);
+    //   • and the user's own door choice WINS: if a catch-up surface or a
+    //     modal is already up at fire time, the queued action drops quietly.
+    try {
+      const _open = new URLSearchParams(location.search).get('open');
+      if (_open === 'random' || _open === 'filter') {
+        const fire = () => {
+          try {
+            const cs = document.getElementById('catchup-sheet');
+            if (cs && !cs.hidden) return;                                  // they chose the sheet
+            if (modal && modal.classList.contains('active')) return;      // or a deep-link landed
+          } catch (_) {}
+          document.getElementById(_open === 'random' ? 'random-btn' : 'filter-btn')?.click();
+        };
+        const welcomed = (() => { try { return sessionStorage.getItem('rar:welcomed') === '1'; } catch (_) { return true; } })();
+        if (welcomed) setTimeout(fire, 0);   // AFTER init() finishes (the boot reset)
+        else {
+          const splashEl = document.getElementById('welcome-splash');
+          const watch = setInterval(() => {
+            try {
+              if (sessionStorage.getItem('rar:welcomed') === '1' && (!splashEl || splashEl.hidden)) {
+                clearInterval(watch);
+                setTimeout(fire, 700);   // past the door teardown + the 620ms catch-up hand-off
+              }
+            } catch (_) { clearInterval(watch); }
+          }, 300);
+          setTimeout(() => clearInterval(watch), 120000);   // give up quietly after 2 min
+        }
+      }
     } catch (_) {}
     initScrollReveal();   // v1.8.3 gate 3 — reveal-once home sections
     initWelcome();        // v1.8.3 gate 3 — first-visit "den door" splash

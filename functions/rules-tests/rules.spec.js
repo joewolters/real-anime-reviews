@@ -263,6 +263,14 @@ test('profile: HOSTILE owner setting isAdmin is DENIED (M1)', async () => {
 test('profile: HOSTILE reserved display name "Blake" is DENIED (M1)', async () => {
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), { displayName: 'Blake' }));
 });
+// v1.10.2 (the Creator sheet) — the denylist stops IMPERSONATION; the real
+// Blake is exempt on his OWN doc (profiles writes stay owner-gated).
+test('profile: the ADMIN may use his own reserved name on HIS doc (v1.10.2 Creator)', async () => {
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'profiles/' + ADMIN), { displayName: 'Blake', joinedAt: serverTimestamp() }));
+});
+test('profile: HOSTILE member named "blake" (case-folded) stays DENIED post-carve-out', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), { displayName: 'bLaKe' }));
+});
 test('profile: HOSTILE arbitrary external photoURL is DENIED (M2)', async () => {
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
     { displayName: 'Alice', photoURL: 'https://evil.example.com/track.png' }));

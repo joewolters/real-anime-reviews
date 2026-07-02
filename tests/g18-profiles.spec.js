@@ -32,7 +32,9 @@ test.describe('gates 15-16 — public profiles (static)', () => {
     expect(r.spoiler).toBe(true);
   });
 
-  test('profileDecision: Blake → his Den; banned → suspended; missing → former member; legacy users-doc → profile', async ({ page }) => {
+  // v1.10.2 (Blake's 3rd ask): his name opens THE CREATOR SHEET now — the
+  // 'den' decision evolved to 'creator' (the sheet carries the Den path).
+  test('profileDecision: Blake → the Creator sheet; banned → suspended; missing → former member; legacy users-doc → profile', async ({ page }) => {
     await page.goto('/');
     await page.waitForFunction(() => typeof window.profileDecision === 'function');
     const r = await page.evaluate(() => ({
@@ -42,7 +44,7 @@ test.describe('gates 15-16 — public profiles (static)', () => {
       legacy: window.profileDecision('u3', null, { username: 'Old' }),
       gone: window.profileDecision('u4', null, null),
     }));
-    expect(r.blake).toBe('den');
+    expect(r.blake).toBe('creator');
     expect(r.banned).toBe('suspended');
     expect(r.normal).toBe('profile');
     expect(r.legacy).toBe('profile-legacy');

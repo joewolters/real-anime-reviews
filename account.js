@@ -617,17 +617,18 @@ async function renderViewerMode(user) {
   const host = document.getElementById('acct-viewer');
   if (!host) return;
   host.innerHTML = '<p class="muted">Opening the public view…</p>';
-  // HEART (adversarial MED): Blake has no member sheet — his name routes every
-  // viewer to the Den. Don't render member chrome for him, and don't invite a
-  // save that would mint a profiles doc for the one identity that never wears one.
-  if (user.uid === RAR_ADMIN_UID) {
-    host.innerHTML = '<div class="acct-viewer-empty">🏮 Your name leads members <b>home to the Den</b> — there is no public member sheet for this account.</div>';
-    return;
-  }
+  // v1.10.2 (Blake's 3rd ask — supersedes the no-sheet heart spec): the admin
+  // gets THE CREATOR SHEET now. His Public view renders it like any member's
+  // preview (he wanted to SEE it), his Studio save may mint his profiles doc
+  // (the rules' reserved-name denylist carries an admin carve-out), and the
+  // sheet stays count-free — gold is never counted.
+  const isCreator = user.uid === RAR_ADMIN_UID;
   let p = null;
   try { const s = await getDoc(doc(db, 'profiles', user.uid)); p = s.exists() ? s.data() : null; } catch (_) {}
   if (!p) {
-    host.innerHTML = '<div class="acct-viewer-empty">🌙 Nothing public yet — save your profile once and the room can see you.</div>';
+    host.innerHTML = isCreator
+      ? '<div class="acct-viewer-empty acct-viewer-empty--creator">🏮 <b>Your Creator sheet is ready to wear.</b><br>Save your profile once and every member who clicks your name meets it — gold kicker, the Den Keeper frame, and the path home to the Den.</div>'
+      : '<div class="acct-viewer-empty">🌙 Nothing public yet — save your profile once and the room can see you.</div>';
     return;
   }
   // honesty (adversarial MED): a suspended account's viewers see the tombstone,
@@ -654,12 +655,15 @@ async function renderViewerMode(user) {
     ? `<div class="profile-bio">${window.renderMarkdownInline ? window.renderMarkdownInline(String(p.bio)) : esc(p.bio)}</div>` : '';
   // viewers ALWAYS see the Appreciate row (the live sheet coerces a missing
   // count to 0) — the preview must too, or a fresh profile under-promises.
+  // v1.10.2 HEART: except the CREATOR — gold is never counted; his preview
+  // carries the gold kicker + the Den path instead, exactly like the live sheet.
   const likesCount = (typeof p.likesCount === 'number') ? p.likesCount : 0;
-  const likes = `<div class="profile-like-row"><button type="button" class="profile-like-btn" disabled title="Viewers can appreciate you here"><span class="profile-like-heart" aria-hidden="true">♥</span><span class="profile-like-verb">Appreciate</span></button><span class="profile-like-count" aria-label="appreciations">${Math.max(0, likesCount)}</span></div>`;
-  const vFrame = (typeof p.frame === 'string' && frameKeyValid(p.frame)) ? p.frame : '';
-  host.innerHTML = `<section class="profile-sheet acct-viewer-sheet"${accent ? ` data-accent="${esc(accent)}"` : ''}${p.accentGlow === true ? ' data-accent-glow' : ''}${vFrame ? ` data-frame="${esc(vFrame)}"` : ''}>
+  const likes = isCreator ? '' : `<div class="profile-like-row"><button type="button" class="profile-like-btn" disabled title="Viewers can appreciate you here"><span class="profile-like-heart" aria-hidden="true">♥</span><span class="profile-like-verb">Appreciate</span></button><span class="profile-like-count" aria-label="appreciations">${Math.max(0, likesCount)}</span></div>`;
+  const denPath = isCreator ? '<button type="button" class="profile-den-path" disabled><span class="den-path-glyph" aria-hidden="true">🏮</span> Visit the Den <span class="jp-mini">隠れ家へ</span><span class="den-path-arrow" aria-hidden="true">→</span></button>' : '';
+  const vFrame = (typeof p.frame === 'string' && frameKeyValid(p.frame)) ? p.frame : (isCreator ? 'blake' : '');
+  host.innerHTML = `<section class="profile-sheet acct-viewer-sheet${isCreator ? ' is-creator' : ''}"${accent ? ` data-accent="${esc(accent)}"` : ''}${p.accentGlow === true ? ' data-accent-glow' : ''}${vFrame ? ` data-frame="${esc(vFrame)}"` : ''}>
       <span class="pf-accent-ring" aria-hidden="true"></span>
-      <div class="profile-kicker">MEMBER <span class="jp-mini">旅人</span>
+      <div class="profile-kicker">${isCreator ? 'CREATOR <span class="jp-mini">創り手</span>' : 'MEMBER <span class="jp-mini">旅人</span>'}
         <span class="acct-viewer-badge">as last saved — exactly what viewers see</span></div>
       <div class="profile-body">
         <div class="profile-head">
@@ -667,9 +671,10 @@ async function renderViewerMode(user) {
           <h2 class="profile-name">${name}</h2>
           ${status}${since}${tags}${bio}${likes}
         </div>
+        ${denPath}
         <div class="profile-featured-slot"></div>
         <div class="acct-viewer-foot">
-          <span class="fld-hint">their threads · reviews · comments · replies load on the live page · viewers can also report a profile</span>
+          <span class="fld-hint">${isCreator ? 'your threads load on the live page · the Den path takes them home' : 'their threads · reviews load on the live page · viewers can also report a profile'}</span>
           <button type="button" class="linky" id="acct-viewer-live">Open the live page ↗</button>
         </div>
       </div>

@@ -9805,6 +9805,41 @@ html.rar-welcome-pending::before {
    the frames lift — the ring must stay position:absolute) */
 .profile-sheet.has-bg > *:not(.profile-bg-wrap):not(.pf-accent-ring) { position: relative; z-index: 1; }
 
+/* ════════════════════════════════════════════════════════════════════════
+   v1.10.2 — THE CREATOR SHEET. The ONE gold sheet on the site (the heart
+   rule, USED): Blake's profile wears the gold kicker, the Den Keeper frame
+   by default, and the gold path home. No Appreciate row ever renders here —
+   gold is never counted. Members' sheets are untouched by every rule below
+   (all scoped .is-creator; the heart specs pin that members can't wear it).
+   ════════════════════════════════════════════════════════════════════════ */
+.profile-sheet.is-creator .profile-kicker {
+  color: #ffd54a;   /* GOLD — the creator's mark (jp-mini inherits) */
+  text-shadow: 0 0 16px rgba(255, 213, 74, 0.4);
+}
+.profile-sheet.is-creator .profile-kicker .jp-mini { color: #ffe082; opacity: 0.9; }
+.profile-sheet.is-creator .profile-avatar {
+  border-color: rgba(255, 213, 74, 0.75);   /* GOLD ring on his face */
+  box-shadow: 0 0 18px rgba(255, 179, 0, 0.25);
+}
+.profile-sheet.is-creator .profile-name { text-shadow: 0 0 22px rgba(255, 213, 74, 0.28); }
+.profile-den-path {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; margin: 14px 0 4px; padding: 12px 18px;
+  border-radius: 12px; cursor: pointer;
+  font: 700 0.95rem 'Montserrat', sans-serif; letter-spacing: 0.03em; color: #1c1303;
+  background: linear-gradient(120deg, #ffd54a, #ffb300);   /* GOLD — his door */
+  border: 1px solid rgba(255, 224, 130, 0.9);
+  box-shadow: 0 6px 22px rgba(255, 179, 0, 0.3), inset 0 0 14px rgba(255, 244, 200, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.profile-den-path:hover { transform: translateY(-1px); box-shadow: 0 9px 28px rgba(255, 179, 0, 0.42), inset 0 0 14px rgba(255, 244, 200, 0.4); }
+.profile-den-path:focus-visible { outline: 2px solid #ffe082; outline-offset: 2px; }
+.profile-den-path .jp-mini { color: #4a3408; font-size: 0.7rem; }
+.profile-den-path .den-path-arrow { font-size: 1.1em; }
+.profile-den-path[disabled] { cursor: default; opacity: 0.85; }   /* the account preview's inert twin */
+@media (prefers-reduced-motion: reduce) { .profile-den-path { transition: none; } }
+.acct-viewer-empty--creator { border-color: rgba(255, 213, 74, 0.5); color: #ffe082; }
+
 /* kicker actions (⚑ report rides beside close) */
 .profile-kicker-actions { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; }
 .profile-report { width: 34px; height: 34px; border-radius: 9px; background: rgba(30, 10, 60, 0.9);

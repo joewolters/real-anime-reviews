@@ -129,7 +129,10 @@ service cloud.firestore {
       return request.resource.data.displayName is string
         && request.resource.data.displayName.size() > 0
         && request.resource.data.displayName.size() <= 40
-        && !(request.resource.data.displayName.lower() in ['blake', 'admin', 'administrator', 'moderator', 'mod', 'owner', 'staff'])
+        // v1.10.2 (the Creator sheet): the denylist exists to stop IMPERSONATION
+        // — the real Blake is exempt (profiles writes are owner-gated, so the
+        // admin can only ever mint HIS OWN doc with his own reserved name).
+        && (isAdmin() || !(request.resource.data.displayName.lower() in ['blake', 'admin', 'administrator', 'moderator', 'mod', 'owner', 'staff']))
         && (!('bio' in request.resource.data) || (request.resource.data.bio is string && request.resource.data.bio.size() <= 500))
         && (!('photoURL' in request.resource.data)
             || request.resource.data.photoURL == null

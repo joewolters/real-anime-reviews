@@ -3,6 +3,7 @@
 
 ## ⚡ READ-FIRST
 - **What this doc is:** the step-by-step runbook for the v1.9.0 production cutover (new client + staged `firestore.rules` + Cloud Functions all going live together). It is a DEEP REFERENCE, not session-start reading.
+- **⚠️ PERMANENT lesson from the v1.10.0 cutover (confirmed by Blake 2026-06-12):** Storage rules that cross-read Firestore (`firestore.get()/exists()`) need the **cross-service IAM grant** (firebase-rules service agent → `roles/firebaserules.firestoreServiceAgent`) on PROD. **The deploy CLI does NOT grant it** (proven, firebase-tools 15.19.1 --debug) and the emulator never needs it — every rules test stays green while prod denies ALL uploads. Pre-flight for ANY storage-rules deploy touching cross-reads: verify the grant in the Firebase console (Storage → Rules — the permission banner / its one-click Grant). v1.10.1's root, fixed by Blake clicking exactly that banner.
 - **Open it ONLY when:** Blake has said "ship it" and you are actually triggering/working the v1.9.0 cutover.
 - **Open it ONLY when:** you are mid-cutover and need the exact deploy order, a per-step verify command, or a rollback.
 - **Otherwise SKIP it** — a fresh Code does not need this doc to do normal v1.9.0 work; reading it top-to-bottom burns context for no gain.

@@ -60,6 +60,21 @@
           <span class="toolbar-seam" aria-hidden="true"></span>
           <div class="nav-tools" role="group" aria-label="Tools">
             <button type="button" id="view-all-btn" class="inline-header-btn tool-btn" onclick="location.href='index.html#all'">View All <span class="jp-mini">全作品</span></button>
+            <!-- v1.10.2 (Blake): the FULL tool set on the account page too. Random
+                 and Filter live on the homepage, so these route home with ?open=
+                 and the boot handler performs the action — no half-dead buttons. -->
+            <button type="button" id="random-btn" class="inline-header-btn tool-btn random-btn" aria-label="Random anime" onclick="location.href='index.html?open=random'">
+            <svg class="dice-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3" y="3" width="18" height="18" rx="4" ry="4" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <circle cx="8" cy="8" r="1.6" fill="currentColor"></circle>
+            <circle cx="16" cy="8" r="1.6" fill="currentColor"></circle>
+            <circle cx="12" cy="12" r="1.6" fill="currentColor"></circle>
+            <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
+            <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
+            </svg>
+            <span>Random <span class="jp-mini">ランダム</span></span>
+            </button>
+            <button type="button" id="filter-btn" class="inline-header-btn tool-btn" onclick="location.href='index.html?open=filter'">Filter <span class="jp-mini">絞り込み</span></button>
           </div>
         </div>
       </div>
