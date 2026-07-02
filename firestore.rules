@@ -561,46 +561,207 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // DIRECT MESSAGES — admin-floor only in v1.9.0 (one participant is always
-    // ADMIN_UID, so there is no stranger-to-stranger surface). `kind:"peer"` is
-    // BANKED: peer create is implicitly DENIED here (create requires
-    // kind=="admin"); adding peer later is a CF-created path (study §3c), NOT a
-    // client allow-branch. H4: reads are member-pinned and there is NO messages
-    // collection-group rule. v1.10.0 gate 1: conversation create + the participant
-    // summary update + message create are gated (banned/un-consented denied).
+    // BLOCKS — MEGA-RUN gate A1: blocks/{blockerUid}/list/{blockedUid}, the
+    // peer-DM safety floor. Owner-only EVERYTHING:
+    //   • get/list are owner-only and NOBODY else ever reads a block list — a
+    //     blocked user must not be able to CONFIRM they're blocked (the
+    //     silence IS the shield).
+    //   • create/delete deliberately do NOT require gateOk(): a banned or
+    //     un-consented user may still protect themselves (same class as the
+    //     ungated unvote — safety/cleanup ops never gate).
+    //   • Doc shape is EXACTLY { createdAt: <server time> } — no payload, no
+    //     notes-about-a-person field to moderate.
+    // =========================================================================
+    match /blocks/{blockerUid}/list/{blockedUid} {
+      allow get, list: if isOwner(blockerUid);
+      allow create: if isOwner(blockerUid)
+        && blockedUid != blockerUid
+        && request.resource.data.keys().hasOnly(['createdAt'])
+        && createdNow();
+      allow update: if false; // nothing to change — unblock is delete, re-block is create
+      allow delete: if isOwner(blockerUid);
+    }
+
+    // ---- gate A1 helpers (peer DM / group chat) ----
+    // The OTHER party of a 2-slot participants list. Callers guarantee the
+    // caller is IN the list before using this (short-circuit order matters).
+    function otherOf(parts) {
+      return parts[0] == request.auth.uid ? parts[1] : parts[0];
+    }
+    function blockExists(blocker, blocked) {
+      return exists(/databases/$(database)/documents/blocks/$(blocker)/list/$(blocked));
+    }
+    // EITHER direction blocked -> the pairing is off-limits (2 exists() reads).
+    function blockedEither(a, b) { return blockExists(a, b) || blockExists(b, a); }
+
+    // =========================================================================
+    // DIRECT MESSAGES — admin floor + (gate A1) PEER requests + GROUP chats.
+    //   • kind=='admin' — Blake's floor, EXACTLY the v1.10.x behavior.
+    //   • kind=='peer'  — member-to-member, born state=='request'; only the
+    //     RECIPIENT may flip it 'open'/'declined'; block checks both ways.
+    //   • kind=='group' — SOLO birth (creator only), members added one-per-
+    //     update (a born-with-15 create would blow the 10-access rules cap).
+    // H4: reads are member-pinned and there is NO messages collection-group
+    // rule. v1.10.0 gate 1: conversation create + message create are gated
+    // (banned/un-consented denied); blocking is NOT (see blocks above).
     // =========================================================================
     match /conversations/{convId} {
       allow get, list: if isSignedIn() && request.auth.uid in resource.data.participants;
-      allow create: if isSignedIn()
-        && request.auth.uid in request.resource.data.participants
-        && request.resource.data.participants.size() == 2
-        && request.resource.data.kind == 'admin'
-        && (request.resource.data.participants[0] == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'
-            || request.resource.data.participants[1] == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1')
-        && createdNow()
-        && request.resource.data.state == 'open'
-        && gateOk();
+      allow create: if
+        // (1) kind=='admin' — Blake's floor, byte-compatible with pre-A1.
+        ( isSignedIn()
+          && request.auth.uid in request.resource.data.participants
+          && request.resource.data.participants.size() == 2
+          && request.resource.data.kind == 'admin'
+          && (request.resource.data.participants[0] == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'
+              || request.resource.data.participants[1] == 'G2jGRa14u8bzGAmeBTkvXy8PKmr1')
+          && createdNow()
+          && request.resource.data.state == 'open'
+          && gateOk() )
+        // (2) kind=='peer' (gate A1) — a member-to-member REQUEST. Born
+        // state=='request' (the recipient flips it — update rule below).
+        // creatorUid pins the request SENDER (the state-flip + message rules
+        // need it). Blake is NEVER a peer party (his floor stays kind=='admin';
+        // peers can't mint a second Blake channel). NEITHER direction blocked.
+        || ( isSignedIn()
+          && request.resource.data.kind == 'peer'
+          && request.resource.data.keys().hasOnly(['participants', 'kind', 'state', 'createdAt', 'creatorUid'])
+          && request.resource.data.participants.size() == 2
+          && request.auth.uid in request.resource.data.participants
+          && otherOf(request.resource.data.participants) != request.auth.uid
+          && !('G2jGRa14u8bzGAmeBTkvXy8PKmr1' in request.resource.data.participants)
+          && request.resource.data.creatorUid == request.auth.uid
+          && request.resource.data.state == 'request'
+          && createdNow()
+          && !blockedEither(request.auth.uid, otherOf(request.resource.data.participants))
+          && gateOk() )
+        // (3) kind=='group' (gate A1) — SOLO birth: participants == [creator]
+        // only; members are added one-per-UPDATE below (per-add block checks
+        // stay inside the rules access-call budget). name 1..60 (escaped at
+        // render like every user string). state=='open' at birth.
+        || ( isSignedIn()
+          && request.resource.data.kind == 'group'
+          && request.resource.data.keys().hasOnly(['participants', 'kind', 'state', 'name', 'creatorUid', 'createdAt'])
+          && request.resource.data.participants == [request.auth.uid]
+          && request.resource.data.creatorUid == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1
+          && request.resource.data.name.size() <= 60
+          && request.resource.data.state == 'open'
+          && createdNow()
+          && gateOk() );
       // The conversation SUMMARY (lastMessageAt / lastSenderUid / unread_*) is
       // CF-OWNED (onDmMessageCreate, Admin SDK). The adversarial review showed
       // the old participant-writable summary branch let a member forge
       // lastMessageAt (sort/unread spoof) and write an unbounded lastMessageText
       // (contradicting the no-raw-preview design) — and NO client ever wrote it
       // (the client derives unread from reads/{uid} + treats the CF mirror as
-      // untrusted). So the only client UPDATE is the admin LOCK toggle.
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']);
+      // untrusted). Gate A1 adds three PARTICIPANT branches (peer state flip +
+      // group membership ops) — every one diff-checked to its single field, so
+      // the summary-forgery denial HOLDS on every kind.
+      allow update: if
+        // (A) admin lock toggle — unchanged (the pre-A1 branch).
+        ( isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']) )
+        // (B) PEER state flip — ONLY the recipient (the participant who is NOT
+        // creatorUid) answers a request: 'request'->'open' (accept) or
+        // 'request'->'declined', NOTHING else changing. One-shot: re-flips
+        // from 'open'/'declined' are denied (resource state must be 'request').
+        // No gateOk(): declining is self-protection (must work banned/
+        // unconsented), and accepting opens nothing a banned user can use —
+        // message SENDS stay gated below.
+        || ( isSignedIn()
+          && resource.data.kind == 'peer'
+          && request.auth.uid in resource.data.participants
+          && request.auth.uid != resource.data.creatorUid
+          && resource.data.state == 'request'
+          && request.resource.data.state in ['open', 'declined']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']) )
+        // (C) GROUP: the creator ADDS exactly one member, APPENDED at the end
+        // of the list (the append pin makes the added uid addressable for the
+        // block checks — rules can't pull an element out of a set). Set math
+        // proves: no dups, every old member kept, exactly one new. Cap 15.
+        // Blake MAY be added (groups are community space — purple; his
+        // messages render gold by identity, not by channel). Neither the
+        // added member blocking the creator nor the reverse may hold. Adds
+        // gate on gateOk() (growing a group is a community act — a banned
+        // creator can't grow one); state must be 'open' (a locked group is
+        // frozen).
+        || ( isSignedIn()
+          && resource.data.kind == 'group'
+          && request.auth.uid == resource.data.creatorUid
+          && resource.data.state == 'open'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants'])
+          && request.resource.data.participants is list
+          && request.resource.data.participants.size() == resource.data.participants.size() + 1
+          && request.resource.data.participants.size() <= 15
+          && request.resource.data.participants.toSet().size() == request.resource.data.participants.size()
+          && request.resource.data.participants.toSet().hasAll(resource.data.participants.toSet())
+          && !(request.resource.data.participants[request.resource.data.participants.size() - 1] in resource.data.participants)
+          && !blockedEither(request.auth.uid, request.resource.data.participants[request.resource.data.participants.size() - 1])
+          && gateOk() )
+        // (D) GROUP: any NON-creator participant removes exactly THEMSELVES.
+        // Leaving is ungated + state-free (a banned member of a locked group
+        // must still be able to walk out — the unvote precedent). The creator
+        // cannot leave in v1 (banked: creator hand-off / group delete).
+        // new ⊆ old, |new| == |old|-1, caller ∉ new  ⇒  new == old − {caller}.
+        || ( isSignedIn()
+          && resource.data.kind == 'group'
+          && request.auth.uid in resource.data.participants
+          && request.auth.uid != resource.data.creatorUid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants'])
+          && request.resource.data.participants.size() == resource.data.participants.size() - 1
+          && request.resource.data.participants.size() >= 1
+          && !(request.auth.uid in request.resource.data.participants)
+          && resource.data.participants.toSet().hasAll(request.resource.data.participants.toSet())
+          && request.resource.data.participants.toSet().size() == request.resource.data.participants.size() )
+        // (E) GROUP: the creator removes exactly one OTHER member (the
+        // creator stays: caller ∈ new pins removed != creator). Ungated +
+        // state-free like (D) — removal is a safety op.
+        || ( isSignedIn()
+          && resource.data.kind == 'group'
+          && request.auth.uid == resource.data.creatorUid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants'])
+          && request.resource.data.participants.size() == resource.data.participants.size() - 1
+          && request.resource.data.participants.size() >= 1
+          && request.auth.uid in request.resource.data.participants
+          && resource.data.participants.toSet().hasAll(request.resource.data.participants.toSet())
+          && request.resource.data.participants.toSet().size() == request.resource.data.participants.size() );
       allow delete: if false; // CF cascade (onUserDelete / admin)
 
       match /messages/{msgId} {
         allow get, list: if isSignedIn()
           && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+        // gate A1 — the kind/state SEND gate:
+        //   • state=='open' -> any participant, any kind. Admin convs keep the
+        //     EXACT pre-A1 semantics: 'locked' (the ban-cascade / deletion
+        //     tombstone) still blocks. (The contract's "admin stateless"
+        //     phrasing would have re-opened locked/tombstoned admin convs —
+        //     kept open-required instead; deviation flagged in the gate report.)
+        //   • kind=='peer' && state=='request' -> ONLY the request SENDER
+        //     (creatorUid) may write; the recipient answers by ACCEPTING first.
+        //   • 'declined' / 'locked' -> nobody.
         allow create: if isSignedIn()
           && request.resource.data.senderUid == request.auth.uid
           && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants
-          && get(/databases/$(database)/documents/conversations/$(convId)).data.state == 'open'
+          && ( get(/databases/$(database)/documents/conversations/$(convId)).data.state == 'open'
+               || ( get(/databases/$(database)/documents/conversations/$(convId)).data.kind == 'peer'
+                    && get(/databases/$(database)/documents/conversations/$(convId)).data.state == 'request'
+                    && get(/databases/$(database)/documents/conversations/$(convId)).data.creatorUid == request.auth.uid ) )
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000
+          // gate A1 — OPTIONAL image attachment: ONE own-prefix Storage path +
+          // its thumb, both pinned to uploads/{me}/dm-{convId}/ (the forum
+          // imageRefs scheme — same charset/length caps — with the docId
+          // segment pinned to THIS conversation, so a DM image pointer can't
+          // be re-aimed at another conversation or lifted from a forum post).
+          && (!('imgRef' in request.resource.data)
+              || (request.resource.data.imgRef is string
+                  && request.resource.data.imgRef.matches('uploads/' + request.auth.uid + '/dm-' + convId + '/[A-Za-z0-9_-]{1,120}')))
+          && (!('imgThumbRef' in request.resource.data)
+              || (request.resource.data.imgThumbRef is string
+                  && request.resource.data.imgThumbRef.matches('uploads/' + request.auth.uid + '/dm-' + convId + '/[A-Za-z0-9_-]{1,120}')))
           && createdNow()
           && gateOk();
         allow update, delete: if false; // immutable; moderation via state:"locked" / CF

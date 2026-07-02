@@ -284,3 +284,120 @@ test('muted dm recipient -> unread mirror increments but NO notification is writ
   const dmNotifs = s.docs.map((d) => d.data()).filter((n) => n.type === 'dm');
   assert.equal(dmNotifs.length, 0, 'a muted dm recipient must get NO dm notification');
 });
+
+// =============================================================================
+// MEGA-RUN GATE A1 — peer-DM / group-chat CFs: onConversationCreate (the
+// dm_request ping), the onDmMessageCreate request-state + conv-mute guards,
+// and the DM lane of the detect-and-undo rate limiter.
+// =============================================================================
+
+// 13) peer conversation create -> ONE dm_request ping to the recipient,
+//     server-sourced identity, and DELIBERATELY UNMUTABLE (muted dm +
+//     dm_request prefs must NOT silence it — the request ping is the safety
+//     signal that lets the recipient accept, decline, or block).
+test('A1: peer conversation create -> dm_request ping (server-sourced, unmutable)', async () => {
+  await db.doc('profiles/pA').set({ displayName: 'Peer Sender', photoURL: null });
+  await db.doc('users/pB/notifPrefs/prefs').set({ muted: { dm: true, dm_request: true } });
+  await db.doc('conversations/preq1').set({
+    participants: ['pA', 'pB'], kind: 'peer', state: 'request', creatorUid: 'pA',
+    createdAt: TS.now(), fromDisplayName: 'FORGED Blake', // forged field — must be ignored
+  });
+  const notif = await waitFor(async () => {
+    const s = await db.collection('users/pB/notifications').get();
+    return s.docs.map((d) => d.data()).find((n) => n.type === 'dm_request') || null;
+  });
+  assert.ok(notif, 'the recipient should get a dm_request notification DESPITE the mutes');
+  assert.equal(notif.toUid, 'pB');
+  assert.equal(notif.fromUid, 'pA');
+  assert.equal(notif.fromDisplayName, 'Peer Sender', 'identity must be server-sourced from profiles');
+  assert.equal(notif.targetPath, 'conversations/preq1');
+  assert.equal(notif.read, false);
+});
+
+// 14) messages into a PENDING request are silent: no dm ping, no unread bump
+//     (the dm_request ping already covers the request).
+test('A1: a message while state==request writes NO dm notification and NO unread', async () => {
+  await db.doc('conversations/preq2').set({
+    participants: ['pC', 'pD'], kind: 'peer', state: 'request', creatorUid: 'pC', createdAt: TS.now(),
+  });
+  await db.collection('conversations/preq2/messages').add({ senderUid: 'pC', text: 'nudge', createdAt: FV.serverTimestamp() });
+  await sleep(2500);
+  const s = await db.collection('users/pD/notifications').get();
+  const dmNotifs = s.docs.map((d) => d.data()).filter((n) => n.type === 'dm');
+  assert.equal(dmNotifs.length, 0, 'a request-state message must NOT ping the recipient');
+  const conv = await db.doc('conversations/preq2').get();
+  assert.equal(conv.data().unread_pD, undefined, 'a request-state message must NOT bump unread');
+  assert.equal(conv.data().lastMessageAt, undefined, 'the summary must not move in request state');
+});
+
+// 15) once OPEN, a peer message pings + bumps unread exactly like the admin floor.
+test('A1: an open-state peer message -> dm notification + unread mirror', async () => {
+  await db.doc('profiles/pE').set({ displayName: 'Open Peer', photoURL: null });
+  await db.doc('conversations/popen1').set({
+    participants: ['pE', 'pF'], kind: 'peer', state: 'open', creatorUid: 'pE', createdAt: TS.now(),
+  });
+  await db.collection('conversations/popen1/messages').add({ senderUid: 'pE', text: 'hello', createdAt: FV.serverTimestamp() });
+  const notif = await waitFor(async () => {
+    const s = await db.collection('users/pF/notifications').get();
+    return s.docs.map((d) => d.data()).find((n) => n.type === 'dm' && n.fromUid === 'pE') || null;
+  });
+  assert.ok(notif, 'the peer recipient should get a dm notification');
+  assert.equal(notif.fromDisplayName, 'Open Peer');
+  assert.equal(notif.targetPath, 'conversations/popen1');
+  const conv = await waitFor(async () => {
+    const d = await db.doc('conversations/popen1').get();
+    return typeof d.data().unread_pF === 'number' && d.data().unread_pF >= 1 ? d.data() : null;
+  });
+  assert.ok(conv, 'unread_pF should reach >= 1');
+  assert.equal(conv.lastSenderUid, 'pE');
+});
+
+// 16) per-CONVERSATION mute ('conv:<id>') silences the ping but not the badge.
+test('A1: conv-mute suppresses the dm notification but the unread mirror still bumps', async () => {
+  await db.doc('users/pH/notifPrefs/prefs').set({ muted: { 'conv:convmute1': true } });
+  await db.doc('conversations/convmute1').set({
+    participants: ['pG', 'pH'], kind: 'peer', state: 'open', creatorUid: 'pG', createdAt: TS.now(),
+  });
+  await db.collection('conversations/convmute1/messages').add({ senderUid: 'pG', text: 'muted thread', createdAt: FV.serverTimestamp() });
+  const conv = await waitFor(async () => {
+    const d = await db.doc('conversations/convmute1').get();
+    return typeof d.data().unread_pH === 'number' && d.data().unread_pH >= 1 ? true : null;
+  });
+  assert.ok(conv, 'unread_pH should increment even under a conv-mute');
+  await sleep(2500);
+  const s = await db.collection('users/pH/notifications').get();
+  const dmNotifs = s.docs.map((d) => d.data()).filter((n) => n.type === 'dm');
+  assert.equal(dmNotifs.length, 0, 'a conv-muted recipient must get NO dm notification for that thread');
+});
+
+// 17) rate limit: the 21st rapid DM message by one sender is detected and undone.
+//     DM messages ride their OWN bucket (rateState/<uid>__dm) at chat cadence
+//     (DM_RATE_LIMIT = 20/60s) — a real back-and-forth beats 5/min, so the DM
+//     brake is flood-tier, and it never shares state with the forum bucket.
+test('A1 rate limit: the 21st rapid DM message by one sender is undone (dm bucket, chat cadence)', async () => {
+  await db.doc('conversations/rl1').set({
+    participants: ['rlOther', 'spamdm'], kind: 'peer', state: 'open', creatorUid: 'rlOther', createdAt: TS.now(),
+  });
+  for (let i = 0; i < 21; i++) {
+    await db.doc('conversations/rl1/messages/rlm' + String(i).padStart(2, '0')).set({ senderUid: 'spamdm', text: 'spam ' + i, createdAt: FV.serverTimestamp() });
+  }
+  const settled = await waitFor(async () => {
+    const s = await db.collection('conversations/rl1/messages').get();
+    return s.size === 20 ? true : null;
+  });
+  assert.ok(settled, 'exactly 20 messages should remain (the 21st over-limit create is undone)');
+});
+
+// 18) rate limit: the 6th rapid conversation create by one creator is undone.
+test('A1 rate limit: the 6th rapid conversation create by one creator is undone', async () => {
+  for (let i = 0; i < 6; i++) {
+    await db.doc('conversations/cs' + i).set({
+      participants: ['convspam', 'r' + i], kind: 'peer', state: 'request', creatorUid: 'convspam', createdAt: TS.now(),
+    });
+  }
+  const settled = await waitFor(async () => {
+    const s = await db.collection('conversations').where('creatorUid', '==', 'convspam').get();
+    return s.size === 5 ? true : null;
+  });
+  assert.ok(settled, 'exactly 5 conversations should remain (the 6th over-limit create is undone)');
+});

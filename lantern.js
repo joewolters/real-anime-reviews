@@ -71,6 +71,11 @@ const NOTIF_TYPE_META = {
   // origin (fromUid = ADMIN), so the row wears his gold; lands on the title's
   // secondary modal via targetPath secondary/<anilistId>.
   request_done:        { glyph: '✍', label: 'From Blake',  verb: 'reviewed it — you asked for this one' },
+  // mega-run gate A1 — a stranger's first message is a REQUEST: one quiet ping,
+  // never repeated (the CF pings on conversation create, not per message).
+  // Deliberately ABSENT from the mute strip: a request is the safety signal —
+  // it must not be missable. Lands on the inbox via targetPath conversations/<id>.
+  dm_request:          { glyph: '✉', label: 'Requests',    verb: 'wants to message you' },
 };
 
 async function cleanupOldNotifications(uid, snapDocs) {

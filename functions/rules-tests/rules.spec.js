@@ -971,3 +971,249 @@ test('users doc: get stays PUBLIC until the profiles backfill lands (the reverte
   await assertSucceeds(getDoc(doc(anon(), 'users/alice')));
   await assertSucceeds(getDoc(doc(as(ADMIN), 'users/alice')));
 });
+
+// ============================================================================
+// ============================================================================
+// MEGA-RUN GATE A1 — PEER-DM / GROUP-CHAT security layer.
+// blocks/{blocker}/list/{blocked} (owner-only, ungated, unreadable by the
+// blocked), kind=='peer' conversations (request/open/declined lifecycle,
+// block checks both ways, no Blake), kind=='group' (solo birth, one-per-update
+// membership, cap 15), message send gates by kind+state, and the DM image
+// pointer (imgRef/imgThumbRef pinned to uploads/{me}/dm-{convId}/).
+// ============================================================================
+const peerConv = (creator, other, over = {}) => ({
+  participants: [creator, other], kind: 'peer', state: 'request',
+  creatorUid: creator, createdAt: serverTimestamp(), ...over,
+});
+const groupConv = (creator, over = {}) => ({
+  participants: [creator], kind: 'group', state: 'open', name: 'Club',
+  creatorUid: creator, createdAt: serverTimestamp(), ...over,
+});
+const seedPeer = (id, creator, other, state) => seed((db) => setDoc(doc(db, 'conversations/' + id),
+  { participants: [creator, other], kind: 'peer', state, creatorUid: creator, createdAt: Timestamp.now() }));
+const seedGroup = (id, creator, parts, over = {}) => seed((db) => setDoc(doc(db, 'conversations/' + id),
+  { participants: parts, kind: 'group', state: 'open', name: 'Club', creatorUid: creator, createdAt: Timestamp.now(), ...over }));
+const dmMsg = (sender, over = {}) => ({ senderUid: sender, text: 'hi', createdAt: serverTimestamp(), ...over });
+
+// ---------------- A1: blocks ----------------
+test('A1 blocks: owner create + get + list + delete happy path (exact {createdAt} shape)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'blocks/alice/list/bob'), { createdAt: serverTimestamp() }));
+  await assertSucceeds(getDoc(doc(as('alice'), 'blocks/alice/list/bob')));
+  await assertSucceeds(getDocs(collection(as('alice'), 'blocks/alice/list')));
+  await assertSucceeds(deleteDoc(doc(as('alice'), 'blocks/alice/list/bob')));
+});
+test('A1 blocks: HOSTILE — a stranger cannot create or delete in someone else\'s block list', async () => {
+  await assertFails(setDoc(doc(as('mallory'), 'blocks/alice/list/bob'), { createdAt: serverTimestamp() }));
+  await seed((db) => setDoc(doc(db, 'blocks/alice/list/bob'), { createdAt: Timestamp.now() }));
+  await assertFails(deleteDoc(doc(as('mallory'), 'blocks/alice/list/bob')));
+  await assertFails(deleteDoc(doc(as('bob'), 'blocks/alice/list/bob'))); // the blocked party can't self-unblock
+});
+test('A1 blocks: HOSTILE — the blocked user can NEVER confirm they\'re blocked (get + list denied)', async () => {
+  await seed((db) => setDoc(doc(db, 'blocks/alice/list/bob'), { createdAt: Timestamp.now() }));
+  await assertFails(getDoc(doc(as('bob'), 'blocks/alice/list/bob')));
+  await assertFails(getDocs(collection(as('bob'), 'blocks/alice/list')));
+  await assertFails(getDoc(doc(anon(), 'blocks/alice/list/bob')));
+});
+test('A1 blocks: self-block, extra keys, backdated + missing createdAt are DENIED', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'blocks/alice/list/alice'), { createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('alice'), 'blocks/alice/list/bob'), { createdAt: serverTimestamp(), note: 'why' }));
+  await assertFails(setDoc(doc(as('alice'), 'blocks/alice/list/bob'), { createdAt: Timestamp.fromMillis(0) }));
+  await assertFails(setDoc(doc(as('alice'), 'blocks/alice/list/bob'), {}));
+});
+test('A1 blocks: blocking needs NO gateOk — un-consented AND banned users may still protect themselves', async () => {
+  // 'newbie' has no moderationGate doc (un-consented) — block still lands:
+  await assertSucceeds(setDoc(doc(as('newbie'), 'blocks/newbie/list/mallory'), { createdAt: serverTimestamp() }));
+  await seed((db) => gate(db, 'badguy', { banned: true }));
+  await assertSucceeds(setDoc(doc(as('badguy'), 'blocks/badguy/list/mallory'), { createdAt: serverTimestamp() }));
+  await assertSucceeds(deleteDoc(doc(as('badguy'), 'blocks/badguy/list/mallory')));
+});
+
+// ---------------- A1: peer conversation create ----------------
+test('A1 peer create: happy — 2 parties, born state request, creatorUid = the sender', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'conversations/pc1'), peerConv('alice', 'bob')));
+});
+test('A1 peer create: HOSTILE shapes DENIED (3 parties / creator absent / forged creatorUid / self-pair / smuggled summary key)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc2'),
+    peerConv('alice', 'bob', { participants: ['alice', 'bob', 'carol'] })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc3'),
+    peerConv('alice', 'bob', { participants: ['bob', 'carol'] })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc4'),
+    peerConv('alice', 'bob', { creatorUid: 'bob' })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc5'),
+    peerConv('alice', 'alice')));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc6'),
+    peerConv('alice', 'bob', { unread_bob: 99 })));
+});
+test('A1 peer create: HOSTILE — Blake in a peer pair is DENIED (his floor stays kind admin)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc7'), peerConv('alice', ADMIN)));
+});
+test('A1 peer create: born-open / born-declined are DENIED (a request must be answerable)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc8'), peerConv('alice', 'bob', { state: 'open' })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc9'), peerConv('alice', 'bob', { state: 'declined' })));
+});
+test('A1 peer create: a block in EITHER direction kills the pairing; un-consented creator DENIED', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'blocks/bob/list/alice'), { createdAt: Timestamp.now() });   // bob blocked alice
+    await setDoc(doc(db, 'blocks/alice/list/carol'), { createdAt: Timestamp.now() }); // alice blocked carol
+  });
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pcB1'), peerConv('alice', 'bob')));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pcB2'), peerConv('alice', 'carol')));
+  // no gate doc -> gateOk() holds the DM surface (unlike blocks, which are ungated):
+  await assertFails(setDoc(doc(as('newbie'), 'conversations/pcB3'), peerConv('newbie', 'bob')));
+});
+
+// ---------------- A1: peer state flip ----------------
+test('A1 peer flip: the RECIPIENT accepts (request->open) or declines (request->declined), state-only', async () => {
+  await seedPeer('pf1', 'alice', 'bob', 'request');
+  await assertSucceeds(updateDoc(doc(as('bob'), 'conversations/pf1'), { state: 'open' }));
+  await seedPeer('pf2', 'alice', 'bob', 'request');
+  await assertSucceeds(updateDoc(doc(as('bob'), 'conversations/pf2'), { state: 'declined' }));
+});
+test('A1 peer flip: HOSTILE — the CREATOR cannot self-accept; outsiders cannot flip', async () => {
+  await seedPeer('pf3', 'alice', 'bob', 'request');
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/pf3'), { state: 'open' }));
+  await assertFails(updateDoc(doc(as('carol'), 'conversations/pf3'), { state: 'open' }));
+});
+test('A1 peer flip: one-shot — no re-flip from open/declined, no arbitrary states, state-ONLY diff', async () => {
+  await seedPeer('pf4', 'alice', 'bob', 'open');
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/pf4'), { state: 'declined' })); // accepted is immutable
+  await seedPeer('pf5', 'alice', 'bob', 'declined');
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/pf5'), { state: 'open' }));
+  await seedPeer('pf6', 'alice', 'bob', 'request');
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/pf6'), { state: 'locked' }));
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/pf6'), { state: 'open', creatorUid: 'bob' }));
+});
+test('A1 summary forgery: participants still cannot write unread_*/lastMessageAt on peer OR group', async () => {
+  await seedPeer('sf1', 'alice', 'bob', 'open');
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/sf1'), { unread_alice: 99 }));
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/sf1'), { lastMessageAt: serverTimestamp() }));
+  await seedGroup('sf2', 'alice', ['alice', 'bob']);
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/sf2'), { unread_alice: 5 }));
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/sf2'), { lastMessageAt: serverTimestamp() }));
+});
+
+// ---------------- A1: message send gates by kind + state ----------------
+test('A1 messages: ONLY the request sender may write into a pending request', async () => {
+  await seedPeer('mreq', 'alice', 'bob', 'request');
+  await assertSucceeds(setDoc(doc(as('alice'), 'conversations/mreq/messages/m1'), dmMsg('alice')));
+  await assertFails(setDoc(doc(as('bob'), 'conversations/mreq/messages/m2'), dmMsg('bob')));
+});
+test('A1 messages: NOBODY writes into declined; BOTH parties write into open', async () => {
+  await seedPeer('mdec', 'alice', 'bob', 'declined');
+  await assertFails(setDoc(doc(as('alice'), 'conversations/mdec/messages/m1'), dmMsg('alice')));
+  await assertFails(setDoc(doc(as('bob'), 'conversations/mdec/messages/m2'), dmMsg('bob')));
+  await seedPeer('mopen', 'alice', 'bob', 'open');
+  await assertSucceeds(setDoc(doc(as('alice'), 'conversations/mopen/messages/m1'), dmMsg('alice')));
+  await assertSucceeds(setDoc(doc(as('bob'), 'conversations/mopen/messages/m2'), dmMsg('bob')));
+});
+test('A1 messages: group members write when open; outsiders DENIED; a locked group is frozen', async () => {
+  await seedGroup('mg1', 'alice', ['alice', 'bob']);
+  await assertSucceeds(setDoc(doc(as('bob'), 'conversations/mg1/messages/m1'), dmMsg('bob')));
+  await assertFails(setDoc(doc(as('carol'), 'conversations/mg1/messages/m2'), dmMsg('carol')));
+  await seedGroup('mg2', 'alice', ['alice', 'bob'], { state: 'locked' });
+  await assertFails(setDoc(doc(as('bob'), 'conversations/mg2/messages/m1'), dmMsg('bob')));
+});
+
+// ---------------- A1: the DM image pointer ----------------
+test('A1 message imgRef: own dm-path (+thumb) happy; foreign-uid path DENIED', async () => {
+  await seedPeer('mi1', 'alice', 'bob', 'open');
+  await assertSucceeds(setDoc(doc(as('alice'), 'conversations/mi1/messages/m1'),
+    dmMsg('alice', { imgRef: 'uploads/alice/dm-mi1/img1', imgThumbRef: 'uploads/alice/dm-mi1/img1_thumb' })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/mi1/messages/m2'),
+    dmMsg('alice', { imgRef: 'uploads/bob/dm-mi1/img1' })));
+});
+test('A1 message imgRef: wrong prefix / another conversation / URL / bad thumb are DENIED', async () => {
+  await seedPeer('mi2', 'alice', 'bob', 'open');
+  await assertFails(setDoc(doc(as('alice'), 'conversations/mi2/messages/m1'),
+    dmMsg('alice', { imgRef: 'uploads/alice/somepost/img1' })));        // not the dm- scheme
+  await assertFails(setDoc(doc(as('alice'), 'conversations/mi2/messages/m2'),
+    dmMsg('alice', { imgRef: 'uploads/alice/dm-otherconv/img1' })));    // re-aimed at another conv
+  await assertFails(setDoc(doc(as('alice'), 'conversations/mi2/messages/m3'),
+    dmMsg('alice', { imgRef: 'https://evil.example/x.png' })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/mi2/messages/m4'),
+    dmMsg('alice', { imgThumbRef: 'uploads/bob/dm-mi2/t1' })));
+});
+
+// ---------------- A1: group create ----------------
+test('A1 group create: SOLO birth happy (participants == [creator])', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'conversations/gc1'), groupConv('alice')));
+});
+test('A1 group create: HOSTILE births DENIED (with members / forged creator / born-request / bad name / extra key)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'conversations/gc2'),
+    groupConv('alice', { participants: ['alice', 'bob'] })));           // born-with-members
+  await assertFails(setDoc(doc(as('alice'), 'conversations/gc3'),
+    groupConv('alice', { creatorUid: 'bob' })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/gc4'),
+    groupConv('alice', { state: 'request' })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/gc5'),
+    { participants: ['alice'], kind: 'group', state: 'open', creatorUid: 'alice', createdAt: serverTimestamp() })); // no name
+  await assertFails(setDoc(doc(as('alice'), 'conversations/gc6'),
+    groupConv('alice', { name: 'x'.repeat(61) })));
+  await assertFails(setDoc(doc(as('alice'), 'conversations/gc7'),
+    groupConv('alice', { topic: 'smuggled' })));
+});
+test('A1 group create: un-consented creator is DENIED (gateOk holds the community surface)', async () => {
+  await assertFails(setDoc(doc(as('newbie'), 'conversations/gc8'), groupConv('newbie')));
+});
+
+// ---------------- A1: group membership ops ----------------
+test('A1 group add: the creator appends exactly ONE member — and Blake MAY be added (groups are community space)', async () => {
+  await seedGroup('ga1', 'alice', ['alice']);
+  await assertSucceeds(updateDoc(doc(as('alice'), 'conversations/ga1'), { participants: ['alice', 'bob'] }));
+  await seedGroup('ga2', 'alice', ['alice', 'bob']);
+  await assertSucceeds(updateDoc(doc(as('alice'), 'conversations/ga2'), { participants: ['alice', 'bob', ADMIN] }));
+});
+test('A1 group add: HOSTILE adds DENIED (non-creator / two-at-once / duplicate / swap / locked group)', async () => {
+  await seedGroup('gb1', 'alice', ['alice', 'bob']);
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/gb1'), { participants: ['alice', 'bob', 'carol'] }));
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/gb1'), { participants: ['alice', 'bob', 'carol', 'dave'] }));
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/gb1'), { participants: ['alice', 'bob', 'bob'] }));
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/gb1'), { participants: ['alice', 'carol'] })); // swap, not add
+  await seedGroup('gb2', 'alice', ['alice'], { state: 'locked' });
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/gb2'), { participants: ['alice', 'bob'] }));
+});
+test('A1 group add: the 15-member cap holds (grow to 15 OK; the 16th DENIED)', async () => {
+  const fourteen = ['alice'].concat(Array.from({ length: 13 }, (_, i) => 'm' + i));   // 14 members
+  await seedGroup('gcap1', 'alice', fourteen);
+  await assertSucceeds(updateDoc(doc(as('alice'), 'conversations/gcap1'), { participants: fourteen.concat(['m13']) })); // -> 15
+  const fifteen = fourteen.concat(['m13']);
+  await seedGroup('gcap2', 'alice', fifteen);
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/gcap2'), { participants: fifteen.concat(['m14']) }));     // -> 16
+});
+test('A1 group add: a block in EITHER direction kills the add', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'blocks/dave/list/alice'), { createdAt: Timestamp.now() });  // dave blocked the creator
+    await setDoc(doc(db, 'blocks/alice/list/eve'), { createdAt: Timestamp.now() });   // the creator blocked eve
+  });
+  await seedGroup('gbl1', 'alice', ['alice', 'bob']);
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/gbl1'), { participants: ['alice', 'bob', 'dave'] }));
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/gbl1'), { participants: ['alice', 'bob', 'eve'] }));
+});
+test('A1 group remove: a member removes THEMSELVES; the creator removes ONE OTHER', async () => {
+  await seedGroup('gr1', 'alice', ['alice', 'bob', 'carol']);
+  await assertSucceeds(updateDoc(doc(as('bob'), 'conversations/gr1'), { participants: ['alice', 'carol'] }));
+  await seedGroup('gr2', 'alice', ['alice', 'bob', 'carol']);
+  await assertSucceeds(updateDoc(doc(as('alice'), 'conversations/gr2'), { participants: ['alice', 'carol'] }));
+});
+test('A1 group remove: HOSTILE removals DENIED (creator-leave / member evicting another / evicting the creator / gutting)', async () => {
+  await seedGroup('gr3', 'alice', ['alice', 'bob', 'carol']);
+  await assertFails(updateDoc(doc(as('alice'), 'conversations/gr3'), { participants: ['bob', 'carol'] }));  // creator cannot leave (v1)
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/gr3'), { participants: ['alice', 'bob'] }));    // member evicting carol
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/gr3'), { participants: ['bob', 'carol'] }));    // member evicting the creator
+  await assertFails(updateDoc(doc(as('bob'), 'conversations/gr3'), { participants: ['alice'] }));           // removing two at once
+});
+test('A1 group gating: a banned creator cannot GROW a group; a banned member can still LEAVE', async () => {
+  await seed(async (db) => {
+    await gate(db, 'bcreator', { banned: true });
+    await gate(db, 'bmember', { banned: true });
+  });
+  await seedGroup('gg1', 'bcreator', ['bcreator', 'bob']);
+  await assertFails(updateDoc(doc(as('bcreator'), 'conversations/gg1'), { participants: ['bcreator', 'bob', 'carol'] }));
+  await seedGroup('gg2', 'alice', ['alice', 'bmember']);
+  await assertSucceeds(updateDoc(doc(as('bmember'), 'conversations/gg2'), { participants: ['alice'] }));
+});
+test('A1 group read: participant get OK; non-participant get DENIED (H4 holds for groups)', async () => {
+  await seedGroup('grd1', 'alice', ['alice', 'bob']);
+  await assertSucceeds(getDoc(doc(as('bob'), 'conversations/grd1')));
+  await assertFails(getDoc(doc(as('carol'), 'conversations/grd1')));
+});

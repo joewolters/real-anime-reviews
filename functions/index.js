@@ -482,13 +482,22 @@ exports.onUserDelete = onDocumentDeleted('users/{uid}', async (event) => {
 // The callable pre-block stays the documented escalation if abuse appears.
 async function enforceRateLimit(event, authorField) {
   const data = event.data && typeof event.data.data === 'function' ? event.data.data() : null;
-  const uid = data ? data[authorField] : null;
+  await enforceRateLimitForUid(event, data ? data[authorField] : null);
+}
+// gate A1 — split out so a caller can DERIVE the key uid (conversation creates
+// key to the creator, which admin-floor docs don't carry as a field).
+// opts.bucket gives a surface its OWN rateState doc + threshold: chat cadence
+// is not forum cadence — DM messages ride `rateState/<uid>__dm` at DM_RATE_LIMIT
+// so real conversation never trips the forum brake (which stays 5/60s).
+async function enforceRateLimitForUid(event, uid, opts) {
   if (!uid) return;
-  const stateRef = db.doc('rateState/' + uid);
+  const bucket = opts && opts.bucket ? '__' + opts.bucket : '';
+  const limit = (opts && opts.limit) || RATE_LIMIT;
+  const stateRef = db.doc('rateState/' + uid + bucket);
   const over = await db.runTransaction(async (tx) => {
     const snap = await tx.get(stateRef);
     const prevFlagged = snap.exists && snap.data().flagged === true;
-    const { overLimit, nextState } = rateDecision(snap.exists ? snap.data() : null, Date.now(), RATE_WINDOW_MS, RATE_LIMIT);
+    const { overLimit, nextState } = rateDecision(snap.exists ? snap.data() : null, Date.now(), RATE_WINDOW_MS, limit);
     tx.set(stateRef, Object.assign({}, nextState, { flagged: overLimit || prevFlagged }));
     return overLimit;
   });
@@ -497,6 +506,32 @@ async function enforceRateLimit(event, authorField) {
 
 exports.rateLimitForumThread = onDocumentCreated('forum/{threadId}', (e) => enforceRateLimit(e, 'authorUid'));
 exports.rateLimitComment = onDocumentCreated('comments/{anime}/items/{cid}', (e) => enforceRateLimit(e, 'uid'));
+
+// gate A1 — the SAME detect-and-undo limiter, now watching the DM lane:
+//   • rateLimitDmMessage — every DM/group message, keyed to its senderUid, in
+//     its OWN bucket (`rateState/<uid>__dm`) at chat cadence: a real
+//     back-and-forth easily beats 5 msgs/min, so the DM brake sits at
+//     DM_RATE_LIMIT (20/60s) — flood-stopping, conversation-safe — and never
+//     shares state with the forum/comment bucket.
+const DM_RATE_LIMIT = 20;
+exports.rateLimitDmMessage = onDocumentCreated('conversations/{convId}/messages/{msgId}', async (e) => {
+  const data = e.data && typeof e.data.data === 'function' ? e.data.data() : null;
+  await enforceRateLimitForUid(e, data ? data.senderUid : null, { bucket: 'dm', limit: DM_RATE_LIMIT });
+});
+//   • rateLimitConversationCreate — every conversation birth, keyed to the
+//     CREATOR. CHOICE (stated per the gate-A1 contract): rate-limit ALL
+//     conversation creates, including Blake's admin floor — Blake creating 6
+//     conversations/minute is unrealistic, and a kind-based exemption would be
+//     a costume a hostile client could try on. peer/group docs pin creatorUid
+//     at create; admin-floor docs don't carry one, so those key to the
+//     non-admin party (the member who opened the floor).
+exports.rateLimitConversationCreate = onDocumentCreated('conversations/{convId}', async (e) => {
+  const data = e.data && typeof e.data.data === 'function' ? e.data.data() : null;
+  if (!data) return;
+  const uid = data.creatorUid
+    || (Array.isArray(data.participants) ? data.participants.find((u) => u !== moderation.ADMIN_UID) : null);
+  await enforceRateLimitForUid(e, uid);
+});
 
 // aggregateSuggestionCounts — on each suggestion create, bump the count-only,
 // admin-read rollup keyed by anilistId (+ a snapshot for the admin queue). Raw-
@@ -831,18 +866,64 @@ exports.onForumThreadRemoved = onDocumentWritten('forum/{threadId}', async (even
 });
 
 // =============================================================================
-// v1.10.0 GATE 18 — onDmMessageCreate (the Message-Blake admin floor DM ping).
-// Admin-floor only by RULES (kind=='admin', Blake always a party); this CF is
-// participant-agnostic — it reads the conversation's participants and pings
-// whoever ISN'T the sender — so it serves peer DMs later unchanged.
-// Two CF-owned writes (the rules deny both to clients):
-//   (1) the recipient's notification (type 'dm' — the Lantern renders it purple
-//       client-side), sender identity SERVER-sourced like the vote pings;
-//   (2) an unread mirror on the conversation: unread_{recipientUid} increment +
-//       lastMessageAt, FLAT keys (no dotted nested-map field paths), so the
+// v1.10.0 GATE 18 (+ MEGA-RUN gate A1) — the DM CF pair.
+//
+// onConversationCreate (gate A1) — the 'dm_request' ping. A kind=='peer'
+// conversation is born state=='request' by rules; the RECIPIENT (the
+// non-creator participant) gets ONE dm_request notification with SERVER-
+// sourced sender identity. DELIBERATELY UNMUTABLE — no mute check of any kind:
+// the request ping IS the safety signal (the recipient must learn someone
+// wants in so they can accept, decline, or block; an invisible pending request
+// would be worse than the ping). Message spam into a pending request is
+// already silenced by the request-state guard in onDmMessageCreate below.
+//   • kind=='group': member ADDS are conversation UPDATES — notifying added
+//     members is an update-trigger, OUT of gate A1 (noted for a later gate).
+//   • kind=='admin': the floor has no request phase — nothing to do.
+// =============================================================================
+exports.onConversationCreate = onDocumentCreated('conversations/{convId}', async (event) => {
+  const conv = event.data && typeof event.data.data === 'function' ? event.data.data() : null;
+  if (!conv || conv.kind !== 'peer') return;
+  if (await alreadyProcessed(event.id)) return;
+  const creator = conv.creatorUid;
+  const participants = Array.isArray(conv.participants) ? conv.participants : [];
+  const recipient = participants.find((u) => u !== creator);
+  if (!creator || !recipient) return;
+  const ident = await senderIdentity(creator);
+  await db.collection('users/' + recipient + '/notifications').add({
+    toUid: recipient,
+    fromUid: creator,
+    fromDisplayName: ident.name,   // server-sourced — a forged client name never reaches here
+    fromPhotoURL: ident.photo,
+    type: 'dm_request',
+    verb: 'sent you a message request',
+    targetPath: 'conversations/' + event.params.convId,
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + NOTIF_TTL_DAYS * DAY_MS),
+  });
+});
+
+// =============================================================================
+// onDmMessageCreate — the message ping. Participant-agnostic: reads the
+// conversation and serves admin-floor, peer, AND group (gate A1) unchanged in
+// shape. Two CF-owned writes (the rules deny both to clients):
+//   (1) each recipient's notification (type 'dm' — the Lantern renders it
+//       purple client-side; a Blake-sent one gilds by identity), sender
+//       identity SERVER-sourced like the vote pings;
+//   (2) an unread mirror on the conversation: unread_{recipientUid} increment
+//       + lastMessageAt, FLAT keys (no dotted nested-map field paths), so the
 //       client can badge the conversation without trusting client writes. The
 //       mirror bumps even when the recipient muted 'dm' (a badge isn't a ping).
 //       NO lastMessageText — content stays in the messages, never the metadata.
+// Gate A1 guards:
+//   (a) peer + state=='request' -> NO ping, NO unread: the dm_request ping
+//       (above) already covers the pending request; nudge-spam into an
+//       unaccepted request must put zero pressure on the recipient.
+//   (b) per-CONVERSATION mute — notifPrefs muted['conv:<convId>'] silences
+//       THIS thread's pings (the per-TYPE 'dm' mute stays too). Both silence
+//       only the ping, never the unread badge.
+//   Groups fan out to EVERY non-sender participant (the pre-A1 single-
+//   recipient pick would silently drop all but one member of a group).
 // =============================================================================
 exports.onDmMessageCreate = onDocumentCreated(
   'conversations/{convId}/messages/{msgId}',
@@ -856,43 +937,46 @@ exports.onDmMessageCreate = onDocumentCreated(
     const convRef = db.doc('conversations/' + convId);
     const convSnap = await convRef.get();
     if (!convSnap.exists) return; // message under a vanished conversation
-    const participants = Array.isArray(convSnap.data().participants) ? convSnap.data().participants : [];
+    const conv = convSnap.data();
+    const participants = Array.isArray(conv.participants) ? conv.participants : [];
     if (!participants.includes(senderUid)) return; // defensive: sender must be a party
-    const recipient = participants.find((u) => u !== senderUid);
-    if (!recipient) return;
 
-    // (2) CF-owned conversation summary — unconditional (mute silences the ping
-    // below, not the badge). Flat 'unread_' + uid key; lastSenderUid lets the
-    // client skip self-authored messages when computing the unread badge (no
-    // raw lastMessageText — content stays in the messages). merge so nothing
-    // else moves. The client treats this whole summary as untrusted telemetry.
-    await convRef.set(
-      { ['unread_' + recipient]: FieldValue.increment(1), lastMessageAt: FieldValue.serverTimestamp(), lastSenderUid: senderUid },
-      { merge: true }
-    ).catch(() => {}); // conversation may have been deleted mid-flight
+    // gate A1 guard (a): a message into a PENDING peer request is silent.
+    if (conv.kind === 'peer' && conv.state === 'request') return;
 
-    // mute-at-source: a muted 'dm' type writes NO notification doc at all.
-    const prefsSnap = await db.doc('users/' + recipient + '/notifPrefs/prefs').get();
-    if (prefsSnap.exists && isMuted(prefsSnap.data(), 'dm')) return;
+    const recipients = participants.filter((u) => u !== senderUid);
+    if (!recipients.length) return;
 
-    // (1) the Lantern ping — sender identity SERVER-sourced (NEVER the message's
-    // own client fields), same notification shape as the vote pings. NOTE: today
-    // every 'dm' is admin-floor, so fromUid is always Blake → the Lantern renders
-    // it GOLD (notifIsBlake), which is heart-correct (a message FROM Blake is a
-    // Blake surface). A future PEER 'dm' (fromUid != Blake) renders PURPLE.
+    // (2) CF-owned conversation summary — unconditional (mutes silence the
+    // pings below, not the badge). One merge write, an unread_ bump per
+    // recipient; lastSenderUid lets the client skip self-authored messages
+    // when computing the unread badge. The client treats this whole summary
+    // as untrusted telemetry.
+    const summary = { lastMessageAt: FieldValue.serverTimestamp(), lastSenderUid: senderUid };
+    recipients.forEach((r) => { summary['unread_' + r] = FieldValue.increment(1); });
+    await convRef.set(summary, { merge: true }).catch(() => {}); // conversation may have been deleted mid-flight
+
+    // (1) the Lantern pings — sender identity SERVER-sourced ONCE (never the
+    // message's own client fields), then per-recipient mute checks:
+    // per-TYPE ('dm') and per-CONVERSATION ('conv:<convId>', gate A1 guard b).
     const ident = await senderIdentity(senderUid);
-    await db.collection('users/' + recipient + '/notifications').add({
-      toUid: recipient,
-      fromUid: senderUid,
-      fromDisplayName: ident.name,
-      fromPhotoURL: ident.photo,
-      type: 'dm',
-      verb: 'sent you a message',
-      targetPath: 'conversations/' + convId,
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
-      expiresAt: Timestamp.fromMillis(Date.now() + NOTIF_TTL_DAYS * DAY_MS),
-    });
+    for (const recipient of recipients) {
+      const prefsSnap = await db.doc('users/' + recipient + '/notifPrefs/prefs').get();
+      const prefs = prefsSnap.exists ? prefsSnap.data() : null;
+      if (isMuted(prefs, 'dm') || isMuted(prefs, 'conv:' + convId)) continue;
+      await db.collection('users/' + recipient + '/notifications').add({
+        toUid: recipient,
+        fromUid: senderUid,
+        fromDisplayName: ident.name,
+        fromPhotoURL: ident.photo,
+        type: 'dm',
+        verb: 'sent you a message',
+        targetPath: 'conversations/' + convId,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + NOTIF_TTL_DAYS * DAY_MS),
+      });
+    }
   }
 );
 
