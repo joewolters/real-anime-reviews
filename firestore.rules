@@ -755,6 +755,15 @@ service cloud.firestore {
                || ( get(/databases/$(database)/documents/conversations/$(convId)).data.kind == 'peer'
                     && get(/databases/$(database)/documents/conversations/$(convId)).data.state == 'request'
                     && get(/databases/$(database)/documents/conversations/$(convId)).data.creatorUid == request.auth.uid ) )
+          // gate A5 (adversarial HIGH) — a BLOCK severs an OPEN peer thread.
+          // The A1 create-time block check couldn't stop messages into an
+          // already-open conversation: a blocked party kept full send + ping
+          // access, and neither side could lock an open peer conv. Every peer
+          // message now re-checks the block both ways (2 exists()), so blocking
+          // freezes the thread for both. (Groups can't loop-check members in
+          // rules; their block story is client-side hiding + leave + report.)
+          && ( get(/databases/$(database)/documents/conversations/$(convId)).data.kind != 'peer'
+               || !blockedEither(request.auth.uid, otherOf(get(/databases/$(database)/documents/conversations/$(convId)).data.participants)) )
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 2000
           // gate A4 — an image IS a message: text may be EMPTY when imgRef

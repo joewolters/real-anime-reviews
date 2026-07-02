@@ -1,24 +1,26 @@
 <!-- author: Code | date: 2026-07-02 -->
-# THE MEGA-RUN — Report 2: picks locked in, the messaging foundations are BUILT (gates A0 + A1). Sandbox-staged; nothing touches prod before your single go.
+# THE MEGA-RUN — Report 3: **MILESTONE A COMPLETE** — messaging is fully built, sealed, and adversarially hardened. Sandbox-staged; nothing on prod before your one go.
 
-Your picks are running the show now: **one mega-cutover, one final smoke** — so everything below was verified by my own hands at full discipline (test tracks, live walks, the works), and you won't be asked to look at anything until the one comprehensive smoke at the end. The door-line copy approval rides that final smoke.
+The whole messaging era is done and self-verified: peer DMs, group chats, images that stay sealed until you accept, the unified Letter Room inbox — and a five-lens adversarial panel that found four real safety holes I then closed. You'll see all of it in the one final smoke; nothing here needs your eyes yet.
 
-## Gate A0 — the notification engine is ONE machine now
-The site had two copies of the Lantern (index and account pages) that had already drifted apart — one was missing a mute control the other had. Every DM feature this run adds would have needed the same work done twice, drifting further. Now there's one module; the index page plugs its page-specific behavior in through five small hooks. ~450 duplicated lines deleted, four new structural tests pin it so the twin can never come back, and I walked it live: the gold ember lights for your pings, the who-liked drill-down works, closing the center puts the light out.
+## What's live in the sandbox now (gates A0–A5)
+- **The Letter Room** — one inbox for everyone. The old "DM Blake" hero card and the locked "People" box are gone; Blake is just a normal conversation whose row and letters glow gold. A **✉ Message** button sits on every member's profile. Strangers knock first: a first message arrives as a **request** you accept, decline (silently — they never know), or block in one tap.
+- **Group chats** — anyone makes one, names it, adds people they've actually exchanged letters with, up to 15; anyone can leave; every message is reportable; mute is per-conversation.
+- **Images in letters** — attach one picture; it rides the same safe pipeline (verified email, size caps, metadata stripped). In a **request**, the recipient sees only a neutral "🖼 accept to view" chip — the image genuinely never loads for them until they accept.
 
-## Gate A1 — the safety layer peer DMs stand on (built BEFORE any chat UI exists)
-The design study found the "blocks" system the old notes claimed was live **never existed** — so it exists now, and it's tested from 30 angles:
-- **Blocking is invisible and unconditional.** A blocked person can never confirm they're blocked (they just can't start a conversation — the copy will say "can't message this member", nothing more). Blocking works even for banned members — self-protection is never gated.
-- **Strangers knock first.** A first message creates a REQUEST: you get exactly one quiet notification (deliberately impossible to mute — it's the safety signal), the sender can't generate more pings no matter how much they type, and only the recipient can open or silently decline it.
-- **Groups are born small and grow carefully.** A group starts with just its creator; members are added one at a time (each add re-checks blocks both ways), capped at 15, anyone can leave, and nobody can forge the unread counters.
-- **Message plumbing:** send-gates (nothing writes into a declined or locked conversation), the image-path shape for DM pictures (gate A4 rides on it), per-conversation mute, and rate brakes — conversation-creation spam stops at 5/min while real chat gets its own 20-messages-a-minute lane (the build agent's first cut shared the forum brake, which would have deleted normal conversation — caught and fixed in-gate).
-- The dm_request notification type was a ONE-line, one-place addition — the exact thing gate A0 was for.
+## The adversarial panel (the part that matters)
+Five independent skeptics attacked the whole messaging diff. They confirmed **four real holes** — all now fixed and re-tested:
+1. **Blocking didn't fully work.** You could block someone, but if you already had an open conversation, they could keep messaging you. **Fixed** at the security-rule level: a block now freezes the thread for both sides, and blocked people vanish from your inbox.
+2. **The image seal was only skin-deep.** A determined recipient could have pulled a request-image out before accepting. **Fixed**: the seal is now enforced on the server — a request-image is unreadable to the recipient until they accept, not just hidden in the app.
+3. **Someone could spam you with repeat requests.** **Fixed**: all requests from one person now collapse into a single notification, and the rate limiter caps the rest.
+4. **Group blocking gap** (medium): someone could put two people who blocked each other in one group. Rules can't police that fully, so blocked members' messages are now hidden from you in groups, and you can always leave — I've documented this honestly as the bounded residual.
+The heart and injection lenses came back **clean** — no gold leaked onto members, and every new piece of member text is safely escaped.
 
-## Test state (all green, floors raised)
-Playwright **233** · rules **187** (+30 — the whole security layer) · functions **77** · CF triggers **73** (+6) · e2e **16**. Commits `05c9663` + `efb5a17`, pushed.
+## Proof it works (self-verified)
+A new always-on test suite drives the real cycles on the sandbox — a member knocking, being accepted, replying; a decline staying silent; a group forming and a letter fanning out; an image sealed then unsealed through the real pipeline — plus 900+ unit/rules/function checks. **All green: 239 UI · 195 rules · 77 functions · 75 triggers · 20 end-to-end.**
 
 ## What's next (no input needed)
-**Gate A2 — THE LETTER ROOM:** the unified inbox itself. The DM-Blake hero card and the locked "People" placeholder die; in their place: a conversation list with a Requests strip, your row in gold among them, the thread view, a ✉ Message button on every profile sheet, and the mute toggle per conversation. Then groups UI (A3), images with the sealed-until-accept chip (A4), and the messaging adversarial panel (A5). Milestone reports keep landing here as each batch closes.
+**Milestone B** — your curator tools: per-anime status labels on cards ("Blake is watching", "on Blake's list"), a curator admin panel to set them plus private notes, and an "anime info request" button on sparse pages. Then Milestone C (discovery + the yellow-tape community reviews + Wrapped) and Milestone D (the responsive overhaul). Reports keep landing here.
 
 ## One-liner reply
-Your picks are locked and the run is moving: the notification engine is one machine instead of two drifting copies, and the entire safety layer for peer DMs — blocks that really exist now, knock-first requests that can't spam you, careful little groups, chat-speed rate brakes — is built, 36 new tests green, before a single pixel of chat UI goes up; the Letter Room is next, and nothing reaches the live site until your one big smoke and your single go.
+The messaging era is fully built and then some — peer DMs, groups, and sealed images inside a unified inbox where you're a gold row among friends — and a five-lens adversarial panel caught four real safety holes (a block that didn't fully block, an image seal that was only skin-deep, a request-spam gap, and a group-block edge) which are all now closed and re-tested; everything's green at 239/195/77/75/20, and the whole thing waits in the sandbox for your one smoke and your one word.

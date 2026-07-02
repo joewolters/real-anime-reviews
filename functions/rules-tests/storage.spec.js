@@ -120,6 +120,34 @@ test('storage: public single-object read is allowed (anon get)', async () => {
   await seedSt((st) => uploadBytes(ref(st, 'uploads/alice/t1/img1'), BYTES, JPEG));
   await assertSucceeds(getBytes(ref(stAnon(), 'uploads/alice/t1/img1')));
 });
+
+// ---------------- gate A5: the DM-image SEAL (server-side) ----------------
+// A DM image at uploads/{sender}/dm-{convId}/{id} must NOT be world-readable
+// (the client "accept to view" chip is cosmetic — a hostile recipient reads
+// imgRef straight off the message doc). Sealed to participants + non-request.
+test('storage A5: a DM-request image is SEALED — sender reads own, recipient + anon + stranger DENIED', async () => {
+  await seedFs((db) => setDoc(doc(db, 'conversations/convREQ'),
+    { participants: ['alice', 'bob'], kind: 'peer', state: 'request', creatorUid: 'alice' }));
+  await seedSt((st) => uploadBytes(ref(st, 'uploads/alice/dm-convREQ/img1'), BYTES, JPEG));
+  await assertSucceeds(getBytes(ref(stAs('alice'), 'uploads/alice/dm-convREQ/img1')));   // the sender sees own
+  await assertFails(getBytes(ref(stAs('bob'), 'uploads/alice/dm-convREQ/img1')));        // the recipient CANNOT pre-accept
+  await assertFails(getBytes(ref(stAs('carol'), 'uploads/alice/dm-convREQ/img1')));      // a non-participant NEVER
+  await assertFails(getBytes(ref(stAnon(), 'uploads/alice/dm-convREQ/img1')));           // anon NEVER (was public)
+});
+test('storage A5: once the letter is OPEN, the recipient reads; a stranger still cannot', async () => {
+  await seedFs((db) => setDoc(doc(db, 'conversations/convOPEN'),
+    { participants: ['alice', 'bob'], kind: 'peer', state: 'open', creatorUid: 'alice' }));
+  await seedSt((st) => uploadBytes(ref(st, 'uploads/alice/dm-convOPEN/img1'), BYTES, JPEG));
+  await assertSucceeds(getBytes(ref(stAs('bob'), 'uploads/alice/dm-convOPEN/img1')));    // accepted → unsealed
+  await assertFails(getBytes(ref(stAs('carol'), 'uploads/alice/dm-convOPEN/img1')));     // still not a participant
+});
+test('storage A5: a group image reads for members (groups are always open); non-members DENIED', async () => {
+  await seedFs((db) => setDoc(doc(db, 'conversations/convGRP'),
+    { participants: ['alice', 'bob', 'carol'], kind: 'group', state: 'open', creatorUid: 'alice', name: 'g' }));
+  await seedSt((st) => uploadBytes(ref(st, 'uploads/alice/dm-convGRP/img1'), BYTES, JPEG));
+  await assertSucceeds(getBytes(ref(stAs('bob'), 'uploads/alice/dm-convGRP/img1')));
+  await assertFails(getBytes(ref(stAs('dave'), 'uploads/alice/dm-convGRP/img1')));       // not in the group
+});
 test('storage: HOSTILE list/enumerate is DENIED — even for the owner, even admin', async () => {
   await seedSt((st) => uploadBytes(ref(st, 'uploads/alice/t1/img1'), BYTES, JPEG));
   await assertFails(listAll(ref(stAnon(), 'uploads/alice/t1')));

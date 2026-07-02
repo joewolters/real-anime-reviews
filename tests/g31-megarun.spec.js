@@ -93,6 +93,20 @@ test('gA4: sealed-until-accept — a request-state image NEVER fetches its URL (
   expect(js).toContain("'uploads/' + user.uid + '/dm-' + convId + '/'");
 });
 
+// ── gate A5 — the adversarial-panel fixes (client half) ──────────────────────
+test('gA5: blocking severs the peer thread + hides blocked group letters (source pins)', async ({ page }) => {
+  const js = await (await page.request.get('/account.js')).text();
+  // my live block list drives the filters
+  expect(js).toMatch(/onSnapshot\(collection\(db, 'blocks', user\.uid, 'list'\)/);
+  // a blocked peer conversation vanishes from my list
+  expect(js).toMatch(/c\.kind === 'peer' && iBlocked\(otherUid\(c\)\)/);
+  // a blocked member's group letters don't render
+  expect(js).toContain('if (isGroup && !mine && iBlocked(m.senderUid)) return;');
+  // ANY permission-denied send stays generic (a blocked member can't confirm it)
+  expect(js).toContain("can't receive your letter");
+  expect(js).toContain("permission-denied");
+});
+
 test('gA0: the live lantern still exposes the pure model on index (behavior anchor)', async ({ page }) => {
   await page.goto('/index.html');
   await page.waitForFunction(() => typeof window.lanternModel === 'function', null, { timeout: 15000 });

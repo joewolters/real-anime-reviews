@@ -83,6 +83,33 @@ service firebase.storage {
 
     function emailVerified() { return request.auth.token.email_verified == true; }
 
+    // ── mega-run gate A5 (adversarial HIGH) — the DM-IMAGE SEAL, server-side.
+    // A2/A4 route private-channel images to uploads/{uid}/dm-{convId}/{id} so
+    // they ride the SAME pipeline. But `allow get: if true` below made every
+    // such object WORLD-READABLE: a hostile recipient reads imgRef straight off
+    // the message doc and calls getDownloadURL, bypassing the client's
+    // "accept to view" chip entirely. The seal is now enforced here.
+    //   • non-participants: NEVER (was public).
+    //   • the sender (folder owner): always (their own upload).
+    //   • a participant recipient: only once the letter is NOT a pending
+    //     request (peer requests stay sealed until accepted; groups + the admin
+    //     floor are 'open', so members read freely).
+    // convId is the Firestore auto-id after the 'dm-' prefix (auto-ids are
+    // alphanumeric — no hyphens — so split('dm-')[1] is exact). A get on a
+    // missing conversation ERRORS -> DENY (safe). Rides the existing
+    // firebaserules.firestoreServiceAgent grant (same as gateOk's cross-read —
+    // no NEW grant needed).
+    function isDmDoc(docId) { return docId.matches('dm-[A-Za-z0-9_-]{1,116}'); }
+    function dmConv(docId) {
+      return firestore.get(/databases/(default)/documents/conversations/$(docId.split('dm-')[1])).data;
+    }
+    function dmImageReadable(uid, docId) {
+      return isSignedIn()
+        && ( request.auth.uid == uid
+             || ( request.auth.uid in dmConv(docId).participants
+                  && dmConv(docId).state != 'request' ) );
+    }
+
     // Default-deny EVERYTHING. Only the matches below open anything.
     match /{allPaths=**} {
       allow read, write: if false;
@@ -118,8 +145,10 @@ service firebase.storage {
     // surface-agnostic on purpose: every public composer rides the SAME gates
     // below. NO image DMs, ever, without their own threat model (gate-0 §3d).
     match /uploads/{uid}/{docId}/{imageId} {
-      // Public single-object read (the site renders these); list stays denied.
-      allow get: if true;
+      // Public single-object read for PUBLIC content (forum/review/profile
+      // images the site renders); DM images (dm-{convId} folder) are sealed to
+      // participants + non-request state (gate A5). List stays denied.
+      allow get: if !isDmDoc(docId) || dmImageReadable(uid, docId);
       allow list: if false;
 
       allow create: if isSignedIn()

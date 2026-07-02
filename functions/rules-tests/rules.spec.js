@@ -1124,6 +1124,18 @@ test('A1 messages: group members write when open; outsiders DENIED; a locked gro
   await seedGroup('mg2', 'alice', ['alice', 'bob'], { state: 'locked' });
   await assertFails(setDoc(doc(as('bob'), 'conversations/mg2/messages/m1'), dmMsg('bob')));
 });
+// gate A5 (adversarial HIGH) — a BLOCK severs an OPEN peer thread at the
+// message level (the A1 create-time block check couldn't reach an already-open
+// conversation). Either direction of block freezes BOTH senders.
+test('A5 messages: a block freezes an OPEN peer thread for BOTH parties', async () => {
+  await seedPeer('mblk', 'alice', 'bob', 'open');
+  // sanity: open + unblocked, both write
+  await assertSucceeds(setDoc(doc(as('alice'), 'conversations/mblk/messages/m0'), dmMsg('alice')));
+  // alice blocks bob (a block doc in EITHER direction)
+  await seed((db) => setDoc(doc(db, 'blocks/alice/list/bob'), { createdAt: Timestamp.now() }));
+  await assertFails(setDoc(doc(as('bob'), 'conversations/mblk/messages/m1'), dmMsg('bob')));    // the blocked party can't reach in
+  await assertFails(setDoc(doc(as('alice'), 'conversations/mblk/messages/m2'), dmMsg('alice'))); // and the blocker's own thread is closed too
+});
 
 // ---------------- A1: the DM image pointer ----------------
 test('A1 message imgRef: own dm-path (+thumb) happy; foreign-uid path DENIED', async () => {

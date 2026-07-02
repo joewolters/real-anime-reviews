@@ -889,7 +889,15 @@ exports.onConversationCreate = onDocumentCreated('conversations/{convId}', async
   const recipient = participants.find((u) => u !== creator);
   if (!creator || !recipient) return;
   const ident = await senderIdentity(creator);
-  await db.collection('users/' + recipient + '/notifications').add({
+  // gate A5 (adversarial HIGH) — DETERMINISTIC ping id per SENDER. The old
+  // .add() minted a fresh dm_request per peer-conv create; a hostile client
+  // scripting convs (or re-requesting after a decline) flooded the recipient's
+  // Lantern with unmutable pings. A `dmreq_<creator>` doc-id collapses every
+  // request from one sender into ONE re-lit row (the profile_like pl_<liker>
+  // pattern) — request VOLUME is bounded by rateLimitConversationCreate, ping
+  // COUNT is now bounded to one-per-sender. targetPath points at the NEWEST
+  // request conv so the row still opens the live letter.
+  await db.doc('users/' + recipient + '/notifications/dmreq_' + creator).set({
     toUid: recipient,
     fromUid: creator,
     fromDisplayName: ident.name,   // server-sourced — a forged client name never reaches here

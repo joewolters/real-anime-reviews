@@ -314,6 +314,28 @@ test('A1: peer conversation create -> dm_request ping (server-sourced, unmutable
   assert.equal(notif.read, false);
 });
 
+// 13b) gate A5 (adversarial HIGH) — the dm_request ping is DEDUPED per sender:
+//      a second request conv from the SAME sender re-lights the ONE
+//      dmreq_<creator> row, never floods (a re-request-after-decline / SDK
+//      spam vector). Bounds ping COUNT to one-per-sender.
+test('A5: repeated requests from one sender collapse into ONE dmreq_<creator> ping', async () => {
+  await db.doc('profiles/pFlood').set({ displayName: 'Flooder', photoURL: null });
+  await db.doc('conversations/pf1').set({
+    participants: ['pFlood', 'pVictim'], kind: 'peer', state: 'request', creatorUid: 'pFlood', createdAt: TS.now(),
+  });
+  await waitFor(async () => (await db.doc('users/pVictim/notifications/dmreq_pFlood').get()).exists ? true : null);
+  // a second request conv (re-request) from the same sender
+  await db.doc('conversations/pf2').set({
+    participants: ['pFlood', 'pVictim'], kind: 'peer', state: 'request', creatorUid: 'pFlood', createdAt: TS.now(),
+  });
+  await new Promise((r) => setTimeout(r, 2500));
+  const all = await db.collection('users/pVictim/notifications').get();
+  const reqs = all.docs.map((d) => d.data()).filter((n) => n.type === 'dm_request' && n.fromUid === 'pFlood');
+  assert.equal(reqs.length, 1, 'a re-request must NOT mint a second dm_request ping');
+  // and the single ping points at the NEWEST request conv (still opens a live letter)
+  assert.equal(reqs[0].targetPath, 'conversations/pf2');
+});
+
 // 14) messages into a PENDING request are silent: no dm ping, no unread bump
 //     (the dm_request ping already covers the request).
 test('A1: a message while state==request writes NO dm notification and NO unread', async () => {

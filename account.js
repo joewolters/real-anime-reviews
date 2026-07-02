@@ -2243,14 +2243,28 @@ function initInbox(user) {
     if (openConvId) paintMuteBtn();
   }, () => {});
 
+  // gate A5 — MY block list (the people I've blocked). Live so a fresh block
+  // hides its peer conversation immediately, and group letters from a blocked
+  // member stop rendering (the rules can't loop group members — this is the
+  // client half; leave + report remain).
+  let myBlocks = new Set();
+  onSnapshot(collection(db, 'blocks', user.uid, 'list'), (snap) => {
+    myBlocks = new Set(); snap.forEach((d) => myBlocks.add(d.id));
+    if (!threadEl.hidden && openConvId) { const c = convos.find((x) => x.id === openConvId); if (c) openConv(openConvId); }
+    paintList();
+  }, () => {});
+  const iBlocked = (uid) => myBlocks.has(uid);
+
   // A conversation is an INCOMING request when I'm the recipient (not the
   // creator) and it still waits. My own sent requests (state 'request' OR
   // 'declined' — indistinguishable, see the header comment) list as pending.
-  const isIncomingRequest = (c) => c.kind === 'peer' && c.state === 'request' && c.creatorUid !== user.uid;
+  const isIncomingRequest = (c) => c.kind === 'peer' && c.state === 'request' && c.creatorUid !== user.uid && !iBlocked(otherUid(c));
   const isMyPendingRequest = (c) => c.kind === 'peer' && (c.state === 'request' || c.state === 'declined') && c.creatorUid === user.uid;
   // Declined requests VANISH from the recipient's list (declining closes the
-  // door quietly; the doc stays for the rules' no-re-request memory).
-  const hiddenForMe = (c) => c.kind === 'peer' && c.state === 'declined' && c.creatorUid !== user.uid;
+  // door quietly; the doc stays for the rules' no-re-request memory). A peer
+  // conversation with someone I've blocked also vanishes (the block severs it).
+  const hiddenForMe = (c) => (c.kind === 'peer' && c.state === 'declined' && c.creatorUid !== user.uid)
+    || (c.kind === 'peer' && iBlocked(otherUid(c)));
 
   // unread = a NEWER message I haven't read AND it wasn't mine (adversarial
   // review, MED: my own send bumped lastMessageAt and could flag my own row
@@ -2359,6 +2373,10 @@ function initInbox(user) {
       snap.forEach((d) => {
         const m = d.data() || {};
         const mine = m.senderUid === user.uid;
+        // gate A5 (adversarial MED) — a blocked member's group letters don't
+        // render for me (the rules can't loop group members; this is the
+        // client half of the group-block story — leave + report remain).
+        if (isGroup && !mine && iBlocked(m.senderUid)) return;
         // round-3 adversarial (heart): gold keys on IDENTITY — a letter wears
         // Blake's gold edge when BLAKE sent it, on every viewer's screen.
         const fromBlake = m.senderUid === RAR_ADMIN_UID;
@@ -2525,9 +2543,11 @@ function initInbox(user) {
       }
     } catch (err) {
       console.error('DM send failed', err);
-      // a denied peer-create may mean a block in either direction — the copy
-      // stays GENERIC by design (a blocked member must never learn they are)
-      sayStatus(wasCompose && err && String(err.code || '').indexOf('permission-denied') !== -1
+      // ANY permission-denied on a peer send may mean a block in either
+      // direction (a first request OR a message into a since-blocked open
+      // thread — gate A5) — the copy stays GENERIC by design so a blocked
+      // member can never confirm it.
+      sayStatus(err && String(err.code || '').indexOf('permission-denied') !== -1
         ? "This member can't receive your letter right now."
         : 'Could not send: ' + friendlyError(err, { kind: image ? 'upload' : 'post', user }));
       sendBtn.disabled = false;
@@ -2722,9 +2742,15 @@ function initInbox(user) {
   const membersBtn = document.getElementById('inbox-members');
   let membersPanel = null;
   function contactsOf() {
-    // people I've exchanged letters with (non-group convs), minus myself
+    // people I have an OPEN peer conversation with — a real relationship, not a
+    // pending or declined request (those aren't contacts) and not the Blake
+    // floor (kind 'admin'). Also drops anyone I've blocked.
     const seen = new Set();
-    convos.forEach((c) => { if (c.kind !== 'group') { const o = otherUid(c); if (o) seen.add(o); } });
+    convos.forEach((c) => {
+      if (c.kind !== 'peer' || c.state !== 'open') return;
+      const o = otherUid(c);
+      if (o && o !== RAR_ADMIN_UID && !iBlocked(o)) seen.add(o);
+    });
     return [...seen];
   }
   async function paintMembersPanel() {
