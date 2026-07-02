@@ -151,7 +151,7 @@ function markDirty() {
 async function saveQuotes() {
   if (!serverUp) { await probeServer(); }   // re-check: the initial probe may not have resolved before a fast click
   if (!serverUp) {
-    $('q-status').textContent = 'Local server not running — start `npm run mode1`.';
+    $('q-status').textContent = 'Saving needs Mode 1 — double-click MODE 1 on the desktop, then try again.';
     return;
   }
   const quotes = readRows();

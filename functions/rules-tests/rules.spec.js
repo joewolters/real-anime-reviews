@@ -723,8 +723,15 @@ test('like: happy create on someone else profile', async () => {
 test('like: HOSTILE self-like is DENIED (no inflation)', async () => {
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice/likes/alice'), like('alice')));
 });
-test('like: HOSTILE like on BLAKE\'s own profile is DENIED (the heart never wears a community count)', async () => {
-  await assertFails(setDoc(doc(as('alice'), 'profiles/' + ADMIN + '/likes/alice'), like('alice')));
+// v1.10.2R — Blake's explicit call (2026-07-02: "I want my account to be
+// appreicated.") REVERSED the old like-on-Blake denial: the carve-out now
+// extends to his account like any member's. Self-like stays denied for him
+// too (likerUid != uid — no inflation, same as everyone).
+test('like: a member CAN appreciate BLAKE now (his 2026-07-02 call — the carve-out extends to him)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'profiles/' + ADMIN + '/likes/alice'), like('alice')));
+});
+test('like: HOSTILE — BLAKE self-liking his own profile stays DENIED (no inflation for anyone)', async () => {
+  await assertFails(setDoc(doc(as(ADMIN), 'profiles/' + ADMIN + '/likes/' + ADMIN), like(ADMIN)));
 });
 test('like: HOSTILE non-1 values are DENIED (no dislikes on people, no weighting)', async () => {
   await assertFails(setDoc(doc(as('bob'), 'profiles/alice/likes/bob'),

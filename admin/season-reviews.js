@@ -169,7 +169,7 @@ async function saveReview() {
   if (!editorId) return;
   const body = reviewMarkdown().trim();
   if (!body) { $('sr-editor-status').textContent = 'Write something first.'; return; }
-  if (!serverUp) { $('sr-editor-status').textContent = 'Local server not running — start `npm run mode1`.'; return; }
+  if (!serverUp) { $('sr-editor-status').textContent = 'Saving needs Mode 1 — double-click MODE 1 on the desktop, then try again.'; return; }
   $('sr-editor-save').disabled = true;
   $('sr-editor-status').textContent = 'Saving…';
   try {

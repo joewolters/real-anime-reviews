@@ -25,14 +25,14 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
 
 // (?v= wired at the v1.10.0 cutover — these once-bare imports cache-bust now;
 // bump-version.js carries the import targets.)
-import { initLantern } from './lantern.js?v=1.10.1';
+import { initLantern } from './lantern.js?v=1.10.2';
 // round 2 — the ONE consent implementation (shared with script.js): the
 // account page accepts the community rules IN PLACE (Blake: "its dumb for
 // users to have to go comment to accept the terms").
-import { ensureConsent, peekConsent } from './consent.js?v=1.10.1';
-import { openCropper } from './cropper.js?v=1.10.1';   // round 4 — frame-it crop/reposition (item 2)
+import { ensureConsent, peekConsent } from './consent.js?v=1.10.2';
+import { openCropper } from './cropper.js?v=1.10.2';   // round 4 — frame-it crop/reposition (item 2)
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError } from './friendly-errors.js?v=1.10.1';
+import { friendlyError } from './friendly-errors.js?v=1.10.2';
 
 
 const $  = (sel) => document.querySelector(sel);
@@ -617,9 +617,9 @@ async function renderViewerMode(user) {
   const host = document.getElementById('acct-viewer');
   if (!host) return;
   host.innerHTML = '<p class="muted">Opening the public view…</p>';
-  // v1.10.2 (Blake's 3rd ask — supersedes the no-sheet heart spec): the admin
-  // gets THE CREATOR SHEET now. His Public view renders it like any member's
-  // preview (he wanted to SEE it), his Studio save may mint his profiles doc
+  // v1.10.2R (Blake's clarified spec, 2026-07-02): his Public view renders a
+  // MEMBER sheet — his own Studio choices, nothing imposed — with the CREATOR
+  // kicker as the ONE difference. His Studio save may mint his profiles doc
   // (the rules' reserved-name denylist carries an admin carve-out), and the
   // sheet stays count-free — gold is never counted.
   const isCreator = user.uid === RAR_ADMIN_UID;
@@ -627,7 +627,7 @@ async function renderViewerMode(user) {
   try { const s = await getDoc(doc(db, 'profiles', user.uid)); p = s.exists() ? s.data() : null; } catch (_) {}
   if (!p) {
     host.innerHTML = isCreator
-      ? '<div class="acct-viewer-empty acct-viewer-empty--creator">🏮 <b>Your Creator sheet is ready to wear.</b><br>Save your profile once and every member who clicks your name meets it — gold kicker, the Den Keeper frame, and the path home to the Den.</div>'
+      ? '<div class="acct-viewer-empty acct-viewer-empty--creator">🏮 <b>Your sheet is ready to wear.</b><br>Save your profile once and every member who clicks your name meets it — your own look, with CREATOR where their MEMBER goes.</div>'
       : '<div class="acct-viewer-empty">🌙 Nothing public yet — save your profile once and the room can see you.</div>';
     return;
   }
@@ -655,12 +655,11 @@ async function renderViewerMode(user) {
     ? `<div class="profile-bio">${window.renderMarkdownInline ? window.renderMarkdownInline(String(p.bio)) : esc(p.bio)}</div>` : '';
   // viewers ALWAYS see the Appreciate row (the live sheet coerces a missing
   // count to 0) — the preview must too, or a fresh profile under-promises.
-  // v1.10.2 HEART: except the CREATOR — gold is never counted; his preview
-  // carries the gold kicker + the Den path instead, exactly like the live sheet.
+  // v1.10.2R (Blake: "I want my account to be appreicated."): HIS preview
+  // carries the row too — full parity, the count purple like everyone's.
   const likesCount = (typeof p.likesCount === 'number') ? p.likesCount : 0;
-  const likes = isCreator ? '' : `<div class="profile-like-row"><button type="button" class="profile-like-btn" disabled title="Viewers can appreciate you here"><span class="profile-like-heart" aria-hidden="true">♥</span><span class="profile-like-verb">Appreciate</span></button><span class="profile-like-count" aria-label="appreciations">${Math.max(0, likesCount)}</span></div>`;
-  const denPath = isCreator ? '<button type="button" class="profile-den-path" disabled><span class="den-path-glyph" aria-hidden="true">🏮</span> Visit the Den <span class="jp-mini">隠れ家へ</span><span class="den-path-arrow" aria-hidden="true">→</span></button>' : '';
-  const vFrame = (typeof p.frame === 'string' && frameKeyValid(p.frame)) ? p.frame : (isCreator ? 'blake' : '');
+  const likes = `<div class="profile-like-row"><button type="button" class="profile-like-btn" disabled title="Viewers can appreciate you here"><span class="profile-like-heart" aria-hidden="true">♥</span><span class="profile-like-verb">Appreciate</span></button><span class="profile-like-count" aria-label="appreciations">${Math.max(0, likesCount)}</span></div>`;
+  const vFrame = (typeof p.frame === 'string' && frameKeyValid(p.frame)) ? p.frame : '';
   host.innerHTML = `<section class="profile-sheet acct-viewer-sheet${isCreator ? ' is-creator' : ''}"${accent ? ` data-accent="${esc(accent)}"` : ''}${p.accentGlow === true ? ' data-accent-glow' : ''}${vFrame ? ` data-frame="${esc(vFrame)}"` : ''}>
       <span class="pf-accent-ring" aria-hidden="true"></span>
       <div class="profile-kicker">${isCreator ? 'CREATOR <span class="jp-mini">創り手</span>' : 'MEMBER <span class="jp-mini">旅人</span>'}
@@ -671,10 +670,9 @@ async function renderViewerMode(user) {
           <h2 class="profile-name">${name}</h2>
           ${status}${since}${tags}${bio}${likes}
         </div>
-        ${denPath}
         <div class="profile-featured-slot"></div>
         <div class="acct-viewer-foot">
-          <span class="fld-hint">${isCreator ? 'your threads load on the live page · the Den path takes them home' : 'their threads · reviews load on the live page · viewers can also report a profile'}</span>
+          <span class="fld-hint">${isCreator ? 'your threads · reviews load on the live page' : 'their threads · reviews load on the live page · viewers can also report a profile'}</span>
           <button type="button" class="linky" id="acct-viewer-live">Open the live page ↗</button>
         </div>
       </div>

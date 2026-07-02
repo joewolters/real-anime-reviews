@@ -646,14 +646,13 @@ service cloud.firestore {
       match /likes/{likerUid} {
         allow get: if isOwner(likerUid);
         allow list: if false;
-        // dream-profile HEART (adversarial MED): a like cannot land on BLAKE's
-        // own profile — the carve-out count is community→community only; minting
-        // it onto the one identity that must never carry a community count (even
-        // though his name routes to the Den and the count is invisible on-site)
-        // would still publish a likesCount on profiles/<ADMIN_UID> via raw read.
+        // v1.10.2R (Blake's explicit call, 2026-07-02: "I want my account to
+        // be appreicated."): the old like-on-Blake denial is GONE — the
+        // profile-Appreciate carve-out extends to his account like any
+        // member's. (The g19 never-count-his-identity rationale was
+        // superseded by his own word; the count renders purple, never gold.)
         allow create: if isOwner(likerUid)
           && likerUid != uid
-          && uid != 'G2jGRa14u8bzGAmeBTkvXy8PKmr1'
           && request.resource.data.keys().hasOnly(['uid', 'value', 'updatedAt'])
           && request.resource.data.uid == likerUid
           && request.resource.data.value == 1

@@ -89,7 +89,10 @@ test.describe('Mode 1 server (dry-run integration)', () => {
   test.beforeAll(async () => {
     server = spawn(process.execPath, ['scripts/mode1-server.js'], {
       cwd: ROOT,
-      env: { ...process.env, MODE1_PORT: PORT },
+      // MODE1_NO_OPEN: the server auto-opens a browser on ready (v1.10.2R) —
+      // a test run must never spawn real tabs (belt; the piped-stdio isTTY
+      // guard in openBrowser is the suspenders).
+      env: { ...process.env, MODE1_PORT: PORT, MODE1_NO_OPEN: '1' },
       stdio: 'ignore',
     });
     server.on('error', (e) => { throw e; });

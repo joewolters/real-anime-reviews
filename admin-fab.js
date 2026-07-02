@@ -12,45 +12,47 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/fi
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 
+// hrefs MUST be root-absolute — the FAB also mounts on /admin/* pages (new-anime),
+// where a relative 'admin/…' href doubles to /admin/admin/… → 404.
 const ADMIN_MENU_ITEMS = [
   {
     label: 'Add Anime',
     jp: '新規追加',
-    href: 'admin/new-anime.html',
+    href: '/admin/new-anime.html',
   },
   {
     label: 'Edit a Review',
     jp: '編集',
-    href: 'admin/edit.html',
+    href: '/admin/edit.html',
   },
   {
     label: 'Season Reviews',
     jp: '感想',
-    href: 'admin/season-reviews.html',
+    href: '/admin/season-reviews.html',
   },
   {
     label: 'Quotes',
     jp: '名言',
-    href: 'admin/quotes.html',
+    href: '/admin/quotes.html',
   },
   {
     label: 'Suggestion Queue',
     jp: '提案',
-    href: 'admin/suggestions.html',
+    href: '/admin/suggestions.html',
   },
   {
     label: 'Reports',
     jp: '通報',
-    href: 'admin/reports.html',
+    href: '/admin/reports.html',
   },
   {
     label: 'Inbox',
     jp: '受信箱',
-    href: 'admin/inbox.html',
+    href: '/admin/inbox.html',
   },
   // Future entries land here:
-  // { label: 'Site Health', jp: '監視', href: 'admin/health.html' },
-  // { label: 'Audit', jp: '監査', href: 'admin/audit.html' },
+  // { label: 'Site Health', jp: '監視', href: '/admin/health.html' },
+  // { label: 'Audit', jp: '監査', href: '/admin/audit.html' },
 ];
 
 function buildFab() {

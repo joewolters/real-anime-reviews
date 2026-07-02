@@ -1085,13 +1085,16 @@ async function callChatApi() {
     state.chatMessages = state.chatMessages.filter(m => !m.pending);
     if (!res.ok) {
       const b = await res.json().catch(() => ({}));
+      // v1.10.2 — friendly copy only (mirrors admin/chat-drawer.js): raw server
+      // errors / status codes never reach the drawer. A JSON error body means
+      // Mode 1 answered and hit a snag; anything else means it isn't reachable.
       let msg;
-      if (res.status === 503) {
-        msg = /API_KEY/i.test(b.error || '')
-          ? 'ANTHROPIC_API_KEY not configured in .env. Add it and restart Mode 1.'
-          : (b.error || 'AI server unavailable.');
+      if (/API_KEY/i.test(b.error || '')) {
+        msg = 'The assistant key is missing from .env on the desktop — add it, then restart Mode 1.';
+      } else if (b.error) {
+        msg = 'The assistant hit a snag — please try again.';
       } else {
-        msg = b.error || `AI request failed (${res.status}).`;
+        msg = 'The assistant needs Mode 1 running on the desktop — double-click MODE 1, then try again.';
       }
       state.chatMessages.push({ role: 'assistant', error: true, retry: true, content: msg });
     } else {
@@ -1100,7 +1103,7 @@ async function callChatApi() {
     }
   } catch (_) {
     state.chatMessages = state.chatMessages.filter(m => !m.pending);
-    state.chatMessages.push({ role: 'assistant', error: true, retry: true, content: 'AI server not running — start Mode 1 (npm run mode1).' });
+    state.chatMessages.push({ role: 'assistant', error: true, retry: true, content: 'The assistant needs Mode 1 running on the desktop — double-click MODE 1, then try again.' });
   }
   renderChatThread();
   saveChatHistory();
@@ -1443,6 +1446,22 @@ async function init() {
       $('generate-btn').textContent = 'Generate Excel Row';
       $('server-mode-label').textContent = 'Paste workflow · ペースト';
       $('server-mode-label').className = 'admin-section-aside remote';
+    }
+
+    // v1.10.2 — say the mode out loud. Off-localhost detectServerMode() silently
+    // forces 'remote', which reads as "the page is broken" without a notice.
+    const modeNotice = $('mode-notice');
+    if (modeNotice) {
+      if (state.serverMode === 'local') {
+        modeNotice.textContent = 'Mode 1 connected — full Submit & Ship available.';
+        modeNotice.className = 'mode-notice local';
+      } else {
+        // copy is location-neutral (adversarial LOW): 'remote' also happens on
+        // localhost sandboxes where the Mode-1 probe fails — never claim "live site"
+        modeNotice.textContent = 'Generate mode — the Mode 1 desktop server is not connected. To submit and ship directly, use Mode 1 (double-click MODE 1), then reload.';
+        modeNotice.className = 'mode-notice';
+      }
+      modeNotice.hidden = false;
     }
 
     $('title-input').focus();

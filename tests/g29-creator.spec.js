@@ -1,9 +1,9 @@
-// g29 — v1.10.2: THE CREATOR SHEET + the account-page nav.
-// HEART pins: the gold dressing is .is-creator-scoped — a MEMBER sheet can
-// never wear it; the Creator sheet never carries the Appreciate count.
+// g29 — v1.10.2R: THE CREATOR KICKER + the account-page nav.
+// Blake's clarified spec (2026-07-02): his sheet is a MEMBER sheet — his own
+// Studio choices, nothing imposed — and the ONE difference is the CREATOR
+// kicker. HEART pins: the gold kicker is .is-creator-scoped (a MEMBER sheet
+// can never wear it); the Creator sheet never carries the Appreciate count.
 const { test, expect } = require('@playwright/test');
-
-const GOLD = ['255, 213, 74', '#ffd54a'];
 
 test('g29 (heart): the gold kicker + den path are .is-creator-ONLY — member sheets stay purple', async ({ page }) => {
   await page.goto('/index.html');
@@ -23,21 +23,27 @@ test('g29 (heart): the gold kicker + den path are .is-creator-ONLY — member sh
   expect(m.member).not.toBe('rgb(255, 213, 74)');     // members never
 });
 
-test('g29 (heart): the den-path button is gold and its CSS exists once', async ({ page }) => {
+test('g29 (heart): gold is the KICKER only — the old showcase dressing is gone', async ({ page }) => {
   const css = await (await page.request.get('/style.css')).text();
-  const block = css.slice(css.indexOf('.profile-den-path {'), css.indexOf('.profile-den-path {') + 600);
-  expect(block).toContain('#ffd54a');
-  // the gold stays scoped to the creator machinery — the accent palette is untouched
+  // v1.10.2R: the gold door + imposed gold dressing left with the old spec
+  expect(css).not.toContain('.profile-den-path');
+  expect(css).not.toContain('.is-creator .profile-avatar');
+  expect(css).not.toContain('.is-creator .profile-name');
+  // the gold stays scoped to the creator kicker — the accent palette is untouched
   expect(css).not.toMatch(/data-accent="[^"]*"\]\s*\{[^}]*ffd54a/);
 });
 
-test('g29: the Creator branch renders no Appreciate row and no report flag (source pins)', async ({ page }) => {
+test('g29: the Creator sheet is a MEMBER sheet + kicker — no flag, Appreciate ON, nothing imposed (source pins)', async ({ page }) => {
   const src = await (await page.request.get('/script.js')).text();
-  expect(src).toContain("return 'creator'");                              // the decision
-  expect(src).toMatch(/likesCount: isCreator \? undefined/);              // gold is never counted
+  expect(src).toContain("return 'creator'");                              // never a tombstone
+  expect(src).not.toMatch(/likesCount: isCreator/);                       // Appreciate rides his sheet (Blake's 2026-07-02 call)
   expect(src).toMatch(/isCreator \? '' : '<button type="button" class="profile-report"/); // no flag on the owner
-  expect(src).toContain('profile-den-path');                              // the path home exists
-  expect(src).toContain('function goHomeToDen');                          // and closes every layer
+  // v1.10.2R (Blake's clarified spec): member parity — nothing imposed
+  expect(src).not.toContain('profile-den-path');                          // the gold door is gone
+  expect(src).not.toContain('goHomeToDen');
+  expect(src).not.toMatch(/setAttribute\('data-frame', 'blake'\)/);       // no forced frame default
+  expect(src).toMatch(/class="profile-act-chip" data-act="reviews"/);     // Reviews tab for everyone
+  expect(src).not.toMatch(/isCreator \? '' : '<button type="button" class="profile-act-chip"/);
 });
 
 test('g29: the account page carries the FULL tool set (View All · Random · Filter)', async ({ page }) => {

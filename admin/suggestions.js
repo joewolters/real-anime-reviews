@@ -18,11 +18,16 @@
 // that title's 'anime:al:<id>' Tavern threads onto the picked catalog slug via
 // the migrateRequestThread callable — the threads GAIN the gold verdict rail.
 //
+// v1.10.2 addition: clicking a row (or Enter/Space on its body) expands an
+// inline detail panel — submitter name resolved via the inbox.js nameFor
+// pattern (Anonymous when the doc predates gate 20.5), the FULL untruncated
+// reason, the full submitted date, and any dropdown extras the doc carries.
+//
 // Author: Code | date: 2026-06-02 | v1.6.11 Suggestion Box (gate 3b UI overhaul)
 
 import { auth, db, functions } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, query, orderBy, getDocs, doc, updateDoc, deleteDoc, serverTimestamp }
+import { collection, query, orderBy, getDoc, getDocs, doc, updateDoc, deleteDoc, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
 
@@ -60,6 +65,38 @@ function formatTimestamp(ts) {
   if (diffH < 24) return Math.floor(diffH) + 'h ago';
   const d = new Date(ms);
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+}
+
+// Full timestamp for the expanded detail panel (v1.10.2) — the meta strip
+// keeps the two-tier relative form above.
+function formatFullDate(ts) {
+  if (!ts) return '';
+  const ms = ts.toMillis ? ts.toMillis() : ts;
+  return new Date(ms).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+}
+
+// Resolve a submitter's display name: profiles/{uid} first, then users/{uid}
+// displayName || username (the inbox.js nameFor pattern — both reads are
+// world-readable per rules). Cached per uid; results land via textContent.
+const nameCache = new Map();     // uid -> display name (or null when unresolvable)
+async function nameFor(uid) {
+  if (!uid) return null;
+  if (nameCache.has(uid)) return nameCache.get(uid);
+  let name = null;
+  try {
+    const p = await getDoc(doc(db, 'profiles', uid));
+    if (p.exists()) { const d = p.data() || {}; name = d.displayName || null; }
+  } catch (_e) { /* fall through to users */ }
+  if (!name) {
+    try {
+      const u = await getDoc(doc(db, 'users', uid));
+      if (u.exists()) { const d = u.data() || {}; name = d.displayName || d.username || null; }
+    } catch (_e) { /* unresolvable — the short uid carries the line */ }
+  }
+  nameCache.set(uid, name);
+  return name;
 }
 
 // ---- Skeleton shimmer (gate 3b Cowork addition #2) -------------------------
@@ -153,9 +190,30 @@ function renderRow(snap, index) {
     ? `<button data-action="reply" class="secondary" title="Message this member in the Inbox">Reply</button>`
     : '';
 
+  // v1.10.2 — expandable detail panel: who sent it (nameFor resolves async on
+  // first open; docs without submitterUid predate gate 20.5 → Anonymous), the
+  // FULL untruncated reason, the full submitted date, plus any dropdown extras
+  // the doc carries. Everything escapes before it lands in the markup.
+  const detailId = `detail-${escapeAttr(id)}`;
+  const detailPairs = [];
+  detailPairs.push(['From', submitterUid
+    ? `<span class="detail-submitter" data-uid="${escapeAttr(submitterUid)}">Loading…</span>`
+    : 'Anonymous']);
+  if (data.reason) detailPairs.push(['Request', escapeHtml(data.reason)]);
+  const fullDate = formatFullDate(data.submittedAt);
+  if (fullDate) detailPairs.push(['Submitted', escapeHtml(fullDate)]);
+  if (data.englishTitle) detailPairs.push(['English', escapeHtml(data.englishTitle)]);
+  if (data.romajiTitle) detailPairs.push(['Romaji', escapeHtml(data.romajiTitle)]);
+  if (data.format) detailPairs.push(['Format', escapeHtml(data.format)]);
+  if (data.year) detailPairs.push(['Year', escapeHtml(String(data.year))]);
+  if (data.anilistId) detailPairs.push(['AniList ID', escapeHtml(String(data.anilistId))]);
+  const detailHtml = `<div class="row-detail" id="${detailId}" hidden>
+      ${detailPairs.map(([k, v]) => `<span class="detail-label">${k}</span><span class="detail-value">${v}</span>`).join('\n      ')}
+    </div>`;
+
   return `<li class="${rowClass}" style="--i: ${index}" data-doc-id="${escapeHtml(id)}" data-title="${escapeHtml(data.title)}"${anilistIdAttr}${submitterAttr}>
     ${coverHtml}
-    <div class="row-body">
+    <div class="row-body" role="button" tabindex="0" aria-expanded="false" aria-controls="${detailId}" title="Show full details">
       <h3 class="title">${escapeHtml(data.title)}</h3>
       ${reasonHtml}
       <div class="meta">
@@ -171,6 +229,7 @@ function renderRow(snap, index) {
       ${replyHtml}
       <button data-action="delete" class="danger">Delete</button>
     </div>
+    ${detailHtml}
   </li>`;
 }
 
@@ -427,6 +486,30 @@ function moveToReviewed(row) {
   setTimeout(finish, 320);                // reduced-motion / no-transition fallback
 }
 
+// ---- Row expand/collapse (v1.10.2) ------------------------------------------
+
+// Toggles a row's inline detail panel. aria-expanded lives on .row-body (the
+// role="button" toggle); the submitter's display name resolves lazily on the
+// first open — via textContent, so a member-controlled name has no HTML path.
+function toggleDetail(row) {
+  const body = row.querySelector('.row-body');
+  const detail = row.querySelector('.row-detail');
+  if (!body || !detail) return;
+  const expand = detail.hidden;
+  detail.hidden = !expand;
+  body.setAttribute('aria-expanded', String(expand));
+  row.classList.toggle('expanded', expand);
+  if (expand) {
+    const nameEl = detail.querySelector('.detail-submitter[data-uid]');
+    if (nameEl && !nameEl.dataset.resolved) {
+      nameEl.dataset.resolved = '1';
+      nameFor(nameEl.dataset.uid).then((name) => {
+        nameEl.textContent = name || ('Member ' + nameEl.dataset.uid.slice(0, 6) + '…');
+      });
+    }
+  }
+}
+
 // ---- Event delegation ------------------------------------------------------
 
 function wireListClicks() {
@@ -434,7 +517,16 @@ function wireListClicks() {
   // (a row physically moves between the two lists on Mark Reviewed).
   $('suggestions-queue').addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-action]');
-    if (!btn) return;
+    if (!btn) {
+      // v1.10.2 — a click on the row itself (not its action buttons, not inside
+      // the open detail panel — text there should be selectable) toggles detail.
+      const clickedRow = e.target.closest('li.suggestion-row');
+      if (clickedRow && !clickedRow.classList.contains('skeleton') &&
+          !e.target.closest('.actions') && !e.target.closest('.row-detail')) {
+        toggleDetail(clickedRow);
+      }
+      return;
+    }
     const row = btn.closest('li.suggestion-row');
     if (!row) return;
     const docId = row.dataset.docId;
@@ -521,6 +613,17 @@ function wireListClicks() {
         btn.disabled = false;
       }
     }
+  });
+
+  // v1.10.2 — keyboard path for the row toggle (.row-body is role="button" +
+  // tabindex="0"; Enter/Space activate it like a real button).
+  $('suggestions-queue').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const body = e.target.closest('.row-body[role="button"]');
+    if (!body) return;
+    e.preventDefault();                     // Space must not scroll the page
+    const row = body.closest('li.suggestion-row');
+    if (row) toggleDetail(row);
   });
 }
 

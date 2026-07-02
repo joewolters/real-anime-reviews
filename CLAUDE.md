@@ -151,13 +151,14 @@ Always run `firebase` commands from inside `Current Version/` (it needs `firebas
 
 ## Version bump checklist
 
-When shipping a new version, every one of these strings updates:
+When shipping a new version, every one of these strings updates. `npm run bump -- X.Y.Z` (`scripts/bump-version.js`) automates the string sweep — run it, then verify; its TARGETS list must gain any NEW versioned surface in the same gate that adds one (the stale-TARGETS trap bit at the v1.10.0 cutover dry-run).
 
-- `index.html` line 8: `window.APP_VERSION="X.Y.Z"`
-- `index.html` lines ~24-26: `style.css?v=X.Y.Z` (×2) and `mobile.css?v=X.Y.Z`
-- `index.html` line ~169: changelog widget static fallback `<span ...>vX.Y.Z</span>`
-- `account.html` line 7: `window.APP_VERSION="X.Y.Z"`
-- `account.html` lines ~23-25: `style.css?v=X.Y.Z` (×2) and `mobile.css?v=X.Y.Z`
+- `index.html` line ~36: `window.APP_VERSION="X.Y.Z"`
+- `index.html` lines ~59-62: `style.css?v=X.Y.Z` (×2) and `mobile.css?v=X.Y.Z`
+- `index.html` line ~238: changelog widget static fallback `<span ...>vX.Y.Z</span>`
+- `account.html` line ~14: `window.APP_VERSION="X.Y.Z"`
+- `account.html` lines ~30-33: `style.css?v=X.Y.Z` (×2) and `mobile.css?v=X.Y.Z`
+- versioned module imports (`script.js` / `account.js` `?v=` specifiers, frames.css/frames.js)
 - `CHANGELOG.md`: new entry at top with `<!-- author: ... -->` marker
 - `ROADMAP.md` "Current state" section: `running vX.Y.Z`
 

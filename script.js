@@ -21,9 +21,9 @@ import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=1.10.1';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=1.10.2';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError } from './friendly-errors.js?v=1.10.1';
+import { friendlyError } from './friendly-errors.js?v=1.10.2';
 
 // Wrap in IIFE to avoid leaking globals
 (() => {
@@ -5721,9 +5721,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
   });
 
   // PURE — where does a profile click land? (exposed for the heart spec)
-  // v1.10.2 (Blake's 3rd ask): his name opens THE CREATOR SHEET now — the one
-  // gold sheet — instead of silently routing home. The sheet itself carries
-  // the "Visit the Den" path, so the old promise survives with a face on it.
+  // v1.10.2R (Blake's clarified spec, 2026-07-02): his name opens HIS profile
+  // sheet — full member parity, his own Studio choices, nothing imposed. The
+  // ONE difference is the CREATOR kicker. 'creator' here only guards him from
+  // the suspended/former tombstones — the render path is a member's.
   function profileDecision(uid, prof, userDoc) {
     if (uid === NOTIF_ADMIN_UID) return 'creator';              // Blake IS the site
     if (prof && prof.isBanned === true) return 'suspended';
@@ -5767,23 +5768,14 @@ function openInlineCommentEditor(editBtn, itemRef) {
       try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
     }
   }
-  // v1.10.2 — the relocated "his name leads home" promise: every layer comes
-  // down (the gate-20.8 close-all discipline) and the page rests at the Den.
-  // Lives on the CREATOR SHEET's gold path button now, not on the name click.
-  function goHomeToDen() {
-    closeProfilePage();
-    try { if (typeof closeHubDrawer === 'function') closeHubDrawer(); } catch (_) {}
-    try { if (typeof tertiaryEl !== 'undefined' && tertiaryEl && !tertiaryEl.hidden) closeTertiary(); } catch (_) {}
-    try { if (typeof secondaryEl !== 'undefined' && secondaryEl && !secondaryEl.hidden) closeSecondaryModal(); } catch (_) {}
-    try { if (typeof modal !== 'undefined' && modal && modal.classList.contains('active') && typeof closeModal === 'function') closeModal(); } catch (_) {}
-    try { window.scrollTo({ top: 0 }); } catch (_) {}
-  }
   async function openProfilePage(uid) {
     if (typeof uid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) return;
-    // v1.10.2 (Blake's 3rd ask): his name opens THE CREATOR SHEET — the one
-    // gold sheet on the site (kicker CREATOR 創り手, the Den Keeper frame by
-    // default, NO Appreciate row — gold is never counted, NO report flag on
-    // the owner) with the gold "Visit the Den" path keeping the old promise.
+    // v1.10.2R (Blake's clarified spec): his sheet is a MEMBER sheet — his own
+    // Studio choices, nothing imposed. The ONE difference: the CREATOR 創り手
+    // kicker (gold — his mark) where members wear MEMBER 旅人. The one guard
+    // that stays: NO report flag on the owner. The Appreciate row rides his
+    // sheet like any member's (his 2026-07-02 call: "I want my account to be
+    // appreicated." — the count is the purple carve-out, never gold).
     const isCreator = uid === NOTIF_ADMIN_UID;
     closeProfilePage();
     const layer = document.createElement('div');
@@ -5824,14 +5816,14 @@ function openInlineCommentEditor(editBtn, itemRef) {
           status: prof.status, tags: prof.tags,
           // the carve-out count renders only for a REAL profiles doc (the CF's
           // count update() needs the doc; legacy users/ rows show no like row).
-          // v1.10.2 HEART: the CREATOR sheet NEVER carries the count — gold is
-          // never counted (likesCount stays undefined → the row never renders;
-          // the rules already deny likes landing on his profile).
-          likesCount: isCreator ? undefined : ((typeof prof.likesCount === 'number') ? prof.likesCount : 0) }
+          // v1.10.2R (Blake: "I want my account to be appreicated."): the
+          // Appreciate row rides HIS sheet like any member's — the rules'
+          // like-on-Blake denial is gone; the count stays community purple.
+          likesCount: (typeof prof.likesCount === 'number') ? prof.likesCount : 0 }
       : userDoc
         ? { name: (userDoc.username || userDoc.displayName), photo: userDoc.photoURL, bio: '', sinceMs: 0 }
-        // v1.10.2: the Creator before his first Studio save — both docs may be
-        // absent; the sheet still stands (name only; the gold does the talking).
+        // v1.10.2R: the Creator before his first Studio save — both docs may be
+        // absent; the sheet still stands (name only — Blake is never a tombstone).
         : { name: 'Blake', photo: '', bio: '', sinceMs: 0 };
 
     // accent — curated palette only (the palette holds no gold/yellow, so a
@@ -5853,9 +5845,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
       const fdef = fl.find((f) => f && f.key === prof.frame);
       if (fdef && (!fdef.blakeOnly || uid === NOTIF_ADMIN_UID)) sheet.setAttribute('data-frame', prof.frame);
     }
-    // v1.10.2 — the Creator sheet wears THE DEN KEEPER by default (his frame,
-    // rules-locked to his account; he can still pick another in the Studio).
-    if (isCreator && sheet && !sheet.getAttribute('data-frame')) sheet.setAttribute('data-frame', 'blake');
+    // v1.10.2R: no forced frame — his SAVED frame renders like any member's
+    // (the display-validate above already admits 'blake' on his sheet only).
     // gate 20.5 (item 9) — the accent ring layer on the live sheet too
     if (sheet && !sheet.querySelector('.pf-accent-ring')) {
       const ring = document.createElement('span');
@@ -5917,26 +5908,17 @@ function openInlineCommentEditor(editBtn, itemRef) {
     }
 
     bodyEl.innerHTML = profileHeaderHtml(ident)
-      // v1.10.2 — the gold path home: his name used to BE this jump; now the
-      // sheet carries it (the old promise, with a face on the door).
-      + (isCreator ? '<button type="button" class="profile-den-path">'
-          + '<span class="den-path-glyph" aria-hidden="true">🏮</span> Visit the Den '
-          + '<span class="jp-mini">隠れ家へ</span><span class="den-path-arrow" aria-hidden="true">→</span></button>' : '')
       + '<div class="profile-featured-slot"></div>'
       + '<div class="profile-collections-slot"></div>'
       + '<div class="profile-acts" role="tablist" aria-label="Their activity">'
       +   '<button type="button" class="profile-act-chip is-active" data-act="threads" role="tab" aria-selected="true">Threads</button>'
-      // v1.10.2: the Creator carries no Reviews tab — his reviews ARE the site
-      // (the Den path above is that door); members keep Threads + Reviews.
-      +   (isCreator ? '' : '<button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>')
+      // v1.10.2R: everyone carries Threads + Reviews — the Creator included
+      // (member parity; his community reviews list like anyone's).
+      +   '<button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>'
       // gate 20.7 (Blake item 3): Comments + Replies tabs removed from the
       // PUBLIC profile — "No need to go that deep." Threads + Reviews stay.
       + '</div>'
       + '<ul class="profile-list" data-profile-acts><li class="hub-loading">Looking…</li></ul>';
-    if (isCreator) {
-      const denBtn = bodyEl.querySelector('.profile-den-path');
-      if (denBtn) denBtn.addEventListener('click', goHomeToDen);
-    }
 
     // the heart carve-out — wire the like. Signed-out invites sign-in; the
     // owner's own button hides (rules deny self-likes — don't render the tease);

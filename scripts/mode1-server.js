@@ -818,12 +818,50 @@ app.put('/api/quotes', (req, res) => {
   }
 });
 
+// Open Blake's default browser to the admin form. Windows: `cmd /c start "" <url>`
+// (the empty "" fills start's window-title slot so the URL isn't eaten as a title).
+// Guarded by MODE1_NO_OPEN so Playwright/automation runs don't spawn real tabs —
+// AND by isTTY (adversarial HIGH: tests/mode1-server.spec.js spawns this server
+// during every `npm test` with piped stdio; only a real console double-click or
+// a hand-typed `npm run mode1` has a TTY, so only those may open a browser).
+const ADMIN_URL = `http://localhost:${PORT}/admin/new-anime`;
+function openBrowser(url) {
+  if (process.env.MODE1_NO_OPEN || !process.stdout.isTTY) return;
+  try {
+    if (process.platform === 'win32') {
+      spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', detached: true }).unref();
+    } else {
+      spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
+    }
+  } catch (e) { /* auto-open is cosmetic — the URL is printed either way */ }
+}
+
 smokeCheckSpawn().then(() => {
-  app.listen(PORT, '127.0.0.1', () => {
+  const server = app.listen(PORT, '127.0.0.1', () => {
     console.log('');
     console.log(`${C.bold}${C.green}Mode 1 server ready${C.reset}`);
-    console.log(`  ${C.gray}URL:${C.reset}  http://localhost:${PORT}/admin/new-anime`);
-    console.log(`  ${C.gray}Stop:${C.reset} Ctrl+C`);
+    console.log(`  ${C.gray}URL:${C.reset}  ${ADMIN_URL}`);
+    console.log(`  ${C.gray}Stop:${C.reset} Ctrl+C (or close the Mode 1 window)`);
     console.log('');
+    openBrowser(ADMIN_URL);
+  });
+  // Double-click #2 lands here: a Mode 1 server (or a zombie node) already owns
+  // the port. From Blake's chair that's a SUCCESS — point his browser at the
+  // running one and exit 0, instead of dying in a raw stack + npm ERR wall.
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.log('');
+      console.log(`Mode 1 looks like it's already running — opening your browser to it.`);
+      console.log(`  URL: ${ADMIN_URL}`);
+      console.log(`  If the page does not load, close every Mode 1 window and`);
+      console.log(`  double-click the Mode 1 icon again.`);
+      console.log('');
+      openBrowser(ADMIN_URL);
+      process.exit(0);
+    }
+    console.error(`${C.red}Mode 1 could not start:${C.reset} ${err && err.message ? err.message : err}`);
+    console.error('  Close this window and try again. If it keeps failing, ask for help');
+    console.error('  and include the message above.');
+    process.exit(1);
   });
 });

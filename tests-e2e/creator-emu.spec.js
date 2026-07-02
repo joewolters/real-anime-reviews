@@ -1,9 +1,11 @@
 const { test, expect } = require('../tests/welcomed');
 
-// v1.10.2 — THE CREATOR SHEET, driven live on the emulator.
+// v1.10.2R — THE CREATOR KICKER, driven live on the emulator. Blake's
+// clarified spec: his sheet is a MEMBER sheet (nothing imposed) and the ONE
+// difference is the CREATOR kicker.
 // Requires the practice sandbox: `npm run practice` first, then `npm run test:e2e`.
 test.describe('the Creator sheet (emulator-seeded)', () => {
-  test('a member clicking Blake meets the gold sheet — and the Den path still leads home', async ({ page }) => {
+  test('a member clicking Blake meets HIS member-parity sheet — CREATOR kicker, nothing imposed', async ({ page }) => {
     await page.goto('/index.html?emu=1');
     await page.click('#auth-open');
     await page.fill('#auth-email', 'prac-mika@practice.test');
@@ -18,18 +20,23 @@ test.describe('the Creator sheet (emulator-seeded)', () => {
     const sheet = page.locator('.profile-layer .profile-sheet');
     await expect(sheet).toBeVisible({ timeout: 20000 });
 
-    // the gold sheet: CREATOR kicker, the Den Keeper frame, NO count, NO flag
+    // the kicker is the ONE difference; no flag on the owner — and the
+    // Appreciate row rides his sheet now (Blake's 2026-07-02 call)
     await expect(sheet).toHaveClass(/is-creator/);
     await expect(sheet.locator('.profile-kicker')).toContainText('CREATOR');
-    await expect(sheet).toHaveAttribute('data-frame', 'blake');
-    await expect(sheet.locator('.profile-like-row')).toHaveCount(0);
+    await expect(sheet.locator('.profile-like-row')).toHaveCount(1);
+    await expect(sheet.locator('.profile-like-count')).toHaveText(/^\d+$/);
     await expect(sheet.locator('.profile-report')).toHaveCount(0);
 
-    // the old promise survives ON the sheet: the gold path closes and goes home
-    await page.click('.profile-den-path');
+    // member parity: no gold door, the Reviews tab is back, and NO imposed
+    // frame — the seed saves none, so none may render (the forced default died)
+    await expect(sheet.locator('.profile-den-path')).toHaveCount(0);
+    await expect(sheet.locator('.profile-act-chip[data-act="reviews"]')).toHaveCount(1);
+    expect(await sheet.getAttribute('data-frame')).toBeNull();
+
+    // the sheet closes clean like any member's
+    await page.click('.profile-close');
     await expect(page.locator('.profile-layer')).toHaveCount(0, { timeout: 10000 });
-    const home = await page.evaluate(() => ({ y: window.scrollY, surface: document.documentElement.getAttribute('data-surface') }));
-    expect(home.y).toBeLessThan(40);
   });
 
   test("Blake's own Public view shows HIS sheet now (the 3rd-ask fix)", async ({ page }) => {

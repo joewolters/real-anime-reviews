@@ -20,6 +20,22 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-07-02 -->
+## v1.10.2 — MINOR (2026-07-02)
+
+**The Creator profile + a fully working admin.** Blake's clarified spec replaced the staged gold-showcase design before it ever deployed: his profile is now a MEMBER sheet — his own Studio choices (accent, frame, background, bio, tags, status, pinned review), nothing imposed — rendering wherever a member's would, and the ONE difference is the gold **CREATOR 創り手** kicker where members wear purple MEMBER 旅人. By his explicit call (*"I want my account to be appreicated."*) the **Appreciate button + count now ride his sheet like any member's** — the rules' like-on-Blake denial is gone and the carve-out count extends to him, purple like everyone's (self-like stays denied for all). The no-report guard stays (nobody reports the owner to the owner), the rules' reserved-name carve-out stays (the real Blake saves; impersonators bounce), and the gold Visit-the-Den door, the forced Den Keeper frame default, and the suppressed Reviews tab all left with the old spec (the Den Keeper frame stays his alone — optional, never forced). The account page keeps the full **View All · Random · Filter** nav.
+
+**Member-reported prod bugs, dead at the root:**
+- **The pinned-review picker crushed its rows** — a flex min-height collapse (`overflow:hidden` on the options zeroed their minimum, so 60 rows squeezed into the 300px menu at ~3px each). One rule fixes every brand-select menu: options never flex-shrink; the menu scrolls.
+- **Admin nav 404s** (`/admin/admin/quotes.html`) — the Admin FAB's relative hrefs doubled under `/admin/` pages. All destinations are root-absolute now, spec-pinned.
+- **The suggestion queue** — rows now expand to a detail view (requester name resolved from `submitterUid` via profiles→users, "Anonymous" for pre-v1.10.0 docs, the FULL request text, submitted date, AniList fields), keyboard-accessible; the NEW-badge clipping is root-fixed (`flex-wrap` on the meta strip) along with the mobile "ADD THIS ANIM" button truncation.
+
+**Admin honesty pass (the pages must say what needs Mode 1):** the quotes + season-reviews banners now say plainly what works on the live site vs what needs the desktop server; the Add-Anime page shows which mode it's in; the ✨ASK drawer explains it needs Mode 1 instead of erroring raw — and its copy no longer names the AI provider (the same no-provider-names rule the visitor pages follow).
+
+**The Mode-1 desktop launcher works like an app now (third report, root causes found):** the server never opened a browser (a working start looked like nothing happened) and a second double-click died on a raw port collision. Now: double-click → greeting banner → the browser opens to Mode 1 by itself; a second double-click detects the running server and just opens the browser to it; every failure path prints plain English and pauses. Verified on real double-click semantics, twice over.
+
+Tests: Playwright 229 · rules 157 · functions 77 · cf 67 · e2e 16 — the g29 specs re-pinned to the clarified Creator spec (Appreciate ON), the rules reversal tested both ways, new g30 specs pin every member-reported bug at the root.
+
 <!-- author: Code | date: 2026-06-11 -->
 ## v1.10.1 — PATCH (2026-06-11)
 

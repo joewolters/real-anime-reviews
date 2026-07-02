@@ -84,13 +84,17 @@
         messages = messages.filter(m => !m.pending);
         if (!res.ok) {
           const b = await res.json().catch(() => ({}));
+          // v1.10.2 — friendly copy only: raw server errors / status codes never
+          // reach the drawer. A JSON error body means Mode 1 answered and hit a
+          // snag; anything else (e.g. the deployed site's 404 page for /api/chat)
+          // means Mode 1 isn't reachable from here.
           let msg;
-          if (res.status === 503) {
-            msg = /API_KEY/i.test(b.error || '')
-              ? 'ANTHROPIC_API_KEY not configured in .env. Add it and restart Mode 1.'
-              : (b.error || 'AI server unavailable.');
+          if (/API_KEY/i.test(b.error || '')) {
+            msg = 'The assistant key is missing from .env on the desktop — add it, then restart Mode 1.';
+          } else if (b.error) {
+            msg = 'The assistant hit a snag — please try again.';
           } else {
-            msg = b.error || `AI request failed (${res.status}).`;
+            msg = 'The assistant needs Mode 1 running on the desktop — double-click MODE 1, then try again.';
           }
           messages.push({ role: 'assistant', error: true, retry: true, content: msg });
         } else {
@@ -99,7 +103,7 @@
         }
       } catch (_) {
         messages = messages.filter(m => !m.pending);
-        messages.push({ role: 'assistant', error: true, retry: true, content: 'AI server not running — start Mode 1 (npm run mode1).' });
+        messages.push({ role: 'assistant', error: true, retry: true, content: 'The assistant needs Mode 1 running on the desktop — double-click MODE 1, then try again.' });
       }
       render();
       persist();

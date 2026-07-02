@@ -8,15 +8,35 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script>window.APP_VERSION="1.10.1"</script>
+  <script>window.APP_VERSION="1.10.2"</script>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Admin-only Mode 1 page — not indexed." />
 
-  <link rel="stylesheet" href="../style.css?v=1.10.1" />
-  <link rel="stylesheet" href="../mobile.css?v=1.10.1" media="(max-width: 900px)" />
-  <link rel="stylesheet" href="../admin-fab.css?v=1.10.1" />
-  <link rel="stylesheet" href="new-anime.css?v=1.10.1" />
+  <link rel="stylesheet" href="../style.css?v=1.10.2" />
+  <link rel="stylesheet" href="../mobile.css?v=1.10.2" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="../admin-fab.css?v=1.10.2" />
+  <link rel="stylesheet" href="new-anime.css?v=1.10.2" />
   <link rel="stylesheet" href="section-editor.css" />
+  <style>
+    /* Mode notice — mirror of .sr-server-banner (season-reviews.css/quotes.css);
+       those stylesheets aren't loaded on this page, so the rules ride inline. */
+    .mode-notice {
+      margin: 0 0 16px;
+      padding: 11px 14px;
+      border-radius: 10px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      color: #ffcf7a;
+      font: 600 0.85rem/1.4 'Montserrat', sans-serif;
+    }
+    .mode-notice[hidden] { display: none; }
+    /* Mode 1 connected — calm brand purple instead of the amber warning voice. */
+    .mode-notice.local {
+      background: rgba(187, 134, 252, 0.10);
+      border-color: rgba(187, 134, 252, 0.40);
+      color: #d9b9ff;
+    }
+  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:ital,wght@0,400;0,500;0,600;1,300;1,400&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -54,6 +74,10 @@
         </h2>
         <button type="button" id="chat-summon-btn" class="chat-summon-btn" disabled aria-controls="chat-drawer" aria-expanded="false">✨ ASK</button>
       </div>
+
+      <!-- Mode notice — filled by new-anime.js after detectServerMode() so the
+           silent Generate-mode fallback off-localhost is said out loud. -->
+      <div id="mode-notice" class="mode-notice" hidden></div>
 
       <section class="admin-section" aria-labelledby="step1-h">
         <div class="admin-section-head">

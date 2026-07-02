@@ -171,6 +171,9 @@
 .suggestion-row {
   position: relative;
   display: flex;
+  /* v1.10.2 — wrap so the full-width .row-detail drops to its own line; the
+     cover/body/actions line itself never wraps (.row-body absorbs the width). */
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 18px;
@@ -246,6 +249,7 @@
   min-width: 0;
   position: relative;
   z-index: 1;
+  cursor: pointer;   /* v1.10.2 — the row body toggles the detail panel */
 }
 
 .suggestion-row .title {
@@ -266,10 +270,49 @@
 
 .suggestion-row .meta {
   display: flex;
-  gap: 12px;
+  /* v1.10.2 — the strip must wrap inside .row-body; without this it overflowed
+     and slid UNDER the .actions column (the clipped NEW badge). */
+  flex-wrap: wrap;
+  gap: 6px 12px;
   align-items: center;
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.55);
+}
+
+/* ---- Expandable detail panel (v1.10.2) -------------------------------------
+   Full-width line under cover/body/actions (flex-basis:100% + the row's new
+   flex-wrap). Label/value grid in the section-kicker voice. */
+.suggestion-row .row-detail {
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(187, 134, 252, 0.18);
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.78);
+  position: relative;
+  z-index: 1;                        /* above the row's grain overlay */
+}
+/* [hidden] symmetry — author display:grid would beat the UA [hidden] (the g23
+   standing rule: every new display:flex/grid component ships its twin). */
+.suggestion-row .row-detail[hidden] { display: none; }
+
+.suggestion-row .row-detail .detail-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #bb86fc;
+  padding-top: 2px;
+}
+.suggestion-row .row-detail .detail-value {
+  min-width: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;           /* 1000-char requests must never clip */
+  white-space: pre-wrap;             /* keep the member's own line breaks */
 }
 
 /* ---- Status pills (gradient backgrounds) ----------------------------------- */
@@ -571,7 +614,13 @@
   .suggestions-stats { margin-left: 0; }
   .suggestion-row { flex-direction: column; padding: 14px 16px; }
   .suggestion-row .actions { flex-direction: row; flex-wrap: wrap; }
-  .suggestion-row .actions button { flex: 1; min-width: 0; }
+  /* v1.10.2R: min-width:0 let the nowrap+overflow:hidden base rule truncate
+     labels ("ADD THIS ANIM") — max-content keeps each label whole and the
+     wrap above carries extras onto their own line. */
+  .suggestion-row .actions button { flex: 1 1 auto; min-width: max-content; }
+  /* Column direction: flex-basis:100% would mean HEIGHT here — let the
+     stretched cross-axis carry the full width instead (v1.10.2). */
+  .suggestion-row .row-detail { flex-basis: auto; width: 100%; }
 }
 
 /* ---- Cowork addition #3 — prefers-reduced-motion accessibility pass -------- */

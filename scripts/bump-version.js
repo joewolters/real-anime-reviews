@@ -400,6 +400,11 @@ const LATE_TARGETS = [
   // v1.10.1 hotfix — the ONE branded-error module rides ?v= from birth
   ['script.js',         "friendly-errors.js?v= import (script)",  /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],
   ['account.js',        "friendly-errors.js?v= import (account)", /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],
+  // v1.10.2R (adversarial LOW): both pages sat at APP_VERSION "1.9.1" for two
+  // ships because only their ?v= lines were targeted — the version marker
+  // itself must move with the rest.
+  ['admin/inbox.html',  'window.APP_VERSION (inbox)',      /(<script>window\.APP_VERSION=")([^"]+)(")/],
+  ['admin/reports.html','window.APP_VERSION (reports)',    /(<script>window\.APP_VERSION=")([^"]+)(")/],
   ['admin/inbox.html',  '../style.css?v= (inbox)',         /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
   ['admin/inbox.html',  '../mobile.css?v= (inbox)',        /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
   ['admin/inbox.html',  'inbox.css?v= (inbox)',            /(href="inbox\.css\?v=)([^"]+)(")/],
