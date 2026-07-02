@@ -2321,9 +2321,12 @@ function initInbox(user) {
       : (isBlake && c && c.kind === 'admin') ? 'Reply as Blake…'
       : 'Write your letter…';
     sendBtn.disabled = true;
-    // mute: any open conv (not compose-new); block: open/pending PEER convs only
+    // mute: any open conv (not compose-new); block: open/pending PEER convs only;
+    // members: groups only (everyone may look; roles differ inside the panel)
     if (muteBtn) { muteBtn.hidden = !!composeTo || !c; paintMuteBtn(); }
     if (blockBtn) blockBtn.hidden = !!composeTo || !c || c.kind !== 'peer' || isBlake;
+    const membersBtn = document.getElementById('inbox-members');
+    if (membersBtn) membersBtn.hidden = !!composeTo || !c || c.kind !== 'group';
   }
 
   async function openConv(convId) {
@@ -2563,6 +2566,134 @@ function initInbox(user) {
   listEl.addEventListener('click', rowOpen);
   listEl.addEventListener('keydown', rowKey);
   if (reqListEl) { reqListEl.addEventListener('click', rowOpen); reqListEl.addEventListener('keydown', rowKey); }
+
+  // ── gate A3: GROUPS ────────────────────────────────────────────────────────
+  // Create: solo birth (the rules cap block-checks per write, so members join
+  // one add at a time). Add: from YOUR CONTACTS — the people you've exchanged
+  // letters with (open peer convs + the admin floor) — append-only per the
+  // rules. Leave: remove-self. Remove: creator-only, never themselves.
+  const groupBtn = document.getElementById('inbox-new-group');
+  const groupPanel = document.getElementById('inbox-group-create');
+  const groupName = document.getElementById('inbox-group-name');
+  const groupGo = document.getElementById('inbox-group-go');
+  if (groupBtn && groupPanel && groupName && groupGo) {
+    groupBtn.addEventListener('click', () => {
+      groupPanel.hidden = !groupPanel.hidden;
+      if (!groupPanel.hidden) groupName.focus();
+    });
+    groupPanel.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) groupPanel.hidden = true; });
+    groupName.addEventListener('input', () => {
+      const v = groupName.value.trim();
+      groupGo.disabled = !(v.length >= 1 && v.length <= 60);
+    });
+    groupGo.addEventListener('click', async () => {
+      const name = groupName.value.trim();
+      if (!name) return;
+      groupGo.disabled = true;
+      try {
+        const ref = await addDoc(collection(db, 'conversations'), {
+          participants: [user.uid], kind: 'group', state: 'open', name,
+          creatorUid: user.uid, createdAt: serverTimestamp(), lastMessageAt: serverTimestamp(),
+        });
+        groupPanel.hidden = true;
+        groupName.value = '';
+        openConv(ref.id);
+        sayStatus('Group made — open 👥 to add people from your letters.');
+      } catch (err) {
+        sayStatus('Could not create the group: ' + friendlyError(err, { kind: 'save' }));
+      } finally { groupGo.disabled = false; }
+    });
+  }
+
+  // the members panel (docked in the thread, like the report panel)
+  const membersBtn = document.getElementById('inbox-members');
+  let membersPanel = null;
+  function contactsOf() {
+    // people I've exchanged letters with (non-group convs), minus myself
+    const seen = new Set();
+    convos.forEach((c) => { if (c.kind !== 'group') { const o = otherUid(c); if (o) seen.add(o); } });
+    return [...seen];
+  }
+  async function paintMembersPanel() {
+    const c = convos.find((x) => x.id === openConvId);
+    if (!membersPanel || !c || c.kind !== 'group') return;
+    const mine = c.creatorUid === user.uid;
+    const parts = c.participants || [];
+    await Promise.all(parts.map((u) => nameFor(u)));
+    const rows = parts.map((u) => {
+      const gold = u === RAR_ADMIN_UID;
+      const canRemove = mine && u !== user.uid;
+      return `<div class="inbox-member-row">
+        <span class="inbox-member-name${gold ? ' is-blake-name' : ''}">${escText(nameCache.get(u) || 'A member')}${u === c.creatorUid ? ' <span class="inbox-member-tag">made it</span>' : ''}${u === user.uid ? ' <span class="inbox-member-tag">you</span>' : ''}</span>
+        ${canRemove ? `<button type="button" class="inbox-member-x" data-remove="${escText(u)}" title="Remove from group" aria-label="Remove from group">×</button>` : ''}
+      </div>`;
+    }).join('');
+    let footer = '';
+    if (mine && parts.length < 15) {
+      const candidates = contactsOf().filter((u) => parts.indexOf(u) === -1);
+      await Promise.all(candidates.map((u) => nameFor(u)));
+      footer = candidates.length
+        ? `<div class="inbox-panel-sub muted">Add from your letters:</div>
+           <div class="inbox-member-adds">${candidates.map((u) => `<button type="button" class="inbox-member-add" data-add="${escText(u)}">➕ ${escText(nameCache.get(u) || 'A member')}</button>`).join('')}</div>`
+        : '<div class="inbox-panel-sub muted">Exchange letters with someone first — then you can add them here.</div>';
+    } else if (mine) {
+      footer = '<div class="inbox-panel-sub muted">The room is full — 15 is the cap.</div>';
+    } else {
+      footer = `<div class="inbox-member-adds"><button type="button" class="inbox-req-btn inbox-req-btn--danger" data-leave>Leave group</button></div>`;
+    }
+    membersPanel.innerHTML = `
+      <div class="inbox-panel-head">👥 Members <button type="button" class="inbox-panel-x" data-close aria-label="Close">×</button></div>
+      <div class="inbox-member-list">${rows}</div>${footer}`;
+  }
+  function ensureMembersPanel() {
+    if (membersPanel) return membersPanel;
+    membersPanel = document.createElement('div');
+    membersPanel.className = 'inbox-panel inbox-members-panel';
+    membersPanel.hidden = true;
+    threadEl.appendChild(membersPanel);
+    membersPanel.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-close]')) { membersPanel.hidden = true; return; }
+      const c = convos.find((x) => x.id === openConvId);
+      if (!c || c.kind !== 'group') return;
+      const addBtn = e.target.closest('[data-add]');
+      if (addBtn) {
+        try {
+          // append-only (the rules pin the new member LAST) + cap 15
+          await updateDoc(doc(db, 'conversations', openConvId), { participants: [...(c.participants || []), addBtn.dataset.add] });
+          c.participants = [...(c.participants || []), addBtn.dataset.add];
+          await paintMembersPanel();
+          await paintThreadChrome(c);
+        } catch (err) { sayStatus("Couldn't add them: " + friendlyError(err, { kind: 'save' })); }
+        return;
+      }
+      const remBtn = e.target.closest('[data-remove]');
+      if (remBtn) {
+        try {
+          const next = (c.participants || []).filter((u) => u !== remBtn.dataset.remove);
+          await updateDoc(doc(db, 'conversations', openConvId), { participants: next });
+          c.participants = next;
+          await paintMembersPanel();
+          await paintThreadChrome(c);
+        } catch (err) { sayStatus("Couldn't remove them: " + friendlyError(err, { kind: 'save' })); }
+        return;
+      }
+      if (e.target.closest('[data-leave]')) {
+        try {
+          const next = (c.participants || []).filter((u) => u !== user.uid);
+          await updateDoc(doc(db, 'conversations', openConvId), { participants: next });
+          membersPanel.hidden = true;
+          closeConv();
+          sayStatus('You left the group.');
+        } catch (err) { sayStatus("Couldn't leave: " + friendlyError(err, { kind: 'save' })); }
+      }
+    });
+    return membersPanel;
+  }
+  if (membersBtn) membersBtn.addEventListener('click', async () => {
+    const p = ensureMembersPanel();
+    p.hidden = !p.hidden;
+    if (!p.hidden) await paintMembersPanel();
+  });
 
   // #inbox/new/<uid> — the ✉ Message hand-off from profile sheets (any page).
   // The conversations snapshot may not have landed yet; wait one tick for it.

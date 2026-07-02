@@ -10508,20 +10508,47 @@ html[data-surface="account"] .side-link.is-active {
   opacity: 0.55; }
 .inbox-msg-flag:hover, .inbox-msg-flag:focus-visible { opacity: 1; color: #ffd5d5;
   border-color: rgba(255, 130, 130, 0.6); }
-/* the report reason panel — compact, branded, docked in the thread */
-.inbox-report-panel[hidden] { display: none; }
-.inbox-report-panel { display: block; margin-top: 10px; padding: 12px 14px; border-radius: 12px;
+/* the docked branded panel — the report reasons, group-create, and members
+   panels all wear it (compact, in-flow, never a native dialog) */
+.inbox-panel[hidden], .inbox-report-panel[hidden] { display: none; }
+.inbox-panel, .inbox-report-panel { display: block; margin-top: 10px; padding: 12px 14px; border-radius: 12px;
   background: rgba(26, 8, 52, 0.97); border: 1px solid rgba(187, 134, 252, 0.6);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
-.inbox-report-head { display: flex; align-items: center; justify-content: space-between;
+.inbox-panel-head, .inbox-report-head { display: flex; align-items: center; justify-content: space-between;
   font: 700 0.84rem 'Montserrat', sans-serif; color: #f1e9ff; margin-bottom: 9px; }
-.inbox-report-x { width: 26px; height: 26px; border-radius: 8px; cursor: pointer;
+.inbox-panel-x, .inbox-report-x { width: 26px; height: 26px; border-radius: 8px; cursor: pointer;
   background: rgba(30, 10, 60, 0.9); border: 1px solid rgba(187, 134, 252, 0.5); color: #d9c9ff; }
 .inbox-report-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
 .inbox-report-reasons button { padding: 7px 14px; border-radius: 999px; cursor: pointer;
   font: 600 0.78rem 'Montserrat', sans-serif;
   background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.5); color: #e9dbff; }
 .inbox-report-reasons button:hover { border-color: rgba(187, 134, 252, 0.9); color: #fff; }
+/* gate A3 — groups */
+.inbox-tools { display: flex; gap: 10px; margin-bottom: 12px; }
+.inbox-tool-btn { padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  font: 700 0.8rem 'Montserrat', sans-serif;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.5); color: #e9dbff; }
+.inbox-tool-btn:hover { border-color: rgba(187, 134, 252, 0.9); color: #fff; }
+.inbox-panel-row { display: flex; gap: 8px; align-items: center; }
+.inbox-panel-row input { flex: 1 1 auto; min-width: 0; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; color: #fff; padding: 9px 12px;
+  font: 400 0.9rem 'Montserrat', sans-serif; }
+.inbox-panel-sub { font-size: 0.78rem; margin: 8px 0 0; }
+.inbox-member-list { display: flex; flex-direction: column; gap: 6px; }
+.inbox-member-row { display: flex; align-items: center; gap: 8px; padding: 6px 9px;
+  border-radius: 9px; background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(187, 134, 252, 0.22); }
+.inbox-member-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.86rem; color: #efe6ff; margin-right: auto; }
+.inbox-member-tag { font-size: 0.66rem; color: #9d8cc4; font-style: italic; }
+.inbox-member-x { width: 24px; height: 24px; border-radius: 7px; cursor: pointer; flex: 0 0 auto;
+  background: rgba(30, 10, 60, 0.9); border: 1px solid rgba(255, 130, 130, 0.4); color: #ffd5d5; }
+.inbox-member-x:hover { border-color: rgba(255, 150, 150, 0.8); color: #fff; }
+.inbox-member-adds { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.inbox-member-add { padding: 6px 13px; border-radius: 999px; cursor: pointer;
+  font: 600 0.76rem 'Montserrat', sans-serif;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(187, 134, 252, 0.5); color: #e9dbff; }
+.inbox-member-add:hover { border-color: rgba(187, 134, 252, 0.9); color: #fff; }
 @media (prefers-reduced-motion: reduce) {
   .inbox-send-btn, .inbox-back-chip { transition: none; }
 }

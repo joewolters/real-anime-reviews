@@ -904,6 +904,44 @@ exports.onConversationCreate = onDocumentCreated('conversations/{convId}', async
 });
 
 // =============================================================================
+// onConversationUpdate (gate A3) — the group-ADD ping. The rules pin adds to
+// exactly-one-appended-last by the CREATOR, so the added member is the array
+// tail and the sender identity is creatorUid (update triggers carry no auth).
+// Type rides 'dm' with a custom verb — muting Messages mutes group-adds too
+// (coherent; the unmutable safety ping stays dm_request only). Self-removal
+// (leaves) and creator-removals ping nobody — departures are quiet.
+// =============================================================================
+exports.onConversationUpdate = onDocumentUpdated('conversations/{convId}', async (event) => {
+  const before = event.data && event.data.before ? event.data.before.data() : null;
+  const after = event.data && event.data.after ? event.data.after.data() : null;
+  if (!before || !after || after.kind !== 'group') return;
+  const bp = Array.isArray(before.participants) ? before.participants : [];
+  const ap = Array.isArray(after.participants) ? after.participants : [];
+  if (ap.length !== bp.length + 1) return;                    // adds only
+  const added = ap[ap.length - 1];
+  if (!added || added === after.creatorUid || bp.indexOf(added) !== -1) return;
+  if (await alreadyProcessed(event.id)) return;
+  // mute-at-source: the added member may have muted 'dm' entirely
+  try {
+    const prefsSnap = await db.doc('users/' + added + '/notifPrefs/prefs').get();
+    if (prefsSnap.exists && isMuted(prefsSnap.data(), 'dm')) return;
+  } catch (_) {}
+  const ident = await senderIdentity(after.creatorUid);
+  await db.collection('users/' + added + '/notifications').add({
+    toUid: added,
+    fromUid: after.creatorUid,
+    fromDisplayName: ident.name,
+    fromPhotoURL: ident.photo,
+    type: 'dm',
+    verb: 'added you to "' + String(after.name || 'a group').slice(0, 60) + '"',
+    targetPath: 'conversations/' + event.params.convId,
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + NOTIF_TTL_DAYS * DAY_MS),
+  });
+});
+
+// =============================================================================
 // onDmMessageCreate — the message ping. Participant-agnostic: reads the
 // conversation and serves admin-floor, peer, AND group (gate A1) unchanged in
 // shape. Two CF-owned writes (the rules deny both to clients):

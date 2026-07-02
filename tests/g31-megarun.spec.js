@@ -65,6 +65,18 @@ test('gA2: request-first wiring pins — the strip, the flip, the block, the con
   expect(js).toMatch(/kind: 'peer', state: 'request', creatorUid: user\.uid/); // the knock-first create
 });
 
+// ── gate A3 — GROUPS ─────────────────────────────────────────────────────────
+test('gA3: groups wiring pins — solo birth, append-only add, self-leave, creator-remove', async ({ page }) => {
+  const js = await (await page.request.get('/account.js')).text();
+  expect(js).toMatch(/participants: \[user\.uid\], kind: 'group', state: 'open', name/); // solo birth
+  expect(js).toContain('participants: [...(c.participants || []), addBtn.dataset.add]'); // append-LAST (the rules pin)
+  expect(js).toContain(".filter((u) => u !== user.uid)");                                // self-leave
+  const html = await (await page.request.get('/account.html')).text();
+  expect(html).toContain('id="inbox-new-group"');
+  expect(html).toContain('id="inbox-members"');
+  expect(html).toMatch(/inbox-group-name" maxlength="60"/);                              // the rules cap, mirrored
+});
+
 test('gA0: the live lantern still exposes the pure model on index (behavior anchor)', async ({ page }) => {
   await page.goto('/index.html');
   await page.waitForFunction(() => typeof window.lanternModel === 'function', null, { timeout: 15000 });

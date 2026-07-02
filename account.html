@@ -456,6 +456,19 @@
               <div class="inbox-requests-head">✉ Requests <span class="jp-mini">問い</span></div>
               <ul id="inbox-requests-list" class="inbox-list" aria-label="Message requests"></ul>
             </div>
+            <!-- gate A3 — groups: anyone creates (cap 15; members are added one
+                 at a time from your contacts, block-checked by the rules) -->
+            <div class="inbox-tools">
+              <button type="button" id="inbox-new-group" class="inbox-tool-btn">👥 New group</button>
+            </div>
+            <div id="inbox-group-create" class="inbox-panel" hidden>
+              <div class="inbox-panel-head">Name your group <button type="button" class="inbox-panel-x" data-close aria-label="Close">×</button></div>
+              <div class="inbox-panel-row">
+                <input type="text" id="inbox-group-name" maxlength="60" placeholder="e.g. Finale watchers" aria-label="Group name">
+                <button type="button" id="inbox-group-go" class="inbox-req-btn inbox-req-btn--accept" disabled>Create</button>
+              </div>
+              <p class="inbox-panel-sub muted">You start alone — add people from your letters once it exists. Up to 15.</p>
+            </div>
             <ul id="inbox-list" class="inbox-list" aria-label="Conversations"></ul>
             <p id="inbox-hint" class="inbox-hint muted" hidden>Meet someone in the Tavern or a room, open their profile, and tap ✉ Message — letters start where the conversations do.</p>
           </div>
@@ -465,6 +478,7 @@
               <button type="button" id="inbox-back" class="inbox-back-chip">← Inbox</button>
               <span class="inbox-thread-title" id="inbox-thread-title">✉ <b>Letter</b></span>
               <span class="inbox-thread-actions">
+                <button type="button" id="inbox-members" class="inbox-bar-btn" hidden title="Group members">👥</button>
                 <button type="button" id="inbox-mute" class="inbox-bar-btn" hidden aria-pressed="false" title="Mute this conversation">🔔</button>
                 <button type="button" id="inbox-block" class="inbox-bar-btn inbox-bar-btn--danger" hidden title="Block this member">⛔</button>
               </span>

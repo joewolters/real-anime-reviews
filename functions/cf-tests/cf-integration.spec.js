@@ -388,6 +388,30 @@ test('A1 rate limit: the 21st rapid DM message by one sender is undone (dm bucke
   assert.ok(settled, 'exactly 20 messages should remain (the 21st over-limit create is undone)');
 });
 
+// 18b) gate A3 — the group-ADD ping: appending a member to a group pings THEM
+//      (type 'dm', creator-sourced identity, the group name in the verb);
+//      leaves/removals ping nobody.
+test('A3 group add: the appended member gets the added-you ping; a leave pings nobody', async () => {
+  await db.doc('conversations/ga1').set({
+    participants: ['gaCreator'], kind: 'group', state: 'open', name: 'Finale watchers',
+    creatorUid: 'gaCreator', createdAt: TS.now(), lastMessageAt: TS.now(),
+  });
+  await db.doc('conversations/ga1').update({ participants: ['gaCreator', 'gaNewbie'] });
+  const got = await waitFor(async () => {
+    const s = await db.collection('users/gaNewbie/notifications').get();
+    const n = s.docs.map((d) => d.data()).find((x) => x.type === 'dm' && /added you to "Finale watchers"/.test(x.verb || ''));
+    return n || null;
+  });
+  assert.ok(got, 'the added member must get the added-you ping');
+  assert.equal(got.fromUid, 'gaCreator');
+  // a member leaving must ping nobody new
+  await db.doc('conversations/ga1').update({ participants: ['gaCreator'] });
+  await new Promise((r) => setTimeout(r, 2500));
+  const after = await db.collection('users/gaNewbie/notifications').get();
+  const pings = after.docs.map((d) => d.data()).filter((x) => /added you/.test(x.verb || ''));
+  assert.equal(pings.length, 1, 'a leave/remove must not mint another ping');
+});
+
 // 18) rate limit: the 6th rapid conversation create by one creator is undone.
 test('A1 rate limit: the 6th rapid conversation create by one creator is undone', async () => {
   for (let i = 0; i < 6; i++) {
