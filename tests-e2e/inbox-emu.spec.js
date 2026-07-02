@@ -1,13 +1,13 @@
 const { test, expect } = require('../tests/welcomed');
 
-// ROUND 2 — drive the REAL Message-Blake flow end to end. The gate-18 inbox
-// shipped with addDoc never imported (every send threw ReferenceError) and no
-// spec caught it because nothing DROVE the flow — static id checks lied by
-// omission. This spec sends an actual message through the live emulator.
+// ROUND 2 → gate A2: drive the REAL write-to-Blake flow end to end, through
+// the LETTER ROOM's unified entry (the hero card is gone — Blake is reached
+// like anyone: his sheet's ✉ Message → account#inbox/new/<uid> → the first
+// letter). The addDoc-never-imported lesson stands: the flow IS the test.
 //
 // Requires the practice sandbox: `npm run practice` first, then `npm run test:e2e`.
-test.describe('the Message-Blake inbox — a real send (emulator-seeded)', () => {
-  test('sign in, open the Inbox panel, message Blake, see the letter land', async ({ page }) => {
+test.describe('the Letter Room — a real send to Blake (emulator-seeded)', () => {
+  test('sign in, ✉ Message on Blake\'s sheet, write the letter, see it land', async ({ page }) => {
     // the real auth modal (no fixture shortcuts — the flow IS the test)
     await page.goto('/index.html?emu=1');
     await page.click('#auth-open');
@@ -15,17 +15,25 @@ test.describe('the Message-Blake inbox — a real send (emulator-seeded)', () =>
     await page.fill('#auth-password', 'practice123');
     await page.click('#auth-submit');
     await page.waitForTimeout(2500);
+    await page.evaluate(() => document.querySelector('.signin-catchup')?.remove());
 
-    await page.goto('/account.html#inbox');
-    // the Inbox panel is active via the deep link
-    await expect(page.locator('#tab-inbox')).toBeVisible({ timeout: 20000 });
-    await page.click('#inbox-message-blake');
+    // the unified entry: Blake's profile sheet carries the letter door
+    await page.waitForFunction(() => typeof window.openProfilePage === 'function', null, { timeout: 20000 });
+    await page.evaluate(() => window.openProfilePage('G2jGRa14u8bzGAmeBTkvXy8PKmr1'));
+    const msgBtn = page.locator('.profile-layer .profile-message');
+    await expect(msgBtn).toBeVisible({ timeout: 20000 });
+    await msgBtn.click();
+
+    // lands in the Letter Room compose/thread view on the account page
     await expect(page.locator('#inbox-thread')).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(1200);   // the conversations snapshot + compose hand-off settle
 
-    const line = 'round-2 smoke: the inbox actually sends now';
+    const line = 'gate-A2 smoke: the letter room actually sends now';
     await page.fill('#inbox-input', line);
     await page.click('#inbox-send');
     // the letter lands in the thread (the live onSnapshot paints it)
     await expect(page.locator('#inbox-messages')).toContainText(line, { timeout: 20000 });
+    // and Blake's thread wears his identity (gold title name, admin kind)
+    await expect(page.locator('#inbox-thread-title')).toContainText('Blake');
   });
 });

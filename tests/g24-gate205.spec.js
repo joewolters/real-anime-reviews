@@ -105,7 +105,9 @@ test('20.5 (4+7): the renames hold — no "Blake\'s 44" or "Message Blake" left 
   const acct = await (await request.get('/account.html')).text();
   expect(acct).not.toContain("Blake's 44");
   expect(acct).toContain("Blake's reviews");
-  expect(acct).toContain('DM Blake');
+  // gate A2: the "DM Blake" hero card died with the peer flip (Blake's word:
+  // "Replace with dms and stuff normally.") — the phrase leaves with it.
+  expect(acct).not.toContain('DM Blake');
   expect(acct).not.toContain('Message Blake');
 });
 

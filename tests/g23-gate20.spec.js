@@ -66,17 +66,23 @@ test('gate 20 (item 8): activity snippets are plain text (tokens stripped, no ne
   expect(renderBlock).not.toContain('desc.innerHTML');
 });
 
-test('gate 20 (item 8, the 4th ask): the Message-Blake surface wears the premium classes', async ({ page, request }) => {
+test('gate 20 → A2: the LETTER ROOM wears the premium classes (the hero card is gone)', async ({ page, request }) => {
   const html = await (await request.get('/account.html')).text();
-  expect(html).toContain('inbox-blake-btn');
-  expect(html).toContain('inbox-blake-lantern');
+  // the peer flip killed the hero card + the People placeholder (Blake's word)
+  expect(html).not.toContain('inbox-blake-card');
+  expect(html).not.toContain('inbox-people-locked');
+  expect(html).not.toContain('id="inbox-message-blake"');
+  // the Letter Room surfaces
+  expect(html).toContain('id="inbox-requests"');
+  expect(html).toContain('id="inbox-req-bar"');
   expect(html).toContain('inbox-back-chip');
   expect(html).toContain('inbox-send-btn');
-  // and the classes actually carry the premium paint (not bare buttons)
+  expect(html).toContain('id="inbox-status"');
+  // and the send button actually carries the premium paint (not a bare button)
   await page.goto('/index.html');
   const m = await page.evaluate(() => {
     const b = document.createElement('button');
-    b.className = 'inbox-blake-btn'; document.body.appendChild(b);
+    b.className = 'inbox-send-btn'; document.body.appendChild(b);
     const cs = getComputedStyle(b);
     const out = { radius: cs.borderRadius, bg: cs.backgroundImage, cursor: cs.cursor };
     b.remove(); return out;

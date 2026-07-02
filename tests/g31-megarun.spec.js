@@ -33,6 +33,38 @@ test('gA0: the drift is dead — lantern.js mute strip carries request_done + th
   expect(ljs).toContain('export async function markAllNotifsRead');
 });
 
+// ── gate A2 — THE LETTER ROOM ────────────────────────────────────────────────
+test('gA2: decline is SILENT — the sender-side pins (pending == declined, generic block copy)', async ({ page }) => {
+  const js = await (await page.request.get('/account.js')).text();
+  // the sender's row treats 'request' and 'declined' identically — the two
+  // states must be indistinguishable on their side (anti-harassment)
+  expect(js).toMatch(/c\.state === 'request' \|\| c\.state === 'declined'/);
+  // a rules-denied first letter renders GENERIC copy (a blocked member must
+  // never learn they're blocked)
+  expect(js).toContain("can't receive your letter");
+  // the inbox never alert()s — the friendly status line owns failures
+  const inboxBlock = js.slice(js.indexOf('function initInbox('));
+  expect(inboxBlock).not.toContain('alert(');
+});
+
+test('gA2: every profile sheet carries the letter door (✉ Message → the Letter Room)', async ({ page }) => {
+  const sjs = await (await page.request.get('/script.js')).text();
+  expect(sjs).toContain('profile-message');
+  expect(sjs).toContain("'account.html#inbox/new/'");
+  const js = await (await page.request.get('/account.js')).text();
+  expect(js).toMatch(/#inbox\\\/new\\\//);            // the route regex exists
+  expect(js).toContain('openComposeNew');
+});
+
+test('gA2: request-first wiring pins — the strip, the flip, the block, the conv-mute', async ({ page }) => {
+  const js = await (await page.request.get('/account.js')).text();
+  expect(js).toContain('isIncomingRequest');
+  expect(js).toMatch(/updateDoc\(doc\(db, 'conversations', openConvId\), \{ state: nextState \}\)/);
+  expect(js).toMatch(/doc\(db, 'blocks', user\.uid, 'list'/);   // block writes to MY list
+  expect(js).toContain("'conv:' + openConvId");                 // per-conversation mute key
+  expect(js).toMatch(/kind: 'peer', state: 'request', creatorUid: user\.uid/); // the knock-first create
+});
+
 test('gA0: the live lantern still exposes the pure model on index (behavior anchor)', async ({ page }) => {
   await page.goto('/index.html');
   await page.waitForFunction(() => typeof window.lanternModel === 'function', null, { timeout: 15000 });

@@ -625,7 +625,7 @@ service cloud.firestore {
         // peers can't mint a second Blake channel). NEITHER direction blocked.
         || ( isSignedIn()
           && request.resource.data.kind == 'peer'
-          && request.resource.data.keys().hasOnly(['participants', 'kind', 'state', 'createdAt', 'creatorUid'])
+          && request.resource.data.keys().hasOnly(['participants', 'kind', 'state', 'createdAt', 'creatorUid', 'lastMessageAt'])
           && request.resource.data.participants.size() == 2
           && request.auth.uid in request.resource.data.participants
           && otherOf(request.resource.data.participants) != request.auth.uid
@@ -633,6 +633,11 @@ service cloud.firestore {
           && request.resource.data.creatorUid == request.auth.uid
           && request.resource.data.state == 'request'
           && createdNow()
+          // gate A2 — the inbox orders by lastMessageAt; a doc BORN without it
+          // falls out of the ordered query (an invisible request). Optional at
+          // create, but if present it must be NOW (no future-pinning atop the
+          // recipient's list). The CF owns it afterwards.
+          && request.resource.data.get('lastMessageAt', request.time) == request.time
           && !blockedEither(request.auth.uid, otherOf(request.resource.data.participants))
           && gateOk() )
         // (3) kind=='group' (gate A1) — SOLO birth: participants == [creator]
@@ -641,7 +646,7 @@ service cloud.firestore {
         // render like every user string). state=='open' at birth.
         || ( isSignedIn()
           && request.resource.data.kind == 'group'
-          && request.resource.data.keys().hasOnly(['participants', 'kind', 'state', 'name', 'creatorUid', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['participants', 'kind', 'state', 'name', 'creatorUid', 'createdAt', 'lastMessageAt'])
           && request.resource.data.participants == [request.auth.uid]
           && request.resource.data.creatorUid == request.auth.uid
           && request.resource.data.name is string
@@ -649,6 +654,8 @@ service cloud.firestore {
           && request.resource.data.name.size() <= 60
           && request.resource.data.state == 'open'
           && createdNow()
+          // gate A2 — same born-sortable rule as the peer branch above.
+          && request.resource.data.get('lastMessageAt', request.time) == request.time
           && gateOk() );
       // The conversation SUMMARY (lastMessageAt / lastSenderUid / unread_*) is
       // CF-OWNED (onDmMessageCreate, Admin SDK). The adversarial review showed

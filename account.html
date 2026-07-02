@@ -442,39 +442,47 @@
           <header class="panel-head">
             <div class="panel-head-text">
               <h3 class="acct-kicker">Inbox <span class="jp-mini">受信箱</span></h3>
-              <p class="acct-section-sub">Your messages — send me one anytime, I read them all.</p>
+              <p class="acct-section-sub">Your letters — members, groups, and Blake himself. Strangers knock first.</p>
             </div>
           </header>
 
-          <!-- gate 20 (item 8, the 4th ask) — the Message-Blake surface goes
-               PREMIUM: a real hero card with the swaying lantern, branded
-               primary actions, a chip back, a finished composer. -->
+          <!-- mega-run gate A2 — THE LETTER ROOM: the unified inbox. The DM-Blake
+               hero card + the locked People placeholder died with the peer flip
+               (Blake: "Replace with dms and stuff normally.") — Blake is a normal
+               conversation whose row and letters stay identity-keyed GOLD. A
+               stranger's first letter waits in the Requests strip. -->
           <div id="inbox-home">
-            <div class="inbox-blake-card">
-              <span class="inbox-blake-lantern" aria-hidden="true">🏮</span>
-              <div class="inbox-blake-body">
-                <div class="inbox-blake-head">DM Blake <span class="jp-mini">便り</span></div>
-                <p class="inbox-blake-sub">A question, a request, or a take you want to land directly? It goes straight to me — I read everything myself.</p>
-                <button type="button" id="inbox-message-blake" class="inbox-blake-btn">✉ DM Blake</button>
-              </div>
+            <div id="inbox-requests" class="inbox-requests" hidden>
+              <div class="inbox-requests-head">✉ Requests <span class="jp-mini">問い</span></div>
+              <ul id="inbox-requests-list" class="inbox-list" aria-label="Message requests"></ul>
             </div>
             <ul id="inbox-list" class="inbox-list" aria-label="Conversations"></ul>
-            <div class="inbox-people-locked">
-              <div class="inbox-people-head">👥 People</div>
-              <p class="muted">Messaging other members is coming — the safety net gets built first.</p>
-            </div>
+            <p id="inbox-hint" class="inbox-hint muted" hidden>Meet someone in the Tavern or a room, open their profile, and tap ✉ Message — letters start where the conversations do.</p>
           </div>
 
           <div id="inbox-thread" hidden>
             <div class="inbox-thread-bar">
               <button type="button" id="inbox-back" class="inbox-back-chip">← Inbox</button>
-              <span class="inbox-thread-title">🏮 DM <b>Blake</b> <span class="jp-mini">便り</span></span>
+              <span class="inbox-thread-title" id="inbox-thread-title">✉ <b>Letter</b></span>
+              <span class="inbox-thread-actions">
+                <button type="button" id="inbox-mute" class="inbox-bar-btn" hidden aria-pressed="false" title="Mute this conversation">🔔</button>
+                <button type="button" id="inbox-block" class="inbox-bar-btn inbox-bar-btn--danger" hidden title="Block this member">⛔</button>
+              </span>
+            </div>
+            <div id="inbox-req-bar" class="inbox-req-bar" hidden>
+              <span class="inbox-req-line">They'd like to message you. Open the letter, then decide.</span>
+              <span class="inbox-req-actions">
+                <button type="button" id="inbox-req-accept" class="inbox-req-btn inbox-req-btn--accept">Accept</button>
+                <button type="button" id="inbox-req-decline" class="inbox-req-btn">Decline</button>
+                <button type="button" id="inbox-req-block" class="inbox-req-btn inbox-req-btn--danger">Block</button>
+              </span>
             </div>
             <div id="inbox-messages" class="inbox-messages" aria-live="polite"></div>
+            <div id="inbox-status" class="inbox-status" role="status" hidden></div>
             <div class="inbox-composer">
               <!-- gate 20.8 (fix 1): your face on the DM composer too (account.js paints it) -->
               <div class="avatar composer-ava" id="inbox-self-ava" aria-hidden="true">&#9733;</div>
-              <textarea id="inbox-input" maxlength="2000" placeholder="Write to Blake…"></textarea>
+              <textarea id="inbox-input" maxlength="2000" placeholder="Write your letter…"></textarea>
               <button type="button" id="inbox-send" class="inbox-send-btn" disabled>Send ➤</button>
             </div>
           </div>

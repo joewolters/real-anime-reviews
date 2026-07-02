@@ -1051,6 +1051,17 @@ test('A1 peer create: born-open / born-declined are DENIED (a request must be an
   await assertFails(setDoc(doc(as('alice'), 'conversations/pc8'), peerConv('alice', 'bob', { state: 'open' })));
   await assertFails(setDoc(doc(as('alice'), 'conversations/pc9'), peerConv('alice', 'bob', { state: 'declined' })));
 });
+// gate A2 — born-sortable: the inbox orders by lastMessageAt, so creates may
+// carry it — but only as NOW (a future stamp would pin the request atop the
+// recipient's list forever).
+test('A2 peer create: lastMessageAt == now at birth is ALLOWED (born-sortable)', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'conversations/pc10'),
+    peerConv('alice', 'bob', { lastMessageAt: serverTimestamp() })));
+});
+test('A2 peer create: HOSTILE future lastMessageAt at birth is DENIED (no sort-pinning)', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'conversations/pc11'),
+    peerConv('alice', 'bob', { lastMessageAt: Timestamp.fromMillis(Date.now() + 86400000) })));
+});
 test('A1 peer create: a block in EITHER direction kills the pairing; un-consented creator DENIED', async () => {
   await seed(async (db) => {
     await setDoc(doc(db, 'blocks/bob/list/alice'), { createdAt: Timestamp.now() });   // bob blocked alice

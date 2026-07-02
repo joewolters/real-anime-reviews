@@ -13,7 +13,7 @@ import {
 import {
   doc, setDoc, getDoc, getDocs, addDoc, collection, onSnapshot, deleteDoc,
   query, orderBy, where, limit, collectionGroup,
-  serverTimestamp, deleteField
+  serverTimestamp, deleteField, updateDoc
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 // (round-2 adversarial HIGH: addDoc was USED by the gate-18 inbox at two call
 // sites but never imported — every "Message Blake"/Send threw ReferenceError.
@@ -91,7 +91,7 @@ $$('.side-link').forEach(btn => {
 });
 // deep-link: #inbox lands on the Inbox tab (the Lantern's dm pings route here);
 // #settings lands on the split-out account settings; #collections on the shelves.
-activateTab(location.hash === '#inbox' ? 'inbox'
+activateTab(location.hash.indexOf('#inbox') === 0 ? 'inbox'   // gate A2: + #inbox/new/<uid>
   : (location.hash === '#settings' ? 'settings'
   : (location.hash === '#collections' ? 'collections' : 'profile')));
 if (location.hash === '#collections') {
@@ -2118,20 +2118,32 @@ function ensureActivity() {
 const RAR_ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 function escText(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
+// mega-run gate A2 — THE LETTER ROOM. One list for every conversation kind
+// (admin floor · peer · group), a Requests strip for knock-first strangers,
+// and Blake as a normal row whose gold keys on IDENTITY, never on kind.
+// Decline is SILENT by design: the sender's row reads "request sent" whether
+// the request is pending OR declined — the two states are indistinguishable
+// on their side (anti-harassment; the A1 rules enforce the write side).
 function initInbox(user) {
   const homeEl = document.getElementById('inbox-home');
   const threadEl = document.getElementById('inbox-thread');
   const listEl = document.getElementById('inbox-list');
+  const reqWrapEl = document.getElementById('inbox-requests');
+  const reqListEl = document.getElementById('inbox-requests-list');
+  const hintEl = document.getElementById('inbox-hint');
   const msgsEl = document.getElementById('inbox-messages');
   const inputEl = document.getElementById('inbox-input');
   const sendBtn = document.getElementById('inbox-send');
   const backBtn = document.getElementById('inbox-back');
-  const blakeBtn = document.getElementById('inbox-message-blake');
+  const titleEl = document.getElementById('inbox-thread-title');
+  const muteBtn = document.getElementById('inbox-mute');
+  const blockBtn = document.getElementById('inbox-block');
+  const reqBarEl = document.getElementById('inbox-req-bar');
+  const statusEl = document.getElementById('inbox-status');
   const dotEl = document.getElementById('inbox-dot');
   if (!homeEl || !threadEl) return;
 
   const isBlake = user.uid === RAR_ADMIN_UID;
-  if (isBlake && blakeBtn) blakeBtn.closest('.inbox-blake-card').hidden = true;   // Blake sees the list, not himself
 
   // gate 20.8 (fix 1): the DM composer chip wears YOUR face (origin-gated,
   // escape-safe; the initial disc when no photo; mirrors script.js's chip).
@@ -2149,11 +2161,54 @@ function initInbox(user) {
 
   let convos = [];
   let myReads = {};            // convId -> lastReadAt ms
+  let myMuted = {};            // notifPrefs.muted (per-type + 'conv:<id>' keys)
   let openConvId = null;
+  let composeTo = null;        // uid — "new letter" mode (no conv doc yet)
   let unsubMsgs = null;
   const ms = (t) => (t && t.toMillis ? t.toMillis() : 0);
+  const ago = (t) => {
+    const s = Math.max(0, Math.floor((Date.now() - ms(t)) / 1000));
+    if (!ms(t)) return '';
+    if (s < 60) return 'now';
+    const m = Math.floor(s / 60); if (m < 60) return m + 'm';
+    const h = Math.floor(m / 60); if (h < 24) return h + 'h';
+    return Math.floor(h / 24) + 'd';
+  };
 
-  // my conversations, newest activity first (the index exists)
+  // Name resolution: profiles/{uid}.displayName → users/{uid} fallback (the
+  // admin-queue nameFor pattern). Cached; textContent-patched — no HTML path.
+  const nameCache = new Map();
+  async function nameFor(uid) {
+    if (!uid) return 'A member';
+    if (uid === RAR_ADMIN_UID) return 'Blake';
+    if (nameCache.has(uid)) return nameCache.get(uid);
+    let name = 'A member';
+    try {
+      const p = await getDoc(doc(db, 'profiles', uid));
+      if (p.exists() && typeof p.data().displayName === 'string' && p.data().displayName.trim()) name = p.data().displayName.trim();
+      else {
+        const u = await getDoc(doc(db, 'users', uid));
+        if (u.exists()) name = String(u.data().displayName || u.data().username || 'A member');
+      }
+    } catch (_) {}
+    name = name.slice(0, 40);
+    nameCache.set(uid, name);
+    return name;
+  }
+  const otherUid = (c) => ((c.participants || []).find((u) => u !== user.uid) || '');
+
+  // Friendly status line (never a native dialog, never a raw SDK string).
+  let statusTimer = null;
+  function sayStatus(text) {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.hidden = !text;
+    if (statusTimer) clearTimeout(statusTimer);
+    if (text) statusTimer = setTimeout(() => { statusEl.hidden = true; }, 6000);
+  }
+
+  // my conversations, newest activity first (the index exists; requests are
+  // born WITH lastMessageAt — the A2 born-sortable rule — so they ride too)
   const cq = query(collection(db, 'conversations'),
     where('participants', 'array-contains', user.uid), orderBy('lastMessageAt', 'desc'), limit(30));
   onSnapshot(cq, async (snap) => {
@@ -2164,30 +2219,126 @@ function initInbox(user) {
       try { const r = await getDoc(doc(db, 'conversations', c.id, 'reads', user.uid)); myReads[c.id] = r.exists() ? ms(r.data().lastReadAt) : 0; }
       catch (_) { myReads[c.id] = 0; }
     }));
+    // resolve names BEFORE painting (cached after the first pass; N≤30)
+    await Promise.all(convos.map((c) => c.kind === 'group' ? null : nameFor(otherUid(c))));
     paintList();
   }, () => {});
+
+  // live mute prefs (the same doc the Lantern watches)
+  onSnapshot(doc(db, 'users', user.uid, 'notifPrefs', 'prefs'), (snap) => {
+    myMuted = (snap.exists() && snap.data().muted) || {};
+    if (openConvId) paintMuteBtn();
+  }, () => {});
+
+  // A conversation is an INCOMING request when I'm the recipient (not the
+  // creator) and it still waits. My own sent requests (state 'request' OR
+  // 'declined' — indistinguishable, see the header comment) list as pending.
+  const isIncomingRequest = (c) => c.kind === 'peer' && c.state === 'request' && c.creatorUid !== user.uid;
+  const isMyPendingRequest = (c) => c.kind === 'peer' && (c.state === 'request' || c.state === 'declined') && c.creatorUid === user.uid;
+  // Declined requests VANISH from the recipient's list (declining closes the
+  // door quietly; the doc stays for the rules' no-re-request memory).
+  const hiddenForMe = (c) => c.kind === 'peer' && c.state === 'declined' && c.creatorUid !== user.uid;
 
   // unread = a NEWER message I haven't read AND it wasn't mine (adversarial
   // review, MED: my own send bumped lastMessageAt and could flag my own row
   // unread in the send-then-leave window). lastSenderUid is CF-owned.
   function isUnread(c) { return c.lastSenderUid !== user.uid && ms(c.lastMessageAt) > (myReads[c.id] || 0); }
+
+  function rowLabel(c) {
+    if (c.kind === 'group') {
+      const n = (c.participants || []).length;
+      return `<span class="inbox-row-who">👥 ${escText(String(c.name || 'A group').slice(0, 60))} <span class="inbox-row-count">${n}</span></span>`;
+    }
+    const other = otherUid(c);
+    const gold = other === RAR_ADMIN_UID;
+    const name = escText(nameCache.get(other) || (gold ? 'Blake' : 'A member'));
+    return `<span class="inbox-row-who">${gold ? '🏮 ' : '✉ '}${name}</span>`;
+  }
+
   function paintList() {
     if (!listEl) return;
-    listEl.innerHTML = convos.length ? convos.map((c) => `
-      <li class="inbox-row${isUnread(c) ? ' is-unread' : ''}" data-conv="${escText(c.id)}" role="button" tabindex="0">
-        <span class="inbox-row-who">${isBlake ? '✉ A member' : '🏮 Blake'}</span>
+    const requests = convos.filter(isIncomingRequest);
+    const rows = convos.filter((c) => !isIncomingRequest(c) && !hiddenForMe(c));
+
+    if (reqWrapEl && reqListEl) {
+      reqWrapEl.hidden = requests.length === 0;
+      reqListEl.innerHTML = requests.map((c) => `
+        <li class="inbox-row inbox-row--request is-unread" data-conv="${escText(c.id)}" role="button" tabindex="0">
+          ${rowLabel(c)}
+          <span class="inbox-row-sub">wants to message you</span>
+          <span class="inbox-row-state"><span class="inbox-row-dot" aria-label="Unread request"></span></span>
+        </li>`).join('');
+    }
+
+    listEl.innerHTML = rows.length ? rows.map((c) => `
+      <li class="inbox-row${isUnread(c) ? ' is-unread' : ''}${otherUid(c) === RAR_ADMIN_UID && c.kind !== 'group' ? ' is-blake' : ''}${isMyPendingRequest(c) ? ' is-pending' : ''}" data-conv="${escText(c.id)}" role="button" tabindex="0">
+        ${rowLabel(c)}
+        ${isMyPendingRequest(c) ? '<span class="inbox-row-sub">request sent</span>' : ''}
+        <span class="inbox-row-when">${escText(ago(c.lastMessageAt))}</span>
         <span class="inbox-row-state">${c.state === 'locked' ? '🔒' : ''}${isUnread(c) ? '<span class="inbox-row-dot" aria-label="Unread"></span>' : ''}</span>
-      </li>`).join('') : '<li class="inbox-empty muted">No conversations yet.</li>';
-    if (dotEl) dotEl.hidden = !convos.some(isUnread);
+      </li>`).join('') : '<li class="inbox-empty muted">No letters yet.</li>';
+
+    if (hintEl) hintEl.hidden = !(rows.length === 0 && requests.length === 0);
+    if (dotEl) dotEl.hidden = !(convos.some((c) => !hiddenForMe(c) && isUnread(c)) || requests.length > 0);
+  }
+
+  function paintMuteBtn() {
+    if (!muteBtn || !openConvId) return;
+    const muted = !!myMuted['conv:' + openConvId];
+    muteBtn.textContent = muted ? '🔕' : '🔔';
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    muteBtn.title = muted ? 'Unmute this conversation' : 'Mute this conversation';
+  }
+
+  async function paintThreadChrome(c) {
+    // title
+    if (titleEl) {
+      if (composeTo) {
+        const name = escText(await nameFor(composeTo));
+        titleEl.innerHTML = `✉ New letter to <b>${name}</b>`;
+      } else if (c && c.kind === 'group') {
+        titleEl.innerHTML = `👥 <b>${escText(String(c.name || 'A group').slice(0, 60))}</b> <span class="inbox-row-count">${(c.participants || []).length}</span>`;
+      } else if (c) {
+        const other = otherUid(c);
+        const gold = other === RAR_ADMIN_UID;
+        const name = escText(await nameFor(other));
+        titleEl.innerHTML = `${gold ? '🏮' : '✉'} <b class="${gold ? 'is-blake-name' : ''}">${name}</b>${gold ? ' <span class="jp-mini">便り</span>' : ''}`;
+      }
+    }
+    // request bar (incoming only) + composer state
+    const incoming = c && isIncomingRequest(c);
+    const pendingMine = c && isMyPendingRequest(c);
+    if (reqBarEl) reqBarEl.hidden = !incoming;
+    const locked = c && c.state === 'locked';
+    const writable = composeTo || (c && (c.state === 'open'));
+    inputEl.readOnly = !writable;
+    inputEl.placeholder = composeTo ? 'Introduce yourself — this arrives as a request…'
+      : locked ? 'This conversation is closed.'
+      : incoming ? 'Accept the request to reply.'
+      : pendingMine ? 'You can write more once they accept.'
+      : (c && c.kind === 'group') ? 'Write to the group…'
+      : (c && otherUid(c) === RAR_ADMIN_UID) ? 'Write to Blake…'
+      : (isBlake && c && c.kind === 'admin') ? 'Reply as Blake…'
+      : 'Write your letter…';
+    sendBtn.disabled = true;
+    // mute: any open conv (not compose-new); block: open/pending PEER convs only
+    if (muteBtn) { muteBtn.hidden = !!composeTo || !c; paintMuteBtn(); }
+    if (blockBtn) blockBtn.hidden = !!composeTo || !c || c.kind !== 'peer' || isBlake;
   }
 
   async function openConv(convId) {
+    composeTo = null;
     openConvId = convId;
     homeEl.hidden = true; threadEl.hidden = false;
+    sayStatus('');
     msgsEl.innerHTML = '<p class="muted">Opening…</p>';
     if (unsubMsgs) { try { unsubMsgs(); } catch (_) {} }
+    const c = convos.find((x) => x.id === convId);
+    await paintThreadChrome(c);
     const mq = query(collection(db, 'conversations', convId, 'messages'), orderBy('createdAt', 'asc'), limit(200));
-    unsubMsgs = onSnapshot(mq, (snap) => {
+    unsubMsgs = onSnapshot(mq, async (snap) => {
+      const isGroup = c && c.kind === 'group';
+      if (isGroup) await Promise.all(snap.docs.map((d) => nameFor((d.data() || {}).senderUid)));
       const rows = [];
       snap.forEach((d) => {
         const m = d.data() || {};
@@ -2195,77 +2346,230 @@ function initInbox(user) {
         // round-3 adversarial (heart): gold keys on IDENTITY — a letter wears
         // Blake's gold edge when BLAKE sent it, on every viewer's screen.
         const fromBlake = m.senderUid === RAR_ADMIN_UID;
-        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}${fromBlake ? ' is-blake' : ''}">${escText(m.text || '')}</div>`);
+        // group letters carry the sender's name (resolved above, escaped here);
+        // the ⚑ rides every non-mine letter — always visible (no hover-only).
+        const who = (isGroup && !mine) ? `<span class="inbox-msg-who${fromBlake ? ' is-blake-name' : ''}">${escText(nameCache.get(m.senderUid) || 'A member')}</span>` : '';
+        const flag = !mine ? `<button type="button" class="inbox-msg-flag" data-mid="${escText(d.id)}" data-sender="${escText(m.senderUid || '')}" title="Report this message" aria-label="Report this message">⚑</button>` : '';
+        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}${fromBlake ? ' is-blake' : ''}">${who}${escText(m.text || '')}${flag}</div>`);
       });
       msgsEl.innerHTML = rows.length ? rows.join('')
-        : '<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">🏮</span>'
-          + '<p>Say hello — this goes straight to Blake.</p>'
-          + '<p class="inbox-empty-sub">He reads every letter himself.</p></div>';
+        : `<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">🏮</span>
+            <p>${c && otherUid(c) === RAR_ADMIN_UID && c.kind !== 'group' ? 'Say hello — this goes straight to Blake.' : 'The first letter starts it.'}</p>
+            ${c && otherUid(c) === RAR_ADMIN_UID && c.kind !== 'group' ? '<p class="inbox-empty-sub">He reads every letter himself.</p>' : ''}</div>`;
       msgsEl.scrollTop = msgsEl.scrollHeight;
       // read receipt (rules-legal: reads/{uid} is owner-writable for participants)
       setDoc(doc(db, 'conversations', convId, 'reads', user.uid), { lastReadAt: serverTimestamp() }, { merge: true })
         .then(() => {
           // clamp to the server lastMessageAt (not the client clock) so skew
           // can't leave a just-read thread showing unread (review, MED).
-          const c = convos.find((x) => x.id === convId);
-          myReads[convId] = Math.max(myReads[convId] || 0, c ? ms(c.lastMessageAt) : 0, Date.now());
+          const cc = convos.find((x) => x.id === convId);
+          myReads[convId] = Math.max(myReads[convId] || 0, cc ? ms(cc.lastMessageAt) : 0, Date.now());
           paintList();
         }).catch(() => {});
     }, () => { msgsEl.innerHTML = '<p class="muted">Couldn\'t open this conversation.</p>'; });
-    const c = convos.find((x) => x.id === convId);
-    const locked = c && c.state !== 'open';
-    inputEl.readOnly = !!locked;
-    inputEl.placeholder = locked ? 'This conversation is closed.' : (isBlake ? 'Reply as Blake…' : 'Write to Blake…');
-    sendBtn.disabled = true;
   }
-  function closeConv() {
+
+  // "New letter" mode — no conv doc yet; the first send creates the REQUEST
+  // (or the admin floor when writing to Blake). Reached via #inbox/new/<uid>
+  // (the ✉ Message button on profile sheets).
+  async function openComposeNew(toUid) {
+    if (!toUid || toUid === user.uid) return;
+    // an existing conversation with them wins (peer pair, or Blake's floor)
+    const existing = convos.find((c) => c.kind !== 'group' && otherUid(c) === toUid);
+    if (existing && !hiddenForMe(existing)) { openConv(existing.id); return; }
+    composeTo = toUid;
     openConvId = null;
     if (unsubMsgs) { try { unsubMsgs(); } catch (_) {} unsubMsgs = null; }
+    homeEl.hidden = true; threadEl.hidden = false;
+    sayStatus('');
+    if (reqBarEl) reqBarEl.hidden = true;
+    msgsEl.innerHTML = toUid === RAR_ADMIN_UID
+      ? '<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">🏮</span><p>Say hello — this goes straight to Blake.</p><p class="inbox-empty-sub">He reads every letter himself.</p></div>'
+      : '<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">✉</span><p>Your first letter arrives as a request.</p><p class="inbox-empty-sub">They choose whether to open the conversation — write something worth opening.</p></div>';
+    await paintThreadChrome(null);
+  }
+
+  function closeConv() {
+    openConvId = null;
+    composeTo = null;
+    if (unsubMsgs) { try { unsubMsgs(); } catch (_) {} unsubMsgs = null; }
     threadEl.hidden = true; homeEl.hidden = false;
+    sayStatus('');
   }
 
   inputEl.addEventListener('input', () => {
     const v = inputEl.value.trim();
     sendBtn.disabled = !(v.length > 0 && v.length <= 2000 && !inputEl.readOnly);
   });
+
   sendBtn.addEventListener('click', async () => {
     const text = inputEl.value.trim();
-    if (!text || !openConvId) return;
+    if (!text) return;
     sendBtn.disabled = true;
     try {
-      await addDoc(collection(db, 'conversations', openConvId, 'messages'), {
-        senderUid: user.uid, text, createdAt: serverTimestamp(),
-      });
-      inputEl.value = '';
-    } catch (err) { console.error('DM send failed', err); alert('Could not send: ' + friendlyError(err, { kind: 'post' })); }
+      if (composeTo) {
+        // first letter: mint the conversation (Blake's floor stays kind admin;
+        // anyone else = a knock-first peer request, born-sortable)
+        const toUid = composeTo;
+        const ref = toUid === RAR_ADMIN_UID
+          ? await addDoc(collection(db, 'conversations'), {
+              participants: [user.uid, RAR_ADMIN_UID], kind: 'admin', state: 'open',
+              createdAt: serverTimestamp(), lastMessageAt: serverTimestamp(),
+            })
+          : await addDoc(collection(db, 'conversations'), {
+              participants: [user.uid, toUid], kind: 'peer', state: 'request', creatorUid: user.uid,
+              createdAt: serverTimestamp(), lastMessageAt: serverTimestamp(),
+            });
+        await addDoc(collection(db, 'conversations', ref.id, 'messages'), {
+          senderUid: user.uid, text, createdAt: serverTimestamp(),
+        });
+        inputEl.value = '';
+        composeTo = null;
+        openConv(ref.id);
+        if (toUid !== RAR_ADMIN_UID) sayStatus('Request sent — they choose whether to open it.');
+      } else if (openConvId) {
+        await addDoc(collection(db, 'conversations', openConvId, 'messages'), {
+          senderUid: user.uid, text, createdAt: serverTimestamp(),
+        });
+        inputEl.value = '';
+      }
+    } catch (err) {
+      console.error('DM send failed', err);
+      // a denied peer-create may mean a block in either direction — the copy
+      // stays GENERIC by design (a blocked member must never learn they are)
+      sayStatus(composeTo && err && String(err.code || '').indexOf('permission-denied') !== -1
+        ? "This member can't receive your letter right now."
+        : 'Could not send: ' + friendlyError(err, { kind: 'post' }));
+      sendBtn.disabled = false;
+    }
   });
+
+  // request actions — recipient-only by the rules; the UI mirrors that
+  const reqAccept = document.getElementById('inbox-req-accept');
+  const reqDecline = document.getElementById('inbox-req-decline');
+  const reqBlock = document.getElementById('inbox-req-block');
+  async function flipRequest(nextState) {
+    if (!openConvId) return;
+    try {
+      await updateDoc(doc(db, 'conversations', openConvId), { state: nextState });
+      if (nextState === 'open') {
+        const c = convos.find((x) => x.id === openConvId);
+        if (c) c.state = 'open';
+        await paintThreadChrome(c);
+        sayStatus('Letter opened — you can write back now.');
+      } else {
+        closeConv();
+      }
+    } catch (err) { sayStatus('That didn\'t go through: ' + friendlyError(err, { kind: 'save' })); }
+  }
+  if (reqAccept) reqAccept.addEventListener('click', () => flipRequest('open'));
+  if (reqDecline) reqDecline.addEventListener('click', () => flipRequest('declined'));
+  if (reqBlock) reqBlock.addEventListener('click', async () => {
+    const c = convos.find((x) => x.id === openConvId);
+    if (!c) return;
+    try {
+      await setDoc(doc(db, 'blocks', user.uid, 'list', otherUid(c)), { createdAt: serverTimestamp() });
+      await updateDoc(doc(db, 'conversations', openConvId), { state: 'declined' }).catch(() => {});
+      closeConv();
+      sayStatus('Blocked. They can\'t start conversations with you anymore.');
+    } catch (err) { sayStatus('That didn\'t go through: ' + friendlyError(err, { kind: 'save' })); }
+  });
+
+  // thread-bar actions: per-conversation mute + block (open peer convs)
+  if (muteBtn) muteBtn.addEventListener('click', async () => {
+    if (!openConvId) return;
+    const key = 'conv:' + openConvId;
+    const next = !myMuted[key];
+    myMuted = { ...myMuted, [key]: next };   // optimistic
+    paintMuteBtn();
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'notifPrefs', 'prefs'), { muted: { [key]: next } }, { merge: true });
+    } catch (_) { /* the prefs snapshot re-syncs */ }
+  });
+  if (blockBtn) blockBtn.addEventListener('click', async () => {
+    const c = convos.find((x) => x.id === openConvId);
+    if (!c || c.kind !== 'peer') return;
+    if (blockBtn.dataset.arm !== '1') {
+      // branded two-tap confirm (never a native dialog)
+      blockBtn.dataset.arm = '1';
+      blockBtn.textContent = 'Block?';
+      setTimeout(() => { blockBtn.dataset.arm = ''; blockBtn.textContent = '⛔'; }, 4000);
+      return;
+    }
+    blockBtn.dataset.arm = ''; blockBtn.textContent = '⛔';
+    try {
+      await setDoc(doc(db, 'blocks', user.uid, 'list', otherUid(c)), { createdAt: serverTimestamp() });
+      closeConv();
+      sayStatus('Blocked. They can\'t start conversations with you anymore.');
+    } catch (err) { sayStatus('That didn\'t go through: ' + friendlyError(err, { kind: 'save' })); }
+  });
+
+  // report-a-message (⚑ on any letter that isn't mine): a compact branded
+  // reason panel docked over the composer; ships the reports doc the A1 rules
+  // shape admits (targetType 'dm', snapshotText ≤480, evidence preserved).
+  let reportFor = null;   // { mid, senderUid, text }
+  let reportPanel = null;
+  function ensureReportPanel() {
+    if (reportPanel) return reportPanel;
+    reportPanel = document.createElement('div');
+    reportPanel.className = 'inbox-report-panel';
+    reportPanel.hidden = true;
+    reportPanel.innerHTML = `
+      <div class="inbox-report-head">Report this message <button type="button" class="inbox-report-x" aria-label="Close">×</button></div>
+      <div class="inbox-report-reasons">
+        <button type="button" data-reason="harassment">Harassment</button>
+        <button type="button" data-reason="spam">Spam</button>
+        <button type="button" data-reason="offtopic">Doesn't belong</button>
+        <button type="button" data-reason="other">Something else</button>
+      </div>`;
+    threadEl.appendChild(reportPanel);
+    reportPanel.addEventListener('click', async (e) => {
+      if (e.target.closest('.inbox-report-x')) { reportPanel.hidden = true; reportFor = null; return; }
+      const btn = e.target.closest('[data-reason]');
+      if (!btn || !reportFor || !openConvId) return;
+      try {
+        await addDoc(collection(db, 'reports'), {
+          reporterUid: user.uid, reason: btn.dataset.reason, status: 'new',
+          targetType: 'dm',
+          targetPath: 'conversations/' + openConvId + '/messages/' + reportFor.mid,
+          targetUid: reportFor.senderUid || '',
+          snapshotText: String(reportFor.text || '').slice(0, 480),
+          createdAt: serverTimestamp(),
+        });
+        sayStatus('Reported — Blake reviews every report himself.');
+      } catch (err) { sayStatus('That didn\'t go through: ' + friendlyError(err, { kind: 'post' })); }
+      reportPanel.hidden = true; reportFor = null;
+    });
+    return reportPanel;
+  }
+  msgsEl.addEventListener('click', (e) => {
+    const flag = e.target.closest('.inbox-msg-flag');
+    if (!flag) return;
+    const bubble = flag.closest('.inbox-msg');
+    reportFor = { mid: flag.dataset.mid, senderUid: flag.dataset.sender, text: bubble ? bubble.textContent.replace(/⚑\s*$/, '') : '' };
+    ensureReportPanel().hidden = false;
+  });
+
   backBtn.addEventListener('click', closeConv);
-  listEl.addEventListener('click', (e) => {
+  const rowOpen = (e) => {
     const row = e.target.closest('[data-conv]');
     if (row) openConv(row.getAttribute('data-conv'));
-  });
-  listEl.addEventListener('keydown', (e) => {
+  };
+  const rowKey = (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const row = e.target.closest('[data-conv]');
     if (row) { e.preventDefault(); openConv(row.getAttribute('data-conv')); }
-  });
+  };
+  listEl.addEventListener('click', rowOpen);
+  listEl.addEventListener('keydown', rowKey);
+  if (reqListEl) { reqListEl.addEventListener('click', rowOpen); reqListEl.addEventListener('keydown', rowKey); }
 
-  if (blakeBtn) blakeBtn.addEventListener('click', async () => {
-    // one floor-conversation per member: reuse mine if it exists
-    const mine = convos.find((c) => c.kind === 'admin' && (c.participants || []).indexOf(RAR_ADMIN_UID) !== -1);
-    if (mine) { openConv(mine.id); return; }
-    blakeBtn.disabled = true;
-    try {
-      const ref = await addDoc(collection(db, 'conversations'), {
-        participants: [user.uid, RAR_ADMIN_UID],
-        kind: 'admin', state: 'open',
-        createdAt: serverTimestamp(), lastMessageAt: serverTimestamp(),
-      });
-      openConv(ref.id);
-    } catch (err) {
-      console.error('conversation start failed', err);
-      alert('Could not start the conversation: ' + friendlyError(err, { kind: 'post' }));
-    } finally { blakeBtn.disabled = false; }
-  });
+  // #inbox/new/<uid> — the ✉ Message hand-off from profile sheets (any page).
+  // The conversations snapshot may not have landed yet; wait one tick for it.
+  const m = /^#inbox\/new\/([A-Za-z0-9_-]{1,128})$/.exec(location.hash || '');
+  if (m) {
+    try { history.replaceState(null, '', location.pathname + '#inbox'); } catch (_) {}
+    setTimeout(() => openComposeNew(m[1]), 600);
+  }
 }
 

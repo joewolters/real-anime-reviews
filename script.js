@@ -5393,6 +5393,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       <section class="profile-sheet${isCreator ? ' is-creator' : ''}" role="dialog" aria-modal="true" aria-label="${isCreator ? 'The Creator' : 'Member profile'}">
         <div class="profile-kicker">${isCreator ? 'CREATOR <span class="jp-mini">創り手</span>' : 'MEMBER <span class="jp-mini">旅人</span>'}
           <span class="profile-kicker-actions">
+            <button type="button" class="profile-message" title="Message" aria-label="Message this member" hidden>✉</button>
             ${isCreator ? '' : '<button type="button" class="profile-report" title="Report this profile" aria-label="Report this profile">⚑</button>'}
             <button type="button" class="profile-close" aria-label="Close">&times;</button>
           </span></div>
@@ -5497,6 +5498,24 @@ function openInlineCommentEditor(editBtn, itemRef) {
         } catch (_) { /* decode quirk — leave the img */ }
       }, { once: true });
       hubHydrateImages(layer);
+    }
+
+    // ✉ Message (gate A2) — every sheet carries the letter door: signed-in
+    // viewers hand off to the Letter Room (#inbox/new/<uid> — an existing
+    // conversation reopens; a stranger's first letter arrives as a REQUEST).
+    // Signed-out invites sign-in. Own sheet: hidden (you don't write yourself).
+    const msgBtn = layer.querySelector('.profile-message');
+    if (msgBtn) {
+      const viewer = auth.currentUser;
+      if (viewer && viewer.uid === uid) {
+        msgBtn.hidden = true;
+      } else {
+        msgBtn.hidden = false;
+        msgBtn.addEventListener('click', () => {
+          if (!auth.currentUser) { try { openAuth('signin'); } catch (_) {} return; }
+          location.href = 'account.html#inbox/new/' + encodeURIComponent(uid);
+        });
+      }
     }
 
     // ⚑ report — the whole profile is reportable (bio/tags/status/avatar/bg in
