@@ -77,6 +77,22 @@ test('gA3: groups wiring pins — solo birth, append-only add, self-leave, creat
   expect(html).toMatch(/inbox-group-name" maxlength="60"/);                              // the rules cap, mirrored
 });
 
+// ── gate A4 — IMAGES IN LETTERS (the legal spine, client half) ──────────────
+test('gA4: sealed-until-accept — a request-state image NEVER fetches its URL (source pins)', async ({ page }) => {
+  const js = await (await page.request.get('/account.js')).text();
+  // the sealed branch renders the chip; only the ELSE branch mints an imgbox
+  // (the hydrate pass resolves URLs from imgboxes alone — no box, no fetch)
+  expect(js).toMatch(/sealed\s*\?\s*'<span class="inbox-img-chip">🖼 Image — accept to view<\/span>'/);
+  expect(js).toContain("cc.kind === 'peer' && cc.state === 'request'");
+  // report-and-preserve: the image evidence rides the report doc
+  expect(js).toMatch(/if \(reportFor\.imgRef\) rep\.imagePath = reportFor\.imgRef/);
+  // the kill-switch + verified-email gates speak BEFORE the pick
+  expect(js).toContain('uploadsAllowed');
+  expect(js).toContain('user.emailVerified');
+  // the upload path pins the conversation (the rules re-check it)
+  expect(js).toContain("'uploads/' + user.uid + '/dm-' + convId + '/'");
+});
+
 test('gA0: the live lantern still exposes the pure model on index (behavior anchor)', async ({ page }) => {
   await page.goto('/index.html');
   await page.waitForFunction(() => typeof window.lanternModel === 'function', null, { timeout: 15000 });

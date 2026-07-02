@@ -1144,6 +1144,18 @@ test('A1 message imgRef: wrong prefix / another conversation / URL / bad thumb a
   await assertFails(setDoc(doc(as('alice'), 'conversations/mi2/messages/m4'),
     dmMsg('alice', { imgThumbRef: 'uploads/bob/dm-mi2/t1' })));
 });
+// gate A4 — an image IS a message (text may be empty when imgRef rides);
+// a bare empty message stays denied.
+test('A4 message: image-only (empty text + imgRef) is ALLOWED', async () => {
+  await seedPeer('mi3', 'alice', 'bob', 'open');
+  await assertSucceeds(setDoc(doc(as('alice'), 'conversations/mi3/messages/m1'),
+    dmMsg('alice', { text: '', imgRef: 'uploads/alice/dm-mi3/img1' })));
+});
+test('A4 message: HOSTILE bare empty message (no text, no image) stays DENIED', async () => {
+  await seedPeer('mi4', 'alice', 'bob', 'open');
+  await assertFails(setDoc(doc(as('alice'), 'conversations/mi4/messages/m1'),
+    dmMsg('alice', { text: '' })));
+});
 
 // ---------------- A1: group create ----------------
 test('A1 group create: SOLO birth happy (participants == [creator])', async () => {

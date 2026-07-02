@@ -756,8 +756,10 @@ service cloud.firestore {
                     && get(/databases/$(database)/documents/conversations/$(convId)).data.state == 'request'
                     && get(/databases/$(database)/documents/conversations/$(convId)).data.creatorUid == request.auth.uid ) )
           && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000
+          // gate A4 — an image IS a message: text may be EMPTY when imgRef
+          // rides (image-only letters); a bare empty message stays denied.
+          && (request.resource.data.text.size() > 0 || 'imgRef' in request.resource.data)
           // gate A1 — OPTIONAL image attachment: ONE own-prefix Storage path +
           // its thumb, both pinned to uploads/{me}/dm-{convId}/ (the forum
           // imageRefs scheme — same charset/length caps — with the docId

@@ -2207,6 +2207,19 @@ function initInbox(user) {
     if (text) statusTimer = setTimeout(() => { statusEl.hidden = true; }, 6000);
   }
 
+  // ── gate A4: images in letters ─────────────────────────────────────────────
+  let pendingImage = null;                 // File picked for the NEXT send
+  const imgUrlCache = new Map();           // imgRef -> download URL (per session)
+  let uploadsEnabledCache = null;          // null=unchecked; the kill-switch doc
+  async function uploadsAllowed() {
+    if (uploadsEnabledCache !== null) return uploadsEnabledCache;
+    try {
+      const s = await getDoc(doc(db, 'commentsMeta', 'uploads'));
+      uploadsEnabledCache = !(s.exists() && s.data().uploadsEnabled === false);
+    } catch (_) { uploadsEnabledCache = true; }   // rules+CF still enforce
+    return uploadsEnabledCache;
+  }
+
   // my conversations, newest activity first (the index exists; requests are
   // born WITH lastMessageAt — the A2 born-sortable rule — so they ride too)
   const cq = query(collection(db, 'conversations'),
@@ -2352,13 +2365,39 @@ function initInbox(user) {
         // group letters carry the sender's name (resolved above, escaped here);
         // the ⚑ rides every non-mine letter — always visible (no hover-only).
         const who = (isGroup && !mine) ? `<span class="inbox-msg-who${fromBlake ? ' is-blake-name' : ''}">${escText(nameCache.get(m.senderUid) || 'A member')}</span>` : '';
-        const flag = !mine ? `<button type="button" class="inbox-msg-flag" data-mid="${escText(d.id)}" data-sender="${escText(m.senderUid || '')}" title="Report this message" aria-label="Report this message">⚑</button>` : '';
-        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}${fromBlake ? ' is-blake' : ''}">${who}${escText(m.text || '')}${flag}</div>`);
+        const flag = !mine ? `<button type="button" class="inbox-msg-flag" data-mid="${escText(d.id)}" data-sender="${escText(m.senderUid || '')}" data-imgref="${escText(m.imgRef || '')}" title="Report this message" aria-label="Report this message">⚑</button>` : '';
+        // gate A4 — the image branch. SEALED-UNTIL-ACCEPT is stricter than
+        // blur: while a peer conv is still a REQUEST, the recipient's client
+        // NEVER resolves the image URL — a neutral chip stands in (a blur is
+        // tamper-trivial; a token never fetched is not). The sender sees
+        // their own image normally; acceptance unseals for real.
+        let img = '';
+        if (typeof m.imgRef === 'string' && m.imgRef) {
+          const cc = convos.find((x) => x.id === convId);
+          const sealed = !mine && cc && cc.kind === 'peer' && cc.state === 'request';
+          img = sealed
+            ? '<span class="inbox-img-chip">🖼 Image — accept to view</span>'
+            : `<span class="inbox-msg-imgbox" data-ref="${escText(m.imgRef)}"><span class="inbox-img-loading">🖼 …</span></span>`;
+        }
+        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}${fromBlake ? ' is-blake' : ''}">${who}${img}${escText(m.text || '')}${flag}</div>`);
       });
       msgsEl.innerHTML = rows.length ? rows.join('')
         : `<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">🏮</span>
             <p>${c && otherUid(c) === RAR_ADMIN_UID && c.kind !== 'group' ? 'Say hello — this goes straight to Blake.' : 'The first letter starts it.'}</p>
             ${c && otherUid(c) === RAR_ADMIN_UID && c.kind !== 'group' ? '<p class="inbox-empty-sub">He reads every letter himself.</p>' : ''}</div>`;
+      // hydrate unsealed images (cached per ref; SDK-derived URLs only — a
+      // dangling ref, e.g. pipeline-deleted, degrades to honest copy)
+      msgsEl.querySelectorAll('.inbox-msg-imgbox[data-ref]').forEach(async (box) => {
+        const ref = box.dataset.ref;
+        try {
+          let url = imgUrlCache.get(ref);
+          if (!url) { url = await getDownloadURL(storageRef(getStorage(), ref)); imgUrlCache.set(ref, url); }
+          const im = document.createElement('img');
+          im.className = 'inbox-msg-img'; im.alt = 'Attached image'; im.decoding = 'async'; im.loading = 'lazy';
+          im.src = url;
+          box.replaceChildren(im);
+        } catch (_) { box.replaceChildren(Object.assign(document.createElement('span'), { className: 'inbox-img-chip', textContent: '🖼 Image unavailable' })); }
+      });
       msgsEl.scrollTop = msgsEl.scrollHeight;
       // read receipt (rules-legal: reads/{uid} is owner-writable for participants)
       setDoc(doc(db, 'conversations', convId, 'reads', user.uid), { lastReadAt: serverTimestamp() }, { merge: true })
@@ -2398,22 +2437,62 @@ function initInbox(user) {
     if (unsubMsgs) { try { unsubMsgs(); } catch (_) {} unsubMsgs = null; }
     threadEl.hidden = true; homeEl.hidden = false;
     sayStatus('');
+    clearAttachment();   // an attachment never crosses threads
   }
 
-  inputEl.addEventListener('input', () => {
+  function paintSendState() {
     const v = inputEl.value.trim();
-    sendBtn.disabled = !(v.length > 0 && v.length <= 2000 && !inputEl.readOnly);
-  });
+    // an image IS a message (gate A4) — text optional when one is attached
+    sendBtn.disabled = !((v.length > 0 || pendingImage) && v.length <= 2000 && !inputEl.readOnly);
+  }
+  inputEl.addEventListener('input', paintSendState);
+
+  // gate A4 — the attach flow. Every gate speaks BEFORE the pick: verified
+  // email (the storage rules enforce it — say it kindly first), the
+  // uploadsEnabled kill-switch, type + size (the pipeline re-checks by bytes).
+  const attachBtn = document.getElementById('inbox-attach');
+  const fileEl = document.getElementById('inbox-file');
+  const chipEl = document.getElementById('inbox-attach-chip');
+  const chipName = document.getElementById('inbox-attach-name');
+  const chipX = document.getElementById('inbox-attach-x');
+  function clearAttachment() {
+    pendingImage = null;
+    if (fileEl) fileEl.value = '';
+    if (chipEl) chipEl.hidden = true;
+    paintSendState();
+  }
+  if (attachBtn && fileEl) {
+    attachBtn.addEventListener('click', async () => {
+      if (inputEl.readOnly) return;
+      if (!user.emailVerified) { sayStatus('Pictures need a verified email first — check Account → verify, then come back.'); return; }
+      if (!(await uploadsAllowed())) { sayStatus('Images are resting right now — words still work.'); return; }
+      fileEl.click();
+    });
+    fileEl.addEventListener('change', () => {
+      const f = fileEl.files && fileEl.files[0];
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { sayStatus('That file isn\'t an image.'); fileEl.value = ''; return; }
+      if (f.size > 5 * 1024 * 1024) { sayStatus('That image is over 5 MB — shrink it a little and try again.'); fileEl.value = ''; return; }
+      pendingImage = f;
+      if (chipName) chipName.textContent = f.name.slice(0, 60);
+      if (chipEl) chipEl.hidden = false;
+      paintSendState();
+    });
+  }
+  if (chipX) chipX.addEventListener('click', clearAttachment);
 
   sendBtn.addEventListener('click', async () => {
     const text = inputEl.value.trim();
-    if (!text) return;
+    const image = pendingImage;
+    if (!text && !image) return;
     sendBtn.disabled = true;
+    const wasCompose = !!composeTo;
     try {
-      if (composeTo) {
-        // first letter: mint the conversation (Blake's floor stays kind admin;
-        // anyone else = a knock-first peer request, born-sortable)
-        const toUid = composeTo;
+      // 1 — make sure the conversation exists (the first letter mints it:
+      // Blake's floor stays kind admin; anyone else = a knock-first request)
+      let convId = openConvId;
+      const toUid = composeTo;
+      if (wasCompose) {
         const ref = toUid === RAR_ADMIN_UID
           ? await addDoc(collection(db, 'conversations'), {
               participants: [user.uid, RAR_ADMIN_UID], kind: 'admin', state: 'open',
@@ -2423,28 +2502,55 @@ function initInbox(user) {
               participants: [user.uid, toUid], kind: 'peer', state: 'request', creatorUid: user.uid,
               createdAt: serverTimestamp(), lastMessageAt: serverTimestamp(),
             });
-        await addDoc(collection(db, 'conversations', ref.id, 'messages'), {
-          senderUid: user.uid, text, createdAt: serverTimestamp(),
-        });
-        inputEl.value = '';
+        convId = ref.id;
+      }
+      if (!convId) return;
+      // 2 — the image rides the ONE pipeline (own dm-<convId> prefix; the CF
+      // re-validates bytes, dedupes, strips EXIF; the rules pin the pointer)
+      const msg = { senderUid: user.uid, text, createdAt: serverTimestamp() };
+      if (image) {
+        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        const path = 'uploads/' + user.uid + '/dm-' + convId + '/' + id;
+        await uploadBytes(storageRef(getStorage(), path), image, { contentType: image.type });
+        msg.imgRef = path;
+      }
+      // 3 — the letter itself
+      await addDoc(collection(db, 'conversations', convId, 'messages'), msg);
+      inputEl.value = '';
+      clearAttachment();
+      if (wasCompose) {
         composeTo = null;
-        openConv(ref.id);
+        openConv(convId);
         if (toUid !== RAR_ADMIN_UID) sayStatus('Request sent — they choose whether to open it.');
-      } else if (openConvId) {
-        await addDoc(collection(db, 'conversations', openConvId, 'messages'), {
-          senderUid: user.uid, text, createdAt: serverTimestamp(),
-        });
-        inputEl.value = '';
       }
     } catch (err) {
       console.error('DM send failed', err);
       // a denied peer-create may mean a block in either direction — the copy
       // stays GENERIC by design (a blocked member must never learn they are)
-      sayStatus(composeTo && err && String(err.code || '').indexOf('permission-denied') !== -1
+      sayStatus(wasCompose && err && String(err.code || '').indexOf('permission-denied') !== -1
         ? "This member can't receive your letter right now."
-        : 'Could not send: ' + friendlyError(err, { kind: 'post' }));
+        : 'Could not send: ' + friendlyError(err, { kind: image ? 'upload' : 'post', user }));
       sendBtn.disabled = false;
     }
+  });
+
+  // gate A4 — a minimal branded lightbox for letter images (account has none)
+  let lightboxEl = null;
+  msgsEl.addEventListener('click', (e) => {
+    const im = e.target.closest('.inbox-msg-img');
+    if (!im) return;
+    if (!lightboxEl) {
+      lightboxEl = document.createElement('div');
+      lightboxEl.className = 'inbox-lightbox';
+      lightboxEl.hidden = true;
+      lightboxEl.innerHTML = '<button type="button" class="inbox-lightbox-x" aria-label="Close">×</button><img alt="Attached image">';
+      document.body.appendChild(lightboxEl);
+      const close = () => { lightboxEl.hidden = true; };
+      lightboxEl.addEventListener('click', (ev) => { if (!ev.target.closest('img')) close(); });
+      document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && lightboxEl && !lightboxEl.hidden) close(); });
+    }
+    lightboxEl.querySelector('img').src = im.src;
+    lightboxEl.hidden = false;
   });
 
   // request actions — recipient-only by the rules; the UI mirrors that
@@ -2458,7 +2564,10 @@ function initInbox(user) {
       if (nextState === 'open') {
         const c = convos.find((x) => x.id === openConvId);
         if (c) c.state = 'open';
-        await paintThreadChrome(c);
+        // re-open: re-subscribes + RE-RENDERS the letters — a sealed image
+        // chip unseals here (the messages snapshot alone never refires on a
+        // conversation-state flip; the walk caught the chip staying sealed)
+        await openConv(openConvId);
         sayStatus('Letter opened — you can write back now.');
       } else {
         closeConv();
@@ -2531,14 +2640,18 @@ function initInbox(user) {
       const btn = e.target.closest('[data-reason]');
       if (!btn || !reportFor || !openConvId) return;
       try {
-        await addDoc(collection(db, 'reports'), {
+        const rep = {
           reporterUid: user.uid, reason: btn.dataset.reason, status: 'new',
           targetType: 'dm',
           targetPath: 'conversations/' + openConvId + '/messages/' + reportFor.mid,
           targetUid: reportFor.senderUid || '',
           snapshotText: String(reportFor.text || '').slice(0, 480),
           createdAt: serverTimestamp(),
-        });
+        };
+        // gate A4 — report-and-preserve: the image EVIDENCE rides the report
+        // (the admin queue renders imagePath; the object outlives the thread)
+        if (reportFor.imgRef) rep.imagePath = reportFor.imgRef;
+        await addDoc(collection(db, 'reports'), rep);
         sayStatus('Reported — Blake reviews every report himself.');
       } catch (err) { sayStatus('That didn\'t go through: ' + friendlyError(err, { kind: 'post' })); }
       reportPanel.hidden = true; reportFor = null;
@@ -2549,7 +2662,7 @@ function initInbox(user) {
     const flag = e.target.closest('.inbox-msg-flag');
     if (!flag) return;
     const bubble = flag.closest('.inbox-msg');
-    reportFor = { mid: flag.dataset.mid, senderUid: flag.dataset.sender, text: bubble ? bubble.textContent.replace(/⚑\s*$/, '') : '' };
+    reportFor = { mid: flag.dataset.mid, senderUid: flag.dataset.sender, imgRef: flag.dataset.imgref || '', text: bubble ? bubble.textContent.replace(/⚑\s*$/, '') : '' };
     ensureReportPanel().hidden = false;
   });
 

@@ -493,10 +493,18 @@
             </div>
             <div id="inbox-messages" class="inbox-messages" aria-live="polite"></div>
             <div id="inbox-status" class="inbox-status" role="status" hidden></div>
+            <!-- gate A4 — the attachment chip (one image per letter; the pipeline
+                 rides: email-verified, kill-switch, caps, EXIF-strip) -->
+            <div id="inbox-attach-chip" class="inbox-attach-chip" hidden>
+              <span id="inbox-attach-name" class="inbox-attach-name"></span>
+              <button type="button" id="inbox-attach-x" class="inbox-panel-x" aria-label="Remove the attachment">×</button>
+            </div>
             <div class="inbox-composer">
               <!-- gate 20.8 (fix 1): your face on the DM composer too (account.js paints it) -->
               <div class="avatar composer-ava" id="inbox-self-ava" aria-hidden="true">&#9733;</div>
               <textarea id="inbox-input" maxlength="2000" placeholder="Write your letter…"></textarea>
+              <button type="button" id="inbox-attach" class="inbox-bar-btn" title="Attach an image" aria-label="Attach an image">📎</button>
+              <input type="file" id="inbox-file" accept="image/*" hidden>
               <button type="button" id="inbox-send" class="inbox-send-btn" disabled>Send ➤</button>
             </div>
           </div>
