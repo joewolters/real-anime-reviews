@@ -399,6 +399,8 @@ const LATE_TARGETS = [
   ['account.js',        "cropper.js?v= import (account)",  /(from '\.\/cropper\.js\?v=)([^']+)(')/],
   // v1.10.1 hotfix — the ONE branded-error module rides ?v= from birth
   ['script.js',         "friendly-errors.js?v= import (script)",  /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],
+  // mega-run gate A0 — index imports the unified Lantern module now
+  ['script.js',         "lantern.js?v= import (script)",   /(from '\.\/lantern\.js\?v=)([^']+)(')/],
   ['account.js',        "friendly-errors.js?v= import (account)", /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],
   // v1.10.2R (adversarial LOW): both pages sat at APP_VERSION "1.9.1" for two
   // ships because only their ?v= lines were targeted — the version marker

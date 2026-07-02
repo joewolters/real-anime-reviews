@@ -112,7 +112,9 @@ test.describe('v1.9.0 gate 6 — the Lantern (static surface)', () => {
   });
 
   test('gate 6f: account deep-links carry the full target via #notif= (cross-page scroll)', async ({ page }) => {
-    await page.goto('/account.html');
+    // gate A0 hardening: import on INDEX — the pure helper is page-agnostic, and
+    // account.html's signed-out boot can navigate mid-evaluate (context-destroyed flake).
+    await page.goto('/index.html');
     // Import the module directly + call the exported pure helper (reliable regardless
     // of page auto-init timing). notifHref is exactly what openNotifTarget navigates with.
     const r = await page.evaluate(async () => {

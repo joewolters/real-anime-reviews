@@ -1,16 +1,22 @@
 // lantern.js (ES module)
-// Self-contained Lantern notification center for the ACCOUNT page. This is a
-// faithful port of the canonical Lantern in script.js (the index page's classic
-// script). It owns #notif-btn / #notif-dot on the account page. Same center,
-// same data, same gold-vs-purple gating, same unread glow.
+// THE Lantern notification center — the ONE source for BOTH pages (mega-run
+// gate A0 unified it; script.js used to carry a duplicated twin that had
+// already drifted). It owns #notif-btn / #notif-dot on whichever page loads it.
+// Same center, same data, same gold-vs-purple gating, same unread glow.
 //
 // The CSS classes (.lantern-layer, .lantern-center, .lantern-row, .lantern-lit,
 // etc.) already live globally in style.css — this module adds NO CSS.
 //
-// Differences from the index port (account page can't open in-page anime modals):
-//  - Deep-link rows NAVIGATE to index.html (hash routes) instead of opening a
-//    modal in-place.
-//  - No on-page scroll-highlight and no floating back-chip (index-only).
+// Page differences ride through initLantern(opts) hooks — NEVER through a copy:
+//  - openTarget(targetPath, animeId): in-page deep-link router (index passes its
+//    openNotifTarget; account omits it and rows NAVIGATE to index.html).
+//  - onRowNavigate(): after an in-page deep-link lands (index shows its
+//    floating "← Notifications" back chip).
+//  - onOpen(): when the center opens (index hides that back chip).
+//  - keepScrollLock(): closing the center keeps the scroll lock when a layer
+//    below still owns it (index's anime modal under the lantern).
+//  - safeAvatar(url): the page's avatar origin gate (index passes its shared
+//    safeAvatar; the default below mirrors it — keep the gates in sync).
 
 import { auth, db } from './firebase.js';
 import {
@@ -32,6 +38,7 @@ function escapeHtml(s) {
 // ── State ────────────────────────────────────────────────────────────────────
 let notifBtn = null;
 let notifDot = null;
+let hooks    = {};   // page hooks from initLantern(opts) — see the header comment
 
 let unsubNotifs     = null;   // notifications collection listener
 let unsubNotifPrefs = null;   // notifPrefs/prefs listener (lastSeenAt + muted)
@@ -104,6 +111,14 @@ function notifCreatedMs(n) {
 function notifIsBlake(n) {
   if (!n) return false;
   return n.type === 'blake_message' || n.fromUid === NOTIF_ADMIN_UID;
+}
+
+// The default avatar origin gate (used when the page hooks none in).
+function defaultSafeAvatar(u) {
+  return (typeof u === 'string'
+    && (/^https:\/\/(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)\//.test(u)
+      || ((location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+        && /^http:\/\/127\.0\.0\.1:9199\//.test(u)))) ? u : '';
 }
 
 // ── PURE testable model (exposed on window for Playwright). Pure function of its
@@ -212,13 +227,19 @@ function onLanternClick(e) {
   // Rollup drill-down — expand to "exactly who liked".
   const roll = e.target.closest('[data-rollup-toggle]');
   if (roll) { e.preventDefault(); notifRollupOpen = !notifRollupOpen; renderLanternCenter(); return; }
-  // A deep-linkable notification row OR an itemized vote row → NAVIGATE to index.
+  // A deep-linkable notification row OR an itemized vote row → the page's
+  // in-page router when one was hooked (index), else NAVIGATE to index.
   const link = e.target.closest('.lantern-row[data-target], .lantern-vote-item[data-target]');
   if (link) {
     const tgt = link.dataset.target, aid = link.dataset.animeid;
     if (!tgt && !aid) return;
     closeLanternCenter();
-    openNotifTarget(tgt, aid);
+    if (typeof hooks.openTarget === 'function') {
+      hooks.openTarget(tgt, aid);
+      if (typeof hooks.onRowNavigate === 'function') hooks.onRowNavigate();
+    } else {
+      openNotifTarget(tgt, aid);
+    }
   }
 }
 
@@ -275,12 +296,10 @@ function renderLanternRow(n) {
   // dream-profile fix: origin-gate the notif avatar too — senderIdentity's
   // users/ fallback photoURL is rules-unvalidated, so a hostile origin could
   // ride a notification into every recipient's lantern (IP beacon).
-  // (gate 20.7: + the practice-emulator origin, localhost-only — mirrors
-  // script.js safeAvatar; keep the three client gates in sync.)
-  const safePhoto = (typeof n.fromPhotoURL === 'string'
-    && (/^https:\/\/(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)\//.test(n.fromPhotoURL)
-      || ((location.hostname === '127.0.0.1' || location.hostname === 'localhost')
-        && /^http:\/\/127\.0\.0\.1:9199\//.test(n.fromPhotoURL)))) ? n.fromPhotoURL : '';
+  // (gate 20.7: + the practice-emulator origin, localhost-only. Index passes
+  // its shared safeAvatar via hooks; this default mirrors it — in sync.)
+  const gate = (typeof hooks.safeAvatar === 'function') ? hooks.safeAvatar : defaultSafeAvatar;
+  const safePhoto = gate(n.fromPhotoURL) || '';
   const avatar = safePhoto
     ? `<img src="${escapeHtml(safePhoto)}" alt="">`
     : `<span>${escapeHtml(String(name).trim().slice(0,1).toUpperCase() || '?')}</span>`;
@@ -377,8 +396,8 @@ function updateLanternGlyph() {
 }
 
 // "Mark all read" = ONE write to notifPrefs/prefs.lastSeenAt (merge). No per-notif
-// read flips anymore.
-async function markAllNotifsRead() {
+// read flips anymore. (Exported: index's catch-up sheet marks pings read on open.)
+export async function markAllNotifsRead() {
   const user = auth.currentUser;
   if (!user) return;
   // optimistic: light goes cold immediately
@@ -448,9 +467,10 @@ function subscribeNotifications(user) {
   });
 }
 
-function openLanternCenter() {
+export function openLanternCenter() {
   if (!auth.currentUser) return;   // logged out: clicking does nothing
   ensureLanternEl();
+  if (typeof hooks.onOpen === 'function') hooks.onOpen();   // index drops its back chip
   notifCenterOpen = true;
   notifBtn?.setAttribute('aria-expanded', 'true');
   renderLanternCenter();           // rows GLOW while open (don't mark read on open)
@@ -470,7 +490,10 @@ function closeLanternCenter() {
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const done = () => { if (lanternEl) lanternEl.hidden = true; };
   if (reduce) done(); else setTimeout(done, 300);
-  document.documentElement.style.overflow = '';
+  // A layer below may still own the scroll lock (index's anime modal under the
+  // lantern) — the page says so through the hook; default releases it.
+  document.documentElement.style.overflow =
+    (typeof hooks.keepScrollLock === 'function' && hooks.keepScrollLock()) ? 'hidden' : '';
   // AUTO-MARK-READ ON CLOSE: after the user opens then closes the center, the rows
   // stop glowing on the next open (and the glyph goes cold).
   markAllNotifsRead();
@@ -483,8 +506,11 @@ function toggleLanternCenter() {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 // Call once when the page initializes. Defensive: if #notif-btn is absent, no-op.
-export function initLantern() {
-  // Keep the pure model unit-testable from the account page too.
+// opts (all optional — see the header comment): openTarget, onRowNavigate,
+// onOpen, keepScrollLock, safeAvatar.
+export function initLantern(opts) {
+  hooks = opts || {};
+  // Keep the pure model unit-testable from every page.
   if (typeof window !== 'undefined') {
     window.lanternModel = lanternModel;
     window.parseNotifTarget = parseNotifTarget;
