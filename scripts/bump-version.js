@@ -433,6 +433,9 @@ const LATE_TARGETS = [
   // stylesheet link + account.js's module import (both ?v= from birth).
   ['account.html',      'wrapped.css?v= (account)',        /(href="wrapped\.css\?v=)([^"]+)(")/],
   ['account.js',        "wrapped.js?v= import (account)",  /(from '\.\/wrapped\.js\?v=)([^']+)(')/],
+  // MEGA-RUN Milestone D — the shared nav-drawer module (?v= from birth on both pages)
+  ['script.js',         "nav-drawer.js?v= import (script)",  /(from '\.\/nav-drawer\.js\?v=)([^']+)(')/],
+  ['account.js',        "nav-drawer.js?v= import (account)", /(from '\.\/nav-drawer\.js\?v=)([^']+)(')/],
 ];
 for (const [file, label, pattern] of LATE_TARGETS) {
   TARGETS.push({

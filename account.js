@@ -35,6 +35,9 @@ import { openCropper } from './cropper.js?v=1.10.2';   // round 4 — frame-it c
 import { friendlyError } from './friendly-errors.js?v=1.10.2';
 // mega-run C3 — Constellation Wrapped (the member's year as a star map; lazy)
 import { initWrapped } from './wrapped.js?v=1.10.2';
+// mega-run milestone D — the ONE nav-drawer implementation (shared with script.js)
+import { initNavDrawer } from './nav-drawer.js?v=1.10.2';
+initNavDrawer();   // inert ≥1201; owns the ≤1200 drawer (same ids as index)
 
 
 const $  = (sel) => document.querySelector(sel);

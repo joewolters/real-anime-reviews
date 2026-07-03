@@ -27,6 +27,9 @@ import { friendlyError } from './friendly-errors.js?v=1.10.2';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
 import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=1.10.2';
+// mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
+import { initNavDrawer } from './nav-drawer.js?v=1.10.2';
+initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals
 (() => {
@@ -1810,7 +1813,9 @@ initLantern({
   openTarget: openNotifTarget,
   onRowNavigate: showLanternBackChip,
   onOpen: hideLanternBackChip,
-  keepScrollLock: () => !!(modal && modal.classList.contains('active')),
+  // TRUE-panel (LOW, fixed): + the nav drawer — closing the lantern used to
+  // wipe the drawer's scroll lock (the two layers were mutually blind).
+  keepScrollLock: () => !!(modal && modal.classList.contains('active')) || document.body.classList.contains('nav-open'),
   safeAvatar,
 });
 

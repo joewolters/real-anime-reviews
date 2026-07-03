@@ -1,63 +1,61 @@
 /* mobile.css — overrides only (loaded on <= 900px) */
+/* milestone D — the column-stacked header DIED with the nav drawer: at ≤900
+   the header is now ONE row ([toggle · logo · search · tokens] — style.css's
+   ≤1200 drawer block owns the toolbar), so this file keeps only sizing that
+   is genuinely phone-specific. The touch-behavior block moved to style.css
+   (it must fire at EVERY width — the iPad-landscape trap). */
 :root{
   --m-pad: 14px;
   --m-gap: 14px;
 }
 
-/* ===== Header becomes stacked & full-width ===== */
-.header-inner{
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  padding: 10px var(--m-pad);
+/* ===== Header: one slim row (the drawer holds the nav) ===== */
+/* TRUE-panel (HIGH, fixed): the header kept its DESKTOP padding (0 40px) at
+   phone widths — with the toggle + logo + tokens that left the search an
+   18px sliver and pushed the sign-in token 39px off-canvas at 375. The
+   header slims here (mobile.css loads after style.css and wins the tie),
+   and the Search submit button yields its width to the input (Enter and
+   the form's submit still work — the input IS the pill on phones). */
+body > header{
+  padding: 0 10px;
 }
-
-.header-left{
-  width: 100%;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
+.header-inner{
+  gap: 8px;
+  padding: 0;
 }
 
 body > header h1{
+  font-size: 1.35rem;
   line-height: 1.1;
-  font-size: 2rem;
-  text-align: center;
 }
 
-/* Buttons wrap instead of overflowing */
-.toolbar{
-  width: 100%;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
+.search-btn{
+  display: none;
 }
 
-/* Slightly tighter buttons on mobile */
+/* the drawer's buttons (this is the only place .inline-header-btn renders ≤900) */
 .inline-header-btn{
   padding: 10px 12px;
   font-size: 0.95rem;
 }
 
-/* Right side becomes centered + search becomes full width (gate 6d: the rail stacks —
-   search on top, the two circular tokens centered below). */
+/* search flexes to the space between the logo and the tokens; 16px input
+   font stays — it is the iPhone tap-zoom guard. */
 .nav-links{
-  width: 100%;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 8px;
 }
-
-.header-tokens{
-  justify-content: center;
-  gap: 16px;
-}
-
-/* iPhone: prevent tap-zoom by making inputs 16px */
+.search-wrap{ flex: 1 1 auto; min-width: 0; }
 #site-search{
   width: 100%;
   max-width: none;
+  min-width: 60px;
   font-size: 16px;
+}
+.header-tokens{
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 /* ===== Side widgets: stop absolute positioning on phones ===== */
@@ -89,20 +87,6 @@ body > header h1{
   .card-container{ grid-template-columns: 1fr; }
 }
 
-/* ===== Touch behavior fixes ===== */
-@media (hover: none), (pointer: coarse){
-  /* no hover scaling weirdness */
-  .card:hover{ transform: none; }
-  .card:hover::after{ opacity: 0; }
-
-  /* card action icons MUST be usable on touch */
-  .card .icon-row{
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-  }
-}
-
 /* ===== Filter panel: full-screen friendly ===== */
 #filter-panel{
   top: 10px;
@@ -121,4 +105,25 @@ body > header h1{
   position: sticky;
   bottom: 0;
   z-index: 2;
+}
+
+/* ===== True phones (≤560): the logo yields harder so the search pill stays a
+   REAL target. LAST in this file on purpose — the header section's unbanded
+   `.search-wrap{min-width:0}` would out-cascade an earlier min-width (the g32
+   pin caught exactly that). The wrap is the visible pill; the input clips
+   inside it. The full search-in-drawer move is banked (study §4b). ===== */
+@media (max-width: 560px){
+  body > header{
+    padding: 0 8px;
+  }
+  .header-inner{
+    gap: 6px;
+  }
+  body > header h1{
+    font-size: 1.02rem;
+    letter-spacing: 1px;
+  }
+  .search-wrap{
+    min-width: 84px;
+  }
 }

@@ -46,10 +46,17 @@
   <!-- Header -->
   <header>
     <div class="header-inner">
+      <!-- v2.0 milestone D — the nav DRAWER toggle (index's twin; same ids so
+           nav-drawer.js and style.css's ≤1200 block serve both pages). -->
+      <button type="button" id="nav-drawer-toggle" class="nav-drawer-toggle" aria-label="Menu" aria-expanded="false" aria-controls="main-toolbar">
+        <span class="ndt-bar" aria-hidden="true"></span>
+        <span class="ndt-bar" aria-hidden="true"></span>
+        <span class="ndt-bar" aria-hidden="true"></span>
+      </button>
       <div class="header-left">
         <h1><a href="index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
 
-        <div class="toolbar">
+        <div class="toolbar" id="main-toolbar">
           <!-- gate 6d item 7: the real nav comes to the account page (static links back
                to the home surfaces) + the logo/Den as a clear way back. -->
           <nav class="nav-places" aria-label="Sections">
@@ -61,7 +68,14 @@
           </nav>
           <span class="toolbar-seam" aria-hidden="true"></span>
           <div class="nav-tools" role="group" aria-label="Tools">
-            <button type="button" id="view-all-btn" class="inline-header-btn tool-btn" onclick="location.href='index.html#all'">View All <span class="jp-mini">全作品</span></button>
+            <button type="button" id="view-all-btn" class="inline-header-btn tool-btn" aria-label="View all anime" onclick="location.href='index.html#all'">
+            <svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            </svg>
+            <span class="tool-label">View All <span class="jp-mini">全作品</span></span></button>
             <!-- v1.10.2 (Blake): the FULL tool set on the account page too. Random
                  and Filter live on the homepage, so these route home with ?open=
                  and the boot handler performs the action — no half-dead buttons. -->
@@ -74,9 +88,13 @@
             <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
             <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
             </svg>
-            <span>Random <span class="jp-mini">ランダム</span></span>
+            <span class="tool-label">Random <span class="jp-mini">ランダム</span></span>
             </button>
-            <button type="button" id="filter-btn" class="inline-header-btn tool-btn" onclick="location.href='index.html?open=filter'">Filter <span class="jp-mini">絞り込み</span></button>
+            <button type="button" id="filter-btn" class="inline-header-btn tool-btn" aria-label="Filter anime" onclick="location.href='index.html?open=filter'">
+            <svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 5h16l-6.2 7.4V19l-3.6-2v-4.6L4 5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+            </svg>
+            <span class="tool-label">Filter <span class="jp-mini">絞り込み</span></span></button>
           </div>
         </div>
       </div>
@@ -100,6 +118,9 @@
           <button type="button" id="auth-open" class="account-token" aria-label="My Account" style="display:none;"></button>
         </div>
       </nav>
+
+      <!-- v2.0 milestone D — the drawer's scrim (index's twin). -->
+      <div id="nav-drawer-scrim" class="nav-drawer-scrim" aria-hidden="true" hidden></div>
     </div>
   </header>
 

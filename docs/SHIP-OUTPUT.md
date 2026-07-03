@@ -1,35 +1,35 @@
-<!-- author: Code | date: 2026-07-02 -->
-# THE MEGA-RUN — Report 5: **MILESTONE C COMPLETE** — discovery + the constellation. Sandbox-staged; nothing on prod before your one go.
+<!-- author: Code | date: 2026-07-03 -->
+# THE MEGA-RUN — Report 6: **MILESTONE D COMPLETE** — the responsive overhaul, panel-hardened. Sandbox-staged; nothing on prod before your one go.
 
-Milestone C is closed: community reviews under honest yellow tape on anime you haven't watched, the Random filter and a Hidden Gems rail, and every member's own **Constellation** — their year on the site drawn as a star map where the one gold star is the day they joined. The adversarial panel earned its keep in a big way this round (details below): it found that two of the three C features I inherited were quietly broken, plus a security hole. All fixed, all pinned, everything green.
+The milestone you asked for is done: **the site works from big monitors down to phones.** The scrunched-nav problem your friend hit is gone at every width — and the independent adversarial panel you required before the cutover ran today and earned its keep with 13 confirmed findings (4 serious), all fixed and locked behind new tests.
 
-## What's built (Milestone C)
-- **Constellation Wrapped (new this session).** Every member gets a "Your Constellation" tab on their account page: their year drawn as a purple night sky — a star for every review (brighter the higher they rated), smaller stars for comments, replies, and saves, diamonds for Tavern threads, a faint constellation line connecting their reviews through the months. **The single gold star is the day they joined — your mark on their sky — and it is the only gold allowed on the surface.** Stats below are strictly truthful (reviews + average rating, comments, threads, saves, top shelf genres, member-since) — no invented watch-time, no vote counts, and a member with a quiet year never sees a parade of zeros; a brand-new member sees just their gold star and "the rest of this sky is yours to light." Reduced-motion members get a still sky. Verified with sampled pixels: the gold star paints your exact gold, the data stars paint purple.
-- **The yellow-tape door + Discover upgrades (built last session, closed this session).** Unreviewed anime open the full 3-column modal under a caution-tape banner with your data honestly absent; Random honors the reviewed/not-yet/surprise filter; Hidden Gems finds high-score low-crowd titles.
-- **The AniList canary now guards the Hidden Gems query** (4 new checks, all green live) and paces its calls so the rate limiter can't fake a failure — the one "failure" I hit on arrival turned out to be exactly that, now impossible.
+## What's built (Milestone D)
+- **The header never wraps again.** It turns out the nav *always* wrapped into two rows — even on big monitors — and the fixed-height header let the second row spill over your content; smaller laptops just made it catastrophic. Now it's ONE clean row from 1201px to ultrawide: paddings tighten first, then the Japanese sublabels step aside (they return on the widest monitors — and they live on inside the drawer), then the three tool buttons become icons (a grid, your dice, a funnel — the four PLACES never lose their names). Measured at twelve widths.
+- **Your sidebar idea, built: the nav drawer.** On laptops ≤1200px and phones, the hamburger (top-left) slides in a left drawer holding all seven nav buttons at full size — night-purple panel, the active place keeps its gold underline, big 44px touch targets. Scrim behind it, Esc closes, tapping a destination closes it and goes. Works identically on the account page.
+- **No more clipped cards.** The catalog grid used to hide cards off-screen on laptop widths (at 1024 the first card sat 143px off-canvas with no way to reach it). Cards stay exactly their designed size; the column count now flexes 4→3→2→phone layout.
+- **The phone header is one slim row** — hamburger, logo, a real search pill, your lantern, the account button — everything tappable at 375px.
+- **Touch devices get working card actions at every width** (an iPad in landscape used to get the hover-only behavior and couldn't use the card buttons at all).
 
-## The adversarial panel — its best round yet (21 confirmed findings, 7 distinct defects, ALL fixed)
-The blunt truth: **two of C's three features were dead in the tree as I found them, and the specs that "verified" them checked that the code existed rather than that it ran.**
-1. **HIGH — Hidden Gems could never appear, twice over.** The strip's reveal was waiting on a scroll-trigger watching a hidden element (which never fires for hidden elements), and even if it had fired, the data function was never plugged into the bridge it's called through. Fixed both; the strip now fills with 12 real cards in the sandbox — the first time it has ever rendered.
-2. **HIGH — the tape modal's comments column was dead.** The comment machinery still looked things up by the old key while the new modal rendered under the new key — they never met, so the column silently didn't work. Fixed; the composer now wires live (walked and pinned).
-3. **HIGH — a security hole in the tape modal.** Titles and genres arriving from the outside anime database were rendered without sanitizing, so a hostile title could have run script in members' browsers. Fixed at the render layer; a test now feeds real attack strings through the modal and proves they stay inert text.
-4. **HIGH (heart) — the tape's "NOT REVIEWED" label was painted in your gold** on the one surface where your voice is deliberately absent. It's now hazard yellow-green — caution tape, not Blake gold — pinned by a computed-color test.
-5. **MED — saved-titles double-counting** in Wrapped (a title on both watchlist and favorites counted twice). Now deduped.
-6. **MED (heart) — two extra gold text elements** on the Constellation surface. The gold now lives in the star alone; the stylesheet is pinned to carry no gold ink ever.
-7. **MED — screen-reader honesty.** The sky's spoken description recited "0 reviews, 0 comments…" to fresh members — the exact zeros-parade the visual design avoids — and undercounted comments for active ones. The accessible story now matches the visible one, count for count.
-Three further claims were refuted by the verification pass and left alone. Every fix carries a new test so none of the seven can return.
+## The TRUE adversarial panel (your #6 gate condition — ran today, 13 confirmed, ALL fixed)
+The earlier solo review was honest but the independent panel proved why it can't substitute:
+1. **HIGH — the phone header was still broken.** My logo-shrinking rule was *dead code* (an older rule with the same name later in the file silently won), so at 375px the sign-in button sat 39px off-screen and the search was an untappable 18px sliver — on both pages. My own checks had passed because they measured the wrong thing. Fixed at the root; the new test measures what users actually see.
+2. **HIGH — a fast close-then-reopen** of the drawer left it open with no dimming and no scroll lock (a stale timer). Fixed; pinned.
+3. **HIGH — keyboard focus could escape the open drawer** into the invisible page behind it, where Enter on the hidden logo triggered a surprise navigation. The drawer now cycles its own controls only.
+4. **MED — opening the Tavern from the drawer**, then pressing Enter, silently reopened the drawer *underneath* the Tavern and stole the Esc key. The drawer now refuses to open under any higher layer.
+5. Also fixed: the closed filter panel carried ~211 invisible keyboard stops (pressing Space could change your filters sight-unseen — pre-existing, fixed for good) · the drawer and Lantern could wipe each other's scroll locks · drawer rows inherited the desktop hover "pop" · the drawer now announces itself properly to screen readers · my own mobile test was asserting nothing (rewritten to really measure).
+Four further claims were refuted by the verification pass and deliberately left alone.
 
 ## Green (the new floors)
-Playwright **250** (was 243) · rules **198** · functions **77** · triggers **76** · end-to-end **20**. Live sandbox walks with sampled pixels: the Constellation (13 checks — gold star exact, purple stars purple, no zero chips), the fixed tape modal + Hidden Gems (7 checks), the extended AniList canary (12 checks, live). Committed as the Milestone C close.
+Playwright **266** (was 250) · rules **198** · functions **77** · triggers **76** · end-to-end **20**. Verified with real pixels and live walks: the one-row header at 12 desktop widths, the drawer's full choreography at 1024 and 375, a four-lane sweep of every surface (home, Discover, For You, View All, all account tabs including the new Constellation, the anime modal, the filter panel, the Tavern, profile sheets, suggest page) at 8 widths — zero horizontal overflow anywhere.
 
-## For your one final smoke (banking these now)
-1. Account → **Constellation** tab: your sky, the gold star on your join day, truthful chips.
-2. Home page: scroll past AIRING NOW → the **HIDDEN GEMS** strip appears with real cards.
-3. Discover → open an anime you haven't reviewed → **★ Community reviews** → the tape modal: caution-yellow tape, your rating/review absent, community column alive.
-4. Random with the filter on "not yet" → lands on unreviewed titles.
+## For your one final smoke (banking these)
+1. Shrink your browser window slowly from full width: the nav never wraps — it compacts, then at laptop width the hamburger appears.
+2. Phone (or a narrow window): hamburger → the drawer slides in → tap Discover → it closes and lands there.
+3. Phone: the header is one row — logo, search, lantern, account, all reachable.
+4. Laptop width (~1024): View All — every card fully visible, three columns.
 
 ## What's next (no input needed)
-**Milestone D — the v2.0 responsive overhaul** (the one you asked for: the scrunched nav, small laptops, phones, the sidebar idea). Header that never wraps, real card-grid breakpoints for the laptop band, the off-canvas nav drawer, touch fixes at every width, then a full-surface sweep at nine screen sizes. Treated with cutover seriousness.
+**Milestone E** — the finale: UI polish, the measured speed round (two multi-megabyte dead images are the cheap wins), the riders from NEXT, staging the door-line copy for your approval, then the full-suite close and the ONE comprehensive final smoke + mega-cutover proposal.
 
 ## One-liner reply
-Milestone C is closed and it's a story about the panel: the Constellation is built (each member's year as a purple star map where the only gold is the day they joined), but the round's real work was the adversarial panel catching that Hidden Gems and the tape modal's comments were both silently dead as inherited — plus an injection hole and your gold leaking onto the no-gold surface — all seven defects fixed, walked with sampled pixels, and pinned so they can't come back; new floors 250/198/77/76/20, sandbox-staged for your one smoke, responsive overhaul next.
+Milestone D is closed the way you wanted it closed: the nav never scrunches again at any width (it turns out it had always been broken, even on big screens), your sidebar idea lives as a night-purple drawer with the gold underline intact, cards never clip on laptops, the phone header finally fits — and the independent panel you made a gate condition ran today and proved its worth by catching my own dead CSS, a stale-timer bug, and a keyboard trap leak among 13 confirmed findings, every one fixed and pinned; floors now 266/198/77/76/20, sandbox-staged, Milestone E next.

@@ -20,8 +20,11 @@ test.describe('v1.8.4 gate 5 — nav + home hole-fill', () => {
     await expect(page.locator('.nav-tools #random-btn')).toHaveCount(1);
     await expect(page.locator('.nav-tools #filter-btn')).toHaveCount(1);
     await expect(page.locator('.toolbar-seam')).toHaveCount(1);
-    // The filter panel stays anchored to .toolbar (a direct child), not nav-tools.
-    await expect(page.locator('.toolbar > #filter-panel')).toHaveCount(1);
+    // v2.0 milestone D: the filter panel moved OUT of .toolbar to a header-level
+    // child — it is position:fixed, and the ≤1200 drawer's transform on the
+    // toolbar would have become its containing block and dragged it off-canvas.
+    await expect(page.locator('body > header .header-inner > #filter-panel')).toHaveCount(1);
+    await expect(page.locator('.toolbar #filter-panel')).toHaveCount(0);
   });
 
   test('the place is a mutually-exclusive radio; Den is lit at home; View All lights none', async ({ page }) => {

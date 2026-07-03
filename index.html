@@ -103,8 +103,17 @@
             <span class="place-marker" aria-hidden="true"></span>
           </nav>
           <span class="toolbar-seam" aria-hidden="true"></span>
+          <!-- v2.0 milestone D — tools carry .tool-ico/.tool-label so the compact
+               desktop band (1201-1400) can shed LABELS first (places never shed). -->
           <div class="nav-tools" role="group" aria-label="Tools">
-            <button type="button" id="view-all-btn" class="inline-header-btn tool-btn">View All <span class="jp-mini">全作品</span></button>
+            <button type="button" id="view-all-btn" class="inline-header-btn tool-btn" aria-label="View all anime">
+            <svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            </svg>
+            <span class="tool-label">View All <span class="jp-mini">全作品</span></span></button>
             <button type="button" id="random-btn" class="inline-header-btn tool-btn random-btn" aria-label="Random anime">
             <svg class="dice-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <rect x="3" y="3" width="18" height="18" rx="4" ry="4" fill="none" stroke="currentColor" stroke-width="2"></rect>
@@ -114,76 +123,84 @@
             <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
             <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
             </svg>
-            <span>Random <span class="jp-mini">ランダム</span></span>
+            <span class="tool-label">Random <span class="jp-mini">ランダム</span></span>
             </button>
-          <button id="filter-btn" class="inline-header-btn tool-btn" aria-expanded="false" aria-controls="filter-panel">Filter <span class="jp-mini">絞り込み</span></button>
+          <button id="filter-btn" class="inline-header-btn tool-btn" aria-expanded="false" aria-controls="filter-panel" aria-label="Filter anime">
+            <svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 5h16l-6.2 7.4V19l-3.6-2v-4.6L4 5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+            </svg>
+            <span class="tool-label">Filter <span class="jp-mini">絞り込み</span></span></button>
           </div>
 
-        
-          <!-- Filter dropdown panel (anchored to .toolbar) -->
-          <div id="filter-panel" aria-label="Filter anime" aria-modal="false">
-            <form id="filter-form">
-              <div class="filter-header">
-                <div class="filter-head-titles">
-                  <span class="filter-kicker">FILTER ANIME <span class="jp-mini">絞り込み</span></span>
-                  <span class="filter-summary" id="filter-summary">No filters applied</span>
-                </div>
-                <button type="button" id="filter-saved" class="filter-saved-toggle" aria-pressed="false" aria-label="Show only saved anime">
-                  <span class="fs-star" aria-hidden="true">&#9733;</span> Saved<span class="fs-count" id="filter-saved-count"></span>
-                </button>
-              </div>
-
-              <div class="filter-body">
-                <!-- v1.8.4 gate 2 — review-status segment (All / Reviewed / Not yet).
-                     "Not yet" is disabled here (catalog-only) until a Discover/For You
-                     surface enables it. No provider names anywhere. -->
-                <div class="filter-reviewed" id="filter-reviewed" role="group" aria-label="Review status">
-                  <button type="button" class="fr-seg is-active" data-reviewed="all" aria-pressed="true">All</button>
-                  <button type="button" class="fr-seg" data-reviewed="reviewed" aria-pressed="false">Reviewed</button>
-                  <button type="button" class="fr-seg" data-reviewed="notyet" aria-pressed="false" disabled title="Available on For You and Discover">Unreviewed</button>
-                </div>
-                <!-- v1.8.3 gate 4 — live-narrow the options as you type -->
-                <div class="filter-narrow-wrap">
-                  <span class="filter-narrow-icon" aria-hidden="true">&#128269;</span>
-                  <input type="text" id="filter-narrow" class="filter-narrow" autocomplete="off"
-                         placeholder="Find a genre, tag or studio&hellip;" aria-label="Narrow filter options">
-                  <button type="button" id="filter-narrow-clear" class="filter-narrow-clear" aria-label="Clear" hidden>&times;</button>
-                </div>
-                <p class="filter-noopts" id="filter-noopts" hidden>No options match that.</p>
-
-                <div class="filter-grid">
-                  <!-- GENRES -->
-                  <div class="filter-group" data-group="genre">
-                    <h4>Genres <span class="fg-jp">ジャンル</span><span class="fg-count" id="genre-count"></span></h4>
-                    <div class="filter-items" id="genre-list"><!-- populated by JS --></div>
-                  </div>
-
-                  <!-- TAGS -->
-                  <div class="filter-group" data-group="tag">
-                    <h4>Tags <span class="fg-jp">タグ</span><span class="fg-count" id="tag-count"></span></h4>
-                    <div class="filter-items" id="tag-list"><!-- populated by JS --></div>
-                  </div>
-
-                  <!-- STUDIOS -->
-                  <div class="filter-group" data-group="studio">
-                    <h4>Studios <span class="fg-jp">スタジオ</span><span class="fg-count" id="studio-count"></span></h4>
-                    <div class="filter-items" id="studio-list"><!-- populated by JS --></div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="filter-actions">
-                <button type="button" id="filter-clear">Clear</button>
-                <button type="button" id="filter-apply">Confirm<span class="fa-count" id="filter-apply-count"></span></button>
-              </div>
-
-            </form>
-          </div>
-          <!-- /#filter-panel -->
         </div>
         <!-- /.toolbar -->
       </div>
       <!-- /.header-left -->
+
+      <!-- Filter dropdown panel. v2.0 milestone D: moved OUT of .toolbar — the
+           panel is position:fixed, and the ≤1200 drawer puts a transform on the
+           toolbar, which would have become the panel's containing block and
+           dragged it off-canvas. As a header-level child its fixed positioning
+           is honest at every width; all ids/handlers unchanged. -->
+      <div id="filter-panel" aria-label="Filter anime" aria-modal="false">
+        <form id="filter-form">
+          <div class="filter-header">
+            <div class="filter-head-titles">
+              <span class="filter-kicker">FILTER ANIME <span class="jp-mini">絞り込み</span></span>
+              <span class="filter-summary" id="filter-summary">No filters applied</span>
+            </div>
+            <button type="button" id="filter-saved" class="filter-saved-toggle" aria-pressed="false" aria-label="Show only saved anime">
+              <span class="fs-star" aria-hidden="true">&#9733;</span> Saved<span class="fs-count" id="filter-saved-count"></span>
+            </button>
+          </div>
+
+          <div class="filter-body">
+            <!-- v1.8.4 gate 2 — review-status segment (All / Reviewed / Not yet).
+                 "Not yet" is disabled here (catalog-only) until a Discover/For You
+                 surface enables it. No provider names anywhere. -->
+            <div class="filter-reviewed" id="filter-reviewed" role="group" aria-label="Review status">
+              <button type="button" class="fr-seg is-active" data-reviewed="all" aria-pressed="true">All</button>
+              <button type="button" class="fr-seg" data-reviewed="reviewed" aria-pressed="false">Reviewed</button>
+              <button type="button" class="fr-seg" data-reviewed="notyet" aria-pressed="false" disabled title="Available on For You and Discover">Unreviewed</button>
+            </div>
+            <!-- v1.8.3 gate 4 — live-narrow the options as you type -->
+            <div class="filter-narrow-wrap">
+              <span class="filter-narrow-icon" aria-hidden="true">&#128269;</span>
+              <input type="text" id="filter-narrow" class="filter-narrow" autocomplete="off"
+                     placeholder="Find a genre, tag or studio&hellip;" aria-label="Narrow filter options">
+              <button type="button" id="filter-narrow-clear" class="filter-narrow-clear" aria-label="Clear" hidden>&times;</button>
+            </div>
+            <p class="filter-noopts" id="filter-noopts" hidden>No options match that.</p>
+
+            <div class="filter-grid">
+              <!-- GENRES -->
+              <div class="filter-group" data-group="genre">
+                <h4>Genres <span class="fg-jp">ジャンル</span><span class="fg-count" id="genre-count"></span></h4>
+                <div class="filter-items" id="genre-list"><!-- populated by JS --></div>
+              </div>
+
+              <!-- TAGS -->
+              <div class="filter-group" data-group="tag">
+                <h4>Tags <span class="fg-jp">タグ</span><span class="fg-count" id="tag-count"></span></h4>
+                <div class="filter-items" id="tag-list"><!-- populated by JS --></div>
+              </div>
+
+              <!-- STUDIOS -->
+              <div class="filter-group" data-group="studio">
+                <h4>Studios <span class="fg-jp">スタジオ</span><span class="fg-count" id="studio-count"></span></h4>
+                <div class="filter-items" id="studio-list"><!-- populated by JS --></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="filter-actions">
+            <button type="button" id="filter-clear">Clear</button>
+            <button type="button" id="filter-apply">Confirm<span class="fa-count" id="filter-apply-count"></span></button>
+          </div>
+
+        </form>
+      </div>
+      <!-- /#filter-panel -->
 
       <nav class="nav-links">
         <!-- gate 6d: ONE composed rail — search to the LEFT, then two equal circular
@@ -209,7 +226,9 @@
         </div>
       </nav>
 
-
+      <!-- v2.0 milestone D — the drawer's scrim (nav-drawer.js toggles hidden;
+           body.nav-open fades it in; the [hidden] twin lives in style.css). -->
+      <div id="nav-drawer-scrim" class="nav-drawer-scrim" aria-hidden="true" hidden></div>
 
     </div>
     <!-- /.header-inner -->

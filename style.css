@@ -200,13 +200,120 @@ body > header {
   transition: transform .25s ease, background-color 0.3s ease; 
   box-sizing: border-box;
 }
-/* v2.0 (milestone D) — the nav-drawer toggle is STUBBED: the button + #main-toolbar
-   id are in index.html as a head-start, but the drawer CSS/JS are NOT built yet.
-   Hide it by default so the half-built control never renders. The next Code
-   builds D here: a @media (max-width:1200px) rule un-hides this, turns .toolbar
-   into an off-canvas left drawer (body.nav-open .toolbar → translateX(0)), adds a
-   scrim + the toggle JS, and adds the 901–1200 card-grid breakpoints. */
+/* ════════════════════════════════════════════════════════════════════════
+   v2.0 milestone D — THE NAV DRAWER (≤1200px) + the compact desktop header.
+   Blake's brief: "the navigation tabs got scrunched up… maybe a sidebar."
+   ≥1201: the horizontal header stays (the site's identity) but COMPACTS
+   before it can ever wrap (jp-mini shed first, then tool labels — places
+   NEVER shed their names). ≤1200: places + tools move into a left off-canvas
+   drawer (#main-toolbar — the id scopes this to index/account; admin pages'
+   plain back-button .toolbar is untouched); the header row is just
+   [toggle · logo · search · tokens] and fits one row down to 375px.
+   JS choreography lives in nav-drawer.js (the ONE module, both pages).
+   The scrim ships its [hidden] twin; reduced-motion silences the slide.
+   ════════════════════════════════════════════════════════════════════════ */
 .nav-drawer-toggle { display: none; }
+.nav-tools .tool-ico { display: none; width: 16px; height: 16px; }   /* glyphs for the compact band only */
+
+/* the logo may NEVER render as two clipped lines again — the nowrap + fluid
+   clamp live in the base `body > header h1` rule (~line 400): an earlier
+   duplicate here was DEAD (same selector, later base won; TRUE-panel catch). */
+
+/* the compact system — the ONE-ROW header at every desktop width. The old
+   header ALWAYS wrapped its toolbar to a second row (even at 1920 with the
+   kanji sublabels) and the fixed 80px box let that row spill over content —
+   the "scrunched nav". Shed order: paddings/gaps everywhere ≥1201 (A0), the
+   jp-mini kanji below 1731 (A1), the tool LABELS below 1431 (B). The four
+   PLACES never shed their names — they are the identity. Selectors carry
+   body>header so they outrank the later base declarations. */
+/* range syntax (width > 1200px), not min-width:1201px — a fractional viewport
+   (browser zoom) at 1200.x must land in the COMPACT header, never in the old
+   unstyled seam between the two integer bands (solo-panel catch). */
+@media (width > 1200px) {
+  body > header { padding: 0 22px; }
+  body > header .header-left { gap: 12px; }
+  body > header .toolbar { gap: 8px; }
+  body > header .inline-header-btn { padding: 9px 12px; }
+  body > header #site-search { width: 165px; }
+  body > header .search-wrap { padding: 4px 6px; }
+}
+/* touch devices in the compact band (iPad Pro landscape ≈1366) keep 44px targets */
+@media (width > 1200px) and (pointer: coarse) {
+  body > header .inline-header-btn, .nav-drawer-toggle { min-height: 44px; }
+}
+/* the kanji sublabels need ~2200px of glass for one row — below that they are
+   the first ornament shed (they return on the widest monitors, never on
+   laptops; measured 2026-07-02: 1931 still wrapped, 2560 fits). Scoped to the
+   NAV BUTTONS only — the filter panel is a header child too (the D DOM move)
+   and its FILTER ANIME 絞り込み kanji must never shed (solo-panel catch). */
+@media (1200px < width <= 2199px) {
+  body > header .nav-places .jp-mini,
+  body > header .nav-tools .jp-mini { display: none; }
+}
+@media (1200px < width <= 1520px) {
+  body > header { padding: 0 16px; }
+  body > header .header-left { gap: 8px; }
+  body > header .toolbar { gap: 6px; }
+  body > header .toolbar-seam { display: none; }
+  body > header .nav-tools .tool-label { display: none; }
+  body > header .nav-tools .tool-ico { display: inline-block; }
+  body > header .nav-tools .inline-header-btn { padding: 10px 11px; }
+  body > header .inline-header-btn { padding: 9px 9px; font-size: 0.86rem; }
+  body > header #site-search { width: 120px; max-width: 22vw; }
+  body > header .nav-links { gap: 8px; }
+}
+
+@media (max-width: 1200px) {
+  .nav-drawer-toggle {
+    display: inline-flex; flex-direction: column; justify-content: center; align-items: center;
+    gap: 5px; width: 44px; height: 44px; flex: 0 0 auto;
+    border-radius: 10px; border: 1px solid rgba(179, 136, 255, 0.4);
+    background: rgba(31, 17, 54, 0.72); cursor: pointer;
+  }
+  .nav-drawer-toggle:hover, .nav-drawer-toggle:focus-visible { border-color: rgba(187, 134, 252, 0.85); }
+  .nav-drawer-toggle .ndt-bar { width: 20px; height: 2px; border-radius: 2px; background: #e3c9ff; }
+
+  /* the toolbar becomes the drawer (id-scoped: admin back-button toolbars stay) */
+  #main-toolbar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: min(320px, 85vw); height: 100dvh;
+    flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 8px;
+    padding: 26px 16px 24px; overflow-y: auto;
+    background: linear-gradient(180deg, rgba(26, 10, 48, 0.99) 0%, rgba(12, 4, 26, 0.99) 100%);
+    border-right: 1px solid rgba(179, 136, 255, 0.3);
+    box-shadow: 12px 0 40px rgba(0, 0, 0, 0.55);
+    transform: translateX(-108%); visibility: hidden;
+    transition: transform 0.28s ease, visibility 0s linear 0.28s;
+    z-index: 2100;
+  }
+  body.nav-open #main-toolbar {
+    transform: translateX(0); visibility: visible;
+    transition: transform 0.28s ease, visibility 0s;
+  }
+  #main-toolbar .nav-places { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 100%; }
+  #main-toolbar .nav-tools { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 100%; }
+  #main-toolbar .nav-places .inline-header-btn,
+  #main-toolbar .nav-tools .inline-header-btn {
+    width: 100%; justify-content: flex-start; min-height: 44px;
+  }
+  #main-toolbar .toolbar-seam { display: block; width: 100%; height: 1px; margin: 6px 0; }   /* display beats the old ≤1024 hide */
+  #main-toolbar .place-marker { display: none; }   /* the gold slider is a one-row instrument */
+  /* TRUE-panel (LOW, fixed): the desktop pill hover (translateY+scale) reads
+     as a pre-popped first row in the drawer + sticky tap-hover on touch */
+  #main-toolbar .inline-header-btn:hover { transform: none; }
+
+  .nav-drawer-scrim {
+    position: fixed; inset: 0; z-index: 2090;
+    background: rgba(4, 0, 14, 0.62);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.28s ease;
+  }
+  .nav-drawer-scrim[hidden] { display: none; }   /* the [hidden] twin (house rule) */
+  body.nav-open .nav-drawer-scrim { opacity: 1; pointer-events: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #main-toolbar, .nav-drawer-scrim { transition: none !important; }
+}
 
 /* Fixed/reveal header behavior (pinned while scrolling) */
 body > header.is-fixed {
@@ -290,7 +397,12 @@ body.filter-open > header {
 
 body > header h1 {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 2.4rem;
+    /* milestone D (TRUE-panel fix): the fluid clamp + nowrap live HERE, in the
+       one base rule — the D block's earlier duplicate of this exact selector
+       was dead CSS (same specificity, earlier source order) and the fixed
+       2.4rem logo was the phone header's overflow driver. One line, always. */
+    font-size: clamp(1.6rem, 0.9rem + 1.1vw, 2.4rem);
+    white-space: nowrap;
     font-weight: 700;
     color: white;
     letter-spacing: 2px;
@@ -316,15 +428,24 @@ body > header h1:hover {
     display: none;
 }
 
-/* Card grid */
+/* Card grid — milestone D: auto-fit tracks. The old fixed FOUR-track grid was
+   1310px wide and centered at every width — at 1024 the first card sat at
+   x=-143, unreachable behind overflow-x:clip (the measured 901-1200 breakage).
+   Cards stay EXACTLY 275px (his 44's presentation is the heart); only the
+   COLUMN COUNT flexes: 4 → 3 → 2 as the viewport narrows. mobile.css owns
+   ≤900. (g32 pins the auto-fit form — never a fixed track count again.) */
 .card-container {
     display: grid;
-    grid-template-columns: repeat(4, 275px);
+    grid-template-columns: repeat(auto-fit, 275px);
     gap: 50px 70px;
     /* vertical | horizontal gap */
     justify-content: center;
     padding: 0 60px;
 }
+/* tighter columns buy the 4th (then 3rd) track back before one drops —
+   4 cols hold to ~1250, 3 cols to ~909, then 2 until mobile.css's fluid pair */
+@media (max-width: 1560px) { .card-container { column-gap: 34px; padding: 0 24px; } }
+@media (max-width: 1200px) { .card-container { column-gap: 26px; padding: 0 16px; } }
 
 /* v1.8.3 gate 4 — sparse results (1–3 cards) shouldn't hug the left of a 4-col
    track; switch to a centered flex row so few matches read as intentional. JS
@@ -3503,7 +3624,12 @@ body > header:focus-within .search-wrap {
   transform: translate(-50%, -6px) scale(0.98); /* center + tiny lift */
   opacity: 0;
   pointer-events: none;
-  transition: opacity .18s ease, transform .18s ease;
+  /* TRUE-panel (MED, fixed): visibility too — opacity:0 alone left ~211
+     invisible keyboard tab stops (every checkbox/segment/input) in the
+     header at every width; focus vanished into them and Space mutated
+     filter state sight-unseen. The delay clears AFTER the fade-out. */
+  visibility: hidden;
+  transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
   will-change: transform, opacity;
 contain: layout paint style;
 }
@@ -3519,6 +3645,8 @@ contain: layout paint style;
   opacity: 1;
   transform: translate(-50%, 0) scale(1);  /* animate in */
   pointer-events: auto;
+  visibility: visible;
+  transition: opacity .18s ease, transform .18s ease, visibility 0s;
 }
 
 .filter-header {
@@ -10439,8 +10567,13 @@ html[data-surface="account"] .side-link.is-active {
 
 /* — small screens: the rail becomes a horizontal strip; the editor stacks — */
 @media (max-width: 900px) {
-  .account-v2 .account-grid { grid-template-columns: 1fr; }
-  .account-v2 .account-side { position: static; }
+  /* milestone D: minmax(0,1fr), NOT bare 1fr — the bare track's auto minimum
+     was the tab strip's min-content, and the 8th tab (Constellation, C3)
+     pushed that past the viewport: every panel inherited ~1040px and clipped
+     (the Wrapped sky ran to x=1044 in a 900px viewport; Inbox sat off-screen).
+     Clamped, the strip actually SCROLLS and panels hold the viewport. */
+  .account-v2 .account-grid { grid-template-columns: minmax(0, 1fr); }
+  .account-v2 .account-side { position: static; min-width: 0; }
   .account-v2 .account-side nav { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
   .account-v2 .side-group { margin-bottom: 0; flex: 0 0 auto; }
   .account-v2 .side-nav { display: flex; gap: 6px; }
@@ -10726,4 +10859,20 @@ html[data-surface="account"] .side-link.is-active {
   .panel-head-text .acct-kicker::before, .acct-toast { animation: none !important; }
   .acct-toast { opacity: 1; transform: translateX(-50%); }
   .set-card { transition: none !important; }
+}
+
+/* milestone D — TOUCH AFFORDANCES AT EVERY WIDTH (promoted verbatim from
+   mobile.css, which only loads ≤900px: an iPad landscape at 1024 — or any
+   touch laptop — had hover-locked card actions. The gate is the input
+   capability, never the viewport width; style.css:3446/10143 precedent.) */
+@media (hover: none), (pointer: coarse) {
+  /* no hover scaling weirdness */
+  .card:hover { transform: none; }
+  .card:hover::after { opacity: 0; }
+  /* card action icons MUST be usable on touch */
+  .card .icon-row {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
 }
