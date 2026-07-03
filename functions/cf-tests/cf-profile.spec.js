@@ -228,3 +228,48 @@ test('onUserDelete -> avatars/{uid}/ gone + foreign like gone + own likes subtre
   await sleep(1500);
   assert.equal((await db.doc('profiles/' + U).get()).exists, false, 'no ghost profiles doc resurrection');
 });
+
+// ============================================================================
+// milestone E — the users-GET tightening's enablers (functions/lib/backfill.js):
+// the users/{uid} onCreate mint (every future signup) + the one-shot admin
+// backfill (every existing account). Together they close the gate-20.5
+// "former member" tombstone class so users docs (they carry EMAILS) can go
+// owner+admin-only.
+// ============================================================================
+const { applyBackfillProfiles } = require('../lib/backfill');
+
+test('signup mint: a new users doc births a minimal profile — name mapped, EMAIL never copied', async () => {
+  const U = 'signup_' + Date.now();
+  await db.doc('users/' + U).set({ username: 'Fresh Fan', photoURL: 'https://example.com/f.png', email: 'fresh@x.test' });
+  const prof = await waitFor(async () => {
+    const p = await db.doc('profiles/' + U).get();
+    return p.exists ? p.data() : null;
+  });
+  assert.equal(prof.displayName, 'Fresh Fan', 'username maps to displayName');
+  assert.equal(prof.photoURL, 'https://example.com/f.png');
+  assert.equal('email' in prof, false, 'the email NEVER crosses into the public profile');
+  assert.ok(prof.joinedAt, 'a signup-time mint stamps joinedAt (truthful at birth)');
+});
+
+test('backfillProfiles: admin-only; mints the missing, skips the Studio-made, omits joinedAt for legacy', async () => {
+  const A = 'bfA_' + Date.now(), B = 'bfB_' + Date.now();
+  await db.doc('users/' + A).set({ username: 'Legacy Ann', email: 'ann@x.test' });
+  await db.doc('users/' + B).set({ displayName: 'Has Studio', email: 'b@x.test' });
+  await db.doc('profiles/' + B).set({ displayName: 'Studio Name', accent: 'ember' });
+  // the onCreate trigger will have minted A too — delete it to simulate a
+  // PRE-TRIGGER legacy account (the population the backfill exists for)
+  await waitFor(async () => (await db.doc('profiles/' + A).get()).exists);
+  await db.doc('profiles/' + A).delete();
+
+  await assert.rejects(() => applyBackfillProfiles(db, 'someFan'), /admin/i, 'the literal-UID gate holds');
+
+  const res = await applyBackfillProfiles(db, ADMIN_UID);
+  assert.ok(res.minted >= 1, 'the legacy account got its profile');
+  const a = (await db.doc('profiles/' + A).get()).data();
+  assert.equal(a.displayName, 'Legacy Ann');
+  assert.equal('email' in a, false, 'no email in the mint');
+  assert.equal('joinedAt' in a, false, 'no fabricated here-since for a legacy account (users doc had no createdAt)');
+  const b = (await db.doc('profiles/' + B).get()).data();
+  assert.equal(b.displayName, 'Studio Name', 'a Studio-made profile is NEVER overwritten');
+  assert.equal(b.accent, 'ember');
+});

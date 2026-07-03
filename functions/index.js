@@ -49,6 +49,7 @@ const images = require('./lib/images');               // gate 14 — admin atomi
 const { sha256Hex, hashDocId } = require('./lib/imagehash'); // image overhaul — per-user dedupe
 const { likeDelta, shouldNotifyLike, likeNotifId, bgSweepDecision } = require('./lib/profile'); // dream profile
 const { stripSweepDecision, reapUploadsOrphans } = require('./lib/sweep'); // gate 20 — edit-strip + orphan reaper
+const backfill = require('./lib/backfill');            // milestone E — profiles backfill + the signup mint
 const migrate = require('./lib/migrate'); // gate 20.5 — the gold-flip's MIGRATION half
 
 setGlobalOptions({
@@ -627,6 +628,29 @@ exports.onSuggestionReviewed = onDocumentUpdated('suggestions/{docId}', async (e
 // admin picks the catalog title and the page passes the slug in. Core in
 // lib/migrate.js (cf-tests drive it directly, like the moderation cores).
 // -----------------------------------------------------------------------------
+// =============================================================================
+// milestone E — the users-GET tightening's two halves (lib/backfill.js):
+//   • backfillProfiles (admin-only callable) — the ONE-SHOT mint for existing
+//     users/-only accounts. ⚠️ CUTOVER ORDER: deploy THIS FUNCTION ALONE first
+//     (`firebase deploy --only functions:backfillProfiles`), run it signed in
+//     as Blake (`await window.__rarBackfillProfiles()` in the console), verify
+//     minted+existing == total — ONLY THEN the normal runbook order carries
+//     the tightened users rules. The full-functions deploy still goes LAST.
+//   • onUserDocCreated — every future signup gets its minimal profile at
+//     birth (Admin SDK — the client consent gate can't strand anyone).
+// =============================================================================
+exports.backfillProfiles = onCall(async (request) => {
+  try {
+    return await backfill.applyBackfillProfiles(db, request.auth && request.auth.uid);
+  } catch (e) { throw new HttpsError(e.code || 'internal', e.message || 'backfillProfiles failed'); }
+});
+
+exports.onUserDocCreated = onDocumentCreated('users/{uid}', async (event) => {
+  try {
+    await backfill.mintProfileForUser(db, FieldValue, event.params.uid, event.data ? event.data.data() : null);
+  } catch (e) { console.error('onUserDocCreated mint failed:', e); }
+});
+
 exports.migrateRequestThread = onCall(async (request) => {
   try {
     return await migrate.applyMigrateRequestThread(

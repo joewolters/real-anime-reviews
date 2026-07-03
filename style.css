@@ -8791,6 +8791,15 @@ html.rar-welcome-pending::before {
   margin: 12px auto 0; max-width: 560px;
   font: 400 .96rem/1.6 'Outfit', sans-serif; color: #c9bfe0;
 }
+/* milestone E — the door line: his live curator status, one quiet purple
+   breath under the tagline (Blake said YES; the exact copy is staged for his
+   approval at the final smoke). Gold-free by rule; absent between shows. */
+.welcome-watching {
+  margin: 8px auto 0; max-width: 560px;
+  font: 500 0.9rem/1.5 'Outfit', sans-serif;
+  color: #c9a4ff; letter-spacing: 0.02em;
+}
+.welcome-watching[hidden] { display: none; }
 .welcome-enter {
   position: relative; isolation: isolate;
   margin-top: 24px;
@@ -9199,13 +9208,14 @@ html.rar-welcome-pending::before {
 .hub-sheet {
   position: relative; margin-right: auto;          /* LEFT-anchored */
   width: min(1080px, 94vw); height: 100%;          /* level 1: matches the right-side secondary modal */
-  /* The Tavern backdrop (8d): the SHARP tavern.png under a dark gradient — the heavy
+  /* The Tavern backdrop (8d): the SHARP tavern art under a dark gradient — the heavy
      pre-blur (8c) read as soupy + washed the text contrast, so we're back to the 8b
      treatment (sharp + shade = cozy AND high-contrast for legible headings). NO live
-     backdrop-filter over the image (the documented Gecko-perf rule). */
+     backdrop-filter over the image (the documented Gecko-perf rule). webp since the
+     E speed round (653KB png → 199KB, same pixels). */
   background:
     linear-gradient(180deg, rgba(26, 11, 44, 0.90) 0%, rgba(20, 8, 38, 0.88) 52%, rgba(34, 16, 30, 0.82) 100%),
-    url(assets/tavern.png) center / cover no-repeat;
+    url(assets/tavern.webp) center / cover no-repeat;
   border-right: 1px solid rgba(187, 134, 252, 0.42);
   box-shadow: 0 0 90px rgba(0, 0, 0, 0.6), 0 0 40px rgba(187, 134, 252, 0.14);
   transform: translateX(-48px); opacity: 0;
@@ -9229,7 +9239,7 @@ html.rar-welcome-pending::before {
   width: min(760px, 90vw); height: 100%;
   background:
     linear-gradient(180deg, rgba(22, 9, 38, 0.94) 0%, rgba(16, 6, 32, 0.93) 52%, rgba(30, 14, 26, 0.88) 100%),
-    url(assets/tavern.png) center / cover no-repeat;
+    url(assets/tavern.webp) center / cover no-repeat;
   border-right: 1px solid rgba(187, 134, 252, 0.5);
   box-shadow: 0 0 90px rgba(0, 0, 0, 0.6), 8px 0 50px rgba(0, 0, 0, 0.5);
   transform: translateX(-40px); opacity: 0;

@@ -224,15 +224,17 @@ service cloud.firestore {
     // moderation gate is for COMMUNITY content, not a user's own saves/bell.)
     // =========================================================================
     match /users/{uid} {
-      // gate 20.5 (2026-06-11): the planned owner-only GET tightening was
-      // built and REVERTED in the same gate — the adversarial panel proved it
-      // tombstones ACTIVE members ("a former member") whose identity lives
-      // only in users/{uid} (profiles/ docs are minted ONLY by the account
-      // Studio save; the index editor + pre-Studio accounts never made one).
-      // The flip is BANKED behind a profiles backfill (dual-write or a
-      // one-shot CF) — see docs/NEXT.md. Until then the public get stays: the
-      // email-field exposure is the accepted, pre-existing trade.
-      allow get: if true;
+      // milestone E (2026-07-03): THE TIGHTENING LANDS. users docs carry
+      // emails; the world-GET existed only for the legacy identity fallback.
+      // Both enabler halves shipped with this rule (functions/lib/backfill.js):
+      // the one-shot backfillProfiles callable mints profiles/{uid} for every
+      // existing account (⚠️ RUNS AT CUTOVER BEFORE THIS RULE DEPLOYS — the
+      // exact order note lives on the CF), and the users/{uid} onCreate
+      // trigger mints one for every FUTURE signup (Admin SDK — the client
+      // consent gate can't strand anyone; the gate-20.5 "former member"
+      // tombstone class is closed, not dodged). Admin keeps get — the queues
+      // (inbox/suggestions) resolve identities through it.
+      allow get: if isOwner(uid) || isAdmin();
       allow list: if isOwner(uid);
       allow create, update, delete: if isOwner(uid);
 

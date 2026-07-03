@@ -985,18 +985,17 @@ test('frame: update ADDING frame to an existing profile is allowed', async () =>
     { frame: 'sakura' }));
 });
 
-// gate 20.5 — the users/{uid} GET tightening was built then REVERTED inside
-// the gate (adversarial: it tombstoned ACTIVE legacy members whose identity
-// lives only in users/{uid}; profiles docs are Studio-save-only). This pins
-// the RESTORED public-get contract so the flip can't sneak back without the
-// profiles backfill that must precede it (banked in NEXT).
-test('users doc: get stays PUBLIC until the profiles backfill lands (the reverted tightening)', async () => {
+// milestone E — THE TIGHTENING LANDED (gate 20.5 banked it behind the profiles
+// backfill; both enabler halves shipped in functions/lib/backfill.js: the
+// one-shot admin callable for existing accounts + the users-onCreate mint for
+// every future signup). users docs carry EMAILS: owner + admin only, forever.
+test('users doc: get is OWNER + ADMIN only — the email field is private (the landed tightening)', async () => {
   await seed((db) => setDoc(doc(db, 'users/alice'),
     { email: 'alice@example.com', displayName: 'Alice' }));
   await assertSucceeds(getDoc(doc(as('alice'), 'users/alice')));
-  await assertSucceeds(getDoc(doc(as('bob'), 'users/alice')));   // the legacy-identity fallback LIVES
-  await assertSucceeds(getDoc(doc(anon(), 'users/alice')));
-  await assertSucceeds(getDoc(doc(as(ADMIN), 'users/alice')));
+  await assertFails(getDoc(doc(as('bob'), 'users/alice')));      // a member can NOT read another's email
+  await assertFails(getDoc(doc(anon(), 'users/alice')));         // nor can the world
+  await assertSucceeds(getDoc(doc(as(ADMIN), 'users/alice')));   // the queues resolve identities
 });
 
 // ============================================================================

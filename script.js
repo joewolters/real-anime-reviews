@@ -327,7 +327,7 @@ async function loadCuratorStatus() {
   // warm from a 1h localStorage cache first (instant paint on repeat visits)
   try {
     const cached = JSON.parse(localStorage.getItem('rar:curatorStatus') || 'null');
-    if (cached && cached.m && (Date.now() - (cached.t || 0)) < 3600000) { curatorStatusMap = cached.m; syncAllCuratorStatus(); }
+    if (cached && cached.m && (Date.now() - (cached.t || 0)) < 3600000) { curatorStatusMap = cached.m; syncAllCuratorStatus(); fillDoorWatching(); }
   } catch (_) {}
   try {
     const snap = await getDocs(collection(db, 'animeStatus'));
@@ -336,7 +336,33 @@ async function loadCuratorStatus() {
     curatorStatusMap = m;
     try { localStorage.setItem('rar:curatorStatus', JSON.stringify({ t: Date.now(), m })); } catch (_) {}
     syncAllCuratorStatus();
+    fillDoorWatching();
   } catch (_) { /* animeStatus is public but a read failure just leaves cards plain */ }
+}
+
+// milestone E — "the site breathes with him" (study §5.2; Blake said YES with
+// his copy approval — the exact wording is STAGED for the final smoke). The
+// welcome door shows his live curator status as one quiet purple line.
+// Progressive (the catch-up-door pattern): absent until animeStatus lands,
+// absent when he's between shows. textContent only; titles are his catalog's.
+function fillDoorWatching() {
+  const el = document.getElementById('welcome-watching');
+  if (!el) return;
+  const pick = (want) => Object.keys(curatorStatusMap || {}).filter((s) => curatorStatusMap[s] === want).sort()[0];
+  const watching = pick('watching');
+  const rewatching = pick('rewatching');
+  const chosen = watching || rewatching;
+  if (!chosen) { el.hidden = true; return; }
+  // self-contained catalog access (this runs top-level; the hub's _animeData
+  // helpers live in another closure) — the same triple fallback shape.
+  const data = (typeof window !== 'undefined' && Array.isArray(window.animeData)) ? window.animeData
+    : (typeof window !== 'undefined' && Array.isArray(window.__ANIME_DATA__)) ? window.__ANIME_DATA__
+    : (typeof animeData !== 'undefined' && Array.isArray(animeData)) ? animeData : [];
+  const toSlug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const entry = data.find((a) => a && a.Title && toSlug(a.Title) === chosen);
+  if (!entry) { el.hidden = true; return; }
+  el.textContent = (watching ? 'Blake is currently watching: ' : 'Blake is rewatching: ') + entry.Title;
+  el.hidden = false;
 }
 if (typeof window !== 'undefined') window.applyCuratorStatusToCard = applyCuratorStatusToCard;
 
@@ -1818,6 +1844,12 @@ initLantern({
   keepScrollLock: () => !!(modal && modal.classList.contains('active')) || document.body.classList.contains('nav-open'),
   safeAvatar,
 });
+
+// milestone E — the cutover runbook's backfill hook. Admin-gated SERVER-side
+// (the callable's literal-UID gate); this is just the console reach. Run
+// signed in as Blake, BEFORE the tightened users rules deploy:
+//   await window.__rarBackfillProfiles()   // → { ok, minted, existing, total }
+window.__rarBackfillProfiles = () => httpsCallable(functions, 'backfillProfiles')().then((r) => r.data);
 
 
   switchRow.addEventListener('click', (e) => {
