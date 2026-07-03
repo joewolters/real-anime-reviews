@@ -200,6 +200,14 @@ body > header {
   transition: transform .25s ease, background-color 0.3s ease; 
   box-sizing: border-box;
 }
+/* v2.0 (milestone D) — the nav-drawer toggle is STUBBED: the button + #main-toolbar
+   id are in index.html as a head-start, but the drawer CSS/JS are NOT built yet.
+   Hide it by default so the half-built control never renders. The next Code
+   builds D here: a @media (max-width:1200px) rule un-hides this, turns .toolbar
+   into an off-canvas left drawer (body.nav-open .toolbar → translateX(0)), adds a
+   scrim + the toggle JS, and adds the 901–1200 card-grid breakpoints. */
+.nav-drawer-toggle { display: none; }
+
 /* Fixed/reveal header behavior (pinned while scrolling) */
 body > header.is-fixed {
   position: fixed;
@@ -7370,7 +7378,31 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   background: rgba(30,10,60,0.9); border: 1px solid rgba(187,134,252,0.4); color: #d9c9ff; }
 .secondary-inforeq-done { font: 700 0.76rem 'Montserrat', sans-serif; color: #cbb0ff; padding: 0 6px; }
 @media (max-width: 640px) { .secondary-inforeq-input { min-width: 130px; } }
-@media (prefers-reduced-motion: reduce) { .secondary-inforeq, .secondary-request { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .secondary-inforeq, .secondary-request, .secondary-commreview { transition: none; } }
+
+/* milestone C (item 8) — the Community-reviews door (purple, member surface). */
+.secondary-commreview {
+  display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 15px;
+  border-radius: 999px; background: rgba(187,134,252,0.14);
+  border: 1px solid rgba(187,134,252,0.5); color: #efe6ff;
+  font: 800 0.76rem/1 'Montserrat', sans-serif; letter-spacing: .03em;
+  white-space: nowrap; cursor: pointer;
+  transition: background .16s ease, border-color .16s ease; }
+.secondary-commreview:hover { background: rgba(187,134,252,0.26); border-color: rgba(187,134,252,0.85); color: #fff; }
+
+/* the YELLOW TAPE in the first modal's left column — an honest "not reviewed"
+   caution band. Amber/yellow (a MARKER), never gold (gold = Blake, and this is
+   exactly where his voice is ABSENT). */
+.unreviewed-tape {
+  display: block; margin: 4px 0 14px; padding: 11px 16px; border-radius: 10px;
+  background: repeating-linear-gradient(45deg,
+    rgba(240, 196, 25, 0.14) 0 14px, rgba(240, 196, 25, 0.06) 14px 28px);
+  border: 1px dashed rgba(240, 196, 25, 0.6); border-left: 4px solid rgba(240, 196, 25, 0.85);
+}
+.unreviewed-tape .ut-kicker {
+  display: block; font: 800 0.78rem 'Montserrat', sans-serif; letter-spacing: 0.08em;
+  color: #f0d34a; margin-bottom: 4px; }
+.unreviewed-tape .ut-line { display: block; font-size: 0.86rem; line-height: 1.5; color: #e8dcb8; }
 
 .secondary-request:hover {
   background: linear-gradient(180deg, rgba(187,134,252,0.45), rgba(140,82,222,0.45));

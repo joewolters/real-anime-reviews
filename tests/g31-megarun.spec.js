@@ -169,6 +169,46 @@ test('gB: the curator admin page exists on the scaffold (admin-gated, no Mode-1 
   expect(fab).toContain('/admin/curation.html');     // reachable from the FAB
 });
 
+// ── MILESTONE C — discovery + community ──────────────────────────────────────
+test('gC1: the review machinery keys on reviewKey — the 44 catalog rooms never move (source pins)', async ({ page }) => {
+  const js = await (await page.request.get('/script.js')).text();
+  expect(js).toContain('function reviewKey(anime)');
+  // reviewKey === communityKey for every pre-C case (catalog slug / al: secondary)
+  expect(js).toMatch(/return \(anime && anime\.__communityKey\) \? anime\.__communityKey : communityKey\(anime\)/);
+  // the three review functions + comments now key through reviewKey
+  const commIdx = js.indexOf('function communityMarkup(anime)');
+  expect(js.slice(commIdx, commIdx + 120)).toContain('reviewKey(anime)');
+  expect(js).toContain('__unreviewed');
+  expect(js).toContain('unreviewed-tape');
+  expect(js).toContain('data-commreview');
+});
+
+test('gC1 (behavior): the unreviewed primary modal is yellow-tape + gold-free + al:-keyed', async ({ page }) => {
+  await page.goto('/index.html');
+  const m = await page.evaluate(async () => {
+    const btn = document.createElement('button');
+    btn.setAttribute('data-commreview', '');
+    Object.assign(btn.dataset, { anilistId: '99777', title: 'Pin Test Show', romaji: 'Pin', genre: 'Action', desc: 'A synopsis.' });
+    document.body.appendChild(btn); btn.click();
+    await new Promise((r) => setTimeout(r, 800));
+    const left = document.querySelector('.sheet--left');
+    return {
+      tape: !!document.querySelector('.unreviewed-tape'),
+      noRating: !(left && left.querySelector('.rating-badge')),
+      noReview: !(left && left.querySelector('.modal-review')),
+      goldFree: !/ffd54a|is-creator/i.test(left ? left.innerHTML : 'x'),
+      reviewForm: !!document.getElementById('rev-form-al:99777'),
+      commList: !!document.getElementById('comm-list-al:99777'),
+    };
+  });
+  expect(m.tape).toBe(true);
+  expect(m.noRating).toBe(true);        // Blake's rating never fabricated
+  expect(m.noReview).toBe(true);
+  expect(m.goldFree).toBe(true);        // gold appears NOWHERE (his voice is absent here)
+  expect(m.reviewForm).toBe(true);      // community reviews fully alive, keyed al:<id>
+  expect(m.commList).toBe(true);
+});
+
 test('gA0: the live lantern still exposes the pure model on index (behavior anchor)', async ({ page }) => {
   await page.goto('/index.html');
   await page.waitForFunction(() => typeof window.lanternModel === 'function', null, { timeout: 15000 });

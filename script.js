@@ -175,6 +175,8 @@ function updateScrollLock() {
   const placeMarker = document.querySelector(".place-marker");
   const homeAiringBlock = document.getElementById("home-airing-block");
   const homeAiringRail = document.getElementById("home-airing");
+  const homeGemsBlock = document.getElementById("home-gems-block");   // milestone C (item 9)
+  const homeGemsRail = document.getElementById("home-gems");
   const homeForyouBlock = document.getElementById("home-foryou-block");
   const homeForyouRail = document.getElementById("home-foryou");
 
@@ -3367,6 +3369,25 @@ async function fillHomeAiring() {
   setRailMeta('home-airing-block', seasonLabel());
 }
 
+// milestone C (item 9) — HIDDEN GEMS home strip. The block ships hidden and
+// reveals ONLY when real gems come back (a fetch failure / empty leaves it
+// hidden — no dead rail). Same discovery-card render as airing; unreviewed
+// cards route to the secondary deep-dive (where the yellow-tape review door is).
+async function fillHomeGems() {
+  if (!homeGemsRail) return;
+  setRailLoading(homeGemsRail);
+  const gems = await window.rarDiscovery.fetchHiddenGemsCached();
+  if (!Array.isArray(gems) || gems.length === 0) {
+    if (homeGemsBlock) homeGemsBlock.hidden = true;   // no gems → stay hidden
+    return;
+  }
+  if (homeGemsBlock) homeGemsBlock.hidden = false;
+  // freshness-seed the window so the strip rotates per visit (like trending)
+  const shuffled = (typeof seededShuffle === 'function') ? seededShuffle(gems, freshSeed()) : gems;
+  renderDiscoverInto(homeGemsRail, shuffled.slice(0, 12),
+    { empty: 'No gems surfaced right now.', carousel: true, onRetry: fillHomeGems });
+}
+
 // FOR YOU on home — chrome (head/sub/more by auth) + the rail. Signed in: a teaser of
 // the top taste rail (reuses fillForYouRailBands with smaller caps). Signed in + no
 // saves: the gift card. Signed out: an honest trending taster relabelled "FROM HIS
@@ -3975,11 +3996,25 @@ function positionFeaturedDrop() {
   }
   if (typeof window !== 'undefined') window.communityKey = communityKey;
 
+  // milestone C (item 8) — the community-REVIEW collection key. Identical to
+  // animeSlug for a catalog anime (the 44 live review rooms NEVER move — the
+  // spec pin), but a synthetic __unreviewed anime (the yellow-tape primary
+  // modal, built from an AniList detail) carries __communityKey = 'al:<id>' so
+  // its reviews live under the per-season key like its comments already do.
+  function reviewKey(anime) {
+    // __communityKey wins (the synthetic unreviewed anime); else communityKey —
+    // which is animeSlug for a catalog anime (Title present → the 44 unchanged)
+    // and 'al:<id>' for an aniListId-only ctx (the secondary rooms, unchanged).
+    return (anime && anime.__communityKey) ? anime.__communityKey : communityKey(anime);
+  }
+
   function commentsMarkup(anime) {
   // gate 19 — keyed by communityKey: identical to animeSlug for catalog anime
   // (ctx has a Title); 'al:<id>' for the secondary modal's per-season context.
+  // milestone C: reviewKey so a synthetic __unreviewed anime keys comments on
+  // al:<id> too (reviewKey === communityKey for every pre-C case).
   // All element lookups are getElementById (colon-safe ids like comments-al:123).
-  const s = communityKey(anime);
+  const s = reviewKey(anime);
   return [
     '<section class="comments-section" id="comments-' + s + '">',
     '  <div class="comments-header">',
@@ -6073,6 +6108,30 @@ function openInlineCommentEditor(editBtn, itemRef) {
     sp.removeAttribute('title');
   });
 
+  // milestone C (item 8) — the COMMUNITY-REVIEWS door: open the FIRST modal in
+  // yellow-tape mode from a sparse deep-dive so members can review a title Blake
+  // hasn't watched. Builds a synthetic __unreviewed anime from the button's
+  // AniList fields; closes the secondary (z-6000) FIRST so the primary (z-5100)
+  // isn't hidden beneath it.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('[data-commreview]');
+    if (!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    const id = parseInt(btn.dataset.anilistId, 10);
+    if (!id) return;
+    const synthetic = {
+      Title: btn.dataset.title || '(untitled)',
+      TitleRomaji: btn.dataset.romaji || '',
+      Genre: btn.dataset.genre || '',
+      Description: btn.dataset.desc || '',
+      AniListId: id, aniListId: id,
+      __communityKey: 'al:' + id,
+      __unreviewed: true,
+    };
+    try { if (typeof closeSecondaryModal === 'function') closeSecondaryModal(); } catch (_) {}
+    try { openModal(synthetic); } catch (err) { console.error('community-review modal failed', err); }
+  }, true);
+
   // milestone B (item 7) — the INFO-REQUEST flow on a sparse deep-dive. A member
   // asks Blake to fill an entry in; writes suggestions kind:'info' (NOT the
   // review-demand rollup — the CF skips it). Inline branded mini-form, no native
@@ -7191,7 +7250,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
 // COMMUNITY (right sheet)
 // ============================
 function communityMarkup(anime) {
-  const s = animeSlug(anime);
+  const s = reviewKey(anime);   // milestone C: al:<id> for a synthetic unreviewed anime; the slug (unchanged) for the 44
   const blakeRating = parseFloat(anime && anime.Rating);
   const hasBlake = Number.isFinite(blakeRating);
   return [
@@ -7275,7 +7334,7 @@ function renderHistogram(histEl, dist, n, blakeRating) {
 
 
 function subscribeReviews(anime) {
-  const s = animeSlug(anime);
+  const s = reviewKey(anime);   // milestone C — see communityMarkup
   const listEl  = document.getElementById(`comm-list-${s}`);
   const avgEl   = document.getElementById(`comm-avg-${s}`);
   const countEl = document.getElementById(`comm-count-${s}`);
@@ -8057,7 +8116,7 @@ function subscribeReviews(anime) {
 
 
 function wireCommunity(anime) {
-  const s = animeSlug(anime);
+  const s = reviewKey(anime);   // milestone C — see communityMarkup
   const form    = document.getElementById(`rev-form-${s}`);
   const titleEl = document.getElementById(`rev-title-${s}`);
   const rateEl  = document.getElementById(`rev-rating-${s}`);
@@ -8588,7 +8647,9 @@ function openModal(anime) {
   isSpotlightHovered = false;
 
   // v1.8.3 gate 5 — remember this open for the "Continue where you left off" rail.
-  try { recordContinue(slug(anime.Title)); buildContinueRail(); } catch (_) {}
+  // milestone C: a synthetic __unreviewed anime has no catalog slug, so skip the
+  // rail (a non-catalog slug would be a dead click when reopened).
+  if (!anime.__unreviewed) { try { recordContinue(slug(anime.Title)); buildContinueRail(); } catch (_) {} }
 
   const tags = safeArray(anime.Tags);
   const platforms = safeArray(anime.Platforms)
@@ -8720,18 +8781,35 @@ function openModal(anime) {
     : provenanceHtml;
 
   // LEFT sheet markup (details + comments)
-  const leftHTML =
-    '<span class="close-button" aria-label="Close">&times;</span>' +
-    trailerBlock +
-    '<h2 class="modal-title">' + anime.Title + '</h2>' +
-    modalRomaji +
-    officialVotesMarkup(anime) +
-    underVoteBar +
-    '<div class="modal-meta">' +
-    ratingHtml + genreHtml + seasonsHtml + studioHtml + tagsHtml + platformsHtml +
-    '</div>' +
-    descBlock + reviewBlock +
-    commentsMarkup(anime);
+  // milestone C (item 8) — the YELLOW TAPE. A synthetic __unreviewed anime opens
+  // the SAME 3-column modal so members can leave a community review, but the left
+  // column carries NONE of Blake's data (no rating badge, no review, no vote bar,
+  // no platforms, no admin-edit) — just the honest washi-tape banner + the AniList
+  // synopsis. Gold appears NOWHERE (nothing fakes his voice). The community column
+  // (rightHTML) is fully alive, keyed al:<id>.
+  const leftHTML = anime.__unreviewed
+    ? '<span class="close-button" aria-label="Close">&times;</span>' +
+      trailerBlock +
+      '<h2 class="modal-title">' + escapeHtml(anime.Title) + '</h2>' +
+      modalRomaji +
+      '<div class="unreviewed-tape" role="note">' +
+        '<span class="ut-kicker">「 NOT REVIEWED 」</span>' +
+        '<span class="ut-line">Blake hasn’t watched this one yet — the take below is the community’s.</span>' +
+      '</div>' +
+      '<div class="modal-meta">' + genreHtml + seasonsHtml + '</div>' +
+      descBlock +
+      commentsMarkup(anime)
+    : '<span class="close-button" aria-label="Close">&times;</span>' +
+      trailerBlock +
+      '<h2 class="modal-title">' + anime.Title + '</h2>' +
+      modalRomaji +
+      officialVotesMarkup(anime) +
+      underVoteBar +
+      '<div class="modal-meta">' +
+      ratingHtml + genreHtml + seasonsHtml + studioHtml + tagsHtml + platformsHtml +
+      '</div>' +
+      descBlock + reviewBlock +
+      commentsMarkup(anime);
 
   // RIGHT sheet markup (community)
   const rightHTML = communityMarkup(anime);
@@ -8875,7 +8953,9 @@ function openModal(anime) {
   try { activeOfficialUnsub(); } catch (_) {}
   activeOfficialUnsub = null;
 }
-activeOfficialUnsub = wireOfficialVotes(anime);
+// milestone C: the __unreviewed left column renders no "agree with my rating"
+// vote bar (there's no rating), so there's nothing to wire.
+if (!anime.__unreviewed) activeOfficialUnsub = wireOfficialVotes(anime);
 }
 
 function closeModal() {
@@ -9631,6 +9711,23 @@ function closeModal() {
           '<span class="secondary-inforeq-icon" aria-hidden="true">ⓘ</span>' +
           '<span class="secondary-inforeq-label">Request info</span></button>';
 
+    // milestone C (item 8) — the COMMUNITY-REVIEWS door. Blake: unreviewed titles
+    // "only open the second modal" — this opens the FIRST (3-column) modal in
+    // yellow-tape mode so members can leave a real community review. Not-watched
+    // only (a watched title routes to Blake's own review). Carries the AniList
+    // fields the synthetic anime needs (title/romaji/genre/synopsis), escaped.
+    const commReviewBtn = isWatched
+      ? ''
+      : '<button type="button" class="secondary-commreview" data-commreview' +
+          ' data-anilist-id="' + escapeHtml(String(detail.id)) + '"' +
+          ' data-title="' + escapeHtml(english) + '"' +
+          ' data-romaji="' + escapeHtml(romaji || '') + '"' +
+          ' data-genre="' + escapeHtml((detail.genres || []).slice(0, 4).join(', ')) + '"' +
+          ' data-desc="' + escapeHtml(String(detail.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 700)) + '"' +
+          ' title="See and write community reviews">' +
+          '<span class="secondary-commreview-icon" aria-hidden="true">★</span>' +
+          '<span class="secondary-commreview-label">Community reviews</span></button>';
+
     // v1.7.4 (gate 3, Surface 1) — inline "Edit season review" link, admin only
     // (the UID gate lives in admin-fab.js → window.__rarIsAdmin). Routes to the
     // dedicated admin panel pre-targeting this id.
@@ -9663,7 +9760,7 @@ function closeModal() {
       '<div class="secondary-header"' + (accent ? ' style="--accent:' + escapeHtml(accent) + '"' : '') + '>' +
         '<div class="secondary-banner"' + (banner ? ' style="background-image:url(\'' + escapeHtml(banner) + '\')"' : '') + '></div>' +
         '<div class="secondary-banner-scrim"></div>' +
-        buildHeaderBar(editReviewBtn + requestBtn + infoReqBtn + saveBtns) +
+        buildHeaderBar(editReviewBtn + requestBtn + infoReqBtn + commReviewBtn + saveBtns) +
         '<div class="secondary-header-body">' +
           // gate 20.7 (Blake item 4): the cover rides a COLUMN so the 👁
           // demand chip can dock neatly under the thumbnail (visible, not
@@ -9936,6 +10033,8 @@ function closeModal() {
   }
   const fetchTrendingCached = makeListCache('rar:trending:', 24 * 60 * 60 * 1000, () => window.franchiseFetch.fetchTrendingList(50));
   const fetchAiringCached = makeListCache('rar:airing:', 12 * 60 * 60 * 1000, (genre) => window.franchiseFetch.fetchAiringList(50, genre));
+  // milestone C (item 9) — Hidden Gems, 24h cached (the flat-query pattern).
+  const fetchHiddenGemsCached = makeListCache('rar:gems:', 24 * 60 * 60 * 1000, () => window.franchiseFetch.fetchHiddenGemsList(40));
   // Pass-through (no cache by design): the G3 search box owns debounce + abort.
   function searchDiscover(q, signal) { return window.franchiseFetch.searchMediaList(q, 20, signal); }
   // Expose the G1 discovery data layer for the G3/G4 UI + the Playwright canary
@@ -10382,6 +10481,12 @@ homeBtn?.addEventListener("click", (e) => {
   window.location.reload();
 });
 
+// milestone C (item 9) — Random now honors the review-status FILTER (Blake's
+// "mini filter: truly random vs Blake-reviewed"): 'reviewed' rolls his 44,
+// 'notyet' rolls an unreviewed AniList title (→ its deep-dive, where the
+// yellow-tape community-review door lives), and the neutral 'all' leans
+// MOSTLY-UNREVIEWED (~70%) per his ask. No new header chrome — it reads the
+// segment that already lives in the Filter panel.
 randomBtn?.addEventListener("click", (e) => {
   e.preventDefault();
   e.stopPropagation();
@@ -10391,27 +10496,41 @@ randomBtn?.addEventListener("click", (e) => {
   document.body.classList.remove("filter-open");
   filterBtn?.setAttribute("aria-expanded", "false");
 
-  if (!Array.isArray(animeData) || animeData.length === 0) return;
-
-  let idx = secureRandomInt(animeData.length);
-
-  // Avoid picking the exact same one twice in a row (feels less broken)
-  if (animeData.length > 1 && idx === lastRandomIdx) {
-    let tries = 0;
-    while (idx === lastRandomIdx && tries < 5) {
-      idx = secureRandomInt(animeData.length);
-      tries++;
-    }
-  }
-  lastRandomIdx = idx;
-
   // Tiny “roll” feel
   if (!REDUCED_MOTION) {
     randomBtn.classList.add("rolling");
     setTimeout(() => randomBtn.classList.remove("rolling"), 380);
   }
 
-  openModal(animeData[idx]);
+  const rollCatalog = () => {
+    if (!Array.isArray(animeData) || animeData.length === 0) return;
+    let idx = secureRandomInt(animeData.length);
+    if (animeData.length > 1 && idx === lastRandomIdx) {
+      let tries = 0;
+      while (idx === lastRandomIdx && tries < 5) { idx = secureRandomInt(animeData.length); tries++; }
+    }
+    lastRandomIdx = idx;
+    openModal(animeData[idx]);
+  };
+  const rollUnreviewed = async () => {
+    try {
+      const pool = await window.rarDiscovery.fetchTrendingCached();
+      // exclude titles Blake HAS watched/reviewed — a "random unreviewed" pull
+      const outside = (Array.isArray(pool) ? pool : []).filter(
+        (m) => m && m.id && !(typeof isWatchedAniListId === 'function' && isWatchedAniListId(m.id)));
+      if (!outside.length) return rollCatalog();
+      const pick = outside[secureRandomInt(outside.length)];
+      if (typeof openSecondaryModal === 'function') openSecondaryModal(pick.id, null, null);
+      else if (typeof window.openSecondaryFromKey === 'function') window.openSecondaryFromKey('al:' + pick.id);
+      else rollCatalog();
+    } catch (_) { rollCatalog(); }
+  };
+
+  const mode = (typeof readReviewedSeg === 'function') ? readReviewedSeg() : 'all';
+  if (mode === 'reviewed') return rollCatalog();
+  if (mode === 'notyet') return rollUnreviewed();
+  // 'all' — mostly-unreviewed mix
+  if (secureRandomInt(10) < 7) rollUnreviewed(); else rollCatalog();
 });
 
 
@@ -11282,6 +11401,7 @@ function onScrollHeader() {
     setFolioDate();
     lazyFillOnView(homeAiringBlock, fillHomeAiring);
     lazyFillOnView(homeForyouBlock, buildHomeForYou);
+    lazyFillOnView(homeGemsBlock, fillHomeGems);   // milestone C (item 9)
     document.getElementById('home-airing-more')?.addEventListener('click', (e) => { e.preventDefault(); showDiscover(); });
     showHome();
     loadCuratorStatus();   // milestone B — paint Blake's per-anime status on the cards (public read; cached)

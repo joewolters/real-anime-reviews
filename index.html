@@ -77,11 +77,20 @@
   <!-- Header -->
   <header>
     <div class="header-inner">
+      <!-- v2.0 (milestone D) — the nav DRAWER toggle. Hidden ≥1201 (the header
+           stays horizontal there); the drawer carries the places + tools on
+           laptops and phones so the nav never scrunches. -->
+      <button type="button" id="nav-drawer-toggle" class="nav-drawer-toggle" aria-label="Menu" aria-expanded="false" aria-controls="main-toolbar">
+        <span class="ndt-bar" aria-hidden="true"></span>
+        <span class="ndt-bar" aria-hidden="true"></span>
+        <span class="ndt-bar" aria-hidden="true"></span>
+      </button>
       <div class="header-left">
         <h1><a href="/" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
 
-        <!-- Toolbar holds the buttons and anchors the dropdown -->
-        <div class="toolbar">
+        <!-- Toolbar holds the buttons and anchors the dropdown. v2.0: at ≤1200
+             this becomes the off-canvas nav drawer (id for the toggle's aria). -->
+        <div class="toolbar" id="main-toolbar">
           <!-- v1.8.4 gate 5 — real nav (Direction C): the three SURFACES are primary
                "places" (Den is the in-page glide home; the logo stays the hard reset),
                then a hairline seam, then the View All / Random / Filter TOOLS. One
@@ -472,6 +481,17 @@
         </div>
         <div class="discover-rail" id="home-airing"></div>
         <a class="home-strip-more" id="home-airing-more" href="#">See more in Discover <span aria-hidden="true">&rarr;</span></a>
+      </section>
+
+      <!-- milestone C (item 9) — HIDDEN GEMS: highly-rated but under-watched titles
+           (AniList score >= 75, popularity < 50k; 24h-cached flat query). Lazy
+           IO-gated, same Discover rail vocabulary as the airing strip. -->
+      <section class="home-strip gems-strip" id="home-gems-block" aria-label="Hidden gems" hidden>
+        <h3 class="discover-block-head">HIDDEN GEMS <span class="jp-mini">隠れた名作</span></h3>
+        <div class="discover-subrow">
+          <p class="discover-block-sub">Loved by the few who found them &mdash; high scores, small crowds.</p>
+        </div>
+        <div class="discover-rail" id="home-gems"></div>
       </section>
 
       <!-- v1.8.4 gate 6 — Top 10 + Latest Drop SIDE-BY-SIDE (Blake: "since there's so much

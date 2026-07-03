@@ -474,6 +474,7 @@ query ($id: Int) {
     coverImage { large color }
     bannerImage
     averageScore
+    popularity
     genres
     season
     seasonYear
@@ -510,6 +511,19 @@ query ($perPage: Int, $genre: String) {
   }
 }`;
 
+  // milestone C (item 9) — HIDDEN GEMS: highly-rated but under-watched. A flat
+  // Page(media:) sort SCORE_DESC with a high score floor + a popularity ceiling
+  // (the "gem" definition: great, but few people have found it). Same lean shape
+  // as the other three; the canary (scripts/anilist-discovery-canary.js) gates
+  // any change to this query shape.
+  const HIDDEN_GEMS_QUERY = `
+query ($perPage: Int, $scoreMin: Int, $popMax: Int) {
+  Page(page: 1, perPage: $perPage) {
+    media(type: ANIME, sort: SCORE_DESC, averageScore_greater: $scoreMin, popularity_lesser: $popMax, isAdult: false) {${DISCOVERY_MEDIA_FIELDS}
+    }
+  }
+}`;
+
   // Normalize one Page.media node into the lean card shape (same defensive
   // defaulting as fetchMediaDetail). Returns null for a junk node.
   function normalizeListMedia(m) {
@@ -520,6 +534,7 @@ query ($perPage: Int, $genre: String) {
       coverImage: m.coverImage || { large: '', color: null },
       bannerImage: m.bannerImage || null,
       averageScore: m.averageScore || null,
+      popularity: (typeof m.popularity === 'number') ? m.popularity : null,
       genres: Array.isArray(m.genres) ? m.genres : [],
       season: m.season || null,
       seasonYear: m.seasonYear || null,
@@ -578,6 +593,12 @@ query ($perPage: Int, $genre: String) {
     return fetchMediaPage(AIRING_QUERY, { perPage: perPage || 50, genre: g }, null);
   }
 
+  // milestone C (item 9) — Hidden gems: score ≥ 75 (a strong 7.5+), popularity
+  // < 50k (under-watched). Deep pool so the freshness seed rotates the window.
+  function fetchHiddenGemsList(perPage) {
+    return fetchMediaPage(HIDDEN_GEMS_QUERY, { perPage: perPage || 40, scoreMin: 75, popMax: 50000 }, null);
+  }
+
   const api = {
     traverseFranchise,
     fetchMediaById,
@@ -590,6 +611,7 @@ query ($perPage: Int, $genre: String) {
     searchMediaList,
     fetchTrendingList,
     fetchAiringList,
+    fetchHiddenGemsList,   // milestone C (item 9)
     normalizeListMedia,
     MORE_INFO_QUERY_NODE,
     MEDIA_DETAIL_QUERY,
