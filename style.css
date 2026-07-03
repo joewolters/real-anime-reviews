@@ -7391,17 +7391,19 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
 .secondary-commreview:hover { background: rgba(187,134,252,0.26); border-color: rgba(187,134,252,0.85); color: #fff; }
 
 /* the YELLOW TAPE in the first modal's left column — an honest "not reviewed"
-   caution band. Amber/yellow (a MARKER), never gold (gold = Blake, and this is
-   exactly where his voice is ABSENT). */
+   caution band. HAZARD yellow-green (hue ~60, a road-marker), deliberately far
+   from Blake's warm gold (#ffd54a, hue ~46) — gold = Blake, and this is exactly
+   where his voice is ABSENT. The C-panel caught the old #f0d34a kicker reading
+   as his gold; the whole tape family moved to the caution hue with it. */
 .unreviewed-tape {
   display: block; margin: 4px 0 14px; padding: 11px 16px; border-radius: 10px;
   background: repeating-linear-gradient(45deg,
-    rgba(240, 196, 25, 0.14) 0 14px, rgba(240, 196, 25, 0.06) 14px 28px);
-  border: 1px dashed rgba(240, 196, 25, 0.6); border-left: 4px solid rgba(240, 196, 25, 0.85);
+    rgba(222, 219, 60, 0.13) 0 14px, rgba(222, 219, 60, 0.05) 14px 28px);
+  border: 1px dashed rgba(222, 219, 60, 0.55); border-left: 4px solid rgba(222, 219, 60, 0.8);
 }
 .unreviewed-tape .ut-kicker {
   display: block; font: 800 0.78rem 'Montserrat', sans-serif; letter-spacing: 0.08em;
-  color: #f0d34a; margin-bottom: 4px; }
+  color: #e3e04e; margin-bottom: 4px; }
 .unreviewed-tape .ut-line { display: block; font-size: 0.86rem; line-height: 1.5; color: #e8dcb8; }
 
 .secondary-request:hover {

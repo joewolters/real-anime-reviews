@@ -4223,7 +4223,13 @@ function setVoteUI(li, value) {
 
 
   function subscribeComments(anime) {
-  const s = communityKey(anime);   // gate 19 — catalog slug OR al:<id> (per-season)
+  // milestone C panel (HIGH, fixed): reviewKey, NOT communityKey — the
+  // yellow-tape synthetic carries Title + __communityKey('al:<id>'), and
+  // commentsMarkup keys its DOM ids on reviewKey; keying the subscription on
+  // communityKey (title slug for the synthetic) left the tape modal's comments
+  // column silently dead. reviewKey === communityKey for every non-synthetic
+  // caller (catalog + secondary rooms), so the 44 rooms don't move.
+  const s = reviewKey(anime);   // gate 19 — catalog slug OR al:<id> (per-season)
   const listEl  = document.getElementById(`comments-list-${s}`);
   const countEl = document.getElementById(`comments-count-${s}`);
   const sortEl  = document.getElementById(`comments-sort-${s}`);
@@ -4403,7 +4409,8 @@ function markPostedNow() {
 }
 
   function wireComments(anime) {
-    const s = communityKey(anime);   // gate 19 — catalog slug OR al:<id> (per-season)
+    // milestone C panel (HIGH, fixed): reviewKey — see subscribeComments.
+    const s = reviewKey(anime);   // gate 19 — catalog slug OR al:<id> (per-season)
     const input   = document.getElementById(`composer-input-${s}`);
     const counter = document.getElementById(`composer-count-${s}`);
     const postBtn = document.getElementById(`composer-post-${s}`);
@@ -8707,9 +8714,13 @@ function openModal(anime) {
       aniListBadgeHtml +
     '</p>';
 
+  // milestone C panel (HIGH, fixed): escape at the SINK — the yellow-tape
+  // synthetic feeds AniList-sourced genre/romaji through here, and dataset
+  // transport DECODES the door's attribute-escaping back to raw strings.
+  // Catalog anime are plain Excel text, so escaping is behaviour-preserving.
   const genreHtml =
   '<p class="meta-line"><strong>Genre:</strong> <span class="genre-chip">' +
-  (anime.Genre || '') +
+  escapeHtml(String(anime.Genre || '')) +
   '</span></p>';
   const seasonsHtml = seasonsVal
     ? '<p class="meta-line seasons-line"><strong>Seasons:</strong> <span class="season-chip">' +
@@ -8761,8 +8772,10 @@ function openModal(anime) {
   // from the displayed (English) title (e.g. "Sousou no Frieren"; skipped for
   // identical-romaji titles like "Chainsaw Man").
   const modalSub = pickSubtitle(anime);
+  // milestone C panel (HIGH, fixed): modalSub.text escaped at the sink — the
+  // synthetic's TitleRomaji arrives raw from AniList (see genreHtml note).
   const modalRomaji = modalSub
-    ? '<p class="modal-romaji' + (modalSub.kind === 'native' ? ' is-native' : '') + '"><i class="rb">「</i>' + modalSub.text + '<i class="rb">」</i></p>'
+    ? '<p class="modal-romaji' + (modalSub.kind === 'native' ? ' is-native' : '') + '"><i class="rb">「</i>' + escapeHtml(String(modalSub.text)) + '<i class="rb">」</i></p>'
     : '';
 
   // v1.8.3 gate 5b — "Blake watched N seasons" provenance, moved off the cards into the
@@ -10040,7 +10053,10 @@ function closeModal() {
   // Expose the G1 discovery data layer for the G3/G4 UI + the Playwright canary
   // spec (the surfaces themselves wire in next gate). Kept off the hot path.
   window.rarDiscovery = {
-    fetchTrendingCached, fetchAiringCached, searchDiscover,
+    // milestone C panel (HIGH, fixed): fetchHiddenGemsCached was defined but
+    // never exported here — fillHomeGems' bridge call threw a (swallowed)
+    // TypeError and the Hidden Gems strip could never fill.
+    fetchTrendingCached, fetchAiringCached, fetchHiddenGemsCached, searchDiscover,
     // gate 2 — card builders + the AniList->card mapper (G3/G4 render with these).
     createDiscoveryCard, mediaToCardProps, isNewlyReviewed,
     // gate 2 — let a discovery surface enable the "Unreviewed" filter segment.
@@ -11401,7 +11417,12 @@ function onScrollHeader() {
     setFolioDate();
     lazyFillOnView(homeAiringBlock, fillHomeAiring);
     lazyFillOnView(homeForyouBlock, buildHomeForYou);
-    lazyFillOnView(homeGemsBlock, fillHomeGems);   // milestone C (item 9)
+    // milestone C panel (HIGH, fixed): the gems block ships [hidden] →
+    // display:none → an IO observing IT can never intersect (the deadlock:
+    // only fillHomeGems unhides it). Observe the VISIBLE airing strip directly
+    // above instead — same viewport threshold, same lazy first-paint-API-free
+    // discipline; hidden-until-real still holds (fillHomeGems unhides on data).
+    lazyFillOnView(homeAiringBlock, fillHomeGems);   // milestone C (item 9)
     document.getElementById('home-airing-more')?.addEventListener('click', (e) => { e.preventDefault(); showDiscover(); });
     showHome();
     loadCuratorStatus();   // milestone B — paint Blake's per-anime status on the cards (public read; cached)

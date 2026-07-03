@@ -429,6 +429,10 @@ const LATE_TARGETS = [
   ['admin/curation.html','curation.css?v= (curation)',     /(href="curation\.css\?v=)([^"]+)(")/],
   ['admin/curation.html','../firebase.js?v= (curation)',   /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
   ['admin/curation.html','curation.js?v= (curation)',      /(src="curation\.js\?v=)([^"]+)(")/],
+  // MEGA-RUN Milestone C3 — Constellation Wrapped: the account page's new
+  // stylesheet link + account.js's module import (both ?v= from birth).
+  ['account.html',      'wrapped.css?v= (account)',        /(href="wrapped\.css\?v=)([^"]+)(")/],
+  ['account.js',        "wrapped.js?v= import (account)",  /(from '\.\/wrapped\.js\?v=)([^']+)(')/],
 ];
 for (const [file, label, pattern] of LATE_TARGETS) {
   TARGETS.push({

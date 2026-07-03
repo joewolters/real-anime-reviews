@@ -33,6 +33,8 @@ import { ensureConsent, peekConsent } from './consent.js?v=1.10.2';
 import { openCropper } from './cropper.js?v=1.10.2';   // round 4 — frame-it crop/reposition (item 2)
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
 import { friendlyError } from './friendly-errors.js?v=1.10.2';
+// mega-run C3 — Constellation Wrapped (the member's year as a star map; lazy)
+import { initWrapped } from './wrapped.js?v=1.10.2';
 
 
 const $  = (sel) => document.querySelector(sel);
@@ -62,7 +64,7 @@ const errEl     = $('#profile-error');
 // split out of the profile editor — Blake's Discord/Reddit IA). The panel-in
 // class drives the slide+fade entrance (transform/opacity only; reduced-motion
 // nulls it in CSS).
-const tabs = ['profile','watchlist','favorites','collections','activity','inbox','settings'];   // round 4: + personal collections
+const tabs = ['profile','watchlist','favorites','collections','activity','wrapped','inbox','settings'];   // round 4: + personal collections · mega-run C3: + wrapped
 function activateTab(name){
   $$('.side-link').forEach(btn => {
     const on = btn.dataset.tab === name;
@@ -87,13 +89,15 @@ $$('.side-link').forEach(btn => {
     activateTab(btn.dataset.tab);
     if (btn.dataset.tab === 'activity') ensureActivity();        // lazy — see boot block
     if (btn.dataset.tab === 'collections') ensureCollections();  // round 4 — lazy too
+    if (btn.dataset.tab === 'wrapped') ensureWrapped();          // mega-run C3 — lazy too
   });
 });
 // deep-link: #inbox lands on the Inbox tab (the Lantern's dm pings route here);
 // #settings lands on the split-out account settings; #collections on the shelves.
 activateTab(location.hash.indexOf('#inbox') === 0 ? 'inbox'   // gate A2: + #inbox/new/<uid>
   : (location.hash === '#settings' ? 'settings'
-  : (location.hash === '#collections' ? 'collections' : 'profile')));
+  : (location.hash === '#collections' ? 'collections'
+  : (location.hash === '#wrapped' ? 'wrapped' : 'profile'))));   // C3: the future door tease lands here
 if (location.hash === '#collections') {
   // the subscription needs auth — retry once the user lands (same lazy shape
   // as ensureActivity's boot block)
@@ -2092,6 +2096,9 @@ onAuthStateChanged(auth, (user) => {
   // adversarial LOW: a collections-tab click BEFORE auth resolved bounced off
   // ensureCollections' auth guard and left the panel blank — catch up now.
   if (document.querySelector('.side-link[data-tab="collections"].is-active')) ensureCollections();
+  // mega-run C3 — same catch-up for a pre-auth Wrapped open (incl. #wrapped deep-links)
+  wrappedUserPending = user;
+  if (document.querySelector('.side-link[data-tab="wrapped"].is-active')) ensureWrapped();
   initProfileStudio(user);   // dream-profile — the identity studio
   initInbox(user);   // gate 18 — the Message-Blake DM
   // Notifications (Lantern) subscribe to auth on their own inside initLantern().
@@ -2104,6 +2111,15 @@ function ensureActivity() {
   if (activityStarted || !activityUserPending) return;
   activityStarted = true;
   subscribeActivity(activityUserPending);
+}
+
+// mega-run C3 — lazy Wrapped: ~6 bounded one-shot reads for a tab that starts
+// hidden (the activity precedent). initWrapped is idempotent per uid and
+// re-arms itself on a failed fetch, so re-opening the tab retries.
+let wrappedUserPending = null;
+function ensureWrapped() {
+  if (!wrappedUserPending) return;
+  initWrapped(wrappedUserPending, { friendlyError });
 }
 
 // =============================================================================

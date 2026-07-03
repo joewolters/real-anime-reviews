@@ -1,0 +1,117 @@
+/* wrapped.css — mega-run milestone C3: CONSTELLATION WRAPPED (account surface).
+   <!-- author: Code | date: 2026-07-02 -->
+   The member's year as a star map in the site's own veil vocabulary: purple
+   strokes (#c9a4ff / #b388ff / #e3c9ff) on the night wash. THE HEART: the one
+   gold element on this member surface is the join-day star (.wr-gold) — no
+   other gold may ever land here. Twinkle is opacity-only (compositor-safe),
+   JS-granted via .wr-live, and silenced under reduced-motion regardless. */
+
+/* the sky */
+#tab-wrapped .wr-sky {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0.4rem 0 0.2rem;
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 110% at 50% 20%,
+      rgba(20, 8, 40, 0.92) 0%,
+      rgba(10, 3, 22, 0.96) 60%,
+      rgba(6, 1, 14, 0.98) 100%);
+  border: 1px solid rgba(179, 136, 255, 0.22);
+  box-shadow: inset 0 0 60px rgba(20, 8, 40, 0.8), 0 0 18px rgba(123, 63, 228, 0.10);
+}
+#tab-wrapped .wr-month {
+  fill: #c9a4ff;
+  opacity: 0.55;
+  font-size: 15px;
+  font-family: 'Outfit', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  text-anchor: middle;
+}
+
+/* twinkle — opacity only, granted by JS (.wr-live) when motion is allowed */
+@keyframes wrTwinkle {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+#tab-wrapped .wr-sky.wr-live .wr-tw { animation: wrTwinkle 4.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  #tab-wrapped .wr-sky .wr-tw { animation: none !important; }
+}
+
+/* copy around the sky */
+#tab-wrapped .wr-lede {
+  margin: 0.2rem 0 0;
+  color: #e7dbff;
+  font-size: 1.02rem;
+}
+#tab-wrapped .wr-legend {
+  margin: 0.35rem 0 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+/* C-panel (MED, fixed): these two used to paint the star's own gold ink — a
+   SECOND and THIRD gold element on the surface whose rule is "the join-day
+   star is the only gold". The sentences stay; their ink is the surface's own
+   bright purple, so the star alone carries the gold. NO gold hex may ever
+   live in this file (g31 pins it, comments included). */
+#tab-wrapped .wr-legend-gold { color: #e3c9ff; }
+#tab-wrapped .wr-began {
+  margin: 0.2rem 0 0.6rem;
+  color: #e3c9ff;
+  font-size: 0.88rem;
+}
+#tab-wrapped .wr-clip {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+}
+
+/* the truthful stat chips */
+#tab-wrapped .wr-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+#tab-wrapped .wr-chips[hidden] { display: none; }   /* the [hidden] twin (house rule) */
+#tab-wrapped .wr-chip {
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(38, 18, 64, 0.55), rgba(20, 8, 40, 0.6));
+  border: 1px solid rgba(179, 136, 255, 0.18);
+}
+#tab-wrapped .wr-chip-big {
+  color: #e3c9ff;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+#tab-wrapped .wr-chip-small {
+  color: #b9a6d9;
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+  line-height: 1.35;
+}
+
+/* empty state — Blake's voice, never zeros-as-achievements */
+#tab-wrapped .wr-empty {
+  padding: 1.6rem 1rem 1.2rem;
+  text-align: center;
+}
+#tab-wrapped .wr-empty[hidden] { display: none; }   /* twin */
+#tab-wrapped .wr-empty-line {
+  color: #e7dbff;
+  font-size: 1.05rem;
+  margin: 0 0 0.3rem;
+}
+#tab-wrapped .wr-empty-sub {
+  font-size: 0.88rem;
+  max-width: 46ch;
+  margin: 0 auto;
+}
+
+/* the status line (loading / friendly failure) */
+#wrapped-status {
+  min-height: 1.2em;
+  font-size: 0.85rem;
+}

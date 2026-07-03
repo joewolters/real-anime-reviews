@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // scripts/anilist-discovery-canary.js
 // <!-- author: Code | date: 2026-06-05 -->
-// v1.8.4 (gate 1) — LIVE canary for the 3 new flat discovery queries in
+// v1.8.4 (gate 1) — LIVE canary for the flat discovery queries in
 // franchise-fetch.js (SEARCH / TRENDING / AIRING). The flat Page(media:) shape
 // is inherently safe vs the query-complexity trap (gotcha #8), but the 101922
 // (Demon Slayer) canary stays the gate — it 500s any over-nested query, so a
 // green run proves these lists are complexity-safe AND shaped right.
+// <!-- author: Code | date: 2026-07-02 -->
+// mega-run milestone C (item 9): + the HIDDEN GEMS gate (the 4th flat query)
+// and inter-query pacing — back-to-back queries tripped AniList's rate limit
+// and a swallowed 429 read as an empty-list FAIL (a false red, root-caused).
 //
 // Run:  node scripts/anilist-discovery-canary.js
 // Exits 0 on all-green, 1 on any failure. Hits AniList live (Node-18+ fetch).
@@ -24,6 +28,10 @@ function check(name, ok, detail) {
 function title(m) {
   return (m && m.title && (m.title.english || m.title.romaji)) || '(untitled)';
 }
+// Pace the live queries — AniList rate-limits back-to-back requests and
+// franchise-fetch degrades a 429 to [], which this canary would misread as a
+// broken query shape (bit once, 2026-07-02).
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
   console.log('=== v1.8.4 discovery canary (live AniList, id 101922 gate) ===\n');
@@ -40,11 +48,13 @@ function title(m) {
     `top: "${title(search[0])}" (${search[0].format}, ${search[0].seasonYear})`);
 
   // 2. TRENDING must return a deep, non-empty pool with no 500.
+  await pause(900);
   const trending = await ff.fetchTrendingList(50);
   check('TRENDING returns a deep pool (no 500)', Array.isArray(trending) && trending.length >= 10,
     `${trending.length} results, top: "${title(trending[0])}"`);
 
   // 3. AIRING (no genre) must return currently-releasing titles, no 500.
+  await pause(900);
   const airing = await ff.fetchAiringList(50, null);
   check('AIRING (all) returns releasing titles (no 500)', Array.isArray(airing) && airing.length > 0,
     `${airing.length} results, top: "${title(airing[0])}"`);
@@ -53,6 +63,7 @@ function title(m) {
     `${airing.filter(m => m.status === 'RELEASING').length}/${airing.length} RELEASING`);
 
   // 4. AIRING by genre must apply the filter (optional $genre is honored, no 500).
+  await pause(900);
   const airingAction = await ff.fetchAiringList(50, 'Action');
   check('AIRING genre:"Action" returns a filtered list (no 500)',
     Array.isArray(airingAction) && airingAction.length > 0,
@@ -60,6 +71,24 @@ function title(m) {
   if (airingAction.length) check('AIRING genre filter is applied',
     airingAction.every(m => m.genres.includes('Action')),
     `${airingAction.filter(m => m.genres.includes('Action')).length}/${airingAction.length} include Action`);
+
+  // 5. HIDDEN GEMS (milestone C item 9) — the score-floor + popularity-ceiling
+  // query must return a filtered pool, card-shaped, honoring BOTH bounds.
+  await pause(900);
+  const gems = await ff.fetchHiddenGemsList(40);
+  check('HIDDEN GEMS returns a non-empty pool (no 500)', Array.isArray(gems) && gems.length > 0,
+    `${gems.length} results, top: "${title(gems[0])}"`);
+  if (gems.length) {
+    check('HIDDEN GEMS honors the score floor (averageScore > 75)',
+      gems.every(m => typeof m.averageScore === 'number' && m.averageScore > 75),
+      `${gems.filter(m => typeof m.averageScore === 'number' && m.averageScore > 75).length}/${gems.length} above floor`);
+    check('HIDDEN GEMS honors the popularity ceiling (< 50000)',
+      gems.every(m => typeof m.popularity === 'number' && m.popularity < 50000),
+      `${gems.filter(m => typeof m.popularity === 'number' && m.popularity < 50000).length}/${gems.length} under ceiling`);
+    check('HIDDEN GEMS result is card-shaped (popularity fetched)',
+      'coverImage' in gems[0] && 'averageScore' in gems[0] && 'popularity' in gems[0],
+      `top: "${title(gems[0])}" (score ${gems[0].averageScore}, pop ${gems[0].popularity})`);
+  }
 
   console.log(`\n=== ${failures === 0 ? 'ALL GREEN' : failures + ' FAILURE(S)'} ===`);
   process.exit(failures === 0 ? 0 : 1);

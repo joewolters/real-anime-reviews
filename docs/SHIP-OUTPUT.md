@@ -1,21 +1,35 @@
 <!-- author: Code | date: 2026-07-02 -->
-# THE MEGA-RUN — Report 4: **MILESTONE B COMPLETE** — your curator tools are built. Sandbox-staged; nothing on prod before your one go.
+# THE MEGA-RUN — Report 5: **MILESTONE C COMPLETE** — discovery + the constellation. Sandbox-staged; nothing on prod before your one go.
 
-Your tools for shaping how the site presents anime are done: per-anime status labels on the cards, a curator panel to set them plus private notes, and an "ask about this" button for sparse pages. Self-verified end-to-end; you'll see it all in the one final smoke.
+Milestone C is closed: community reviews under honest yellow tape on anime you haven't watched, the Random filter and a Hidden Gems rail, and every member's own **Constellation** — their year on the site drawn as a star map where the one gold star is the day they joined. The adversarial panel earned its keep in a big way this round (details below): it found that two of the three C features I inherited were quietly broken, plus a security hole. All fixed, all pinned, everything green.
 
-## What's built (Milestone B)
-- **Card status labels.** You set an anime's status in a new admin panel and every member sees a small gold pill on that card — **"🏮 Blake is watching"**, "On Blake's list", "Blake is rewatching", and so on. It's your mark, so it's gold; it appears only where you've set a status, and updates within the hour.
-- **The curator panel** (`/admin/curation.html`, reachable from your admin menu). One row per anime with a status dropdown and a **private notes** box (notes are yours alone — no member's browser can ever read them). It writes straight to the database, so it works on the live site with no Mode 1 needed.
-- **"Request info" on sparse pages.** When a member opens a deep-dive you haven't filled in, they get a small **ⓘ Request info** button to ask you to flesh it out (with an optional "what would you like to know?"). These land in your suggestions queue with a distinct teal **INFO** badge — and, importantly, they do *not* inflate the public "👁 N requested" review-demand counter (an info question isn't a review request).
+## What's built (Milestone C)
+- **Constellation Wrapped (new this session).** Every member gets a "Your Constellation" tab on their account page: their year drawn as a purple night sky — a star for every review (brighter the higher they rated), smaller stars for comments, replies, and saves, diamonds for Tavern threads, a faint constellation line connecting their reviews through the months. **The single gold star is the day they joined — your mark on their sky — and it is the only gold allowed on the surface.** Stats below are strictly truthful (reviews + average rating, comments, threads, saves, top shelf genres, member-since) — no invented watch-time, no vote counts, and a member with a quiet year never sees a parade of zeros; a brand-new member sees just their gold star and "the rest of this sky is yours to light." Reduced-motion members get a still sky. Verified with sampled pixels: the gold star paints your exact gold, the data stars paint purple.
+- **The yellow-tape door + Discover upgrades (built last session, closed this session).** Unreviewed anime open the full 3-column modal under a caution-tape banner with your data honestly absent; Random honors the reviewed/not-yet/surprise filter; Hidden Gems finds high-score low-crowd titles.
+- **The AniList canary now guards the Hidden Gems query** (4 new checks, all green live) and paces its calls so the rate limiter can't fake a failure — the one "failure" I hit on arrival turned out to be exactly that, now impossible.
 
-## The adversarial panel (and a good catch on myself)
-A three-lens panel reviewed the whole milestone and confirmed six issues — all fixed. The one worth telling you about: the card status label was rendering in the **wrong gold at the wrong size**, and on the Top-10 carousel it was fragmenting into two blobs. My own pixel-check had actually *shown* the wrong color and I'd read it as fine — a reminder that sampled pixels can still be the wrong value. The fix uses the same technique the card's Japanese subtitles use to sidestep that exact styling trap, and I added a test that checks the label's *computed* color and size so it can never regress. The other fixes: the INFO badge had no color (now teal), a retry message could stack up (now replaced cleanly), and an info-request marked done now says "filled in the page" instead of "reviewed it".
+## The adversarial panel — its best round yet (21 confirmed findings, 7 distinct defects, ALL fixed)
+The blunt truth: **two of C's three features were dead in the tree as I found them, and the specs that "verified" them checked that the code existed rather than that it ran.**
+1. **HIGH — Hidden Gems could never appear, twice over.** The strip's reveal was waiting on a scroll-trigger watching a hidden element (which never fires for hidden elements), and even if it had fired, the data function was never plugged into the bridge it's called through. Fixed both; the strip now fills with 12 real cards in the sandbox — the first time it has ever rendered.
+2. **HIGH — the tape modal's comments column was dead.** The comment machinery still looked things up by the old key while the new modal rendered under the new key — they never met, so the column silently didn't work. Fixed; the composer now wires live (walked and pinned).
+3. **HIGH — a security hole in the tape modal.** Titles and genres arriving from the outside anime database were rendered without sanitizing, so a hostile title could have run script in members' browsers. Fixed at the render layer; a test now feeds real attack strings through the modal and proves they stay inert text.
+4. **HIGH (heart) — the tape's "NOT REVIEWED" label was painted in your gold** on the one surface where your voice is deliberately absent. It's now hazard yellow-green — caution tape, not Blake gold — pinned by a computed-color test.
+5. **MED — saved-titles double-counting** in Wrapped (a title on both watchlist and favorites counted twice). Now deduped.
+6. **MED (heart) — two extra gold text elements** on the Constellation surface. The gold now lives in the star alone; the stylesheet is pinned to carry no gold ink ever.
+7. **MED — screen-reader honesty.** The sky's spoken description recited "0 reviews, 0 comments…" to fresh members — the exact zeros-parade the visual design avoids — and undercounted comments for active ones. The accessible story now matches the visible one, count for count.
+Three further claims were refuted by the verification pass and left alone. Every fix carries a new test so none of the seven can return.
 
-## Green
-Playwright **243** · rules **198** · functions **77** · triggers **76** · end-to-end **20** — all passing. Live-walked: you set a status in the panel → a member's fresh page load shows the gold pill.
+## Green (the new floors)
+Playwright **250** (was 243) · rules **198** · functions **77** · triggers **76** · end-to-end **20**. Live sandbox walks with sampled pixels: the Constellation (13 checks — gold star exact, purple stars purple, no zero chips), the fixed tape modal + Hidden Gems (7 checks), the extended AniList canary (12 checks, live). Committed as the Milestone C close.
+
+## For your one final smoke (banking these now)
+1. Account → **Constellation** tab: your sky, the gold star on your join day, truthful chips.
+2. Home page: scroll past AIRING NOW → the **HIDDEN GEMS** strip appears with real cards.
+3. Discover → open an anime you haven't reviewed → **★ Community reviews** → the tape modal: caution-yellow tape, your rating/review absent, community column alive.
+4. Random with the filter on "not yet" → lands on unreviewed titles.
 
 ## What's next (no input needed)
-**Milestone C** — discovery and community: community reviews on anime you haven't watched (under honest "not reviewed" yellow tape, your voice nowhere near it), a Random button that leans toward the unreviewed, a Hidden Gems rail, and each member's Constellation Wrapped. Then Milestone D, the responsive overhaul.
+**Milestone D — the v2.0 responsive overhaul** (the one you asked for: the scrunched nav, small laptops, phones, the sidebar idea). Header that never wraps, real card-grid breakpoints for the laptop band, the off-canvas nav drawer, touch fixes at every width, then a full-surface sweep at nine screen sizes. Treated with cutover seriousness.
 
 ## One-liner reply
-Your curator tools are done — gold status labels on the cards, a panel to set them and keep private notes, and an info-request button that routes questions to you without faking demand numbers — and the adversarial panel caught six things (including a status label rendering in the wrong gold, which my own pixel-check had glossed over) that are all now fixed and pinned; everything's green at 243/198/77/76/20, waiting in the sandbox for your one smoke.
+Milestone C is closed and it's a story about the panel: the Constellation is built (each member's year as a purple star map where the only gold is the day they joined), but the round's real work was the adversarial panel catching that Hidden Gems and the tape modal's comments were both silently dead as inherited — plus an injection hole and your gold leaking onto the no-gold surface — all seven defects fixed, walked with sampled pixels, and pinned so they can't come back; new floors 250/198/77/76/20, sandbox-staged for your one smoke, responsive overhaul next.

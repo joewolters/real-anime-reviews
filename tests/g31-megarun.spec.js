@@ -188,10 +188,17 @@ test('gC1 (behavior): the unreviewed primary modal is yellow-tape + gold-free + 
   const m = await page.evaluate(async () => {
     const btn = document.createElement('button');
     btn.setAttribute('data-commreview', '');
-    Object.assign(btn.dataset, { anilistId: '99777', title: 'Pin Test Show', romaji: 'Pin', genre: 'Action', desc: 'A synopsis.' });
+    // C-panel: hostile AniList strings ride the dataset transport RAW —
+    // the sinks must escape (the XSS the panel caught, never again).
+    Object.assign(btn.dataset, {
+      anilistId: '99777', title: 'Pin Test Show',
+      romaji: '<img src=x onerror=window.__rarPwned=1>',
+      genre: 'Action<svg onload=window.__rarPwned=2>', desc: 'A synopsis.'
+    });
     document.body.appendChild(btn); btn.click();
     await new Promise((r) => setTimeout(r, 800));
     const left = document.querySelector('.sheet--left');
+    const kicker = document.querySelector('.unreviewed-tape .ut-kicker');
     return {
       tape: !!document.querySelector('.unreviewed-tape'),
       noRating: !(left && left.querySelector('.rating-badge')),
@@ -199,6 +206,12 @@ test('gC1 (behavior): the unreviewed primary modal is yellow-tape + gold-free + 
       goldFree: !/ffd54a|is-creator/i.test(left ? left.innerHTML : 'x'),
       reviewForm: !!document.getElementById('rev-form-al:99777'),
       commList: !!document.getElementById('comm-list-al:99777'),
+      // C-panel HIGHs, pinned:
+      pwned: window.__rarPwned || 0,                                   // the payloads must be inert
+      romajiInjected: !!(left && left.querySelector('.modal-romaji img')),
+      genreInjected: !!(left && left.querySelector('.genre-chip svg')),
+      kickerColor: kicker ? getComputedStyle(kicker).color : '',       // hazard yellow-green, never Blake-gold
+      composerWired: !!document.getElementById(`composer-post-al:99777`),
     };
   });
   expect(m.tape).toBe(true);
@@ -207,6 +220,34 @@ test('gC1 (behavior): the unreviewed primary modal is yellow-tape + gold-free + 
   expect(m.goldFree).toBe(true);        // gold appears NOWHERE (his voice is absent here)
   expect(m.reviewForm).toBe(true);      // community reviews fully alive, keyed al:<id>
   expect(m.commList).toBe(true);
+  expect(m.pwned).toBe(0);              // AniList-sourced romaji/genre execute NOTHING
+  expect(m.romajiInjected).toBe(false);
+  expect(m.genreInjected).toBe(false);
+  expect(m.kickerColor).toBe('rgb(227, 224, 78)');   // #e3e04e — the caution hue, not #ffd54a's
+  expect(m.composerWired).toBe(true);
+});
+
+test('gC-panel: the comments wiring keys on reviewKey — the tape column can never go dead again', async ({ page }) => {
+  const sjs = await (await page.request.get('/script.js')).text();
+  // the exact defect: subscribeComments/wireComments keyed communityKey while
+  // commentsMarkup keyed reviewKey — ids never matched for the synthetic.
+  expect(sjs).not.toMatch(/const s = communityKey\(anime\)/);
+  // the whole room family keys on reviewKey now: commentsMarkup,
+  // subscribeComments, wireComments, communityMarkup, subscribeReviews,
+  // wireCommunity — dropping ANY retrofit re-splits the synthetic's rooms.
+  expect((sjs.match(/const s = reviewKey\(anime\)/g) || []).length).toBeGreaterThanOrEqual(6);
+});
+
+test('gC-panel: Hidden Gems is actually reachable — bridge export + a visible IO sentinel', async ({ page }) => {
+  const sjs = await (await page.request.get('/script.js')).text();
+  // the bridge must carry the fetcher fillHomeGems calls
+  expect(sjs).toMatch(/window\.rarDiscovery = \{[\s\S]{0,600}?fetchHiddenGemsCached/);
+  // the IO must observe the VISIBLE airing strip, never the [hidden] gems block
+  expect(sjs).toMatch(/lazyFillOnView\(homeAiringBlock, fillHomeGems\)/);
+  expect(sjs).not.toMatch(/lazyFillOnView\(homeGemsBlock/);
+  // and the live bridge really exposes it
+  await page.goto('/index.html');
+  await page.waitForFunction(() => !!(window.rarDiscovery && window.rarDiscovery.fetchHiddenGemsCached), null, { timeout: 15000 });
 });
 
 test('gA0: the live lantern still exposes the pure model on index (behavior anchor)', async ({ page }) => {
@@ -225,4 +266,119 @@ test('gA0: the live lantern still exposes the pure model on index (behavior anch
   expect(m.blake).toBe(1);
   expect(m.first).toBe('blake_message');   // Blake sorts first — gold discipline
   expect(m.rollup).toBe(1);                // votes collapse
+});
+
+// ── gate C3 — CONSTELLATION WRAPPED ─────────────────────────────────────────
+// The member's year as a purple star map. THE HEART PIN: exactly ONE gold
+// element may ever appear on this member surface — the join-day star.
+
+test('gC3: the account page carries the Constellation tab, panel, and versioned wiring', async ({ page }) => {
+  const html = await (await page.request.get('/account.html')).text();
+  expect(html).toContain('data-tab="wrapped"');
+  expect(html).toMatch(/id="tab-wrapped"[^>]*hidden/);
+  expect(html).toMatch(/href="wrapped\.css\?v=[\d.]+"/);
+  const ajs = await (await page.request.get('/account.js')).text();
+  expect(ajs).toMatch(/from '\.\/wrapped\.js\?v=[\d.]+'/);   // cache-bust from birth
+  // C-panel (LOW, fixed): pin the tabs ARRAY LITERAL itself — a bare
+  // toContain("'wrapped'") survived deleting the array entry (the click
+  // handler + deep-link still matched).
+  expect(ajs).toMatch(/const tabs = \[[^\]]*'wrapped'[^\]]*\]/);
+  expect(ajs).toContain('ensureWrapped');                    // lazy like activity
+  // C-panel (MED, fixed): the ONLY gold on this member surface is the join
+  // star, painted from wrapped.js — the stylesheet may carry NO gold INK
+  // (hex pins only: the word "gold" legitimately lives in comments/selectors).
+  const css = await (await page.request.get('/wrapped.css')).text();
+  expect(css).not.toMatch(/ffd54a|ffe082|ffd700|f0d34a|rgba?\(255, ?21[0-9]/i);
+});
+
+test('gC3: the pure model is TRUTHFUL — stats keys, the gold singleton, the honest year fence', async ({ page }) => {
+  // account.html redirects signed-out visitors before the poll can settle —
+  // the model is page-agnostic, so import the module directly (unversioned:
+  // specs must not carry ?v= literals the bump script would strand).
+  await page.goto('/index.html');
+  await page.evaluate(async () => { await import('/wrapped.js'); });
+  await page.waitForFunction(() => !!window.wrappedModel, null, { timeout: 15000 });
+  const m = await page.evaluate(() => {
+    const W = window.wrappedModel;
+    const y = 2026;
+    const feb = Date.UTC(y, 1, 14), may = Date.UTC(y, 4, 2);
+    const raw = {
+      items: [
+        { path: 'reviews/one-punch-man/items/u1', createdAtMs: feb, rating: 9 },
+        { path: 'comments/one-punch-man/items/c1', createdAtMs: may },
+        { path: 'reviews/old/items/u1', createdAtMs: Date.UTC(y - 1, 3, 1), rating: 2 },  // last year: fenced out
+      ],
+      replies: [], discussions: [], threads: [{ path: 'forum/t1', createdAtMs: may }], posts: [],
+      saves: [{ animeId: 'one-punch-man', ms: feb, title: 'One Punch Man' }],
+      caps: {}
+    };
+    const joined = W.computeWrapped(raw, y, Date.UTC(y, 6, 2), new Map([['one-punch-man', 'Shonen/Action']]), 'u1');
+    const veteran = W.computeWrapped(raw, y, Date.UTC(y - 2, 6, 2), new Map(), 'u1');
+    const layout = W.layoutStars(joined);
+    const layout2 = W.layoutStars(joined);
+    return {
+      statKeys: Object.keys(joined.stats).sort().join(','),
+      reviews: joined.stats.reviews, avg: joined.stats.avgRating,
+      goldCount: layout.placed.filter((s) => s.kind === 'gold-join').length,
+      vetGold: veteran.gold, vetBegan: typeof veteran.skyBegan === 'number',
+      deterministic: JSON.stringify(layout) === JSON.stringify(layout2),
+      genres: joined.stats.topGenres.join(','),
+    };
+  });
+  // the truthful set — NO watch-time, NO votes, NO first-saved, ever
+  expect(m.statKeys).toBe('avgRating,comments,discussions,joinMs,posts,replies,reviews,saves,threads,topGenres');
+  expect(m.reviews).toBe(1);            // last year's review is fenced out
+  expect(m.avg).toBe(9);
+  expect(m.goldCount).toBe(1);          // the singleton
+  expect(m.vetGold).toBeNull();         // an earlier join is NEVER plotted into this year
+  expect(m.vetBegan).toBe(true);        // …it becomes the gold caption instead
+  expect(m.deterministic).toBe(true);   // hash layout, no Math.random
+  expect(m.genres).toBe('Shonen,Action');
+});
+
+test('gC3: the render vocabulary — ONE gold star, purple data stars, dust below the data floor', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.evaluate(async () => { await import('/wrapped.js'); });
+  await page.waitForFunction(() => !!window.wrappedModel, null, { timeout: 15000 });
+  const m = await page.evaluate(() => {
+    const W = window.wrappedModel;
+    const y = 2026;
+    const raw = {
+      items: [{ path: 'reviews/one-punch-man/items/u1', createdAtMs: Date.UTC(y, 1, 14), rating: 9 }],
+      replies: [], discussions: [], threads: [], posts: [],
+      saves: [{ animeId: 'one-punch-man', ms: Date.UTC(y, 0, 5), title: 'One Punch Man' }], caps: {}
+    };
+    const model = W.computeWrapped(raw, y, Date.UTC(y, 6, 2), new Map(), 'u1');
+    const svg = W.skySvg(model);
+    const dust = Array.from(svg.matchAll(/class="wr-dust"[^/]*r="([\d.]+)" [^/]*opacity="([\d.]+)"/g));
+    const emptyModel = W.computeWrapped({ items: [], replies: [], discussions: [], threads: [], posts: [], saves: [], caps: {} }, y, Date.UTC(y, 6, 2), new Map(), 'u1');
+    return {
+      goldFills: (svg.match(/#ffe082/g) || []).length,
+      goldKinds: (svg.match(/data-kind="gold-join"/g) || []).length,
+      reviewPurple: svg.indexOf('#e3c9ff') !== -1,
+      dustCount: dust.length,
+      dustBelowFloor: dust.every((d) => parseFloat(d[1]) <= 1.0 && parseFloat(d[2]) <= 0.22),
+      dustHasNoKind: !/wr-dust[^/]*data-kind/.test(svg),
+      emptyIsEmpty: emptyModel.empty, emptyStillGold: !!emptyModel.gold,
+      // C-panel (MED, fixed): the accessible story equals the visual story
+      freshAria: W.skyAria(emptyModel),
+      activeAria: W.skyAria(model),
+      zeroChips: (W.statsHtml(W.computeWrapped({
+        items: [{ path: 'comments/x/items/c1', createdAtMs: Date.UTC(y, 2, 3) }],
+        replies: [], discussions: [], threads: [], posts: [], saves: [], caps: {}
+      }, y, Date.UTC(y - 2, 0, 1), new Map(), 'u1')).match(/wr-chip-big">0</g) || []).length,
+    };
+  });
+  expect(m.goldFills).toBe(1);          // gold paints the join star and NOTHING else
+  expect(m.goldKinds).toBe(1);
+  expect(m.reviewPurple).toBe(true);
+  expect(m.dustCount).toBeGreaterThan(50);
+  expect(m.dustBelowFloor).toBe(true);  // ambient dust never outshines a real datum
+  expect(m.dustHasNoKind).toBe(true);   // star counts stay data-pure
+  expect(m.emptyIsEmpty).toBe(true);    // zero-activity flags drive the no-zero-chips branch
+  expect(m.emptyStillGold).toBe(true);  // …but a this-year join still lights its star
+  expect(m.freshAria).not.toMatch(/\b0 /);              // no zeros-parade for screen readers
+  expect(m.freshAria).toContain('day you joined');
+  expect(m.activeAria).toContain('1 review');           // non-zero counts still speak
+  expect(m.zeroChips).toBe(0);                          // a one-comment member sees NO zero chips
 });

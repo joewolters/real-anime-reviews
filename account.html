@@ -31,6 +31,8 @@
   <link rel="stylesheet" href="mobile.css?v=1.10.2" media="(max-width: 900px)" />
   <link rel="stylesheet" href="frames.css?v=1.10.2" />   <!-- gate 20.5 — the frame themes -->
   <link rel="stylesheet" href="admin-fab.css?v=1.10.2" />
+  <link rel="stylesheet" href="wrapped.css?v=1.10.2" />   <!-- mega-run C3 — Constellation Wrapped -->
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
@@ -132,6 +134,7 @@
             <div class="side-group-label">Community <span class="jp-mini">部屋</span></div>
             <ul class="side-nav" role="tablist" aria-orientation="vertical">
               <li><button data-tab="activity" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">⌁</span>My Activity</button></li>
+              <li><button data-tab="wrapped" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">✦</span>Constellation</button></li>
               <li><button data-tab="inbox" class="side-link" role="tab" aria-selected="false"><span class="side-ico" aria-hidden="true">✉</span>Inbox <span id="inbox-dot" class="inbox-dot" hidden aria-label="Unread"></span></button></li>
             </ul>
           </div>
@@ -436,6 +439,21 @@
   <p id="activity-empty" class="muted saved-empty">Loading...</p>
   <ul id="activity-list" class="saved-list activity-list" aria-label="Recent activity"></ul>
 </article>
+
+        <!-- CONSTELLATION WRAPPED — mega-run C3: the member's year drawn in
+             stars on the veil's own vocabulary. Purple sky; the ONE gold star
+             is the day they joined. Truthful stats only — the module renders
+             everything into #wrapped-host (wrapped.js, lazy on first open). -->
+        <article class="account-card account-panel-card is-tab" id="tab-wrapped" hidden>
+          <header class="panel-head">
+            <div class="panel-head-text">
+              <h3 class="acct-kicker">Your Constellation <span class="jp-mini">星座</span></h3>
+              <p class="acct-section-sub">Your year in the Den, drawn in stars — every review, comment, and thread you left behind.</p>
+            </div>
+          </header>
+          <p id="wrapped-status" class="muted" role="status"></p>
+          <div id="wrapped-host"></div>
+        </article>
 
         <!-- INBOX — gate 18 machinery; round 2 gives it the full panel -->
         <article class="account-card account-panel-card is-tab" id="tab-inbox" hidden>
