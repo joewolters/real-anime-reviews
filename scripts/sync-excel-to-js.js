@@ -207,15 +207,20 @@ function indexOf(headers, name) {
 }
 
 function transformTags(rawTags) {
-  // Excel: "#action #animation #fan service #OP MC"
+  // Excel: "#action #animation #fan service #OP MC"  (Blake also writes
+  //        "#action, #underdog, #worldbuilding" — comma-separated hashtags)
   // Out:   ["action", "animation", "fan-service", "op-mc"]
   if (!rawTags) return [];
-  // Split on '#' boundary, drop the empty leading part, trim, filter empty
+  // LAST CALL A6 — split on '#' AND ',' and strip trailing punctuation: the
+  // '#'-only split kept each segment's trailing comma ("action,") and turned
+  // interior ", " into ",-" ("friendly,-rivalry") — the comma'd tag pills in
+  // Blake's screenshot. The transform is tolerant of BOTH Excel styles; Excel
+  // itself stays untouched (canonical).
   return String(rawTags)
-    .split('#')
-    .map((s) => s.trim())
+    .split(/[#,]/)
+    .map((s) => s.trim().replace(/[,;、.]+$/g, ''))
     .filter(Boolean)
-    .map((s) => s.toLowerCase().replace(/\s+/g, '-'));
+    .map((s) => s.toLowerCase().replace(/\s+/g, '-').replace(/-+/g, '-').replace(/(^-|-$)/g, ''));
 }
 
 function transformPlatforms(rawWatch, warnings) {

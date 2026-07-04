@@ -21,8 +21,26 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // LAST CALL A5 — bare-URL autolink ("people should just be able to copy
+  // paste like a normal site"). Runs LAST, on already-escaped/processed HTML:
+  // the string is split on existing <a> elements so an explicit [text](url)
+  // link (or its visible text) is never double-wrapped, and only https?://
+  // survives (the same scheme gate as the explicit-link pass). Trailing
+  // sentence punctuation stays outside the link. Input is fully escaped, so
+  // the href can only ever contain entities — no attribute breakout exists.
+  function linkifyBareUrls(html) {
+    // (code spans stay inert — the live editor's own CODE-is-inert rule)
+    return html.split(/(<a [^>]*>[\s\S]*?<\/a>|<code>[\s\S]*?<\/code>)/g).map(function (seg, i) {
+      if (i % 2 === 1) return seg;   // an existing anchor — untouched
+      return seg.replace(/(^|[\s>])(https?:\/\/[^\s<]+?)([.,;:!?)\]]*)(?=[\s<]|$)/g,
+        function (_m, pre, url, trail) {
+          return pre + '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>' + trail;
+        });
+    }).join('');
+  }
+
   function renderMarkdownInline(t) {
-    return escapeHtml(t)
+    return linkifyBareUrls(escapeHtml(t)
       // v1.10.0 gate 11 — ||spoiler||: hidden until clicked (the span is the
       // button; reveal wiring is the consumer's job). Runs FIRST so the inner
       // text still gets bold/italic/code/links applied by the passes below.
@@ -42,7 +60,7 @@
       .replace(/__([^_]+)__/g, '<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'));
   }
 
   // v1.8.2 — anchorable heading ids for the structured-review jump-pills. Returns a

@@ -21,6 +21,17 @@ async function purgeCollection(name) {
   }
 }
 
+// LAST CALL A5 — #inbox-input is RarLive's HIDDEN model now (page.fill can't
+// target display:none); write the model + dispatch, exactly like the app's
+// own external-write contract.
+async function writeLetter(page, text) {
+  await page.evaluate((t) => {
+    const ta = document.getElementById('inbox-input');
+    ta.value = t;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }, text);
+}
+
 async function signIn(page, email) {
   // manually-minted contexts miss the welcomed fixture — set the flag ourselves
   await page.addInitScript(() => { try { sessionStorage.setItem('rar:welcomed', '1'); } catch (_) {} });
@@ -41,7 +52,7 @@ async function knockOn(page, uid, text) {
   await btn.click();
   await expect(page.locator('#inbox-thread')).toBeVisible({ timeout: 20000 });
   await page.waitForTimeout(1500);
-  await page.fill('#inbox-input', text);
+  await writeLetter(page, text);
   await page.click('#inbox-send');
   await page.waitForTimeout(2500);
 }
@@ -76,7 +87,7 @@ test.describe.serial('the Letter Room (emulator-seeded, self-resetting)', () => 
     await ren.click('#inbox-req-accept');
     await ren.waitForTimeout(2000);
     await expect(ren.locator('#inbox-req-bar')).toBeHidden();
-    await ren.fill('#inbox-input', 'letters e2e: the reply');
+    await writeLetter(ren, 'letters e2e: the reply');
     await ren.click('#inbox-send');
     await expect(ren.locator('#inbox-messages')).toContainText('the reply', { timeout: 10000 });
     await renCtx.close();
@@ -137,7 +148,7 @@ test.describe.serial('the Letter Room (emulator-seeded, self-resetting)', () => 
     await mika.waitForTimeout(3000);
     await mika.locator('#inbox-list .inbox-row', { hasText: 'e2e watchers' }).click();
     await mika.waitForTimeout(1500);
-    await mika.fill('#inbox-input', 'letters e2e: to the group');
+    await writeLetter(mika, 'letters e2e: to the group');
     await mika.click('#inbox-send');
     await mika.waitForTimeout(2000);
     await mikaCtx.close();
@@ -170,7 +181,7 @@ test.describe.serial('the Letter Room (emulator-seeded, self-resetting)', () => 
       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
     });
     await page.waitForTimeout(500);
-    await page.fill('#inbox-input', 'letters e2e: swatch');
+    await writeLetter(page, 'letters e2e: swatch');
     await page.click('#inbox-send');
     await page.waitForTimeout(4000);
     await expect(page.locator('.inbox-msg.is-mine .inbox-msg-img')).toBeVisible({ timeout: 15000 });

@@ -124,7 +124,7 @@ test('gate 20 (cherry): the footer wears the kicker vocabulary, copy untouched',
   const html = await (await request.get('/index.html')).text();
   expect(html).toContain('ABOUT ME <span class="jp-mini">');
   expect(html).toContain('CONTACT ME <span class="jp-mini">');
-  expect(html).toContain('vibe-coded the entire website');   // Blake's words, untouched
+  expect(html).toContain('could have never dreamed of');   // Blake's words (the B4 bio), untouched
   await page.goto('/index.html');
   const c = await page.evaluate(() => {
     const el = document.createElement('span');

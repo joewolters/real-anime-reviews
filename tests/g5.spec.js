@@ -30,6 +30,6 @@ test.describe('Gate 5 — continue rail + provenance', () => {
     await expect(page.locator('#anime-modal')).toBeVisible();
     const prov = page.locator('#anime-modal .modal-provenance');
     await expect(prov).toBeVisible();
-    await expect(prov).toContainText(/Blake watched\s+\d+\s+season/i);
+    await expect(prov).toContainText(/The Creator watched\s+\d+\s+season/i);
   });
 });

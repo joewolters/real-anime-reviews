@@ -40,13 +40,15 @@ test('20.8 (1): the chip CSS is a 36px disc that clips an avatar img', async ({ 
   expect(m.fit).toBe('cover');
 });
 
-test('20.8 (2): profile-card rows close stale overlays before routing', async ({ page }) => {
+test('20.8 (2) → LAST CALL B3: profile rows route through the rarNav CASCADE close', async ({ page }) => {
   const src = await (await page.request.get('/script.js')).text();
   expect(src).toContain('function closeStaleOverlays');
-  // both row kinds route THROUGH the overlay close (threads keep the hub —
-  // openThreadById swaps the panel in place; everything else closes it too)
-  expect(src).toMatch(/closeProfilePage\(\); closeStaleOverlays\(true\); try \{ openThreadById/);
-  expect(src).toMatch(/closeProfilePage\(\);\s*\n\s*closeStaleOverlays\(\);/);
+  // LAST CALL: the row-routing rides rarNavCascade now — the same top-down
+  // close discipline PLUS one history rewind, with the open deferred past the
+  // swallowed popstate (the panel's go-vs-push race). The thread branch left
+  // with the public Threads tab (A8).
+  expect(src).toMatch(/rarNavCascade\(\[closeProfilePage, closeStaleOverlays\]/);
+  expect(src).toContain('function rarNavCascade');
   // tertiary closes before secondary (the detail layer lives inside the sheet),
   // and the hub drawer (its own z-6000 layer) is covered too
   const fnBody = src.slice(src.indexOf('function closeStaleOverlays'), src.indexOf('function closeStaleOverlays') + 800);

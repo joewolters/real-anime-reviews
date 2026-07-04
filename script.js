@@ -23,7 +23,7 @@ import { auth, db, functions, storage } from './firebase.js';
 // imports must cache-bust; bump-version.js carries the import targets now.)
 import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=1.10.2';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError } from './friendly-errors.js?v=1.10.2';
+import { friendlyError, showNotice } from './friendly-errors.js?v=1.10.2';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
 import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=1.10.2';
@@ -286,12 +286,15 @@ function applySavedStateToCard(card, animeId) {
 // cached 1h. Label text is set via textContent (no XSS) from a fixed map.
 let curatorStatusMap = {};   // catalog animeId -> status (feeds the card pills)
 let curatorTrackedMap = {};  // Milestone F: al:<id> -> {status,title} (feeds ONLY the Den line)
+// LAST CALL B1 (the de-Blake sweep) — the card pills go name-free: the GOLD
+// is already his mark (gold = the Creator, site law). The Den's masthead line
+// keeps his name (approved verbatim at smoke 2).
 const CURATOR_STATUS_LABEL = {
-  watching:   { label: "Blake is watching",   jp: "視聴中" },
-  watchlist:  { label: "On Blake's list",     jp: "予定" },
-  'on-hold':  { label: "Blake paused this",   jp: "保留" },
-  finished:   { label: "Blake finished this", jp: "完" },
-  rewatching: { label: "Blake is rewatching", jp: "再視聴" },
+  watching:   { label: "Watching now",      jp: "視聴中" },
+  watchlist:  { label: "On the watchlist",  jp: "予定" },
+  'on-hold':  { label: "On hold",           jp: "保留" },
+  finished:   { label: "Watched in full",   jp: "完" },
+  rewatching: { label: "Rewatching",        jp: "再視聴" },
 };
 function applyCuratorStatusToCard(card, animeId) {
   const status = curatorStatusMap[animeId];
@@ -2321,7 +2324,7 @@ function syncFilterFormToApplied() {
         if (turnOn) setRef.delete(animeId); else setRef.add(animeId);   // rollback
         syncSavedUIForAnime(animeId);
         console.error('save failed', err);   // v1.10.1: raw → console only
-        alert("Failed to save: " + friendlyError(err, { kind: 'save' }));
+        showNotice("Failed to save: " + friendlyError(err, { kind: 'save' }));
       } finally {
         btn.disabled = false;
       }
@@ -3227,7 +3230,7 @@ function buildBlakesTableRail() {
   block.id = 'foryou-blakes-table';
   const head = document.createElement('h3');
   head.className = 'discover-block-head';
-  head.textContent = "BLAKE'S TABLE";
+  head.textContent = "THE CREATOR'S TABLE";
   const sp = document.createElement('span'); sp.className = 'jp-mini'; sp.textContent = '十八番';
   head.appendChild(document.createTextNode(' ')); head.appendChild(sp);
   block.appendChild(head);
@@ -3250,7 +3253,7 @@ function buildForYouGift() {
   if (!foryouSectionsEl) return;
   foryouSectionsEl.appendChild(discoverEmptyCard({
     mode: 'empty', kicker: 'NEW HERE', jp: '始めよう',
-    body: "Hey — welcome in. This is the page where I pull my picks right up next to your taste. Thing is, I can't read a shelf that's empty yet. Go heart a few in the catalog, drop the maybes on your watchlist, wander Discover and tap the gold ones. Save three or four and come back — this whole page rebuilds itself around what you're into, my reviews lined up next to the wider world they live in. Promise it's worth it. — Blake",
+    body: "Hey — welcome in. This is the page where I pull my picks right up next to your taste. Thing is, I can't read a shelf that's empty yet. Go heart a few in the catalog, drop the maybes on your watchlist, wander Discover and tap the gold ones. Save three or four and come back — this whole page rebuilds itself around what you're into, my reviews lined up next to the wider world they live in. Promise it's worth it. — the Creator",
     cta: 'Go find something to save',
     onCta: () => showDiscover(),
   }));
@@ -3277,7 +3280,7 @@ async function buildForYouSignedOut(token) {
   foryouSectionsEl.appendChild(block);
   foryouSectionsEl.appendChild(discoverEmptyCard({
     mode: 'empty', kicker: 'WHAT THIS BECOMES', jp: 'サインイン',
-    body: "Right now you're seeing what the whole world is watching — no fake guessing. Sign in and For You becomes mine-meets-yours: I take the titles you save and stand my own reviewed picks right beside the wider world, gold-pinned so you always know which ones I've actually sat through. Make an account and let's build your shelf. — Blake",
+    body: "Right now you're seeing what the whole world is watching — no fake guessing. Sign in and For You becomes mine-meets-yours: I take the titles you save and stand my own reviewed picks right beside the wider world, gold-pinned so you always know which ones I've actually sat through. Make an account and let's build your shelf. — the Creator",
     cta: 'Sign in to build your shelf',
     onCta: () => openAuth('signin'),
   }));
@@ -3482,7 +3485,7 @@ async function buildHomeForYou() {
     // Signed out — an honest trending taster (NOT a sign-in wall on the home), relabelled
     // so impersonal trending never sits under a personalization promise.
     setStripHead(headEl, 'FROM HIS SHELF', '十八番');
-    if (subEl) subEl.textContent = "Not signed in yet — here's what the wider world's loving, with the ones Blake's reviewed lit gold.";
+    if (subEl) subEl.textContent = "Not signed in yet — here's what the wider world's loving, with the ones reviewed here lit gold.";
     setMore('Sign in to make this yours · For You', () => showForYou());
     setRailMeta('home-foryou-block', 'The wider world · 世界');
     setRailLoading(homeForyouRail);
@@ -3503,7 +3506,7 @@ async function buildHomeForYou() {
     homeForyouRail.classList.add('is-sparse');
     homeForyouRail.appendChild(discoverEmptyCard({
       mode: 'empty', kicker: 'FOR YOU', jp: '始めよう',
-      body: "Save a few you love and this whole shelf rebuilds around your taste. — Blake",
+      body: "Save a few you love and this whole shelf rebuilds around your taste. — the Creator",
       cta: 'Go find something to save', onCta: () => showDiscover(),
     }));
     return;
@@ -4095,7 +4098,7 @@ function positionFeaturedDrop() {
     '          <option value="most-liked">Most liked</option>',
     '        </select>',
     '      </label>',
-    '      <span class="comments-lock-note" id="comments-lock-' + s + '" hidden>🔒 Blake closed this thread</span>',
+    '      <span class="comments-lock-note" id="comments-lock-' + s + '" hidden>🔒 The Creator closed this thread</span>',
     '      <span class="comments-admin-lock" id="comments-adminlock-' + s + '" hidden></span>',
     '    </div>',
     '  </div>',
@@ -4127,10 +4130,10 @@ function positionFeaturedDrop() {
     `<div class="official-votes-bar" id="official-votes-${s}">`,
     `  <span class="label">Agree with my Rating?</span>`,
     `  <div class="official-votes">`,
-    `    <button type="button" class="vote-btn like" data-action="like" aria-label="Agree with Blake's rating" title="Agree">`,
+    `    <button type="button" class="vote-btn like" data-action="like" aria-label="Agree with the Creator's rating" title="Agree">`,
     `      ${thumbUp} <span class="vcount">0</span>`,
     `    </button>`,
-    `    <button type="button" class="vote-btn dislike" data-action="dislike" aria-label="Disagree with Blake's rating" title="Disagree">`,
+    `    <button type="button" class="vote-btn dislike" data-action="dislike" aria-label="Disagree with the Creator's rating" title="Disagree">`,
     `      ${thumbDown} <span class="vcount">0</span>`,
     `    </button>`,
     `  </div>`,
@@ -4520,7 +4523,7 @@ function markPostedNow() {
 postBtn.addEventListener('click', async (e) => {
   if (!ensureAuthOrOpen(e)) return;
   if (posting) return;
-  if (!canPostNow()) { alert('Easy there—please wait a moment before posting again.'); return; }
+  if (!canPostNow()) { showNotice('Easy there—please wait a moment before posting again.'); return; }
 
   const u = auth.currentUser;
   if (!u) return;
@@ -4592,7 +4595,7 @@ postBtn.addEventListener('click', async (e) => {
   } catch (err) {
     pending.remove();
     console.error('comment post failed', err);   // v1.10.1: raw → console only
-    alert('Failed to post: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
+    showNotice('Failed to post: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
   } finally {
     posting = false;
     postBtn.disabled = false;
@@ -4641,7 +4644,7 @@ postBtn.addEventListener('click', async (e) => {
       if (lockNote) lockNote.hidden = !threadLocked;
       if (threadLocked) {
         input.readOnly = true;
-        input.placeholder = 'Blake closed this thread';
+        input.placeholder = 'The Creator closed this thread';
         postBtn.disabled = true;
       } else {
         syncAuthUI(auth.currentUser);
@@ -4657,7 +4660,7 @@ postBtn.addEventListener('click', async (e) => {
         const t = e.target.closest('.lock-toggle'); if (!t) return;
         if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
         try { await setDoc(doc(db, 'commentsMeta', s), { locked: !threadLocked }, { merge: true }); }
-        catch (err) { console.error('lock failed', err); alert('Lock failed: ' + friendlyError(err, { kind: 'save' })); }
+        catch (err) { console.error('lock failed', err); showNotice('Lock failed: ' + friendlyError(err, { kind: 'save' })); }
       });
     }
     window.addEventListener('rar:admin-change', renderAdminLock);
@@ -4717,6 +4720,9 @@ function openInlineCommentEditor(editBtn, itemRef) {
   const cancelBtn = wrap.querySelector('.action-btn.cancel');
 
   ta.value = (((p.dataset && p.dataset.raw != null) ? p.dataset.raw : (p.textContent || ''))).trim();
+  // LAST CALL A5 — editing behaves like composing (the same live engine; the
+  // hidden model keeps the counter/save wiring). Mod+Enter saves.
+  const live = window.RarLive ? window.RarLive.mount(ta, { mode: 'inline', submit: 'mod', onSubmit: () => { if (!saveBtn.disabled) saveBtn.click(); } }) : null;
 
   const sync = () => {
     const n = ta.value.length;
@@ -4726,7 +4732,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
   };
   ta.addEventListener('input', sync);
   sync();
-  setTimeout(() => ta.focus(), 0);
+  setTimeout(() => (live ? live.focus() : ta.focus()), 0);
 
   cancelBtn.addEventListener('click', () => {
     wrap.remove();
@@ -4745,7 +4751,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       p.innerHTML = (window.renderMarkdownInline ? window.renderMarkdownInline(next) : escapeHtml(next)); // immediate UI update
       p.dataset.raw = next;
     } catch (err) {
-      alert('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
+      showNotice('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
     } finally {
       wrap.remove();
       p.hidden = false;
@@ -4791,7 +4797,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         } catch (err) {
           // permission-denied is the expected M5 anti-spam clamp / pre-cutover
           // staged-rules state — don't alarm the visitor.
-          if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
+          if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); showNotice('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
         }
         return;
       }
@@ -4818,7 +4824,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         } catch (err) {
           // permission-denied is the expected M5 anti-spam clamp (rapid re-vote)
           // or the pre-cutover staged-rules state — don't alarm the visitor.
-          if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
+          if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); showNotice('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
         }
         return;
       }
@@ -4840,7 +4846,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         if (!(typeof window !== 'undefined' && window.__rarIsAdmin === true)) return;
         const makePinned = btn.dataset.pinned !== '1';
         try { await updateDoc(itemRef, { pinned: makePinned }); }
-        catch (err) { console.error('pin failed', err); alert('Pin failed: ' + friendlyError(err, { kind: 'save' })); }
+        catch (err) { console.error('pin failed', err); showNotice('Pin failed: ' + friendlyError(err, { kind: 'save' })); }
         return;
       }
 
@@ -4850,7 +4856,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
           message: 'This will permanently remove this comment.',
           okText: 'Delete', cancelText: 'Cancel', danger: true
         });
-        if (ok) { try { await deleteDoc(itemRef); } catch (err) { console.error('delete failed', err); alert('Delete failed: ' + friendlyError(err, { kind: 'save' })); } }
+        if (ok) { try { await deleteDoc(itemRef); } catch (err) { console.error('delete failed', err); showNotice('Delete failed: ' + friendlyError(err, { kind: 'save' })); } }
         return;
       }
 
@@ -4975,7 +4981,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     if (!authed) { input.readOnly = true; input.placeholder = 'Sign in to reply'; }
     const lockNote = document.getElementById('comments-lock-' + s);
     const replyLocked = !!(lockNote && !lockNote.hidden);
-    if (replyLocked) { input.readOnly = true; input.placeholder = 'Blake closed this thread'; postBtn.disabled = true; }
+    if (replyLocked) { input.readOnly = true; input.placeholder = 'The Creator closed this thread'; postBtn.disabled = true; }
     input.addEventListener('input', () => {
       if (replyLocked) { postBtn.disabled = true; return; }
       const v = input.value.trim();
@@ -5053,7 +5059,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         input.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview too (8d fix #1)
       } catch (err) {
         console.error('reply failed', err);   // v1.10.1: raw → console only
-        alert('Failed to reply: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
+        showNotice('Failed to reply: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
       } finally {
         postBtn.disabled = false;
         postBtn.textContent = 'Reply';
@@ -5094,7 +5100,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         </label>
         <label class="rar-report-field">
           <span>Anything to add? (optional)</span>
-          <textarea class="rar-report-note" maxlength="500" placeholder="A short note for Blake…"></textarea>
+          <textarea class="rar-report-note" maxlength="500" placeholder="A short note for the Creator…"></textarea>
         </label>
         <div class="rar-report-actions">
           <button type="button" class="action-btn rar-report-cancel">Cancel</button>
@@ -5150,7 +5156,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
           setTimeout(close, 2200);
         } else {
           sendBtn.disabled = false;
-          console.error('report failed', err); alert('Report failed: ' + friendlyError(err, { kind: 'post' }));
+          console.error('report failed', err); showNotice('Report failed: ' + friendlyError(err, { kind: 'post' }));
         }
       }
     });
@@ -5199,7 +5205,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
   // expression is the "From Blake's 44" shelf + an anime-tagged thread's verdict rail.
   // ===========================================================================
   const FORUM_TAGS = ['general', 'recommend', 'hottake', 'episode', 'theories', 'animation', 'music', 'news', 'manga', 'cosplay', 'blakes-44', 'offtopic'];
-  const TAG_LABEL = { general: 'General', recommend: 'Recs', hottake: 'Hot Takes', episode: 'Episode', theories: 'Theories', animation: 'Animation', music: 'Music', news: 'News', manga: 'Manga', cosplay: 'Cosplay', 'blakes-44': "Blake's Reviews", offtopic: 'Off-topic' };
+  const TAG_LABEL = { general: 'General', recommend: 'Recs', hottake: 'Hot Takes', episode: 'Episode', theories: 'Theories', animation: 'Animation', music: 'Music', news: 'News', manga: 'Manga', cosplay: 'Cosplay', 'blakes-44': "Creator's Reviews", offtopic: 'Off-topic' };
   // Topics offered in the new-thread DROPDOWN (gate 8d Part C — going wide). 'blakes-44'
   // is a FILTER chip only (anime threads carry anime:<slug>/anime:al:<id>) — not a composer topic.
   const FORUM_TOPICS = [['general', 'General'], ['recommend', 'Recommendations'], ['hottake', 'Hot Takes'], ['episode', 'Episode Discussion'], ['theories', 'Theories'], ['animation', 'Animation'], ['music', 'Music & OST'], ['news', 'News'], ['manga', 'Manga'], ['cosplay', 'Cosplay'], ['offtopic', 'Off-topic']];
@@ -5543,9 +5549,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
 
   let profileLayerEl = null;
   function closeProfilePage() {
-    if (profileLayerEl) { try { profileLayerEl.remove(); } catch (_) {} profileLayerEl = null; }
+    if (!profileLayerEl) return;
+    rarNavUnwindWhile('profile');   // LAST CALL B3 — consume the sheet's entry
+    try { profileLayerEl.remove(); } catch (_) {} profileLayerEl = null;
     if (/^#profile=/.test(location.hash)) {
-      try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
+      try { history.replaceState({ rarDepth: rarNavOwnedDepth() }, '', location.pathname + location.search + (rarNavStack.length ? rarNavStack[rarNavStack.length - 1].hash : '')); } catch (_) {}
     }
   }
   async function openProfilePage(uid) {
@@ -5557,7 +5565,9 @@ function openInlineCommentEditor(editBtn, itemRef) {
     // sheet like any member's (his 2026-07-02 call: "I want my account to be
     // appreicated." — the count is the purple carve-out, never gold).
     const isCreator = uid === NOTIF_ADMIN_UID;
-    closeProfilePage();
+    // B3 — replacing an open sheet (profile→profile) keeps the old entry:
+    // Back should walk A ← B, so only the DOM is swapped here (suppressed).
+    if (profileLayerEl) { rarNavSuppress = true; try { profileLayerEl.remove(); } catch (_) {} profileLayerEl = null; rarNavSuppress = false; }
     const layer = document.createElement('div');
     layer.className = 'profile-layer';
     layer.innerHTML = `<div class="profile-scrim"></div>
@@ -5572,7 +5582,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
       </section>`;
     document.body.appendChild(layer);
     profileLayerEl = layer;
-    try { history.replaceState(null, '', '#profile=' + encodeURIComponent(uid)); } catch (_) {}
+    // LAST CALL B3 — a real history entry now (was replaceState): Back closes
+    // the sheet instead of leaving the page. A sheet opened OVER another
+    // sheet replaces its entry (one profile step at a time).
+    const profHash = '#profile=' + encodeURIComponent(uid);
+    if (!rarNavReplaceTop('profile', profHash)) rarNavPush('profile', profHash);
     const close = () => closeProfilePage();
     layer.querySelector('.profile-scrim').addEventListener('click', close);
     layer.querySelector('.profile-close').addEventListener('click', close);
@@ -5678,6 +5692,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const msgBtn = layer.querySelector('.profile-message');
     if (msgBtn) {
       const viewer = auth.currentUser;
+      // LAST CALL B1 — the Creator's sheet says who you're writing to
+      if (uid === NOTIF_ADMIN_UID) {
+        msgBtn.title = 'Message the Creator';
+        msgBtn.setAttribute('aria-label', 'Message the Creator');
+      }
       if (viewer && viewer.uid === uid) {
         msgBtn.hidden = true;
       } else {
@@ -5709,13 +5728,13 @@ function openInlineCommentEditor(editBtn, itemRef) {
     bodyEl.innerHTML = profileHeaderHtml(ident)
       + '<div class="profile-featured-slot"></div>'
       + '<div class="profile-collections-slot"></div>'
+      // LAST CALL A8 (Blake: "threads hidden on public pages; reviews only,
+      // plus anything pinned" — "I just don't want TOO much information on a
+      // public profile"): the Threads tab is GONE from the public sheet; the
+      // one remaining chip stays as the section label. Account-page Activity
+      // keeps the full set — this is the PUBLIC face only.
       + '<div class="profile-acts" role="tablist" aria-label="Their activity">'
-      +   '<button type="button" class="profile-act-chip is-active" data-act="threads" role="tab" aria-selected="true">Threads</button>'
-      // v1.10.2R: everyone carries Threads + Reviews — the Creator included
-      // (member parity; his community reviews list like anyone's).
-      +   '<button type="button" class="profile-act-chip" data-act="reviews" role="tab" aria-selected="false">Reviews</button>'
-      // gate 20.7 (Blake item 3): Comments + Replies tabs removed from the
-      // PUBLIC profile — "No need to go that deep." Threads + Reviews stay.
+      +   '<button type="button" class="profile-act-chip is-active" data-act="reviews" role="tab" aria-selected="true">Reviews</button>'
       + '</div>'
       + '<ul class="profile-list" data-profile-acts><li class="hub-loading">Looking…</li></ul>';
 
@@ -5783,27 +5802,57 @@ function openInlineCommentEditor(editBtn, itemRef) {
           const v = String(s || '');
           return (/^assets\/[A-Za-z0-9._-]{1,120}$/.test(v) || /^https:\/\/[^"'<>\s]{1,400}$/.test(v)) ? v : '';
         };
-        let html = '<div class="profile-collections">'
-          + '<span class="profile-featured-kicker">⊞ THEIR SHELVES <span class="jp-mini">蔵書</span></span>';
-        colSnap.forEach((d) => {
-          const c = d.data() || {};
+        // LAST CALL A8 — ONE shelf LEADS (the owner's featuredShelf pick, else
+        // the freshest); the rest wait behind "view all shelves" (Blake: not
+        // TOO much information, still full custom control). Covers are
+        // CLICKABLE (data-anime-id → the card / deep-dive), and every shelf
+        // carries a ☆ Save for the viewer's own "Other members' shelves".
+        const shelves = [];
+        colSnap.forEach((d) => shelves.push(Object.assign({ id: d.id }, d.data() || {})));
+        const featId = (prof && typeof prof.featuredShelf === 'string') ? prof.featuredShelf : '';
+        if (featId) shelves.sort((a, b) => (a.id === featId ? -1 : 0) - (b.id === featId ? -1 : 0));
+        const shelfViewer = auth.currentUser;
+        const blocks = shelves.map((c, i) => {
           const items = Array.isArray(c.items) ? c.items.slice(0, 10) : [];
-          html += '<div class="profile-col">'
-            + '<span class="profile-col-name">' + escapeHtml(String(c.name || '(shelf)').slice(0, 60)) + '</span>'
+          const saveBtn = !shelfViewer
+            ? '<button type="button" class="profile-col-save" data-save-shelf-auth="1">☆ Save shelf</button>'
+            : (shelfViewer.uid !== uid
+                ? '<button type="button" class="profile-col-save" data-save-shelf="' + escapeHtml(c.id) + '" data-shelf-name="' + escapeHtml(String(c.name || '').slice(0, 80)) + '">☆ Save shelf</button>'
+                : '');
+          const strip = items.map((it) => {
+            const cov = safeCov(it && it.coverImage);
+            const title = escapeHtml(String((it && it.title) || '').slice(0, 80));
+            const aid = escapeHtml(String((it && it.animeId) || ''));
+            return cov
+              ? '<img class="profile-col-cover" src="' + escapeHtml(cov) + '" alt="" loading="lazy" title="' + title + '" data-anime-id="' + aid + '" role="link" tabindex="0">'
+              : '<span class="profile-col-cover profile-col-cover--ph" title="' + title + '" data-anime-id="' + aid + '" role="link" tabindex="0">' + escapeHtml(String((it && it.title) || '?').charAt(0)) + '</span>';
+          }).join('') + (items.length ? '' : '<span class="muted">an empty shelf, lovingly dusted</span>');
+          return '<div class="profile-col"' + (i > 0 ? ' data-shelf-extra hidden' : '') + '>'
+            + '<span class="profile-col-name">' + escapeHtml(String(c.name || '(shelf)').slice(0, 60))
+            + (i === 0 && c.id === featId ? ' <span class="profile-col-feat">📌 featured</span>' : '') + '</span>'
             + (typeof c.description === 'string' && c.description.trim()
                 ? '<span class="profile-col-desc">' + escapeHtml(String(c.description).slice(0, 200)) + '</span>' : '')
-            + '<span class="profile-col-strip">'
-            + items.map((it) => {
-                const cov = safeCov(it && it.coverImage);
-                const title = escapeHtml(String((it && it.title) || '').slice(0, 80));
-                return cov
-                  ? '<img class="profile-col-cover" src="' + escapeHtml(cov) + '" alt="" loading="lazy" title="' + title + '">'
-                  : '<span class="profile-col-cover profile-col-cover--ph" title="' + title + '">' + escapeHtml(String((it && it.title) || '?').charAt(0)) + '</span>';
-              }).join('')
-            + (items.length ? '' : '<span class="muted">an empty shelf, lovingly dusted</span>')
-            + '</span></div>';
+            + saveBtn
+            + '<span class="profile-col-strip">' + strip + '</span></div>';
         });
-        colSlot.innerHTML = html + '</div>';
+        const more = shelves.length > 1
+          ? '<button type="button" class="profile-col-viewall" data-shelves-toggle data-shelf-count="' + shelves.length + '" aria-expanded="false">view all shelves (' + shelves.length + ')</button>'
+          : '';
+        colSlot.innerHTML = '<div class="profile-collections">'
+          + '<span class="profile-featured-kicker">⊞ THEIR SHELVES <span class="jp-mini">蔵書</span></span>'
+          + blocks[0] + more + blocks.slice(1).join('') + '</div>';
+        // paint already-saved states (deterministic ref ids: ownerUid__colId)
+        if (shelfViewer && shelfViewer.uid !== uid) {
+          shelves.forEach(async (c) => {
+            try {
+              const s = await getDoc(doc(db, 'users', shelfViewer.uid, 'savedShelves', uid + '__' + c.id));
+              if (s.exists()) {
+                const b = colSlot.querySelector('[data-save-shelf="' + cssEscape(c.id) + '"]');
+                if (b) { b.textContent = '★ Saved'; b.dataset.saved = '1'; }
+              }
+            } catch (_) {}
+          });
+        }
       }
     } catch (e) {
       // the slot stays empty for visitors, but say WHY in the console — a
@@ -5838,21 +5887,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
     // adversarial perf LOW: memoize both tabs — toggling chips on a sheet (it
     // opens from any author name site-wide) must not re-query Firestore per click.
     const actLoaders = {
-      threads: async () => {
-        if (actCache.threads) return actCache.threads;
-        const rows = [];
-        try {
-          const tsnap = await getDocs(query(collection(db, 'forum'), where('authorUid', '==', uid), orderBy('createdAt', 'desc'), limit(12)));
-          tsnap.forEach((d) => { const t = d.data() || {}; if (t.removed) return;
-            rows.push(`<li class="profile-item" data-open-thread="${escapeHtml(d.id)}"><span class="profile-item-title">${escapeHtml(t.title || '(untitled)')}</span><span class="hub-card-time">${escapeHtml(relTimeHub(t.createdAt))}</span></li>`); });
-        } catch (_) {}
-        actCache.threads = rows;
-        return rows;
-      },
+      // LAST CALL A8: the threads loader left with its tab (public = reviews
+      // + pinned only). The account page's own Activity keeps the full set.
       reviews: async () => { await loadItemsSplit(); return actCache.reviews; },
-      // gate 20.7 (item 3): the comments + replies loaders left with their tabs.
     };
-    const ACT_EMPTY = { threads: 'No threads yet.', reviews: 'No reviews yet.' };
+    const ACT_EMPTY = { reviews: 'No reviews yet.' };
     async function showAct(kind) {
       bodyEl.querySelectorAll('.profile-act-chip').forEach((c) => {
         const on = c.getAttribute('data-act') === kind;
@@ -5887,20 +5926,67 @@ function openInlineCommentEditor(editBtn, itemRef) {
     bodyEl.addEventListener('click', (e) => {
       const chip = e.target.closest('.profile-act-chip');
       if (chip) { showAct(chip.getAttribute('data-act')); return; }
-      const th = e.target.closest('[data-open-thread]');
-      if (th) { closeProfilePage(); closeStaleOverlays(true); try { openThreadById(th.getAttribute('data-open-thread')); } catch (_) {} return; }
+      // LAST CALL A8 — "view all shelves" reveals the waiting blocks
+      const tog = e.target.closest('[data-shelves-toggle]');
+      if (tog) {
+        const open = tog.getAttribute('aria-expanded') === 'true';
+        tog.setAttribute('aria-expanded', String(!open));
+        tog.textContent = open ? ('view all shelves (' + (tog.getAttribute('data-shelf-count') || '') + ')') : 'show fewer';
+        bodyEl.querySelectorAll('[data-shelf-extra]').forEach((el) => { el.hidden = open; });
+        return;
+      }
+      // LAST CALL A8 — ☆ Save shelf → users/{viewer}/savedShelves (toggle)
+      const sv = e.target.closest('[data-save-shelf], [data-save-shelf-auth]');
+      if (sv) {
+        if (sv.hasAttribute('data-save-shelf-auth')) { try { openAuth('signin'); } catch (_) {} return; }
+        const shelfViewer = auth.currentUser;
+        if (!shelfViewer) return;
+        const colId = sv.getAttribute('data-save-shelf');
+        const refDoc = doc(db, 'users', shelfViewer.uid, 'savedShelves', uid + '__' + colId);
+        (async () => {
+          try {
+            if (sv.dataset.saved === '1') {
+              await deleteDoc(refDoc);
+              sv.dataset.saved = ''; sv.textContent = '☆ Save shelf';
+            } else {
+              await setDoc(refDoc, { ownerUid: uid, colId: colId, name: String(sv.getAttribute('data-shelf-name') || '').slice(0, 80), savedAt: serverTimestamp() });
+              sv.dataset.saved = '1'; sv.textContent = '★ Saved';
+            }
+          } catch (_) { /* rules said no (own shelf/offline) — leave as-is */ }
+        })();
+        return;
+      }
+      // LAST CALL A8 — shelf covers open the anime (catalog → the card modal;
+      // al:<id> → the deep-dive), through the same stale-overlay discipline.
+      const cover = e.target.closest('[data-anime-id]');
+      if (cover && cover.getAttribute('data-anime-id')) {
+        const aid = cover.getAttribute('data-anime-id');
+        // panel HIGH: the cascade closer — one rewind for every consumed
+        // entry, and the open runs AFTER the swallowed popstate lands (a
+        // synchronous push raced the queued history.go).
+        rarNavCascade([closeProfilePage, closeStaleOverlays],
+          () => { try { openAnimeFromId(aid); } catch (_) {} });
+        return;
+      }
       const tg = e.target.closest('[data-open-target]');
       if (tg) {
         const p = tg.getAttribute('data-open-target');
-        closeProfilePage();
-        closeStaleOverlays();
         // openNotifTarget takes the STRING path and parses internally — handing
         // it the parsed OBJECT threw-and-swallowed, making every review a dead
-        // click (adversarial review, HIGH).
-        try { if (typeof openNotifTarget === 'function') openNotifTarget(p); } catch (_) {}
+        // click (adversarial review, HIGH). panel HIGH: cascade + deferred open.
+        rarNavCascade([closeProfilePage, closeStaleOverlays],
+          () => { try { if (typeof openNotifTarget === 'function') openNotifTarget(p); } catch (_) {} });
       }
     });
-    showAct('threads');
+    // keyboard parity for the cover role="link" spans
+    bodyEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const cover = e.target && e.target.closest ? e.target.closest('[data-anime-id]') : null;
+      if (!cover || !cover.getAttribute('data-anime-id')) return;
+      e.preventDefault();
+      cover.click();
+    });
+    showAct('reviews');
   }
   window.openProfilePage = openProfilePage;
 
@@ -5963,7 +6049,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         // then redacts the pointer — never the Firestore-only trap.
         await httpsCallable(functions, 'adminRemoveImage')({ docPath: imgRm.dataset.imgDoc || '', imagePath: imgRm.dataset.imgRemove });
         const wrap = imgRm.closest('.hub-img-wrap'); if (wrap) wrap.remove();
-      } catch (err) { imgRm.disabled = false; console.error('image remove failed', err); alert('Could not remove the image: ' + friendlyError(err, { kind: 'save' })); }
+      } catch (err) { imgRm.disabled = false; console.error('image remove failed', err); showNotice('Could not remove the image: ' + friendlyError(err, { kind: 'save' })); }
     }
   }, true);
   // the uploadsEnabled kill-switch (commentsMeta/uploads — admin one-write off
@@ -6248,7 +6334,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         if (reason) docData.reason = reason.slice(0, 900);
         await addDoc(collection(db, 'suggestions'), docData);
         try { sessionStorage.setItem(key, String(Date.now())); } catch (_) {}
-        form.replaceChildren(Object.assign(document.createElement('span'), { className: 'secondary-inforeq-done', textContent: '✓ Sent — Blake reads every request.' }));
+        form.replaceChildren(Object.assign(document.createElement('span'), { className: 'secondary-inforeq-done', textContent: '✓ Sent — the Creator reads every request.' }));
       } catch (err) {
         sendB.disabled = false;
         // one message, never a stack (adversarial LOW): drop any prior note first
@@ -6346,7 +6432,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const edited = p.editedAt ? ' <span class="hub-edited" title="Edited">· edited</span>' : '';
     const opTag = opts.isOp ? ' <span class="hub-op-tag" title="Started this thread">OP</span>' : '';
     const pick = !!p.blakePick;
-    const pickBadge = pick ? ' <span class="hub-pick-badge" title="Blake picked this reply">★ Blake&rsquo;s pick</span>' : '';
+    const pickBadge = pick ? ' <span class="hub-pick-badge" title="The Creator picked this reply">★ Creator&rsquo;s pick</span>' : '';
     const pickCls = pick ? ' hub-post--pick' : '';
     const collapsed = !!opts.collapsed;
     const childHtml = opts.childHtml || '';
@@ -6396,7 +6482,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         ${opts.isOwn ? `<button type="button" class="hub-menu-item" data-edit-post="${id}" role="menuitem">Edit</button>
           <button type="button" class="hub-menu-item is-danger" data-del-post="${id}" role="menuitem">Delete</button>` : ''}
         <button type="button" class="hub-menu-item" data-report-post="${id}" role="menuitem">Report</button>
-        ${opts.isAdmin ? `<button type="button" class="hub-menu-item is-gold" data-pick-post="${id}" role="menuitem">${pick ? 'Remove Blake&rsquo;s pick' : '★ Mark Blake&rsquo;s pick'}</button>` : ''}
+        ${opts.isAdmin ? `<button type="button" class="hub-menu-item is-gold" data-pick-post="${id}" role="menuitem">${pick ? 'Remove Creator&rsquo;s pick' : '★ Mark Creator&rsquo;s pick'}</button>` : ''}
       </div>` : '';
 
     // a quiet, branded delete-confirm row (no native dialog)
@@ -6436,8 +6522,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
         <span class="hub-shelf-rating">${escapeHtml(rating)}</span>
       </button>`;
     }).join('');
-    return `<section class="hub-shelf" aria-label="Blake's Reviews">
-      <div class="hub-shelf-kicker">BLAKE&rsquo;S REVIEWS <span class="jp-mini">十八番</span></div>
+    return `<section class="hub-shelf" aria-label="The Creator's Reviews">
+      <div class="hub-shelf-kicker">THE CREATOR&rsquo;S REVIEWS <span class="jp-mini">十八番</span></div>
       <div class="hub-shelf-row">${chips}</div>
     </section>`;
   }
@@ -6460,7 +6546,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       return `<button type="button" class="hub-rising-item${gold ? ' is-blake' : ''}" data-thread-id="${escapeHtml(t.id)}">
         ${gold ? '<span class="hub-rising-star" aria-hidden="true">★</span>' : '<span class="hub-rising-dot" aria-hidden="true"></span>'}
         <span class="hub-rising-title">${escapeHtml(t.title || '(untitled)')}</span>
-        ${gold ? '<span class="hub-rising-tag">Blake&rsquo;s pick</span>' : ''}
+        ${gold ? '<span class="hub-rising-tag">Creator&rsquo;s pick</span>' : ''}
       </button>`;
     }).join('');
     return `<section class="hub-rising" aria-label="Rising in the Tavern">
@@ -6519,10 +6605,13 @@ function openInlineCommentEditor(editBtn, itemRef) {
     tl.hidden = false;
     requestAnimationFrame(() => requestAnimationFrame(() => tl.classList.add('active')));
     hubView = 'thread';
+    // LAST CALL B3 — a thread is a shareable view (#forum/<tid> already cold-opens)
+    if (hubThreadId) rarNavPush('thread', '#forum/' + encodeURIComponent(hubThreadId));
   }
   // Close level 2 — reveal the list behind it; reset all per-thread state.
   function closeThreadPanel() {
     const tl = hubThreadLayer();
+    rarNavUnwindWhile('thread');   // B3 — consume the thread's entry
     tl.classList.remove('active');
     // guard against a fast back->reopen: only hide/clear if it wasn't re-activated.
     setTimeout(() => { if (tl && !tl.classList.contains('active')) { tl.hidden = true; const s = tl.querySelector('.hub-thread-scroll'); if (s) s.innerHTML = ''; } }, 300);
@@ -6574,6 +6663,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('active')));
     document.addEventListener('keydown', onHubKeydown);
     document.documentElement.style.overflow = 'hidden';
+    rarNavPush('hub', '#tavern');   // LAST CALL B3 — the Tavern is a view step
     subscribeForum();
     renderHubList();
   }
@@ -6583,6 +6673,8 @@ function openInlineCommentEditor(editBtn, itemRef) {
     // (e.g. a click eaten by the dying backdrop) must not re-run teardown —
     // it would re-clear the scroll lock a freshly opened modal just set.
     if (!hubLayerEl.classList.contains('active')) return;
+    // B3 — the drawer close takes an open thread's entry with it
+    rarNavUnwindWhile(['thread', 'hub']);
     hubLayerEl.classList.remove('active');
     const tl = hubLayerEl.querySelector('.hub-thread-layer');
     if (tl) { tl.classList.remove('active'); tl.hidden = true; }   // tear down level 2 too
@@ -6663,15 +6755,15 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const slug = hubAnimeSlugFromTag(tag);
     if (!slug) return '';
     const a = animeBySlug(slug);
-    if (!a) return `<div class="hub-verdict hub-verdict--none">Not yet in Blake's reviews — <button type="button" class="hub-suggest-link" data-suggest="${escapeHtml(slug)}">suggest it</button>.</div>`;
+    if (!a) return `<div class="hub-verdict hub-verdict--none">Not reviewed here yet — <button type="button" class="hub-suggest-link" data-suggest="${escapeHtml(slug)}">suggest it</button>.</div>`;
     const rating = String(a.Rating || '').replace(/\s*\/\s*10\s*$/, '');
     const quote = String(a.Review || a.Description || '').replace(/[#*_`>\[\]]/g, '').trim().slice(0, 160);
     return `<div class="hub-verdict" data-anime-slug="${escapeHtml(animeSlug(a))}">
-      <div class="hub-verdict-kicker">BLAKE&rsquo;S VERDICT <span class="jp-mini">監修</span></div>
+      <div class="hub-verdict-kicker">THE VERDICT <span class="jp-mini">監修</span></div>
       <div class="hub-verdict-row"><span class="hub-verdict-score">${escapeHtml(rating)}</span><span class="hub-verdict-max">/10</span>
         <span class="hub-verdict-title">${escapeHtml(a.Title)}</span></div>
       ${quote ? `<p class="hub-verdict-quote">${escapeHtml(quote)}…</p>` : ''}
-      <button type="button" class="hub-verdict-link" data-anime-slug="${escapeHtml(animeSlug(a))}">Read Blake&rsquo;s review →</button>
+      <button type="button" class="hub-verdict-link" data-anime-slug="${escapeHtml(animeSlug(a))}">Read the review →</button>
     </div>`;
   }
   window.hubVerdictRailHtml = verdictRailHtml; // test hook (the gold-verdict blend)
@@ -6855,6 +6947,15 @@ function openInlineCommentEditor(editBtn, itemRef) {
       postsEl.innerHTML = roots.length
         ? roots.map((p) => renderNode(p, 0)).join('')
         : `<li class="hub-post-empty">${HUB_EMPTY_REPLIES}</li>`;
+      // LAST CALL A5 — any post being EDITED gets the ONE live engine too
+      // (every repaint rebuilds the textarea, so re-mount on every paint; the
+      // draft-mirror input listener keeps riding the model's synthetic events).
+      if (window.RarLive) postsEl.querySelectorAll('.hub-edit-input').forEach((ta) => {
+        window.RarLive.mount(ta, { mode: 'inline', submit: 'mod', onSubmit: () => {
+          const btn = postsEl.querySelector('[data-edit-save="' + ta.getAttribute('data-edit-input') + '"]');
+          if (btn && !btn.disabled) btn.click();
+        } });
+      });
       // overhaul item 5 — per-post inline placement: resolve each post's
       // [img:N] slots against ITS OWN imageRefs (:scope so a parent never
       // touches a nested child's text), then drop inline-used figures from
@@ -6951,7 +7052,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         postBtn.textContent = 'Reply';
       } catch (err) {
         console.error('hub reply failed', err);   // v1.10.1: raw → console only
-        alert('Could not post your reply: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
+        showNotice('Could not post your reply: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
         postBtn.disabled = false; postBtn.textContent = 'Reply';
       }
     });
@@ -7000,7 +7101,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
             <input class="hub-nt-search" type="text" placeholder="Search any anime…" aria-label="Search anime">
             <span class="hub-nt-spinner" hidden aria-hidden="true"></span>
           </div>
-          <p class="hub-nt-pick-hint">Type to search. <b>Blake&rsquo;s reviewed titles</b> show a ★ — pick one for his verdict rail; any other anime just adds the cover.</p>
+          <p class="hub-nt-pick-hint">Type to search. <b>Reviewed titles</b> show a ★ — pick one and the thread anchors under its verdict rail; any other anime just adds the cover.</p>
           <ul class="hub-nt-results"></ul>
         </div>
       </div>`;
@@ -7120,6 +7221,10 @@ function openInlineCommentEditor(editBtn, itemRef) {
       const tag = attached ? attached.tag : selectedTopic;   // a thread is about an anime OR a topic
       errEl.textContent = '';
       if (title.length < 1 || title.length > 120) { errEl.textContent = 'Give it a title (1–120 characters).'; return; }
+      // Part C audit (MED): pre-flight the body cap — RarLive bypasses
+      // maxlength, and an over-cap body burned its image uploads before the
+      // rules denied the doc (the exact trap the reply composer already names).
+      if (body.length > 4000) { errEl.textContent = 'That post is over the 4000-character limit — trim it a little.'; return; }
       const createBtn = overlay.querySelector('.hub-nt-create'); createBtn.disabled = true;
       if (!(await ensureCanParticipate())) { createBtn.disabled = false; return; }
       try {
@@ -7228,17 +7333,22 @@ function openInlineCommentEditor(editBtn, itemRef) {
       hubEditing.set(pid, _hubRawBody.get(pid) || ''); hubConfirmDel.delete(pid); hubMenuOpen.delete(pid);
       if (hubRepaintPosts) hubRepaintPosts();
       const ta = document.querySelector('[data-edit-input="' + pid + '"]');
-      if (ta) { try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {} }
+      // the textarea is the hidden RarLive model now — focus its editor twin
+      if (ta) {
+        const ed = ta.parentNode && ta.parentNode.querySelector('.rar-live');
+        try { if (ed) ed.focus(); else { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } } catch (_) {}
+      }
       return;
     }
     const editCancel = t.closest('[data-edit-cancel]'); if (editCancel) { hubEditing.delete(editCancel.dataset.editCancel); if (hubRepaintPosts) hubRepaintPosts(); return; }
     const editSave = t.closest('[data-edit-save]'); if (editSave && hubThreadId) {
       const pid = editSave.dataset.editSave; const ta = document.querySelector('[data-edit-input="' + pid + '"]');
       const val = ta ? ta.value.trim() : ''; if (!val) return;
+      if (val.length > 4000) { showNotice('That edit is over the 4000-character limit — trim it a little.'); return; }   // Part C audit
       if (!(await ensureCanParticipate())) return;
       editSave.disabled = true;
       try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { body: val, editedAt: serverTimestamp() }); hubEditing.delete(pid); _hubRawBody.set(pid, val); if (hubRepaintPosts) hubRepaintPosts(); }
-      catch (err) { editSave.disabled = false; console.error('edit save failed', err); alert('Could not save your edit: ' + friendlyError(err, { kind: 'save' })); }
+      catch (err) { editSave.disabled = false; console.error('edit save failed', err); showNotice('Could not save your edit: ' + friendlyError(err, { kind: 'save' })); }
       return;
     }
     const delBtn = t.closest('[data-del-post]'); if (delBtn) { hubMenuOpen.delete(delBtn.dataset.delPost); hubConfirmDel.add(delBtn.dataset.delPost); if (hubRepaintPosts) hubRepaintPosts(); return; }
@@ -7247,7 +7357,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       const pid = delConfirm.dataset.delConfirm;
       if (!(await ensureCanParticipate())) return;
       try { await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { removed: true, body: '' }); hubConfirmDel.delete(pid); hubEditing.delete(pid); }
-      catch (err) { console.error('takedown failed', err); alert('Could not take it down: ' + friendlyError(err, { kind: 'save' })); }
+      catch (err) { console.error('takedown failed', err); showNotice('Could not take it down: ' + friendlyError(err, { kind: 'save' })); }
       return;
     }
     const adminBtn = t.closest('[data-hub-admin]'); if (adminBtn && hubThreadId) { await hubAdminAction(adminBtn.dataset.hubAdmin); return; }
@@ -7261,7 +7371,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       if (action === 'pin') { const t = hubThreads.find((x) => x.id === hubThreadId); await updateDoc(tref, { pinned: !(t && t.pinned) }); }
       else if (action === 'lock') { const t = hubThreads.find((x) => x.id === hubThreadId); await updateDoc(tref, { locked: !(t && t.locked) }); }
       else if (action === 'remove') { await updateDoc(tref, { removed: true, title: '', body: '' }); closeThreadPanel(); }
-    } catch (err) { console.error('admin action failed', err); alert('Admin action failed: ' + friendlyError(err, { kind: 'save' })); }
+    } catch (err) { console.error('admin action failed', err); showNotice('Admin action failed: ' + friendlyError(err, { kind: 'save' })); }
   }
 
   // gate 8c extra — Blake's-pick: admin marks ONE reply per thread as the gold pick
@@ -7283,7 +7393,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         }
         await updateDoc(doc(db, 'forum', hubThreadId, 'posts', pid), { blakePick: true });
       }
-    } catch (err) { console.error('pick update failed', err); alert('Could not update Blake’s pick: ' + friendlyError(err, { kind: 'save' })); }
+    } catch (err) { console.error('pick update failed', err); showNotice('Could not update the pick: ' + friendlyError(err, { kind: 'save' })); }
   }
 
   // Render this viewer's thumb state onto a reply foot (up = purple, down = neutral white).
@@ -7399,7 +7509,7 @@ function renderHistogram(histEl, dist, n, blakeRating) {
     barsHtml += `<span class="hist-bar" style="--h:${bars[i]}%" title="${i}/10 · ${dist[i]} review${dist[i] === 1 ? '' : 's'}"></span>`;
   }
   const tick = (tickLeft !== null)
-    ? `<span class="hist-tick" style="left:${tickLeft}%" title="Blake's rating: ${blakeRating.toFixed(1)}"></span>`
+    ? `<span class="hist-tick" style="left:${tickLeft}%" title="The Creator's rating: ${blakeRating.toFixed(1)}"></span>`
     : '';
   histEl.innerHTML = `<div class="hist-bars">${barsHtml}</div>${tick}<div class="hist-axis"><span>1</span><span>10</span></div>`;
   histEl.classList.add('has-data');
@@ -7480,6 +7590,8 @@ function subscribeReviews(anime) {
     const cancelBtn = wrap.querySelector('.action-btn.cancel');
 
     ta.value = (((p.dataset && p.dataset.raw != null) ? p.dataset.raw : (p.textContent || ''))).trim();
+    // LAST CALL A5 — editing behaves like composing (the ONE live engine)
+    const live = window.RarLive ? window.RarLive.mount(ta, { mode: 'inline', submit: 'mod', onSubmit: () => { if (!saveBtn.disabled) saveBtn.click(); } }) : null;
 
     const sync = () => {
       const n = ta.value.length;
@@ -7489,7 +7601,7 @@ function subscribeReviews(anime) {
     };
     ta.addEventListener('input', sync);
     sync();
-    setTimeout(() => ta.focus(), 0);
+    setTimeout(() => (live ? live.focus() : ta.focus()), 0);
 
     cancelBtn.addEventListener('click', () => {
       wrap.remove();
@@ -7507,7 +7619,7 @@ function subscribeReviews(anime) {
         await updateDoc(itemRef, { text: next, editedAt: serverTimestamp() });
         p.textContent = next;
       } catch (err) {
-        alert('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
+        showNotice('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
       } finally {
         wrap.remove();
         p.hidden = false;
@@ -8006,7 +8118,7 @@ function subscribeReviews(anime) {
       threadPost?.addEventListener('click', async (e) => {
         if (!ensureAuthOrOpen(e)) return;
         if (posting) return;
-        if (!canPostNow()) { alert('Easy there—please wait a moment before posting again.'); return; }
+        if (!canPostNow()) { showNotice('Easy there—please wait a moment before posting again.'); return; }
 
         const u = auth.currentUser;
         if (!u) return;
@@ -8058,7 +8170,7 @@ function subscribeReviews(anime) {
         } catch (err) {
           pending.remove();
           console.error('discussion post failed', err);   // v1.10.1: raw → console only
-          alert('Failed to post: ' + friendlyError(err, { kind: 'post', user: auth.currentUser }));
+          showNotice('Failed to post: ' + friendlyError(err, { kind: 'post', user: auth.currentUser }));
         } finally {
           posting = false;
           syncThreadComposer();
@@ -8096,7 +8208,7 @@ function subscribeReviews(anime) {
               else tx.set(voteRef, { uid: auth.currentUser.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
             });
           } catch (err) {
-            if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
+            if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); showNotice('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
           }
           return;
         }
@@ -8342,7 +8454,7 @@ if (purl) data.photoURL = purl;
       bodyEl.dispatchEvent(new Event('input', { bubbles: true })); // clear the live preview NOW, not on the snapshot round-trip (8d fix #1)
     } catch (err) {
       console.error('review publish failed', err);   // v1.10.1: raw → console only
-      alert('Failed to publish: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
+      showNotice('Failed to publish: ' + friendlyError(err, { kind: 'upload', user: auth.currentUser }));
     } finally {
       pubBtn.textContent = 'Publish';
       sync();
@@ -8408,7 +8520,7 @@ if (action === 'like' || action === 'dislike') {
       else tx.set(voteRef, { uid: meUid, value: next, updatedAt: serverTimestamp() }, { merge: true });
     });
   } catch (err) {
-    if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
+    if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); showNotice('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
   }
   return;
 }
@@ -8490,6 +8602,9 @@ if (action === 'like' || action === 'dislike') {
   tIn.value = currentTitle;
   rIn.value = Number.isFinite(currentRating) ? currentRating.toFixed(1) : '5.0';
   bIn.value = currentBody;
+  // LAST CALL A5 — the review EDIT joins the ONE engine (block mode, like the
+  // review composer: ## section lines + lists style live while editing).
+  if (window.RarLive) window.RarLive.mount(bIn, { mode: 'block', submit: 'mod', onSubmit: () => { if (!saveBtn.disabled) saveBtn.click(); } });
 
   const sync = () => {
     count.textContent = String(bIn.value.length);
@@ -8497,7 +8612,9 @@ if (action === 'like' || action === 'dislike') {
     const titleOk = tIn.value.trim().length >= 3;
     const r = parseFloat(rIn.value);
     const ratingOk = Number.isFinite(r) && r >= 1 && r <= 10;
-    const bodyOk = bIn.value.trim().length > 0;
+    // Part C audit (MED): the ≤2000 cap must live HERE — RarLive's programmatic
+    // writes bypass maxlength, so the counter alone was a lie past the cap.
+    const bodyOk = bIn.value.trim().length > 0 && bIn.value.length <= 2000;
 
     saveBtn.disabled = !(titleOk && ratingOk && bodyOk);
   };
@@ -8519,18 +8636,20 @@ if (action === 'like' || action === 'dislike') {
     const rating = clamp(rRaw);
     const body = bIn.value.trim();
 
-    if (!title || !body || !Number.isFinite(rating) || rating < 1 || rating > 10) return;
+    if (!title || !body || body.length > 2000 || !Number.isFinite(rating) || rating < 1 || rating > 10) return;
 
     saveBtn.disabled = true;
     try {
       await updateDoc(ref, { title, rating, body, updatedAt: serverTimestamp() });
 
-      // immediate UI update (snapshot will also refresh)
+      // immediate UI update (snapshot will also refresh) — Part C audit (LOW):
+      // through the REAL renderer, like the row painter — the escapeHtml+nl2br
+      // path dropped markdown/spoilers/autolink until the snapshot landed.
       if (titleSpan) titleSpan.textContent = title;
       if (ratingSpan) ratingSpan.textContent = `${rating.toFixed(1)}/10`;
-      if (bodyP) bodyP.innerHTML = nl2br(escapeHtml(stripAccidentalPaste(body)));
+      if (bodyP) bodyP.innerHTML = (window.renderMarkdown ? window.renderMarkdown(stripAccidentalPaste(body)) : nl2br(escapeHtml(stripAccidentalPaste(body))));
     } catch (err) {
-      alert('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
+      showNotice('Failed to edit: ' + friendlyError(err, { kind: 'save' })); console.error('edit failed', err);
     } finally {
       form.remove();
       if (bodyP) bodyP.hidden = false;
@@ -8626,7 +8745,7 @@ function wireOfficialVotes(anime) {
         else tx.set(voteRef, { uid: u.uid, value: next, updatedAt: serverTimestamp() }, { merge: true });
       });
     } catch (err) {
-      if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); alert('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
+      if (!(err && err.code === 'permission-denied')) { console.error('vote failed', err); showNotice('Vote failed: ' + friendlyError(err, { kind: 'post' })); }
     }
   }
 
@@ -8713,8 +8832,170 @@ function wireReviewNav(scope) {
   });
 }
 
+// ===========================================================================
+// LAST CALL B3 — rarNav: SHAREABLE URLs + an HONEST browser Back.
+// Blake: "If you sent the link of what you were on it would just bring you
+// to the general website… when you go back it should go back on what you
+// were last seeing. If I clicked on like 4 characters… the back button
+// would bring me back to the navigation headers."
+//
+// The model: every overlay VIEW STEP (card modal, deep-dive + its related-
+// anime jumps, character/staff views + their swaps, the Tavern, a thread,
+// a profile) pushes ONE history entry carrying its shareable hash. Back
+// pops exactly one step through each layer's OWN close/step function (all
+// the 20.5/20.8 guards stay the single close paths). UI closes (Esc, ✕,
+// scrim, back-chips) CONSUME their entry via history.back() so the browser
+// stack always matches what's on screen. Cold-opened views own NO entry —
+// Back from a shared link honestly leaves the site. Transient chrome
+// (lantern, auth, filter, drawer, lightbox, catch-up) never enters history.
+// Known v1 residue (documented): jumping from a character to an anime
+// leaves that character-trail's entries inert — Back walks through them
+// without visible change instead of ever dumping you home.
+// ===========================================================================
+const rarNavStack = [];          // [{ type, hash, owned }]
+let rarNavSuppress = false;      // a popstate-driven close is running
+let rarNavUnwinding = 0;         // COUNT of history.go() rewinds in flight
+                                 // (a cascade closes several layers — each
+                                 // queues its own go(); each swallows ONE
+                                 // popstate, so this must be a counter)
+const tertHistory = [];          // tertiary view steps (character/staff)
+
+function rarNavOwnedDepth() { return rarNavStack.filter((x) => x.owned).length; }
+function rarNavPush(type, hash) {
+  const cur = location.hash || '';
+  const owned = cur !== hash;    // cold-open: the URL already IS this view
+  try {
+    if (owned) history.pushState({ rarDepth: rarNavOwnedDepth() + 1 }, '', hash);
+    else history.replaceState({ rarDepth: rarNavOwnedDepth() }, '', hash);
+  } catch (_) {}
+  rarNavStack.push({ type: type, hash: hash, owned: owned });
+}
+// UI-close consumption: if this layer owns the TOP entry, route the close
+// through history.back() (popstate re-enters suppressed and really closes).
+function rarNavConsume(type) {
+  if (rarNavSuppress || rarNavUnwinding) return false;
+  const top = rarNavStack[rarNavStack.length - 1];
+  if (!top || top.type !== type) return false;
+  if (!top.owned) {
+    // (tertHistory stays the CALLER's to step — popping it here would double)
+    rarNavStack.pop();
+    // keep the depth state honest — a null state makes a later Forward press
+    // read target 0 and destructively close everything (panel LOW)
+    try { history.replaceState({ rarDepth: rarNavOwnedDepth() }, '', rarNavStack.length ? rarNavStack[rarNavStack.length - 1].hash : '#all'); } catch (_) {}
+    return false;                // proceed with the direct close
+  }
+  history.back();
+  return true;                   // the caller returns; popstate closes
+}
+function rarNavCloseTop() {      // popstate → close/step-back ONE view
+  const top = rarNavStack.pop();
+  if (!top) return;
+  rarNavSuppress = true;
+  try {
+    if (top.type === 'tertiary') {
+      tertHistory.pop();
+      const prev = tertHistory[tertHistory.length - 1];
+      if (prev && tertiaryEl && !tertiaryEl.hidden) loadTertiary(prev.kind, prev.id);
+      else if (tertiaryEl && !tertiaryEl.hidden) closeTertiary();
+      // hidden layer + empty trail = an inert residue step (media-jump) — skip
+    }
+    else if (top.type === 'secondary') secondaryBack();
+    else if (top.type === 'profile') closeProfilePage();
+    else if (top.type === 'thread') closeThreadPanel();
+    else if (top.type === 'hub') closeHubDrawer();
+    else if (top.type === 'modal') closeModal();
+  } catch (_) {}
+  rarNavSuppress = false;
+  try { history.replaceState(history.state, '', rarNavStack.length ? rarNavStack[rarNavStack.length - 1].hash : '#all'); } catch (_) {}
+}
+window.addEventListener('popstate', (e) => {
+  if (rarNavUnwinding > 0) { rarNavUnwinding--; return; }   // a cascade already synced the stack
+  const target = (e.state && e.state.rarDepth) || 0;
+  let guard = 32;   // never loop past the deepest plausible stack
+  while (rarNavOwnedDepth() > target && rarNavStack.length && guard-- > 0) rarNavCloseTop();
+  // FORWARD onto a deeper state: v1 keeps the page (the URL itself stays
+  // shareable; a reload lands it) — Back was the ask, forward is banked.
+});
+// Cascades (closeStaleOverlays, the ✕ full-close): the layers were closed
+// DIRECTLY under suppress — pop their stack entries + unwind history once.
+function rarNavUnwind(keepType) {
+  let k = 0;
+  while (rarNavStack.length) {
+    const top = rarNavStack[rarNavStack.length - 1];
+    if (keepType && top.type === keepType) break;
+    rarNavStack.pop();
+    if (top.type === 'tertiary') tertHistory.pop();
+    if (top.owned) k++;
+  }
+  if (k > 0) { rarNavUnwinding++; try { history.go(-k); } catch (_) { rarNavUnwinding--; } }
+}
+// FULL-close consumption (the ✕ / cascades): pop this layer's top-run of
+// entries, rewind history once, and let the real close proceed NOW (the
+// swallowed popstate arrives async — rarNavUnwinding eats it).
+function rarNavUnwindWhile(types) {
+  if (rarNavSuppress || rarNavUnwinding) return;
+  const set = Array.isArray(types) ? types : [types];
+  let k = 0;
+  while (rarNavStack.length && set.indexOf(rarNavStack[rarNavStack.length - 1].type) !== -1) {
+    const top = rarNavStack.pop();
+    if (top.type === 'tertiary') tertHistory.pop();
+    if (top.owned) k++;
+  }
+  if (k > 0) { rarNavUnwinding++; try { history.go(-k); } catch (_) { rarNavUnwinding--; } }
+}
+// media-jump (character → anime): the tertiary layer closes directly and its
+// trail entries stay behind as documented inert steps — pushing the new
+// secondary entry immediately would otherwise race an async history.go().
+function rarNavForgetTertiary() {
+  while (rarNavStack.length && rarNavStack[rarNavStack.length - 1].type === 'tertiary') {
+    rarNavStack.pop(); tertHistory.pop();
+  }
+}
+// panel HIGH — the CASCADE closer: close a whole overlay pile under suppress,
+// consume ALL their entries with ONE rewind, and run the follow-up open only
+// AFTER the swallowed popstate lands (a synchronous pushState would otherwise
+// race the queued history.go and strand the new entry — the media-jump race,
+// now guarded on EVERY cascade path, not just the tertiary one).
+function rarNavCascade(closeFns, after) {
+  rarNavSuppress = true;
+  try { (closeFns || []).forEach((fn) => { try { fn(); } catch (_) {} }); }
+  finally { rarNavSuppress = false; }
+  let k = 0;
+  while (rarNavStack.length) {
+    const t = rarNavStack.pop();
+    if (t.type === 'tertiary') tertHistory.pop();
+    if (t.owned) k++;
+  }
+  if (k > 0) {
+    rarNavUnwinding++;
+    const onPop = () => {
+      window.removeEventListener('popstate', onPop);
+      setTimeout(() => { try { if (after) after(); } catch (_) {} }, 0);
+    };
+    window.addEventListener('popstate', onPop);   // fires AFTER the main handler
+    try { history.go(-k); } catch (_) {
+      rarNavUnwinding--; window.removeEventListener('popstate', onPop);
+      try { if (after) after(); } catch (_) {}
+    }
+  } else if (after) { try { after(); } catch (_) {} }
+}
+// profile-over-profile swaps REPLACE the top entry (one profile view step at
+// a time — Back returns to what was beneath the sheets, not a sheet chain).
+function rarNavReplaceTop(type, hash) {
+  const top = rarNavStack[rarNavStack.length - 1];
+  if (top && top.type === type) {
+    top.hash = hash;
+    try { history.replaceState(history.state, '', hash); } catch (_) {}
+    return true;
+  }
+  return false;
+}
+window.rarNavStack = rarNavStack;   // e2e visibility (read-only)
+
  // ---------- MODAL ----------
 function openModal(anime) {
+  // LAST CALL B3 — the card is a shareable view (#anime= is the KEPT route)
+  try { if (!anime.__unreviewed && anime.Title) rarNavPush('modal', '#anime=' + encodeURIComponent(slug(anime.Title))); } catch (_) {}
   // Prevent background spotlight motion while modal is open.
   stopSpotlightCycle();
   isSpotlightHovered = false;
@@ -8798,9 +9079,12 @@ function openModal(anime) {
       anime.Studio + '</span></p>'
     : '';
 
+  // LAST CALL A6 — belt-and-braces at the sink: strip stray trailing commas
+  // (the sync transform is fixed at the source) + escape (the render-sink rule;
+  // tags are Blake's own data, but every sink escapes first).
   const tagsHtml = tags.length
     ? '<p class="meta-line"><strong>Tags:</strong> ' +
-      tags.map((t) => '<span class="tag">' + t + '</span>').join(' ') +
+      tags.map((t) => '<span class="tag">' + escapeHtml(String(t).replace(/[,;、]+$/g, '')) + '</span>').join(' ') +
       '</p>'
     : '';
 
@@ -8850,7 +9134,7 @@ function openModal(anime) {
   // you're deciding whether you agree. From WatchedAniListIds (the ids watched in-franchise).
   const modalWatchedN = Array.isArray(anime.WatchedAniListIds) ? anime.WatchedAniListIds.length : 0;
   const provenanceHtml = modalWatchedN > 0
-    ? '<p class="modal-provenance"><span class="mp-eye" aria-hidden="true">&#128065;</span> Blake watched <strong>' +
+    ? '<p class="modal-provenance"><span class="mp-eye" aria-hidden="true">&#128065;</span> The Creator watched <strong>' +
       modalWatchedN + '</strong> season' + (modalWatchedN === 1 ? '' : 's') + ' of this franchise</p>'
     : '';
   // v1.8.3 gate 5d — admin: provenance + ✎ Edit pill share ONE row under the vote bar;
@@ -8873,7 +9157,7 @@ function openModal(anime) {
       modalRomaji +
       '<div class="unreviewed-tape" role="note">' +
         '<span class="ut-kicker">「 NOT REVIEWED 」</span>' +
-        '<span class="ut-line">Blake hasn’t watched this one yet — the take below is the community’s.</span>' +
+        '<span class="ut-line">The Creator hasn’t watched this one yet — the take below is the community’s.</span>' +
       '</div>' +
       '<div class="modal-meta">' + genreHtml + seasonsHtml + '</div>' +
       descBlock +
@@ -9038,6 +9322,9 @@ if (!anime.__unreviewed) activeOfficialUnsub = wireOfficialVotes(anime);
 }
 
 function closeModal() {
+  // LAST CALL B3 — consume this view's history entry (✕/Esc/scrim paths);
+  // Back-driven closes arrive suppressed and fall straight through.
+  rarNavUnwindWhile('modal');
   overlay.classList.remove('active');
   modal.classList.remove('active');
   modal.classList.remove('duo');
@@ -9266,7 +9553,7 @@ function closeModal() {
   }
 
   // One-shot branded tooltip under the header action row (signed-out save prompt
-  // + save-error message). No native alert() per the standing constraint.
+  // + save-error message). No native showNotice() per the standing constraint.
   let secondarySaveTipTimer = null;
   function showSecondarySaveTooltip(btn, msg) {
     if (!secondaryEl) return;
@@ -9360,6 +9647,7 @@ function closeModal() {
     secondaryPrevFocus = document.activeElement;
     try { const sm = secondaryEl.querySelector('.secondary-modal'); if (sm) sm.focus({ preventScroll: true }); } catch (_) {}
     secondaryHistory = [{ id, title: null }];   // seed the navigation history
+    rarNavPush('secondary', '#secondary=' + id);   // LAST CALL B3 — shareable + Back-able
     loadSecondary(id);
   }
 
@@ -9369,6 +9657,7 @@ function closeModal() {
     const id = Number(aniListId);
     if (!id) return;
     secondaryHistory.push({ id, title: (title || '').trim() || null });
+    rarNavPush('secondary', '#secondary=' + id);   // LAST CALL B3 — every jump is a Back step
     loadSecondary(id);
   }
 
@@ -9376,6 +9665,8 @@ function closeModal() {
   // the primary modal. (Cache is per-anime, so a replay is instant when warm.)
   function secondaryBack() {
     if (!secondaryEl || secondaryEl.hidden) return;
+    // LAST CALL B3 — Esc/backdrop/back-chip = ONE Back step through history
+    if (rarNavConsume('secondary')) return;
     if (secondaryHistory.length > 1) {
       secondaryHistory.pop();
       loadSecondary(secondaryHistory[secondaryHistory.length - 1].id);
@@ -9474,7 +9765,7 @@ function closeModal() {
       if (!reqEl.isConnected) return;   // the modal moved on while we fetched
       const chip = document.createElement('span');
       chip.className = 'secondary-requested-chip';
-      chip.title = 'How many people have asked Blake for this one';
+      chip.title = 'How many people have asked the Creator for this one';
       // 99+ cap — anonymous suggestion creates make the raw number inflatable
       // (adversarial MED, accepted: it's a demand signal on the title's own
       // page, not a trust surface; the cap bounds how silly it can look)
@@ -9494,6 +9785,9 @@ function closeModal() {
     // (not active, not yet hidden) would overwrite secondaryCloseTimer and
     // ORPHAN the first timer — defeating the 20.5 reopen-in-window guard.
     if (!secondaryEl.classList.contains('active')) return;
+    // LAST CALL B3 — the ✕ closes the WHOLE layer: consume every secondary
+    // entry (any tertiary above already closed — it sits on top visually).
+    rarNavUnwindWhile('secondary');
     // gate 19 — release the per-season comment listeners with the sheet
     if (secondaryCommentsUnsub) { try { secondaryCommentsUnsub(); } catch (_) {} secondaryCommentsUnsub = null; }
     secondaryEl.classList.remove('active');
@@ -9775,7 +10069,7 @@ function closeModal() {
     // entry is already on Blake's radar). Links to /suggest with title + anilistId.
     const requestBtn = isWatched
       ? ''
-      : '<a class="secondary-request" href="/suggest?title=' + encodeURIComponent(english) + '&anilistId=' + encodeURIComponent(String(detail.id)) + '" title="Request this anime from Blake">' +
+      : '<a class="secondary-request" href="/suggest?title=' + encodeURIComponent(english) + '&anilistId=' + encodeURIComponent(String(detail.id)) + '" title="Request this anime from the Creator">' +
           '<span class="secondary-request-icon" aria-hidden="true">📝</span>' +
           '<span class="secondary-request-label">Request this anime</span></a>';
 
@@ -9786,7 +10080,7 @@ function closeModal() {
     const infoReqBtn = isWatched
       ? ''
       : '<button type="button" class="secondary-inforeq" data-inforeq data-anilist-id="' + escapeHtml(String(detail.id)) +
-          '" data-title="' + escapeHtml(english) + '" title="Ask Blake to fill in this page">' +
+          '" data-title="' + escapeHtml(english) + '" title="Ask the Creator to fill in this page">' +
           '<span class="secondary-inforeq-icon" aria-hidden="true">ⓘ</span>' +
           '<span class="secondary-inforeq-label">Request info</span></button>';
 
@@ -9871,14 +10165,14 @@ function closeModal() {
         ? '<span class="secondary-review-rating"><span class="secondary-review-rating-kicker">RATING</span><span class="secondary-review-rating-divider">·</span><span class="secondary-review-rating-score">' + escapeHtml(fmRating) + '</span></span>'
         : '';
       reviewHtml = '<section class="secondary-section secondary-review">' +
-          '<div class="secondary-review-head"><h3 class="secondary-section-title secondary-review-title">BLAKE’S REVIEW</h3>' + ratingBadge + '</div>' +
+          '<div class="secondary-review-head"><h3 class="secondary-section-title secondary-review-title">THE CREATOR’S REVIEW</h3>' + ratingBadge + '</div>' +
           buildReviewNav(meta.seasonReview.body) +
           '<div class="secondary-review-body">' + window.renderMarkdown(meta.seasonReview.body) + '</div>' +
         '</section>';
     } else if (isWatched) {
       reviewHtml = '<section class="secondary-section secondary-review secondary-review--empty">' +
-          '<h3 class="secondary-section-title secondary-review-title">BLAKE’S REVIEW</h3>' +
-          '<p class="secondary-review-placeholder">No specific review for this season yet — Blake watched it; notes are on the way.</p>' +
+          '<h3 class="secondary-section-title secondary-review-title">THE CREATOR’S REVIEW</h3>' +
+          '<p class="secondary-review-placeholder">No specific review for this season yet — the Creator watched it; notes are on the way.</p>' +
         '</section>';
     }
 
@@ -10154,12 +10448,25 @@ function closeModal() {
     tertiaryEl.addEventListener('click', onTertiaryClick);
   }
 
+  // LAST CALL B3 — the ← chip and Esc step BACK one character/staff view
+  // (Blake's "4 characters deep = 4 Backs"); the ✕ and backdrop close the
+  // whole layer. Both consume their history entries.
+  function tertiaryStepBack() {
+    if (!tertiaryEl || tertiaryEl.hidden) return;
+    if (rarNavConsume('tertiary')) return;
+    tertHistory.pop();
+    const prev = tertHistory[tertHistory.length - 1];
+    if (prev) loadTertiary(prev.kind, prev.id);
+    else closeTertiary();
+  }
+
   function onTertiaryKeydown(e) {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeTertiary(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); tertiaryStepBack(); }
   }
 
   function onTertiaryClick(e) {
-    if (e.target.closest('.tertiary-back') || e.target.closest('.tertiary-close')) { e.preventDefault(); closeTertiary(); return; }
+    if (e.target.closest('.tertiary-back')) { e.preventDefault(); tertiaryStepBack(); return; }
+    if (e.target.closest('.tertiary-close')) { e.preventDefault(); closeTertiary(); return; }
     const more = e.target.closest('.tertiary-readmore');
     if (more) {
       e.preventDefault();
@@ -10173,8 +10480,18 @@ function closeModal() {
       e.preventDefault();
       const id = Number(media.dataset.anilistId);
       const titleEl = media.querySelector('.tertiary-media-title');
-      closeTertiary();
-      if (id) pushSecondary(id, titleEl ? titleEl.textContent : '');
+      // LAST CALL B3 — the character-trail entries stay behind as documented
+      // inert steps (an async history rewind would race the push below).
+      rarNavForgetTertiary();
+      rarNavSuppress = true; try { closeTertiary(); } catch (_) {} rarNavSuppress = false;
+      // panel HIGH: on a COLD-opened character page there is no secondary
+      // layer beneath — pushSecondary would push a phantom entry into a void
+      // (loadSecondary bails on secondaryEl === null). Open the sheet for real.
+      if (id) {
+        const secLive = (typeof secondaryEl !== 'undefined') && secondaryEl && !secondaryEl.hidden;
+        if (secLive) pushSecondary(id, titleEl ? titleEl.textContent : '');
+        else openSecondaryModal(id, null, null);
+      }
       return;
     }
     // A related person (VA / staff's character) → swap tertiary content in place.
@@ -10186,13 +10503,24 @@ function closeModal() {
     }
   }
 
+  let tertOwnLock = false;   // B3: a COLD-opened character view (no secondary
+                             // beneath) must hold its own scroll lock
   function openTertiary(kind, id) {
     if (!id) return;
     ensureTertiaryEl();
+    const wasHidden = tertiaryEl.hidden;
     tertiaryEl.hidden = false;
     void tertiaryEl.offsetWidth;
     tertiaryEl.classList.add('active');
-    document.addEventListener('keydown', onTertiaryKeydown);
+    if (wasHidden) document.addEventListener('keydown', onTertiaryKeydown);
+    if (wasHidden && !(typeof secondaryEl !== 'undefined' && secondaryEl && !secondaryEl.hidden)) {
+      tertOwnLock = true;
+      document.documentElement.style.overflow = 'hidden';
+    }
+    // LAST CALL B3 — every character/staff view (entry AND in-place swap) is
+    // one shareable, Back-able step. #character=/#staff= are cold-openable.
+    tertHistory.push({ kind: kind, id: id });
+    rarNavPush('tertiary', '#' + kind + '=' + id);
     loadTertiary(kind, id);
   }
 
@@ -10207,8 +10535,11 @@ function closeModal() {
 
   function closeTertiary() {
     if (!tertiaryEl || tertiaryEl.hidden) return;
+    rarNavUnwindWhile('tertiary');   // B3 — full-close consumes the whole trail
+    tertHistory.length = 0;
     tertiaryEl.classList.remove('active');
     document.removeEventListener('keydown', onTertiaryKeydown);
+    if (tertOwnLock) { tertOwnLock = false; document.documentElement.style.overflow = ''; }
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const done = () => { if (!tertiaryEl) return; tertiaryEl.hidden = true; tertiaryScrollEl.innerHTML = ''; };
     if (reduce) done(); else setTimeout(done, 260);
@@ -10971,12 +11302,14 @@ function onScrollHeader() {
     // any two is CONSTANT, so a non-overlap at spawn (checked against the LIVE bubbles'
     // current rects) holds for their whole life. Returns a free bottom-vh, or null if
     // the side is too crowded to fit another without overlap.
-    function pickQuoteSlot(side) {
+    function pickQuoteSlot(side, phone) {
       const vh = window.innerHeight / 100;
       const estH = 0.13 * window.innerHeight;        // generous bubble-height estimate
       const live = quotePool.filter((b) => b.dataset.busy === '1' && b.dataset.side === side);
       for (let tries = 0; tries < 12; tries++) {
-        const bottomVh = secureRandomInt(88) - 4;    // -4..83
+        // LAST CALL A1 — on phones the bubbles live in a TOP band (Blake's seed:
+        // "for mobile the quotes appear at the top and fade out slowly")
+        const bottomVh = phone ? (72 + secureRandomInt(14)) : (secureRandomInt(88) - 4);
         const botPx = window.innerHeight - bottomVh * vh;   // candidate bottom edge (px from top)
         const topPx = botPx - estH;
         let clear = true;
@@ -10988,15 +11321,17 @@ function onScrollHeader() {
       }
       return null;
     }
+    function isQuotePhone() { return !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches); }
     function launchQuote() {
       if (!quotesLayer || !WELCOME_QUOTES.length) return false;
-      if (liveQuoteCount() >= QUOTE_MAX) return false;   // at the cap → skip
+      const phone = isQuotePhone();
+      if (liveQuoteCount() >= (phone ? 2 : QUOTE_MAX)) return false;   // at the cap → skip
       // Spawn on the LESS-crowded side, then find a non-overlapping slot.
       const lLive = quotePool.filter((b) => b.dataset.busy === '1' && b.dataset.side === 'L').length;
       const rLive = quotePool.filter((b) => b.dataset.busy === '1' && b.dataset.side === 'R').length;
       let side = lLive < rLive ? 'L' : (rLive < lLive ? 'R' : (secureRandomInt(2) === 0 ? 'L' : 'R'));
-      let bottomVh = pickQuoteSlot(side);
-      if (bottomVh == null) { side = side === 'L' ? 'R' : 'L'; bottomVh = pickQuoteSlot(side); }
+      let bottomVh = pickQuoteSlot(side, phone);
+      if (bottomVh == null) { side = side === 'L' ? 'R' : 'L'; bottomVh = pickQuoteSlot(side, phone); }
       if (bottomVh == null) return false;            // both sides crowded → skip (retried later)
 
       let fig = quotePool.find((b) => b.dataset.busy === '0');
@@ -11004,14 +11339,21 @@ function onScrollHeader() {
       fillBubble(fig, WELCOME_QUOTES[quoteIdx % WELCOME_QUOTES.length]);
       quoteIdx++;
       // CENTER EXCLUSION — outer band only (the card/banner/copy live in the middle).
+      // LAST CALL A1 — right-side bubbles anchor with `right`, not `left`: an
+      // absolute box anchored left near the right edge shrink-to-fits into a
+      // one-word-per-line TOWER (Blake's Death Note screenshot). Right-anchoring
+      // gives the full max-width no matter how close to the edge it spawns.
       const pct = side === 'L' ? (3 + secureRandomInt(20)) : (77 + secureRandomInt(20));
-      fig.style.left = pct + '%';
+      if (side === 'L') { fig.style.left = pct + '%'; fig.style.right = 'auto'; }
+      else { fig.style.left = 'auto'; fig.style.right = (100 - pct) + '%'; }
       fig.dataset.side = side;
       fig.style.bottom = bottomVh + 'vh';
       // random lifetime → constant slow speed → random rise distance (may not reach top)
-      const life = QUOTE_LIFE_MIN + secureRandomInt(QUOTE_LIFE_VAR + 1);
+      const life = QUOTE_LIFE_MIN + secureRandomInt(phone ? 8 : (QUOTE_LIFE_VAR + 1));
       fig.style.setProperty('--q-dur', life + 's');
-      fig.style.setProperty('--q-dist', '-' + Math.round(life * QUOTE_SPEED) + 'vh');
+      // phones: a short drift up into the layer's top fade-mask (the slow fade-out)
+      const dist = phone ? Math.min(6, Math.round(life * QUOTE_SPEED)) : Math.round(life * QUOTE_SPEED);
+      fig.style.setProperty('--q-dist', '-' + dist + 'vh');
       fig.dataset.busy = '1';
       fig.classList.remove('is-rising');
       void fig.offsetWidth;                          // reflow so the rise restarts
@@ -11238,7 +11580,7 @@ function onScrollHeader() {
       // 1 — FROM BLAKE: new reviews since the last visit, as cover cards
       if (catchupState.fresh.length) {
         html += '<section class="catchup-sec" data-sec="blake">'
-          + '<h3 class="catchup-sec-kicker">✍ NEW FROM BLAKE <span class="jp-mini">新作</span></h3>'
+          + '<h3 class="catchup-sec-kicker">✍ NEW REVIEWS <span class="jp-mini">新作</span></h3>'
           + '<p class="catchup-sec-sub">Reviewed since you were last here.</p>'
           + '<div class="catchup-cards">'
           + catchupState.fresh.slice(0, 8).map((a, i) => {
@@ -11257,7 +11599,7 @@ function onScrollHeader() {
           + '<div class="catchup-pings">'
           + catchupState.pings.slice(0, 10).map((n, i) => {
               const blake = n.fromUid === NOTIF_ADMIN_UID;
-              const who = esc(String(n.fromDisplayName || (blake ? 'Blake' : 'Someone')).slice(0, 40));
+              const who = esc(String(n.fromDisplayName || (blake ? 'The Creator' : 'Someone')).slice(0, 40));
               const verb = esc(String(n.verb || 'sent you something').slice(0, 90));
               const title = n.animeTitle ? ` — <i>${esc(String(n.animeTitle).slice(0, 60))}</i>` : '';
               return `<button type="button" class="catchup-ping${blake ? ' is-blake' : ''}" data-ping="${i}">`
@@ -11364,7 +11706,7 @@ function onScrollHeader() {
           if (fresh.length) {
             catchupState.fresh = fresh;
             catchupAdd(catchupButton(
-              '✍ Blake added ' + fresh.length + ' new review' + (fresh.length === 1 ? '' : 's'),
+              '✍ ' + fresh.length + ' new review' + (fresh.length === 1 ? '' : 's') + ' since your last visit',
               'blake',
               fresh.slice(0, 4).map((a) => ({
                 label: String(a.Title).slice(0, 44),
@@ -11598,12 +11940,13 @@ try {
     const target = decodeURIComponent(h.slice('#notif='.length));
     if (typeof showAll === 'function') showAll();
     if (typeof openNotifTarget === 'function') openNotifTarget(target);
-    // Normalize so a refresh doesn't re-fire (the async scroll already captured it).
-    history.replaceState({}, '', location.pathname + location.search + '#all');
+    // LAST CALL B3 — no #all normalize: the opened view pushes its own
+    // canonical shareable route (#anime=/#secondary=/#forum/…); a refresh
+    // re-lands the CONTENT (cold route), never re-fires the halo target.
   } else if (h === '#community' || h === '#tavern') {
     // gate 8c — open the Tavern (used by the account-page nav "Tavern" link).
+    // B3: openHubDrawer writes #tavern itself now.
     if (typeof window.__rarShowCommunity === 'function') window.__rarShowCommunity();
-    history.replaceState({}, '', location.pathname + location.search + '#all');
   } else if (h.startsWith('#forum')) {
     // v1.10.0 gate 5 — forum thread deep-link (#forum=<tid> or #forum/<tid>): open the
     // Tavern + the thread. gate 8c — an optional reply permalink: #forum/<tid>/<pid>
@@ -11614,7 +11957,7 @@ try {
     if (parts.length === 2) pid = decodeURIComponent(parts[1]);
     else if (parts.length >= 3 && parts[1] === 'posts') pid = decodeURIComponent(parts[2]);
     if (tid && typeof window.openHubThread === 'function') window.openHubThread(tid, pid);
-    history.replaceState({}, '', location.pathname + location.search + '#all');
+    // B3: the thread panel writes #forum/<tid> itself now — the URL stays live.
   } else if (h.startsWith('#conversations')) {
     // DMs land in gate 18 — recognize the route + stub cleanly (no dead click / void).
     history.replaceState({}, '', location.pathname + location.search + '#all');
@@ -11641,10 +11984,15 @@ try {
       else if (typeof showModal === 'function') showModal(found);
     }
 
-    // Internal account links should not re-open forever on refresh
-    if (isOpen) {
-      history.replaceState({}, '', location.pathname + location.search + '#all');
-    }
+    // B3: openModal writes the canonical #anime=<slug> itself — an #open=
+    // arrival lands on the shareable URL (refresh re-opens the same card).
+  } else if (h.startsWith('#character=') || h.startsWith('#staff=')) {
+    // LAST CALL B3 — character/staff views are shareable now: cold-open the
+    // tertiary layer standalone (it holds its own scroll lock in this mode).
+    const kind = h.startsWith('#character=') ? 'character' : 'staff';
+    const cid = Number(decodeURIComponent(h.slice(kind.length + 2)));
+    if (typeof showAll === 'function') showAll();
+    if (cid && typeof openTertiary === 'function') openTertiary(kind, cid);
   } else if (h.startsWith('#secondary=')) {
     // v1.7.5 (gate 2) — in-site deep-link to the secondary "deep dive" modal by
     // AniList id (the account page's non-catalog rows route here). No source row
@@ -11668,7 +12016,7 @@ try {
     if (!openedPrimary && aniListId && typeof openSecondaryModal === 'function') {
       openSecondaryModal(aniListId, null, null);
     }
-    history.replaceState({}, '', location.pathname + location.search + '#all');
+    // B3: the sheet writes #secondary=<id> itself — the deep-dive URL is live.
   }
 } catch (e) {
   console.warn('Hash route failed:', e);

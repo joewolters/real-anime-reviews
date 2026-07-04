@@ -455,6 +455,9 @@ const LATE_TARGETS = [
   // Milestone F panel: curation gained the brandSelect port (the parity lane's
   // one missed admin page — the visible native select is now the value store).
   ['admin/curation.html','brand-select.js?v= (curation)',   /(src="brand-select\.js\?v=)([^"]+)(")/],
+  // LAST CALL Part C: suggest.js joined the shared branded-error module — its
+  // in-module versioned import is a bump surface (the thrice-bitten class).
+  ['suggest.js',        "friendly-errors.js?v= import (suggest)", /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],
 ];
 for (const [file, label, pattern] of LATE_TARGETS) {
   TARGETS.push({

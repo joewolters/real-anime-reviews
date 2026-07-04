@@ -195,7 +195,13 @@ service cloud.firestore {
         && (!('featuredAnime' in request.resource.data)
             || request.resource.data.featuredAnime == null
             || (request.resource.data.featuredAnime is string
-                && request.resource.data.featuredAnime.matches('[A-Za-z0-9:_-]{1,120}')));
+                && request.resource.data.featuredAnime.matches('[A-Za-z0-9:_-]{1,120}')))
+        // LAST CALL A8 — the owner-picked FEATURED SHELF (a collections doc id;
+        // client ids are short base36 — same posture as featuredAnime).
+        && (!('featuredShelf' in request.resource.data)
+            || request.resource.data.featuredShelf == null
+            || (request.resource.data.featuredShelf is string
+                && request.resource.data.featuredShelf.matches('[A-Za-z0-9_-]{1,40}')));
     }
 
     // Personal-collection doc shape (round 4 — create + update; update sees the
@@ -261,6 +267,28 @@ service cloud.firestore {
         allow update: if isOwner(uid) && collectionDocOk()
           && (request.resource.data.public != true || gateOk());
         allow delete: if isOwner(uid) || isAdmin();
+      }
+
+      // LAST CALL A8 — SAVED SHELVES: read-only references to OTHER members'
+      // public collections ("Other members' shelves" in the owner's
+      // Collections tab). Pure private per-user data (watchlist parity — no
+      // gate); the doc stores only the pointer + a name snapshot for honest
+      // rendering after the source goes private/deleted. Re-hydration happens
+      // through the SOURCE shelf's own public==true rules, so revocation is
+      // automatic the moment the owner flips it private.
+      match /savedShelves/{refId} {
+        allow get, list, delete: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['ownerUid', 'colId', 'name', 'savedAt'])
+          && request.resource.data.ownerUid is string
+          && request.resource.data.ownerUid.size() > 0
+          && request.resource.data.ownerUid.size() <= 128
+          && request.resource.data.ownerUid != uid
+          && request.resource.data.colId is string
+          && request.resource.data.colId.matches('[A-Za-z0-9_-]{1,40}')
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 80
+          && request.resource.data.savedAt is timestamp;
       }
 
       // NOTIFICATIONS — H3: create is Cloud-Function-only (Admin SDK bypasses
@@ -853,12 +881,12 @@ service cloud.firestore {
       allow get, list: if true;
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt',
-                                                 'tags', 'accent', 'accentGlow', 'frame', 'status', 'bgRef', 'featuredAnime'])
+                                                 'tags', 'accent', 'accentGlow', 'frame', 'status', 'bgRef', 'featuredAnime', 'featuredShelf'])
         && profileFieldsOk()
         && gateOk();
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'joinedAt',
-                                                                             'tags', 'accent', 'accentGlow', 'frame', 'status', 'bgRef', 'featuredAnime'])
+                                                                             'tags', 'accent', 'accentGlow', 'frame', 'status', 'bgRef', 'featuredAnime', 'featuredShelf'])
         && profileFieldsOk()
         && gateOk();
       allow delete: if false; // account deletion is the onUserDelete cascade CF

@@ -29,9 +29,9 @@ export function friendlyError(err, opts) {
       return 'Verify your email to upload images — check your inbox for the verification link, then try again.';
     }
     if (kind === 'upload') {
-      return 'Uploads are locked on the site right now — this one’s on us, not you. Tell Blake if it keeps up.';
+      return 'Uploads are locked on the site right now — this one’s on us, not you. Tell the Creator if it keeps up.';
     }
-    return 'That didn’t go through — the site said no. Tell Blake if it keeps up.';
+    return 'That didn’t go through — the site said no. Tell the Creator if it keeps up.';
   }
   if (/quota|too.?large|payload/.test(raw)) {
     return 'That image didn’t fit — try a smaller file (up to 5 MB).';
@@ -42,6 +42,38 @@ export function friendlyError(err, opts) {
   if (kind === 'upload') return 'The upload didn’t go through — try again in a moment.';
   if (kind === 'save') return 'The save didn’t go through — try again in a moment.';
   return 'That didn’t go through — try again in a moment.';
+}
+
+// =============================================================================
+// LAST CALL Part C — showNotice(msg): the BRANDED toast that retired the last
+// native alert() dialogs on the visitor pages (the "no native dialogs
+// anywhere" rule, finally level everywhere). One quiet purple card, bottom
+// center, aria-live polite, auto-dismisses, ✕-dismissible, stacks up to 3.
+// Styles live in style.css (.rar-notice*); reduced-motion covered there.
+// =============================================================================
+export function showNotice(msg) {
+  try {
+    let host = document.getElementById('rar-notice-host');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'rar-notice-host';
+      host.setAttribute('aria-live', 'polite');
+      document.body.appendChild(host);
+    }
+    while (host.children.length >= 3) host.removeChild(host.firstChild);
+    const card = document.createElement('div');
+    card.className = 'rar-notice';
+    const txt = document.createElement('span');
+    txt.className = 'rar-notice-text';
+    txt.textContent = String(msg == null ? '' : msg);
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'rar-notice-x'; x.setAttribute('aria-label', 'Dismiss'); x.textContent = '×';
+    const kill = () => { try { card.remove(); } catch (_) {} };
+    x.addEventListener('click', kill);
+    card.appendChild(txt); card.appendChild(x);
+    host.appendChild(card);
+    setTimeout(kill, 6500);
+  } catch (_) { /* a notice must never throw over the action it reports */ }
 }
 
 // exposed for the g28 spec (the coverClamp/lanternModel precedent)

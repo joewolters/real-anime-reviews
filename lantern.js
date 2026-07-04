@@ -59,7 +59,7 @@ const NOTIF_VOTE_TYPES = ['comment_vote', 'review_vote'];
 const NOTIF_TYPE_META = {
   reply:               { glyph: '↩', label: 'Replies',     verb: 'replied to you' },
   dm:                  { glyph: '✉', label: 'Messages',    verb: 'sent you a message' },
-  blake_message:       { glyph: '★', label: 'From Blake',  verb: 'sent you a message' },
+  blake_message:       { glyph: '★', label: 'From the Creator',  verb: 'sent you a message' },
   suggestion_accepted: { glyph: '✓', label: 'Suggestions', verb: 'accepted your suggestion' },
   new_season:          { glyph: '◷', label: 'New seasons', verb: 'has a new season' },
   comment_vote:        { glyph: '♥', label: 'Likes',       verb: 'liked your comment' },
@@ -70,7 +70,7 @@ const NOTIF_TYPE_META = {
   // gate 20 — the gold-flip: Blake reviewed something you requested. Blake-
   // origin (fromUid = ADMIN), so the row wears his gold; lands on the title's
   // secondary modal via targetPath secondary/<anilistId>.
-  request_done:        { glyph: '✍', label: 'From Blake',  verb: 'reviewed it — you asked for this one' },
+  request_done:        { glyph: '✍', label: 'From the Creator',  verb: 'reviewed it — you asked for this one' },
   // mega-run gate A1 — a stranger's first message is a REQUEST: one quiet ping,
   // never repeated (the CF pings on conversation create, not per message).
   // Deliberately ABSENT from the mute strip: a request is the safety signal —
@@ -290,7 +290,7 @@ function renderLanternRow(n) {
   const type = (n && n.type) || '';
   const meta = NOTIF_TYPE_META[type] || { glyph: '◆' };
   const blake = notifIsBlake(n);
-  const name = n.fromDisplayName || (blake ? 'Blake' : 'Someone');
+  const name = n.fromDisplayName || (blake ? 'The Creator' : 'Someone');
   const verb = notifVerb(n);
   const title = n.animeTitle || n.animeId || '';
   const ms = notifCreatedMs(n);

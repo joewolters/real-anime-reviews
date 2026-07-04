@@ -6,11 +6,12 @@
 // 5. The sign-in catch-up strip is styled + focusable (item 5c; live flow = e2e).
 const { test, expect } = require('@playwright/test');
 
-test('20.7 (3): the public profile tab source carries Threads + Reviews only', async ({ page }) => {
+test('20.7 (3) → LAST CALL A8: the public profile tab source carries Reviews ONLY', async ({ page }) => {
   const src = await (await page.request.get('/script.js')).text();
-  // the tab row markup is built in one template string — pin its tab set
-  expect(src).toContain('data-act="threads"');
+  // gate 20.7 dropped Comments/Replies; LAST CALL A8 dropped Threads too
+  // (Blake: "threads hidden on public pages; reviews only, plus anything pinned")
   expect(src).toContain('data-act="reviews"');
+  expect(src).not.toContain('data-act="threads"');
   expect(src).not.toContain('data-act="comments"');
   expect(src).not.toContain('data-act="replies"');
 });

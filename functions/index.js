@@ -604,7 +604,10 @@ exports.onSuggestionReviewed = onDocumentUpdated('suggestions/{docId}', async (e
   const isInfo = after.kind === 'info';
   await db.collection('users/' + to + '/notifications').add({
     fromUid: 'G2jGRa14u8bzGAmeBTkvXy8PKmr1',          // ADMIN_UID (status-quo literal, as in lib/moderation.js)
-    fromDisplayName: 'Blake',
+    // LAST CALL B1 — the ONE hardcoded server-side name went name-free; the
+    // row's GOLD (Blake-origin fromUid) is the identity. Historic docs still
+    // carry 'Blake' — the client renders whatever the doc says, honestly.
+    fromDisplayName: 'The Creator',
     fromPhotoURL: null,
     type: 'request_done',
     verb: isInfo ? 'filled in the page — you asked about this one' : 'reviewed it — you asked for this one',

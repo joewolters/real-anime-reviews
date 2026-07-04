@@ -11,6 +11,42 @@ html, body { overflow-x: clip; }
 :root { --header-h: 80px; }                  /* keep in sync with header height */
 body.has-fixed-header { padding-top: var(--header-h); }
 
+/* LAST CALL Part C — the branded notice toast (the alert() replacement).
+   Purple card, bottom center, above everything (the toast tier). */
+#rar-notice-host { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+  z-index: 999998; display: flex; flex-direction: column; gap: 8px; align-items: center;
+  pointer-events: none; max-width: min(520px, 92vw); }
+.rar-notice { display: flex; align-items: center; gap: 10px; pointer-events: auto;
+  padding: 11px 14px 11px 16px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(44, 20, 78, 0.97), rgba(24, 8, 46, 0.98));
+  border: 1px solid rgba(187, 134, 252, 0.45);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 18px rgba(124, 58, 237, 0.25);
+  color: #efe6ff; font: 500 0.88rem 'Outfit', sans-serif; line-height: 1.45;
+  animation: rarNoticeIn 0.22s ease; }
+.rar-notice-x { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; border: none;
+  cursor: pointer; background: rgba(187, 134, 252, 0.16); color: #efe6ff; font-size: 1rem; line-height: 1; }
+.rar-notice-x:hover { background: rgba(187, 134, 252, 0.32); }
+@keyframes rarNoticeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .rar-notice { animation: none; } }
+
+/* Part C — the inline change-password mini-form (the prompt() replacement) */
+.acct-pass-form { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-width: 340px; }
+.acct-pass-form input { padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(187, 134, 252, 0.32);
+  background: rgba(15, 5, 28, 0.6); color: #fff; font: 400 0.9rem 'Outfit', sans-serif; }
+.acct-pass-form input:focus { outline: none; border-color: rgba(187, 134, 252, 0.7);
+  box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.18); }
+.acct-pass-actions { display: flex; gap: 10px; align-items: center; }
+
+/* LAST CALL A3 — kill the native WebKit ✕ on every type=search input: the
+   custom clear buttons (Discover/Studio/saved filters) were doubling up with
+   the UA's own cancel button (Blake's two-✕ screenshot). One clear per bar. */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
 /* Body background and font */
 body {
   font-family: 'Comic Neue', sans-serif;
@@ -654,18 +690,14 @@ body > header h1:hover {
 .card-status-label .csl-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-status-label[data-status="on-hold"] { opacity: 0.9; }
 
-/* v1.8.4 gate 5 carry-over #2 — badged cards (the "Reviewed by Blake" pin or the
-   "NOT REVIEWED" sticker, both top-LEFT) now STACK the save icons VERTICALLY on the
-   right edge so the corner badge never crowds the heart: bookmark on top, heart below
-   it. The card markup is heart-then-bookmark, so column-reverse stacks bookmark-top.
-   Outside cards (is-not-reviewed) wire real saves now (G2 had hidden them) via the
-   al:<id> mechanism — see wireCardSaveButtons. */
+/* LAST CALL A7 — badged cards keep the save icons SIDE-BY-SIDE (Blake: they
+   "should only revert to be on top of one another when there isn't room").
+   Measured: the longest top-LEFT badge ("NOT REVIEWED" ≈ 108px) + the 60px
+   icon pair fit every card size the site renders (200px rails, 275px grid),
+   so the old unconditional column-reverse stack (v1.8.4 gate 5) is gone —
+   only the corner offset it also carried survives. */
 .card.is-blake-pick .icon-row,
 .card.is-not-reviewed .icon-row {
-    display: flex;
-    flex-direction: column-reverse;
-    align-items: center;
-    gap: 6px;
     top: 8px;
     right: 8px;
 }
@@ -880,19 +912,28 @@ body > header h1:hover {
     border-radius: 14px;
     pointer-events: none;
     z-index: 0;
-    /* v1.8.4 gate 3d (item 3) — softer/wider band + a mask that fades the shimmer
-       at the bar's left/right ends, so the white sweep DISSOLVES instead of ending
-       in a hard edge. */
+    /* LAST CALL A2 — the sweep used to TRANSLATE the whole pseudo (translateX
+       60%), sliding its lit band past the bar's right edge as a floating
+       streak (Blake's "weird glow line"). The pseudo now stays PUT and the
+       band travels via background-position — nothing can escape the box. */
     background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.14) 50%, transparent 70%);
+    background-size: 250% 100%;
+    background-position: 140% 0;
     opacity: 0;
-    transform: translateX(-60%);
-    transition: opacity .2s ease, transform .6s ease;
+    transition: opacity .2s ease, background-position .6s ease;
     filter: blur(1.5px);
     -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
             mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
 }
 .discover-search-wrap:hover { transform: translateY(-1px); }
-.discover-search-wrap:hover::before { opacity: 0.6; transform: translateX(60%); }
+.discover-search-wrap:hover::before { opacity: 0.6; background-position: -40% 0; }
+/* Part C audit (MED): the travelling band is real motion — still it, like the
+   header-search twin this rule mirrors (its sweep is silenced wholesale). */
+@media (prefers-reduced-motion: reduce) {
+  .discover-search-wrap, .discover-search-wrap::before { transition: none; }
+  .discover-search-wrap:hover { transform: none; }
+  .discover-search-wrap:hover::before { opacity: 0; }
+}
 .discover-search-wrap:hover #discover-search {
     border-color: rgba(187,134,252,0.55);
     box-shadow: 0 12px 26px rgba(0,0,0,0.30), 0 0 16px rgba(187,134,252,0.40);
@@ -8679,6 +8720,10 @@ html.rar-welcome-pending::before {
 }
 .welcome-quote-bubble {
   position: absolute; bottom: -6vh; left: 0;
+  /* LAST CALL A1 — max-content keeps the bubble its natural width (up to the
+     cap) regardless of anchor side; the old shrink-to-fit near an edge made
+     one-word-per-line TOWERS (Blake's Death Note screenshot). */
+  width: max-content;
   max-width: 230px; margin: 0; padding: 10px 15px;
   opacity: 0;
   /* OUTLINE ONLY — transparent fill (door art shows through), purple comic outline */
@@ -8721,6 +8766,18 @@ html.rar-welcome-pending::before {
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
 }
 .welcome-quote-bubble .wq-src:empty { display: none; }
+/* LAST CALL A1 — the PHONE treatment (Blake's seed): the quotes live in a TOP
+   band, BEHIND the card (z 0 < the card's z 1 — they can never overlap the
+   banner/text again), and dissolve into a top fade-mask as they drift up. */
+@media (max-width: 700px) {
+  .welcome-quotes {
+    z-index: 0;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 100%);
+            mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 100%);
+  }
+  .welcome-quote-bubble { max-width: 190px; }
+  .welcome-quote-bubble.is-static { bottom: auto; top: 7vh; }
+}
 
 /* whole-door fade (guarded by reduced-motion below) */
 .welcome-splash.is-in  { animation: welcomeFade .5s ease both; }
@@ -9347,6 +9404,18 @@ html.rar-welcome-pending::before {
    flex/height/padding from the bare `header` site-header rules (now scoped to
    body > header); these are the same metrics, declared where they belong. */
 .hub-header--tavern { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 80px; padding: 0 40px; }
+/* LAST CALL A4 — on phones the fixed 80px single row can't hold kicker +
+   lantern title + New-thread, and the overflowing pill slid under the
+   absolutely-pinned ✕ (Blake's screenshot). Wrap into rows: kicker + ✕ on
+   top (the ✕ goes static — the thread header's proven treatment), the title
+   on its own line, New thread full-width below. */
+@media (max-width: 600px) {
+  .hub-header--tavern { height: auto; flex-wrap: wrap; padding: 14px 16px 10px; row-gap: 10px; }
+  .hub-header--tavern .hub-kicker { order: 1; }
+  .hub-header--tavern .hub-close { position: static; order: 2; margin-left: auto; flex: 0 0 auto; }
+  .hub-header--tavern .hub-title { order: 3; flex: 1 1 100%; font-size: 1.55rem; }
+  .hub-header--tavern .hub-new { order: 4; flex: 1 1 100%; text-align: center; }
+}
 .hub-header--thread { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .hub-header--thread .hub-close { position: static; flex: 0 0 auto; }
 .hub-thread-lantern { font-size: 1.3rem; line-height: 1; filter: drop-shadow(0 0 9px rgba(255, 184, 92, 0.7)); animation: hub-lantern-flicker 4.5s ease-in-out infinite; }
@@ -10578,6 +10647,29 @@ html[data-surface="account"] .side-link.is-active {
 .profile-col-cover--ph { width: 40px; height: 56px; display: grid; place-items: center; border-radius: 6px;
   background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.35); color: #d9c9ff;
   font: 800 0.9rem 'Montserrat', sans-serif; }
+/* LAST CALL A8 — featured-shelf-leads + view-all + save + clickable covers.
+   The [hidden] twin is load-bearing: extra shelves hide behind the toggle. */
+.profile-col[hidden] { display: none; }
+/* Part C audit (HIGH ×2 — the trap's 4th and 5th scalps): the shelf composer
+   and the owner's own Appreciate button both flex/inline-flex over [hidden]. */
+.col-composer[hidden] { display: none; }
+.profile-like-btn[hidden] { display: none; }
+.profile-col-cover[data-anime-id] { cursor: pointer; transition: transform .14s ease, border-color .14s ease; }
+.profile-col-cover[data-anime-id]:hover { transform: translateY(-2px); border-color: rgba(187, 134, 252, 0.8); }
+.profile-col-cover[data-anime-id]:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.8); outline-offset: 2px; }
+.profile-col-feat { font: 700 0.62rem 'Montserrat', sans-serif; letter-spacing: 0.06em; color: #c9a4ff;
+  text-transform: uppercase; margin-left: 6px; }
+.profile-col-save { float: right; margin: -2px 0 6px 8px; padding: 4px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(187, 134, 252, 0.4); background: rgba(187, 134, 252, 0.1); color: #d9c9ff;
+  font: 600 0.7rem 'Outfit', sans-serif; transition: background .14s ease, border-color .14s ease; }
+.profile-col-save:hover { background: rgba(187, 134, 252, 0.22); border-color: rgba(187, 134, 252, 0.7); }
+.profile-col-viewall { align-self: flex-start; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px dashed rgba(187, 134, 252, 0.45); background: transparent; color: #c9a4ff;
+  font: 600 0.76rem 'Outfit', sans-serif; }
+.profile-col-viewall:hover { border-style: solid; background: rgba(187, 134, 252, 0.1); }
+@media (prefers-reduced-motion: reduce) {
+  .profile-col-cover[data-anime-id], .profile-col-save { transition: none; }
+}
 
 /* — the heart beats once when you appreciate (transform only) — */
 @keyframes pfHeartBeat { 0% { transform: scale(1); } 30% { transform: scale(1.28); } 60% { transform: scale(0.94); } 100% { transform: scale(1); } }

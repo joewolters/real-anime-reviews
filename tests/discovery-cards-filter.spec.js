@@ -41,12 +41,13 @@ test.describe('v1.8.4 discovery cards + 3-way filter', () => {
     expect(info.badge).toContain('NOT REVIEWED');
     expect(info.hasPin).toBe(false);
     expect(info.rating).toBe('73%');                 // community score, not Blake's "N/10"
-    // v1.8.4 gate 5 carry-over #2 — outside cards now SAVE (via al:<id>), icons stacked
-    // vertically on the right (bookmark top, heart below) clear of the badge.
+    // LAST CALL A7 — the icons sit SIDE-BY-SIDE on badged cards now (Blake:
+    // stack only when there's genuinely no room; measured, there always is
+    // at the site's ≥200px card sizes).
     expect(info.animeid).toBe('al:999999001');       // the al:<id> save doc id
     expect(info.hasSaveBtns).toBe(true);
     expect(info.iconRowDisplay).toBe('flex');        // shown now (was display:none in G2)
-    expect(info.iconRowDir).toBe('column-reverse');  // bookmark top, heart below
+    expect(info.iconRowDir).toBe('row');             // side-by-side (the A7 fix)
     expect(info.title).toBe('Some Outside Show');
   });
 

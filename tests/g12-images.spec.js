@@ -80,21 +80,23 @@ test.describe('v1.10.0 gates 12-14 — forum images (static surface)', () => {
     expect(r.adminRemove).toBe(true);
   });
 
-  test('8d fix #1 — clearing a composer + dispatching input empties the live preview', async ({ page }) => {
+  // LAST CALL A5 — ported to RarLive (RarComposer + its preview panel are
+  // gone): an external clear + input dispatch must empty the live EDITOR.
+  test('8d fix #1 — clearing a composer + dispatching input empties the live editor', async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => window.RarComposer && typeof window.RarComposer.enhance === 'function');
+    await page.waitForFunction(() => window.RarLive && typeof window.RarLive.mount === 'function');
     const r = await page.evaluate(() => {
       const host = document.createElement('div'); document.body.appendChild(host);
       const ta = document.createElement('textarea'); host.appendChild(ta);
-      window.RarComposer.enhance(ta, { inline: true, submit: 'enter' });
+      window.RarLive.mount(ta, { inline: true, submit: 'enter' });
       ta.value = 'some **bold** text';
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-      const preview = host.querySelector('.composer-preview');
-      const shownWhileTyping = preview && !preview.hidden && preview.innerHTML.length > 0;
-      // the post-success pattern every composer now uses:
+      const ed = host.querySelector('.rar-live');
+      const shownWhileTyping = !!ed && ed.textContent.length > 0;
+      // the post-success pattern every composer uses:
       ta.value = '';
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-      const clearedAfterPost = preview && preview.hidden && preview.innerHTML === '';
+      const clearedAfterPost = !!ed && ed.textContent === '' && ed.innerHTML === '';
       host.remove();
       return { shownWhileTyping, clearedAfterPost };
     });

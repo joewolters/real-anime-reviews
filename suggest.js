@@ -18,6 +18,8 @@
 import { db, auth } from './firebase.js';
 import { collection, addDoc, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+// Part C — the ONE branded-error module (parity with every other write path)
+import { friendlyError } from './friendly-errors.js?v=1.10.2';
 
 // ---- Constants -------------------------------------------------------------
 
@@ -200,7 +202,7 @@ function renderResultRow(r, i) {
 function renderDropdownError() {
   const dd = $('suggest-search-results');
   // Generic visitor-facing copy — no third-party branding.
-  dd.innerHTML = '<div class="suggest-result-empty">Couldn\'t search right now — submit your title and Blake will look it up.</div>';
+  dd.innerHTML = '<div class="suggest-result-empty">Couldn\'t search right now — submit your title and the Creator will look it up.</div>';
   dd.hidden = false;
   $('suggest-title').setAttribute('aria-expanded', 'true');
   dropdownFocusedIndex = -1;
@@ -379,11 +381,14 @@ async function handleSubmit(e) {
     setStatus('Title is required.', 'error');
     return;
   }
-  if (title.length > 200) {
+  // Part C audit (LOW): the rules demand STRICTLY under 200/1000 — the old
+  // >200/>1000 checks let an exact-boundary submit pass every client gate and
+  // then die on permission-denied.
+  if (title.length >= 200) {
     setStatus('Title is too long — keep it under 200 characters.', 'error');
     return;
   }
-  if (reason.length > 1000) {
+  if (reason.length >= 1000) {
     setStatus('Reason is too long — keep it under 1000 characters.', 'error');
     return;
   }
@@ -418,7 +423,9 @@ async function handleSubmit(e) {
     setStatus('Thanks! Your suggestion has been sent.', 'success');
   } catch (err) {
     console.error('suggest submit failed', err);
-    setStatus('Something went wrong — please try again in a moment.', 'error');
+    // Part C audit (LOW): route through the shared branded-error module like
+    // every other write path (offline/permission splits instead of one blur).
+    setStatus(friendlyError(err, { kind: 'post' }), 'error');
   } finally {
     $('suggest-submit').disabled = false;
   }

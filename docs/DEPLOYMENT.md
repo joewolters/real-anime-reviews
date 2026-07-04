@@ -211,27 +211,31 @@ After DNS records are in place, in **Firebase Console → Hosting → Custom dom
 
 Discord, Slack, iMessage, Twitter, etc. all read Open Graph and Twitter Card meta tags from the page `<head>` to build link previews. Without them, your link looks sketchy.
 
-**Currently set in `index.html` and `account.html`:**
+**Currently set in `index.html`, `account.html`, `suggest.html`, and `404.html`:**
 
 ```html
 <meta property="og:title" content="Real Anime Reviews">
 <meta property="og:description" content="...">
 <meta property="og:url" content="https://realanimereviews.com/">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://realanimereviews.com/assets/preview.jpg">
+<meta property="og:image" content="https://realanimereviews.com/assets/og-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Real Anime Reviews — a late-night anime den">
 <meta property="og:site_name" content="Real Anime Reviews">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Real Anime Reviews">
 <meta name="twitter:description" content="...">
-<meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
+<meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 ```
 
 **Preview image requirements:**
 
-- Lives at `/assets/preview.jpg` (publicly accessible from the deployed site)
-- Recommended size: 1200×630 pixels
-- The actual deployed file is `preview.jpg` — older internal docs reference `preview.png`, that was wrong
+- The live og image is `assets/og-preview.jpg` — 1200×630, styled after the welcome door (night-purple field, banner collage, wordmark + tagline)
+- The filename CHANGED deliberately (was `preview.jpg`): Discord/Facebook/etc cache previews **by image URL**, so pointing the tags at a new filename is what makes scrapers pick up the fresh art
+- The old `assets/preview.jpg` stays on disk untouched — historical caches of old shared links still resolve against it
+- Pinned by `tests/g35-og-meta.spec.js` (og-preview.jpg referenced + serves 200; no stale preview.jpg reference in index)
 
 **Force a Discord preview refresh** (Discord caches link previews aggressively):
 

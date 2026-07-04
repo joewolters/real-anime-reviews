@@ -18,12 +18,15 @@
 <meta property="og:description" content="Manage your profile, favorites, watchlist, and activity.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://realanimereviews.com/account">
-<meta property="og:image" content="https://realanimereviews.com/assets/preview.jpg">
+<meta property="og:image" content="https://realanimereviews.com/assets/og-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Real Anime Reviews — a late-night anime den">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Real Anime Reviews — My Account">
 <meta name="twitter:description" content="Manage your profile, favorites, watchlist, and activity.">
-<meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
+<meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
   <meta name="description" content="Manage your profile and your collections." /> 
@@ -271,6 +274,14 @@
         <span class="fld-hint">leads your profile</span>
         <div id="acct-featured-host" aria-live="off"></div>
       </div>
+
+      <!-- LAST CALL A8 — Featured shelf: ONE collection leads the public
+           profile; the rest wait behind "view all shelves". -->
+      <div class="form-row form-row--full">
+        <span class="fld-pill">⊞ Featured shelf</span>
+        <span class="fld-hint">your public shelf that leads — the rest fold away</span>
+        <div id="acct-featured-shelf-host" aria-live="off"></div>
+      </div>
     </div>
 
     <div class="card-actions acct-save-bar">
@@ -351,7 +362,7 @@
     <input type="search" class="saved-filter" placeholder="Filter by title…" aria-label="Filter watchlist" />
     <div data-sort-dd aria-live="off"></div>
     <button type="button" class="saved-type-chip is-active" data-type="all">All</button>
-    <button type="button" class="saved-type-chip" data-type="catalog">Blake's reviews</button>
+    <button type="button" class="saved-type-chip" data-type="catalog">Reviewed here</button>
     <button type="button" class="saved-type-chip" data-type="anilist">Beyond</button>
   </div>
 
@@ -391,7 +402,7 @@
     <input type="search" class="saved-filter" placeholder="Filter by title…" aria-label="Filter favorites" />
     <div data-sort-dd aria-live="off"></div>
     <button type="button" class="saved-type-chip is-active" data-type="all">All</button>
-    <button type="button" class="saved-type-chip" data-type="catalog">Blake's reviews</button>
+    <button type="button" class="saved-type-chip" data-type="catalog">Reviewed here</button>
     <button type="button" class="saved-type-chip" data-type="anilist">Beyond</button>
   </div>
 
@@ -438,6 +449,13 @@
   <div class="tab-scroll">
     <div id="col-list" class="col-list" aria-label="Your collections"></div>
     <div class="muted saved-empty" id="col-empty" hidden>No shelves yet — make your first one.</div>
+    <!-- LAST CALL A8 — shelves saved FROM other members' profiles: read-only
+         references (purple, count-free); the source's own rules decide what
+         still loads, so a shelf gone private renders an honest line. -->
+    <div id="col-saved-group" hidden>
+      <h3 class="acct-section-sub col-saved-head">⊞ Other members' shelves <span class="jp-mini">借り棚</span></h3>
+      <div id="col-saved-list" class="col-list" aria-label="Shelves you saved from other members"></div>
+    </div>
   </div>
 </article>
 
@@ -481,7 +499,7 @@
           <header class="panel-head">
             <div class="panel-head-text">
               <h3 class="acct-kicker">Inbox <span class="jp-mini">受信箱</span></h3>
-              <p class="acct-section-sub">Your letters — members, groups, and Blake himself. Strangers knock first.</p>
+              <p class="acct-section-sub">Your letters — members, groups, and the Creator himself. Strangers knock first.</p>
             </div>
           </header>
 
@@ -560,11 +578,15 @@
       <!-- About / Contact -->
       <div class="footer-box">
         <h3 class="footer-heading">About Me:</h3>
+        <!-- LAST CALL B4 — Blake's new bio, VERBATIM (his words; spelling
+             normalized per his directive, nothing else touched). -->
         <p class="footer-text">
-          Hey people I'm Blake and this has been a pet project of mine for a couple months now and I'm super happy that it's finally out. 
-        This orignally started off as a place where I would "just leave my reviews" for my friends/family to look at so they know which 
-        anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I'd practically vibe-coded the entire website — with coding help from Claude. All that aside I'm SUPER happy with how this turned out. If any information is 
-        wrong feel free to reach out to me via Instagram. I plan to continue updating this little site and I hope to see y'all around.
+          Hey people! I'm Blake and I've been working on this little pet project of mine for a while now.
+          This originally started as a place where I would leave my personal reviews of the anime I've watched
+          so my close friends and family could know what to look for next. It's grown to be a little bigger
+          than that now... and it's something I could have never dreamed of. I was only able to do this with
+          immense help from Claude and I'm super happy with how it turned out. I plan to keep updating this
+          site and I hope to see y'all around!
         </p>
 
         <h3 class="footer-heading">Contact Me:</h3>
@@ -609,6 +631,9 @@
   // esc()-only preview showed literal asterisks while the live page rendered
   // bold + clickable links — "exactly what viewers see" must be exact).
   document.write(`<script src="markdown.js?v=${v}"><\/script>`);
+  // LAST CALL A5 — the ONE composer engine everywhere: the Letter Room input
+  // and the profile-bio editor mount the same RarLive the main page uses.
+  document.write(`<script src="live-composer.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="firebase.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="account.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="admin-fab.js?v=${v}"><\/script>`);

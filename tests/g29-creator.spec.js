@@ -42,7 +42,7 @@ test('g29: the Creator sheet is a MEMBER sheet + kicker — no flag, Appreciate 
   expect(src).not.toContain('profile-den-path');                          // the gold door is gone
   expect(src).not.toContain('goHomeToDen');
   expect(src).not.toMatch(/setAttribute\('data-frame', 'blake'\)/);       // no forced frame default
-  expect(src).toMatch(/class="profile-act-chip" data-act="reviews"/);     // Reviews tab for everyone
+  expect(src).toMatch(/class="profile-act-chip is-active" data-act="reviews"/);   // Reviews tab for everyone (A8: the ONE public tab)
   expect(src).not.toMatch(/isCreator \? '' : '<button type="button" class="profile-act-chip"/);
 });
 

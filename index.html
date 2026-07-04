@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI." />
+  <meta name="description" content="A late-night anime den — one person's honest takes, ranked, reviewed, and watched in full. Reviews, community threads, and letters, all under one roof." />
   <title>Real Anime Reviews</title>
   <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
@@ -45,15 +45,18 @@
 <link rel="canonical" href="https://realanimereviews.com/">
 
 <meta property="og:title" content="Real Anime Reviews">
-<meta property="og:description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI.">
+<meta property="og:description" content="A late-night anime den — one person's honest takes, ranked, reviewed, and watched in full. Reviews, community threads, and letters, all under one roof.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://realanimereviews.com/">
-<meta property="og:image" content="https://realanimereviews.com/assets/preview.jpg">
+<meta property="og:image" content="https://realanimereviews.com/assets/og-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Real Anime Reviews — a late-night anime den">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Real Anime Reviews">
-<meta name="twitter:description" content="Real Anime Reviews — search, filter, and read honest anime reviews with a clean UI.">
-<meta name="twitter:image" content="https://realanimereviews.com/assets/preview.jpg">
+<meta name="twitter:description" content="A late-night anime den — one person's honest takes, ranked, reviewed, and watched in full. Reviews, community threads, and letters, all under one roof.">
+<meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
   <link rel="stylesheet" href="style.css?v=1.10.2">
@@ -600,7 +603,7 @@
     <div class="discover-head-titles">
       <span class="discover-kicker">DISCOVER <span class="jp-mini">発見</span></span>
       <h2 class="discover-title">The wider world of anime</h2>
-      <p class="discover-sub">Search every anime out there. The ones <strong class="ds-pin"><i class="ds-star" aria-hidden="true">&#9733;</i> Blake's&nbsp;reviewed</strong> light up <span class="ds-gold">gold</span>.</p>
+      <p class="discover-sub">Search every anime out there. The ones <strong class="ds-pin"><i class="ds-star" aria-hidden="true">&#9733;</i> reviewed&nbsp;here</strong> light up <span class="ds-gold">gold</span>.</p>
     </div>
     <!-- The 3-way lens: the bridge between Blake's reviews and the wider world.
          CSS-only (hides non-matching already-rendered cards) — no refetch. -->
@@ -659,13 +662,13 @@
     <div class="discover-head-titles">
       <span class="discover-kicker">FOR YOU <span class="jp-mini">君へ</span></span>
       <h2 class="discover-title">His shelf, leaning your way</h2>
-      <p class="discover-sub">Not an algorithm &mdash; <strong class="ds-pin"><i class="ds-star" aria-hidden="true">&#9733;</i> Blake&rsquo;s&nbsp;reviews</strong>, sorted by what you keep saving. The <span class="ds-gold">gold</span> ones are the ones he actually sat down with.</p>
+      <p class="discover-sub">Not an algorithm &mdash; <strong class="ds-pin"><i class="ds-star" aria-hidden="true">&#9733;</i> the&nbsp;Creator&rsquo;s&nbsp;reviews</strong>, sorted by what you keep saving. The <span class="ds-gold">gold</span> ones are the ones he actually sat down with.</p>
     </div>
     <!-- The curator's lens (relabeled Discover lens; CSS-only filter of rendered
          cards). Hidden until at least one personalized rail renders (JS toggles it). -->
     <div class="discover-lens" id="foryou-lens" role="group" aria-label="Show" hidden>
       <button type="button" class="fr-seg is-active" data-reviewed="all" aria-pressed="true">The Blend</button>
-      <button type="button" class="fr-seg" data-reviewed="reviewed" aria-pressed="false">Blake&rsquo;s picks</button>
+      <button type="button" class="fr-seg" data-reviewed="reviewed" aria-pressed="false">Creator&rsquo;s picks</button>
       <button type="button" class="fr-seg" data-reviewed="notyet" aria-pressed="false">The world</button>
     </div>
   </div>
@@ -678,7 +681,7 @@
   <a href="/suggest" class="suggest-cta-banner reveal">
     <div class="cta-kicker">MISSING SOMETHING? <span class="jp-mini">提案</span></div>
     <div class="cta-headline">
-      Tell Blake what to review next
+      Tell the Creator what to review next
       <span class="cta-arrow" aria-hidden="true">→</span>
     </div>
   </a>
@@ -770,11 +773,15 @@
     <!-- About / Contact -->
     <div class="footer-box reveal">
       <h3 class="footer-heading"><span class="footer-kicker">ABOUT ME <span class="jp-mini">自己紹介</span></span></h3>
+      <!-- LAST CALL B4 — Blake's new bio, VERBATIM (his words; spelling
+           normalized per his directive, nothing else touched). -->
       <p class="footer-text">
-        Hey people I'm Blake and this has been a pet project of mine for a couple months now and I'm super happy that it's finally out. 
-        This orignally started off as a place where I would "just leave my reviews" for my friends/family to look at so they know which 
-        anime they should keep an eye on. As you can see it quickly grew out of hand and before I knew it, I'd practically vibe-coded the entire website — with coding help from Claude. All that aside I'm SUPER happy with how this turned out. If any information is 
-        wrong feel free to reach out to me via Instagram. I plan to continue updating this little site and I hope to see y'all around. 
+        Hey people! I'm Blake and I've been working on this little pet project of mine for a while now.
+        This originally started as a place where I would leave my personal reviews of the anime I've watched
+        so my close friends and family could know what to look for next. It's grown to be a little bigger
+        than that now... and it's something I could have never dreamed of. I was only able to do this with
+        immense help from Claude and I'm super happy with how it turned out. I plan to keep updating this
+        site and I hope to see y'all around!
       </p>
 
       <h3 class="footer-heading"><span class="footer-kicker">CONTACT ME <span class="jp-mini">連絡</span></span></h3>
@@ -878,7 +885,8 @@
   document.write(`<script src="franchise-fetch.js?v=${v}"><\/script>`);
   document.write(`<script src="frames.js?v=${v}"><\/script>`);
   document.write(`<script src="markdown.js?v=${v}"><\/script>`);
-  document.write(`<script src="composer-toolbar.js?v=${v}"><\/script>`);
+  // LAST CALL A5 — the superseded **-marker toolbar engine is DELETED;
+  // RarLive is the ONE composer everywhere.
   document.write(`<script src="live-composer.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="firebase.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="script.js?v=${v}"><\/script>`);

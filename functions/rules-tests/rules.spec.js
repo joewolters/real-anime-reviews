@@ -907,6 +907,40 @@ test('collections: flipping public→true without consent DENIED; consented flip
   await assertSucceeds(deleteDoc(doc(as('newbie'), 'users/newbie/collections/colFlip1')));
   await assertSucceeds(deleteDoc(doc(as('badcol'), 'users/badcol/collections/colFlip3')));
 });
+
+// ============================================================================
+// LAST CALL A8 — SAVED SHELVES (users/{uid}/savedShelves): read-only pointers
+// to OTHER members' public collections. Owner-only, ungated (watchlist
+// parity); shape = pointer + name snapshot; saving your OWN shelf is refused.
+// ============================================================================
+const shelfRef = (over = {}) => ({
+  ownerUid: 'alice', colId: 'colPub1', name: 'Shounen Starters',
+  savedAt: serverTimestamp(), ...over,
+});
+test('savedShelves: owner saves another member\'s shelf pointer; foreign + anon writes DENIED', async () => {
+  await assertSucceeds(setDoc(doc(as('bob'), 'users/bob/savedShelves/alice__colPub1'), shelfRef()));
+  await assertFails(setDoc(doc(as('mallory'), 'users/bob/savedShelves/alice__colHax'), shelfRef()));
+  await assertFails(setDoc(doc(anon(), 'users/bob/savedShelves/alice__colAnon'), shelfRef()));
+});
+test('savedShelves: shape holds — stray keys, oversize name, and SELF-pointers DENIED; unsave always works', async () => {
+  await assertFails(setDoc(doc(as('bob'), 'users/bob/savedShelves/x1'), shelfRef({ extra: 'nope' })));
+  await assertFails(setDoc(doc(as('bob'), 'users/bob/savedShelves/x2'), shelfRef({ name: 'n'.repeat(81) })));
+  await assertFails(setDoc(doc(as('bob'), 'users/bob/savedShelves/x3'), shelfRef({ colId: 'bad id with spaces' })));
+  // pointing at your OWN shelf is refused (it already lives in your Collections)
+  await assertFails(setDoc(doc(as('bob'), 'users/bob/savedShelves/x4'), shelfRef({ ownerUid: 'bob' })));
+  // reads are owner-only; unsave (delete) always works
+  await seed((db) => setDoc(doc(db, 'users/bob/savedShelves/gone1'),
+    { ownerUid: 'alice', colId: 'colX', name: 'Old', savedAt: Timestamp.now() }));
+  await assertFails(getDoc(doc(as('mallory'), 'users/bob/savedShelves/gone1')));
+  await assertSucceeds(deleteDoc(doc(as('bob'), 'users/bob/savedShelves/gone1')));
+});
+test('profiles: featuredShelf accepts an owner-set shelf id (or null); junk shapes DENIED', async () => {
+  const prof = (over = {}) => ({ displayName: 'Alice', joinedAt: serverTimestamp(), ...over });
+  await assertSucceeds(setDoc(doc(as('alice'), 'profiles/alice'), prof({ featuredShelf: 'colPub1' })));
+  await assertSucceeds(setDoc(doc(as('alice'), 'profiles/alice'), prof({ featuredShelf: null })));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), prof({ featuredShelf: 'x'.repeat(41) })));
+  await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), prof({ featuredShelf: 'bad id!' })));
+});
 test('collections: HOSTILE 61-char name + unknown extra key are DENIED', async () => {
   await assertFails(setDoc(doc(as('alice'), 'users/alice/collections/colBad1'),
     col({ name: 'x'.repeat(61) })));

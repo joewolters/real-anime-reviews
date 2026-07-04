@@ -59,7 +59,7 @@ test.describe('v1.8.4 For You surface', () => {
     const segs = page.locator('#foryou-lens .fr-seg');
     await expect(segs).toHaveCount(3);
     await expect(segs.nth(0)).toHaveText('The Blend');
-    await expect(segs.nth(1)).toHaveText('Blake’s picks');
+    await expect(segs.nth(1)).toHaveText('Creator’s picks');
     await expect(segs.nth(2)).toHaveText('The world');
     // Values unchanged so the CSS-only lens mechanism + setFilterHasOutsideCards work untouched.
     await expect(segs.nth(0)).toHaveAttribute('data-reviewed', 'all');

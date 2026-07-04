@@ -81,14 +81,20 @@ test.describe('v1.10.0 gate 11 — ||spoiler||', () => {
     expect(r.colorAfter).not.toBe('rgba(0, 0, 0, 0)');    // visible after reveal
   });
 
+  // LAST CALL A5 — ported to the ONE engine (RarLive): the 👁 wraps the live
+  // selection into a spoiler pill and the hidden model serializes ||…||.
   test('the composer toolbar grew the 👁 spoiler button and it wraps the selection', async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => window.RarComposer && typeof window.RarComposer.enhance === 'function');
+    await page.waitForFunction(() => window.RarLive && typeof window.RarLive.mount === 'function');
     const r = await page.evaluate(() => {
       const host = document.createElement('div'); document.body.appendChild(host);
       const ta = document.createElement('textarea'); host.appendChild(ta);
-      window.RarComposer.enhance(ta, { inline: true, submit: 'enter' });
-      ta.value = 'he dies'; ta.setSelectionRange(0, 7);
+      window.RarLive.mount(ta, { inline: true, submit: 'enter' });
+      ta.value = 'he dies';
+      ta.dispatchEvent(new Event('input', { bubbles: true }));   // external write → re-render
+      const ed = host.querySelector('.rar-live');
+      const range = document.createRange(); range.selectNodeContents(ed);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
       const btn = host.querySelector('[data-md="spoiler"]');
       if (btn) btn.click();
       const out = { present: !!btn, value: ta.value };

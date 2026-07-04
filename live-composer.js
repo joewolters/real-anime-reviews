@@ -224,7 +224,10 @@
     const submitMode = opts.submit === 'mod' ? 'mod' : 'enter';
     const onSubmit = typeof opts.onSubmit === 'function' ? opts.onSubmit : function () {};
 
-    // toolbar (the same vocabulary as before — B / I / 🔗 / 👁 / 📷)
+    // toolbar — B / I / 👁 only (LAST CALL A5, Blake's calls): the 🔗 button is
+    // DEAD ("there shouldn't be a button for links — people should just copy
+    // paste"; bare URLs now auto-link at render), and the toolbar 📷 is DEAD
+    // (it doubled the picker strip's "Add an image" — ONE image affordance).
     const toolbar = document.createElement('div');
     toolbar.className = 'composer-toolbar rar-live-toolbar';
     toolbar.setAttribute('role', 'toolbar');
@@ -232,9 +235,7 @@
     toolbar.innerHTML =
       '<button type="button" class="ct-btn" data-md="bold" title="Bold (' + MOD + '+B)"><strong>B</strong></button>' +
       '<button type="button" class="ct-btn" data-md="italic" title="Italic (' + MOD + '+I)"><em>I</em></button>' +
-      '<button type="button" class="ct-btn" data-md="link" title="Link">🔗</button>' +
-      '<button type="button" class="ct-btn" data-md="spoiler" title="Spoiler — hidden until clicked">👁</button>' +
-      (typeof opts.onImage === 'function' ? '<button type="button" class="ct-btn" data-md="image" title="Insert an image here">📷</button>' : '');
+      '<button type="button" class="ct-btn" data-md="spoiler" title="Spoiler — hidden until clicked">👁</button>';
 
     const editor = document.createElement('div');
     editor.className = 'rar-live' + (opts.mode === 'block' ? ' rar-live--block' : '');
@@ -330,7 +331,8 @@
       editor.focus();
       if (kind === 'bold') document.execCommand('bold');
       else if (kind === 'italic') document.execCommand('italic');
-      else if (kind === 'link') insertTextAtCaret('[link text](https://)');
+      // (the 'link' action died with its button — LAST CALL A5; bare pasted
+      // URLs auto-link at render, and hand-typed [text](url) still completes)
       else if (kind === 'spoiler') {
         const sel = root.getSelection && root.getSelection();
         const selected = sel && sel.rangeCount ? sel.toString() : '';
@@ -340,7 +342,6 @@
           r.deleteContents(); r.insertNode(pill); caretAfter(pill);
         } else insertTextAtCaret('||spoiler||');
       }
-      else if (kind === 'image' && typeof opts.onImage === 'function') { opts.onImage(); return; }
       syncModel();
     }
     toolbar.addEventListener('click', (e) => {

@@ -131,7 +131,7 @@ test('gB (visual): the status label resists the .card .info span cascade — COM
     const buildLabel = () => {
       const label = document.createElement('div'); label.className = 'card-status-label';
       const g = document.createElement('i'); g.className = 'csl-glyph'; g.textContent = '🏮';
-      const t = document.createElement('i'); t.className = 'csl-text'; t.textContent = 'Blake is watching';
+      const t = document.createElement('i'); t.className = 'csl-text'; t.textContent = 'Watching now';
       label.append(g, t); return label;
     };
     const card = mk(); document.body.appendChild(card);

@@ -32,7 +32,7 @@ import { initLantern } from './lantern.js?v=1.10.2';
 import { ensureConsent, peekConsent } from './consent.js?v=1.10.2';
 import { openCropper } from './cropper.js?v=1.10.2';   // round 4 — frame-it crop/reposition (item 2)
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError } from './friendly-errors.js?v=1.10.2';
+import { friendlyError, showNotice } from './friendly-errors.js?v=1.10.2';
 // mega-run C3 — Constellation Wrapped (the member's year as a star map; lazy)
 import { initWrapped } from './wrapped.js?v=1.10.2';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with script.js)
@@ -90,6 +90,9 @@ function activateTab(name){
 $$('.side-link').forEach(btn => {
   btn.addEventListener('click', () => {
     activateTab(btn.dataset.tab);
+    // LAST CALL B3 — the URL always names the tab you're on (shareable);
+    // replaceState, not push — tabs are page chrome, Back leaves the page.
+    try { history.replaceState(null, '', '#' + btn.dataset.tab); } catch (_) {}
     if (btn.dataset.tab === 'activity') ensureActivity();        // lazy — see boot block
     if (btn.dataset.tab === 'collections') ensureCollections();  // round 4 — lazy too
     if (btn.dataset.tab === 'wrapped') ensureWrapped();          // mega-run C3 — lazy too
@@ -180,12 +183,21 @@ const PROF_TAG_CATALOG = [
   ['Identity', '正体', ['Manga reader', 'Light-novel reader', 'AMV maker', 'Cosplayer', 'Figure collector', 'Tier-list maker', 'OST enjoyer', 'Sakuga nerd', 'Lore historian', 'Power-scaler', 'Theory crafter', 'Waifu connoisseur', 'Husbando defender', 'Filler apologist', 'Subtitle purist', 'Con-goer', 'Gacha survivor', 'Spoiler-phobic']],
 ];
 const profState = {
-  bio: '', status: '', tags: [], accent: '', accentGlow: false, frame: '', bgRef: '', featuredAnime: '',
+  bio: '', status: '', tags: [], accent: '', accentGlow: false, frame: '', bgRef: '', featuredAnime: '', featuredShelf: '',
   bgStagedBlob: null, bgStagedMime: '', bgStagedUrl: '', bgRemove: false, bgCurrentUrl: '',
 };
 
 const profStatus2 = () => document.getElementById('prof-status');
 const profBio     = () => document.getElementById('prof-bio');
+// LAST CALL A5 — the bio joins the ONE composer: it already RENDERS as inline
+// markdown on the public sheet, so composing it gets the same live toggles.
+// (The hidden model keeps the save path + live preview 'input' wiring intact.)
+{
+  const bioTa = document.getElementById('prof-bio');
+  if (bioTa && window.RarLive && typeof window.RarLive.mount === 'function') {
+    window.RarLive.mount(bioTa, { mode: 'inline', submit: 'mod', onSubmit: () => {} });
+  }
+}
 
 // the live preview — a compact mirror of the public sheet's header (same
 // escape-first discipline; the real sheet's builder lives in script.js, which
@@ -596,6 +608,29 @@ async function loadFeaturedChoices(uid) {
   });
 }
 
+// LAST CALL A8 — featured-SHELF picker: only the user's own PUBLIC shelves
+// (a private shelf can't lead a public profile). Same explicit-pick-only
+// discipline as the review pin: a failed fetch never coerces the saved value.
+async function loadFeaturedShelfChoices(uid) {
+  const host = document.getElementById('acct-featured-shelf-host');
+  if (!host) return;
+  const options = [{ value: '', label: 'None — freshest shelf leads' }];
+  try {
+    const snap = await getDocs(query(collection(db, 'users', uid, 'collections'),
+      where('public', '==', true), orderBy('updatedAt', 'desc'), limit(20)));
+    snap.forEach((d) => {
+      const v = d.data() || {};
+      options.push({ value: d.id, label: String(v.name || '(shelf)').slice(0, 60) });
+    });
+  } catch (_) { /* just the None option */ }
+  const saved = profState.featuredShelf || '';
+  brandSelect({
+    host, label: 'Featured shelf', options,
+    value: options.some((o) => o.value === saved) ? saved : '',
+    onChange: (v) => { profState.featuredShelf = v || ''; },
+  });
+}
+
 // round 2 — "see what viewers see": renders the SAVED public identity with the
 // real profile-sheet vocabulary (same classes; style.css is shared), inside the
 // panel. Reads the profiles doc fresh so it shows what the room actually sees
@@ -679,7 +714,7 @@ async function renderViewerMode(user) {
         </div>
         <div class="profile-featured-slot"></div>
         <div class="acct-viewer-foot">
-          <span class="fld-hint">${isCreator ? 'your threads · reviews load on the live page' : 'their threads · reviews load on the live page · viewers can also report a profile'}</span>
+          <span class="fld-hint">${isCreator ? 'your reviews load on the live page' : 'their reviews load on the live page · viewers can also report a profile'}</span>
           <button type="button" class="linky" id="acct-viewer-live">Open the live page ↗</button>
         </div>
       </div>
@@ -776,10 +811,18 @@ async function initProfileStudio(user) {
       profState.frame = (typeof p.frame === 'string' && frameKeyValid(p.frame)) ? p.frame : '';
       profState.bgRef = typeof p.bgRef === 'string' ? p.bgRef : '';
       profState.featuredAnime = typeof p.featuredAnime === 'string' ? p.featuredAnime : '';
+  profState.featuredShelf = typeof p.featuredShelf === 'string' ? p.featuredShelf : '';   // LAST CALL A8
     }
   } catch (_) {}
   if (profStatus2()) profStatus2().value = profState.status;
-  if (profBio()) profBio().value = profState.bio;
+  if (profBio()) {
+    profBio().value = profState.bio;
+    // panel HIGH (A5): the bio textarea is RarLive's hidden MODEL now — a bare
+    // .value write leaves the visible editor EMPTY, and the next keystroke
+    // serializes that emptiness over the saved bio. The dispatch re-renders
+    // the editor from the model (the app's own external-write contract).
+    try { profBio().dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+  }
   // hydrate the current background thumb (SDK-derived URL, never doc-built)
   if (profState.bgRef && /^uploads\/[A-Za-z0-9_-]{1,128}\/profilebg\/[A-Za-z0-9_-]{1,120}$/.test(profState.bgRef)) {
     try {
@@ -788,6 +831,7 @@ async function initProfileStudio(user) {
   }
   renderTagEditor(); renderAccentPicker(); renderFramePicker(); renderBgThumb(); renderProfPreview();
   loadFeaturedChoices(user.uid);
+  loadFeaturedShelfChoices(user.uid);   // LAST CALL A8
   // live preview while typing
   $('#prof-name')?.addEventListener('input', renderProfPreview);
   profStatus2()?.addEventListener('input', renderProfPreview);
@@ -1242,7 +1286,7 @@ function renderSaved(listEl, emptyEl, items, kind, uid) {
         await deleteDoc(doc(db, 'users', uid, kind, it.animeId));
       } catch (e) {
         console.error('saved-item remove failed', e);
-        alert('Could not remove: ' + friendlyError(e, { kind: 'save' }));
+        showNotice('Could not remove: ' + friendlyError(e, { kind: 'save' }));
       } finally {
         removeBtn.disabled = false;
       }
@@ -1410,14 +1454,14 @@ function openColAdder(uid, col) {
     b.addEventListener('click', async () => {
       // adversarial MED: at the 200-item rules cap, concat+slice dropped the
       // NEW item and the write "succeeded" — silent false-success. Say so.
-      if ((col.items || []).length >= 200) { alert('This shelf is full — 200 titles max. Make another shelf!'); return; }
+      if ((col.items || []).length >= 200) { showNotice('This shelf is full — 200 titles max. Make another shelf!'); return; }
       b.disabled = true;
       try {
         const items = (col.items || []).concat([{ animeId: c.animeId, title: c.title, coverImage: c.coverImage }]);
         await colWrite(uid, col.id, { items });
         existing.add(c.animeId); col.items = items;
         paint(searchEl.value);
-      } catch (e) { console.error('shelf add failed', e); alert('Could not add: ' + friendlyError(e, { kind: 'save' })); b.disabled = false; }
+      } catch (e) { console.error('shelf add failed', e); showNotice('Could not add: ' + friendlyError(e, { kind: 'save' })); b.disabled = false; }
     });
     return b;
   };
@@ -1432,7 +1476,7 @@ function openColAdder(uid, col) {
     listEl.innerHTML = '';
     const locals = all.filter((c) => !existing.has(c.animeId) && (!needle || c.title.toLowerCase().includes(needle))).slice(0, 60);
     if (locals.length) {
-      listEl.appendChild(group("Your lists & Blake's reviews", '棚'));
+      listEl.appendChild(group("Your lists & the site's reviews", '棚'));
       locals.forEach((c) => listEl.appendChild(rowFor(c)));
     }
     const ext = extRows.filter((c) => !existing.has(c.animeId) && !all.some((l) => l.animeId === c.animeId));
@@ -1514,11 +1558,25 @@ function renderCollections(uid, cols) {
       row.innerHTML = (cov ? `<img class="col-item-cover" src="${esc(cov)}" alt="" loading="lazy" title="${esc(it.title || '')}">`
         : `<span class="col-item-cover col-item-cover--ph" title="${esc(it.title || '')}">${esc(String(it.title || '?').charAt(0))}</span>`)
         + `<button type="button" class="col-item-x" aria-label="Remove ${esc(it.title || 'item')}">×</button>`;
+      // LAST CALL A8 — shelf anime are CLICKABLE (the saved-row cross-page
+      // pattern: catalog slug → the card modal, al:<id> → the deep-dive).
+      const rowAid = String(it.animeId || '');
+      if (rowAid) {
+        const covEl = row.querySelector('.col-item-cover');
+        if (covEl) {
+          covEl.style.cursor = 'pointer';
+          covEl.addEventListener('click', () => {
+            location.href = /^al:\d+$/.test(rowAid)
+              ? 'index.html#secondary=' + encodeURIComponent(rowAid.slice(3))
+              : 'index.html#open=' + encodeURIComponent(rowAid);
+          });
+        }
+      }
       row.querySelector('.col-item-x').addEventListener('click', async () => {
         try {
           const items = col.items.slice(); items.splice(i, 1);
           await colWrite(uid, col.id, { items });
-        } catch (e) { console.error('collection remove failed', e); alert('Could not remove: ' + friendlyError(e, { kind: 'save' })); }
+        } catch (e) { console.error('collection remove failed', e); showNotice('Could not remove: ' + friendlyError(e, { kind: 'save' })); }
       });
       itemsEl.appendChild(row);
     });
@@ -1532,7 +1590,7 @@ function renderCollections(uid, cols) {
           if (res !== 'ok') return;
         }
         await colWrite(uid, col.id, { public: !isPub });
-      } catch (e) { console.error('visibility change failed', e); alert('Could not change visibility: ' + friendlyError(e, { kind: 'save' })); }
+      } catch (e) { console.error('visibility change failed', e); showNotice('Could not change visibility: ' + friendlyError(e, { kind: 'save' })); }
     });
     card.querySelector('.col-del').addEventListener('click', async () => {
       if (!card.dataset.confirmDel) {
@@ -1541,7 +1599,7 @@ function renderCollections(uid, cols) {
         setTimeout(() => { try { delete card.dataset.confirmDel; card.querySelector('.col-del').textContent = 'Delete'; } catch (_) {} }, 2600);
         return;
       }
-      try { await deleteDoc(doc(db, 'users', uid, 'collections', col.id)); } catch (e) { console.error('collection delete failed', e); alert('Could not delete: ' + friendlyError(e, { kind: 'save' })); }
+      try { await deleteDoc(doc(db, 'users', uid, 'collections', col.id)); } catch (e) { console.error('collection delete failed', e); showNotice('Could not delete: ' + friendlyError(e, { kind: 'save' })); }
     });
     // gate 20 (item 7) — the description editor, same inline shape as rename
     card.querySelector('.col-describe').addEventListener('click', () => {
@@ -1564,7 +1622,7 @@ function renderCollections(uid, cols) {
         try { input.remove(); } catch (_) {}
         if (v !== (col.description || '')) {
           try { await colWrite(uid, col.id, { description: v || deleteField() }); }
-          catch (e) { console.error('description save failed', e); alert('Could not save the description: ' + friendlyError(e, { kind: 'save' })); renderCollections(uid, cols); }
+          catch (e) { console.error('description save failed', e); showNotice('Could not save the description: ' + friendlyError(e, { kind: 'save' })); renderCollections(uid, cols); }
         } else renderCollections(uid, cols);
       };
       input.addEventListener('keydown', (e) => {
@@ -1583,7 +1641,7 @@ function renderCollections(uid, cols) {
         input.dataset.done = '1';
         const v = input.value.trim().slice(0, 60);
         try { input.remove(); } catch (_) {}
-        if (v && v !== col.name) { try { await colWrite(uid, col.id, { name: v }); } catch (e) { console.error('rename failed', e); alert('Rename failed: ' + friendlyError(e, { kind: 'save' })); renderCollections(uid, cols); } }
+        if (v && v !== col.name) { try { await colWrite(uid, col.id, { name: v }); } catch (e) { console.error('rename failed', e); showNotice('Rename failed: ' + friendlyError(e, { kind: 'save' })); renderCollections(uid, cols); } }
         else renderCollections(uid, cols);
       };
       input.addEventListener('keydown', (e) => {
@@ -1594,6 +1652,88 @@ function renderCollections(uid, cols) {
     });
     host.appendChild(card);
   });
+}
+
+// LAST CALL A8 — "Other members' shelves": read-only reference cards. Source
+// gone private/deleted → the rules deny the getDoc and the card says so
+// honestly (Blake: "handle the source going private/deleted honestly").
+// Covers route cross-page like saved rows (#open= catalog / #secondary= al:).
+const _savedShelfNameCache = new Map();   // ownerUid -> displayName
+async function renderSavedShelves(uid, refs) {
+  const group = document.getElementById('col-saved-group');
+  const host = document.getElementById('col-saved-list');
+  if (!group || !host) return;
+  group.hidden = !refs.length;
+  if (!refs.length) { host.innerHTML = ''; return; }
+  host.innerHTML = '';
+  for (const r of refs) {
+    const card = document.createElement('section');
+    card.className = 'col-card col-card--saved';
+    card.innerHTML = `<div class="col-card-head">
+        <span class="col-card-name">${esc(r.name || '(shelf)')}</span>
+        <span class="col-saved-by muted">kept by …</span>
+        <span class="col-card-tools"><button type="button" class="linky col-unsave">Unsave</button></span>
+      </div>
+      <div class="col-items"><span class="muted">looking…</span></div>`;
+    card.querySelector('.col-unsave').addEventListener('click', async () => {
+      try { await deleteDoc(doc(db, 'users', uid, 'savedShelves', r.id)); }
+      catch (e) { console.error('unsave failed', e); }
+    });
+    host.appendChild(card);
+    const byEl = card.querySelector('.col-saved-by');
+    const itemsEl = card.querySelector('.col-items');
+    // owner attribution (cached; profiles are public-read)
+    (async () => {
+      try {
+        if (!_savedShelfNameCache.has(r.ownerUid)) {
+          const p = await getDoc(doc(db, 'profiles', r.ownerUid));
+          _savedShelfNameCache.set(r.ownerUid, (p.exists() && (p.data() || {}).displayName) || 'a member');
+        }
+        byEl.textContent = 'kept by ' + String(_savedShelfNameCache.get(r.ownerUid)).slice(0, 40);
+        // panel MED: the account page has no data-profile-uid delegation — the
+        // link must actually navigate (cross-page, like every account row).
+        byEl.setAttribute('role', 'link'); byEl.setAttribute('tabindex', '0');
+        byEl.style.cursor = 'pointer';
+        const goProfile = () => { location.href = 'index.html#profile=' + encodeURIComponent(r.ownerUid); };
+        byEl.addEventListener('click', goProfile);
+        byEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goProfile(); } });
+      } catch (_) { byEl.textContent = 'kept by a member'; }
+    })();
+    // re-hydrate through the source's own rules
+    (async () => {
+      try {
+        const s = await getDoc(doc(db, 'users', r.ownerUid, 'collections', r.colId));
+        if (!s.exists() || (s.data() || {}).public !== true) throw new Error('gone');
+        const c = s.data() || {};
+        const nameEl = card.querySelector('.col-card-name');
+        if (nameEl && c.name) nameEl.textContent = String(c.name).slice(0, 60);
+        const items = Array.isArray(c.items) ? c.items.slice(0, 20) : [];
+        itemsEl.innerHTML = '';
+        items.forEach((it) => {
+          const cov = colSafeCover(it && it.coverImage);
+          const row = document.createElement('span');
+          row.className = 'col-item col-item--ro';
+          row.innerHTML = cov
+            ? `<img class="col-item-cover" src="${esc(cov)}" alt="" loading="lazy" title="${esc(it.title || '')}">`
+            : `<span class="col-item-cover col-item-cover--ph" title="${esc(it.title || '')}">${esc(String(it.title || '?').charAt(0))}</span>`;
+          const aid = String((it && it.animeId) || '');
+          if (aid) {
+            row.style.cursor = 'pointer';
+            row.title = String(it.title || '');
+            row.addEventListener('click', () => {
+              location.href = /^al:\d+$/.test(aid)
+                ? 'index.html#secondary=' + encodeURIComponent(aid.slice(3))
+                : 'index.html#open=' + encodeURIComponent(aid);
+            });
+          }
+          itemsEl.appendChild(row);
+        });
+        if (!items.length) itemsEl.innerHTML = '<span class="muted">an empty shelf, lovingly dusted</span>';
+      } catch (_) {
+        itemsEl.innerHTML = '<span class="muted">This shelf is no longer shared — its keeper took it private.</span>';
+      }
+    })();
+  }
 }
 
 function ensureCollections() {
@@ -1633,11 +1773,23 @@ function ensureCollections() {
         if (desc) data.description = desc;   // optional — gate 20 item 7
         await setDoc(doc(db, 'users', u.uid, 'collections', colId()), data);
         nameEl.value = ''; if (descEl) descEl.value = ''; composer.hidden = true;
-      } catch (e) { console.error('collection create failed', e); alert('Could not create: ' + friendlyError(e, { kind: 'save' })); }
+      } catch (e) { console.error('collection create failed', e); showNotice('Could not create: ' + friendlyError(e, { kind: 'save' })); }
     });
     nameEl?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('col-create')?.click(); });
   }
   if (unsubCollections) return;   // already live
+  // LAST CALL A8 — the saved-shelves group rides its own subscription; each
+  // ref re-hydrates through the SOURCE's public==true rules, so a shelf gone
+  // private/deleted renders honestly instead of silently vanishing.
+  onSnapshot(
+    query(collection(db, 'users', u.uid, 'savedShelves'), orderBy('savedAt', 'desc')),
+    (snap) => {
+      const refs = [];
+      snap.forEach((d) => { const v = d.data() || {}; refs.push({ id: d.id, ownerUid: String(v.ownerUid || ''), colId: String(v.colId || ''), name: String(v.name || '') }); });
+      renderSavedShelves(u.uid, refs);
+    },
+    (err) => console.error('Saved shelves failed:', err)
+  );
   unsubCollections = onSnapshot(
     query(collection(db, 'users', u.uid, 'collections'), orderBy('updatedAt', 'desc')),
     (snap) => {
@@ -1774,46 +1926,62 @@ verifyBtn?.addEventListener('click', async () => {
     verifyMsg.style.color = '#cbb0ff';   // purple-family notice (gold-adjacent #ffdf96 read as Blake's temperature)
   } catch (e) {
     console.error('verification email failed', e);
-    alert('Could not send the verification email — ' + friendlyError(e, { kind: 'post' }));
+    showNotice('Could not send the verification email — ' + friendlyError(e, { kind: 'post' }));
   }
 });
 resendBtn?.addEventListener('click', () => verifyBtn?.click());
+// LAST CALL Part C — the change-password flow lost its native prompt()s (a
+// PASSWORD in a plaintext prompt was the worst native-dialog straggler): an
+// inline branded mini-form appears under the button, masked inputs, Esc/
+// Cancel to dismiss. Same reauth → update sequence as before.
 changePassBtn?.addEventListener('click', async () => {
   const u = auth.currentUser; if (!u?.email) return;
-
-  const current = prompt('Enter your current password to confirm:');
-  if (!current) return;
-
-  try {
-    const cred = EmailAuthProvider.credential(u.email, current);
-    await reauthenticateWithCredential(u, cred);
-  } catch (e) {
-    console.error('password check failed', e); alert('That current password didn’t match — try again.');
-    return;
-  }
-
-  const next = prompt('New password (min 6 characters):');
-  if (!next || next.length < 6) {
-    alert('Password must be at least 6 characters.');
-    return;
-  }
-
-  try {
-    await updatePassword(u, next);
-    alert('Password changed.');
-  } catch (e) {
-    console.error('password change failed', e); alert('Failed to change the password — ' + friendlyError(e, { kind: 'save' }));
-  }
+  if (document.getElementById('acct-pass-form')) return;   // already open
+  const form = document.createElement('div');
+  form.id = 'acct-pass-form';
+  form.className = 'acct-pass-form';
+  form.innerHTML = `
+    <input type="password" id="acct-pass-cur" autocomplete="current-password" placeholder="Current password" />
+    <input type="password" id="acct-pass-new" autocomplete="new-password" placeholder="New password (min 6 characters)" />
+    <div class="acct-pass-actions">
+      <button type="button" class="inline-header-btn small" id="acct-pass-go">Change it</button>
+      <button type="button" class="linky" id="acct-pass-cancel">Cancel</button>
+    </div>`;
+  changePassBtn.insertAdjacentElement('afterend', form);
+  const kill = () => { try { form.remove(); } catch (_) {} };
+  form.querySelector('#acct-pass-cancel').addEventListener('click', kill);
+  form.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); kill(); } });
+  form.querySelector('#acct-pass-cur').focus();
+  form.querySelector('#acct-pass-go').addEventListener('click', async () => {
+    const current = form.querySelector('#acct-pass-cur').value;
+    const next = form.querySelector('#acct-pass-new').value;
+    if (!current) { form.querySelector('#acct-pass-cur').focus(); return; }
+    if (!next || next.length < 6) { showNotice('Password must be at least 6 characters.'); return; }
+    try {
+      const cred = EmailAuthProvider.credential(u.email, current);
+      await reauthenticateWithCredential(u, cred);
+    } catch (e) {
+      console.error('password check failed', e); showNotice('That current password didn’t match — try again.');
+      return;
+    }
+    try {
+      await updatePassword(u, next);
+      kill();
+      showNotice('Password changed.');
+    } catch (e) {
+      console.error('password change failed', e); showNotice('Failed to change the password — ' + friendlyError(e, { kind: 'save' }));
+    }
+  });
 });
 
 resetPassBtn?.addEventListener('click', async () => {
   const u = auth.currentUser; if (!u?.email) return;
   try {
     await sendPasswordResetEmail(auth, u.email);
-    alert('Reset email sent to ' + u.email);
+    showNotice('Reset email sent to ' + u.email);
   } catch (e) {
     console.error('reset email failed', e);
-    alert('Could not send the reset email — ' + friendlyError(e, { kind: 'post' }));
+    showNotice('Could not send the reset email — ' + friendlyError(e, { kind: 'post' }));
   }
 });
 
@@ -1850,7 +2018,7 @@ avatarFile?.addEventListener('change', async (e) => {
                               // from is rebuilt — land focus somewhere real
   } catch (err) {
     console.error('avatar staging failed', err);   // v1.10.1: raw → console only
-    alert(friendlyError(err, { kind: 'upload', user: auth.currentUser }));
+    showNotice(friendlyError(err, { kind: 'upload', user: auth.currentUser }));
     newAvatarBlob = null;
     newAvatarMime = '';
   }
@@ -1960,6 +2128,7 @@ saveBtn.addEventListener('click', async () => {
         accentGlow: profState.accentGlow === true ? true : deleteField(),
         bgRef: nextBgRef,
         featuredAnime: profState.featuredAnime || null,
+    featuredShelf: profState.featuredShelf || null,   // LAST CALL A8 — the leading shelf
       };
       // 20.5 adversarial LOW: if frames.js ever fails to load, frameKeyValid
       // is false for EVERYTHING and a blanket deleteField would silently wipe
@@ -2199,7 +2368,7 @@ function initInbox(user) {
   const nameCache = new Map();
   async function nameFor(uid) {
     if (!uid) return 'A member';
-    if (uid === RAR_ADMIN_UID) return 'Blake';
+    if (uid === RAR_ADMIN_UID) return 'The Creator';   // LAST CALL B1 — rows/titles/pings
     if (nameCache.has(uid)) return nameCache.get(uid);
     let name = 'A member';
     try {
@@ -2297,7 +2466,7 @@ function initInbox(user) {
     }
     const other = otherUid(c);
     const gold = other === RAR_ADMIN_UID;
-    const name = escText(nameCache.get(other) || (gold ? 'Blake' : 'A member'));
+    const name = escText(nameCache.get(other) || (gold ? 'The Creator' : 'A member'));
     return `<span class="inbox-row-who">${gold ? '🏮 ' : '✉ '}${name}</span>`;
   }
 
@@ -2363,7 +2532,7 @@ function initInbox(user) {
       : incoming ? 'Accept the request to reply.'
       : pendingMine ? 'You can write more once they accept.'
       : (c && c.kind === 'group') ? 'Write to the group…'
-      : (c && otherUid(c) === RAR_ADMIN_UID) ? 'Write to Blake…'
+      : (c && otherUid(c) === RAR_ADMIN_UID) ? 'Write to the Creator…'
       : (isBlake && c && c.kind === 'admin') ? 'Reply as Blake…'
       : 'Write your letter…';
     sendBtn.disabled = true;
@@ -2416,11 +2585,15 @@ function initInbox(user) {
             ? '<span class="inbox-img-chip">🖼 Image — accept to view</span>'
             : `<span class="inbox-msg-imgbox" data-ref="${escText(m.imgRef)}"><span class="inbox-img-loading">🖼 …</span></span>`;
         }
-        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}${fromBlake ? ' is-blake' : ''}">${who}${img}${escText(m.text || '')}${flag}</div>`);
+        // LAST CALL A5 — letters render through the shared escape-first inline
+        // markdown now (bold/italic/spoilers/links + bare-URL autolink), the
+        // same renderer every other composer surface uses. escText was plain.
+        const bodyHtml = (window.renderMarkdownInline ? window.renderMarkdownInline(m.text || '') : escText(m.text || ''));
+        rows.push(`<div class="inbox-msg${mine ? ' is-mine' : ''}${fromBlake ? ' is-blake' : ''}">${who}${img}${bodyHtml}${flag}</div>`);
       });
       msgsEl.innerHTML = rows.length ? rows.join('')
         : `<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">🏮</span>
-            <p>${c && otherUid(c) === RAR_ADMIN_UID && c.kind !== 'group' ? 'Say hello — this goes straight to Blake.' : 'The first letter starts it.'}</p>
+            <p>${c && otherUid(c) === RAR_ADMIN_UID && c.kind !== 'group' ? 'Say hello — this goes straight to the Creator.' : 'The first letter starts it.'}</p>
             ${c && otherUid(c) === RAR_ADMIN_UID && c.kind !== 'group' ? '<p class="inbox-empty-sub">He reads every letter himself.</p>' : ''}</div>`;
       // hydrate unsealed images (cached per ref; SDK-derived URLs only — a
       // dangling ref, e.g. pipeline-deleted, degrades to honest copy)
@@ -2463,7 +2636,7 @@ function initInbox(user) {
     sayStatus('');
     if (reqBarEl) reqBarEl.hidden = true;
     msgsEl.innerHTML = toUid === RAR_ADMIN_UID
-      ? '<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">🏮</span><p>Say hello — this goes straight to Blake.</p><p class="inbox-empty-sub">He reads every letter himself.</p></div>'
+      ? '<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">🏮</span><p>Say hello — this goes straight to the Creator.</p><p class="inbox-empty-sub">He reads every letter himself.</p></div>'
       : '<div class="inbox-empty"><span class="inbox-empty-lantern" aria-hidden="true">✉</span><p>Your first letter arrives as a request.</p><p class="inbox-empty-sub">They choose whether to open the conversation — write something worth opening.</p></div>';
     await paintThreadChrome(null);
   }
@@ -2483,6 +2656,37 @@ function initInbox(user) {
     sendBtn.disabled = !((v.length > 0 || pendingImage) && v.length <= 2000 && !inputEl.readOnly);
   }
   inputEl.addEventListener('input', paintSendState);
+  // LAST CALL A5 — the Letter Room joins the ONE composer: RarLive live
+  // formatting (Ctrl/⌘+B/I toggles, spoilers, Enter sends / Shift+Enter
+  // newline — Discord-grade). The textarea stays the hidden model, so
+  // paintSendState/readOnly locks/the send handler are untouched. The 📎
+  // attach flow stays the DM pipeline's own (one image affordance here).
+  if (window.RarLive && typeof window.RarLive.mount === 'function') {
+    window.RarLive.mount(inputEl, {
+      mode: 'inline',
+      submit: 'enter',
+      onSubmit: () => { if (!sendBtn.disabled) sendBtn.click(); },
+    });
+  }
+  // Spoiler reveal — letters render inline markdown now; the same
+  // capture-phase contract script.js uses on the main page.
+  document.addEventListener('click', (e) => {
+    const sp = e.target && e.target.closest ? e.target.closest('.rar-spoiler') : null;
+    if (!sp || sp.classList.contains('is-revealed')) return;
+    e.preventDefault(); e.stopPropagation();
+    sp.classList.add('is-revealed');
+    sp.setAttribute('aria-label', 'Spoiler — revealed');
+    sp.removeAttribute('title');
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const sp = e.target;
+    if (!sp || !sp.classList || !sp.classList.contains('rar-spoiler') || sp.classList.contains('is-revealed')) return;
+    e.preventDefault();
+    sp.classList.add('is-revealed');
+    sp.setAttribute('aria-label', 'Spoiler — revealed');
+    sp.removeAttribute('title');
+  });
 
   // gate A4 — the attach flow. Every gate speaks BEFORE the pick: verified
   // email (the storage rules enforce it — say it kindly first), the
@@ -2554,6 +2758,8 @@ function initInbox(user) {
       // 3 — the letter itself
       await addDoc(collection(db, 'conversations', convId, 'messages'), msg);
       inputEl.value = '';
+      // the dispatch re-renders the RarLive view + repaints the send state
+      inputEl.dispatchEvent(new Event('input', { bubbles: true }));
       clearAttachment();
       if (wasCompose) {
         composeTo = null;
@@ -2691,7 +2897,7 @@ function initInbox(user) {
         // (the admin queue renders imagePath; the object outlives the thread)
         if (reportFor.imgRef) rep.imagePath = reportFor.imgRef;
         await addDoc(collection(db, 'reports'), rep);
-        sayStatus('Reported — Blake reviews every report himself.');
+        sayStatus('Reported — the Creator reviews every report himself.');
       } catch (err) { sayStatus('That didn\'t go through: ' + friendlyError(err, { kind: 'post' })); }
       reportPanel.hidden = true; reportFor = null;
     });

@@ -98,13 +98,13 @@ test('20.5 (3): the catch-up sheet exists, [hidden]-symmetric, with its sections
   expect(d).toBe('none');
   const js = await (await request.get('/script.js')).text();
   expect(js).toContain('function openCatchupSheet(');
-  expect(js).toContain('NEW FROM BLAKE');
+  expect(js).toContain('NEW REVIEWS');   // LAST CALL B1 — the kicker went name-free
 });
 
 test('20.5 (4+7): the renames hold — no "Blake\'s 44" or "Message Blake" left visitor-facing', async ({ request }) => {
   const acct = await (await request.get('/account.html')).text();
   expect(acct).not.toContain("Blake's 44");
-  expect(acct).toContain("Blake's reviews");
+  expect(acct).toContain('Reviewed here');   // LAST CALL B1 — the saved-type chip went name-free
   // gate A2: the "DM Blake" hero card died with the peer flip (Blake's word:
   // "Replace with dms and stuff normally.") — the phrase leaves with it.
   expect(acct).not.toContain('DM Blake');

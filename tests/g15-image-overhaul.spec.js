@@ -102,22 +102,26 @@ test.describe('image overhaul — inline tokens, thumbnail, lightbox (static)', 
     expect(r.inSpoiler).toBe(true);   // blurred until revealed (visibility:hidden children)
   });
 
-  test('RarComposer: 📷 appears ONLY when a picker is wired (onImage)', async ({ page }) => {
+  // LAST CALL A5 — the toolbar 📷 is DEAD everywhere (the picker strip's
+  // "Add an image" is THE one affordance), and the 🔗 button died with it.
+  // The toolbar is exactly B / I / 👁 no matter what options are passed.
+  test('RarLive toolbar: never an image button, never a link button — B/I/👁 only', async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => window.RarComposer && typeof window.RarComposer.enhance === 'function');
+    await page.waitForFunction(() => window.RarLive && typeof window.RarLive.mount === 'function');
     const r = await page.evaluate(() => {
       const mk = (opts) => {
         const host = document.createElement('div'); document.body.appendChild(host);
         const ta = document.createElement('textarea'); host.appendChild(ta);
-        window.RarComposer.enhance(ta, opts);
+        window.RarLive.mount(ta, opts);
         const n = host.querySelectorAll('.ct-btn').length;
         const cam = !!host.querySelector('[data-md="image"]');
+        const link = !!host.querySelector('[data-md="link"]');
         host.remove();
-        return { n, cam };
+        return { n, cam, link };
       };
       return { with: mk({ inline: true, submit: 'enter', onImage: () => {} }), without: mk({ inline: true, submit: 'enter' }) };
     });
-    expect(r.with.n).toBe(5);   expect(r.with.cam).toBe(true);
-    expect(r.without.n).toBe(4); expect(r.without.cam).toBe(false);
+    expect(r.with.n).toBe(3);    expect(r.with.cam).toBe(false);  expect(r.with.link).toBe(false);
+    expect(r.without.n).toBe(3); expect(r.without.cam).toBe(false); expect(r.without.link).toBe(false);
   });
 });

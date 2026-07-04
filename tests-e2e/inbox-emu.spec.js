@@ -29,11 +29,18 @@ test.describe('the Letter Room — a real send to Blake (emulator-seeded)', () =
     await page.waitForTimeout(1200);   // the conversations snapshot + compose hand-off settle
 
     const line = 'gate-A2 smoke: the letter room actually sends now';
-    await page.fill('#inbox-input', line);
+    // LAST CALL A5 — #inbox-input is RarLive's hidden model; write + dispatch
+    await page.evaluate((t) => {
+      const ta = document.getElementById('inbox-input');
+      ta.value = t;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }, line);
     await page.click('#inbox-send');
     // the letter lands in the thread (the live onSnapshot paints it)
     await expect(page.locator('#inbox-messages')).toContainText(line, { timeout: 20000 });
-    // and Blake's thread wears his identity (gold title name, admin kind)
-    await expect(page.locator('#inbox-thread-title')).toContainText('Blake');
+    // and the thread wears his identity (gold title, admin kind) — B1 swept
+    // the literal name to "The Creator"; the GOLD is the identity mark.
+    await expect(page.locator('#inbox-thread-title')).toContainText('The Creator');
+    await expect(page.locator('#inbox-thread-title .is-blake-name')).toHaveCount(1);
   });
 });
