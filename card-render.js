@@ -93,12 +93,13 @@
     card.setAttribute('role', 'button');
     card.setAttribute('aria-label', decodeTitle(anime.Title) || 'Open anime details');
     // v1.8.4 gate 2 — corner badge. NOT-REVIEWED outside cards get the no-provider-
-    // name "NOT REVIEWED" sticker; pinned catalog cards get the "Reviewed by Blake"
-    // gold pin. Both are static strings (no untrusted input) — the card's title/
-    // genre come pre-escaped from the discovery mapper (mediaToCardProps).
+    // name "NOT REVIEWED" sticker; pinned catalog cards get the gold "Reviewed"
+    // pin (Milestone F: Blake's rename — the gold IS his mark, the name was
+    // redundant). Both are static strings (no untrusted input) — the card's
+    // title/genre come pre-escaped from the discovery mapper (mediaToCardProps).
     const cornerBadge = !reviewed
       ? `<span class="card-corner not-reviewed-badge"><i class="nr-eye" aria-hidden="true">&#128065;</i> NOT REVIEWED</span>`
-      : (pinned ? `<span class="card-corner blake-pin"><i class="bp-star" aria-hidden="true">&#9733;</i> Reviewed by Blake</span>` : '');
+      : (pinned ? `<span class="card-corner blake-pin"><i class="bp-star" aria-hidden="true">&#9733;</i> Reviewed</span>` : '');
     // v1.7.1 — romaji subtitle under the title, only when it differs from the
     // displayed title (skips identical-romaji titles like "Chainsaw Man").
     // gate 1d — Japanese 「」brackets are LITERAL inline <i class="rb"> chars so

@@ -238,14 +238,19 @@ test('gC-panel: the comments wiring keys on reviewKey — the tape column can ne
   expect((sjs.match(/const s = reviewKey\(anime\)/g) || []).length).toBeGreaterThanOrEqual(6);
 });
 
-test('gC-panel: Hidden Gems is actually reachable — bridge export + a visible IO sentinel', async ({ page }) => {
+test('gC-panel→F: Hidden Gems is reachable at the BOTTOM of Discover (the Milestone-F move)', async ({ page }) => {
   const sjs = await (await page.request.get('/script.js')).text();
-  // the bridge must carry the fetcher fillHomeGems calls
+  // the bridge must carry the fetcher the Discover fill calls
   expect(sjs).toMatch(/window\.rarDiscovery = \{[\s\S]{0,600}?fetchHiddenGemsCached/);
-  // the IO must observe the VISIBLE airing strip, never the [hidden] gems block
-  expect(sjs).toMatch(/lazyFillOnView\(homeAiringBlock, fillHomeGems\)/);
-  expect(sjs).not.toMatch(/lazyFillOnView\(homeGemsBlock/);
-  // and the live bridge really exposes it
+  // Milestone F (Blake B3): gems fill from buildDiscoverSections — the home
+  // strip and its IO wiring are GONE (never a hidden-block IO deadlock again)
+  expect(sjs).toMatch(/fillDiscoverGems\(\)/);
+  expect(sjs).not.toMatch(/lazyFillOnView\([^)]*[gG]ems/);
+  expect(sjs).not.toMatch(/function fillHomeGems/);
+  const html = await (await page.request.get('/index.html')).text();
+  expect(html).toContain('id="discover-gems-block"');
+  expect(html).not.toContain('id="home-gems-block"');
+  // and the live bridge really exposes the fetcher
   await page.goto('/index.html');
   await page.waitForFunction(() => !!(window.rarDiscovery && window.rarDiscovery.fetchHiddenGemsCached), null, { timeout: 15000 });
 });

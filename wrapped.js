@@ -408,10 +408,21 @@ export function initWrapped(user, helpers) {
         skySvg(model) +
         `<p class="wr-legend muted"><span class="wr-legend-gold">The gold star is the day you joined.</span> The rest of this sky is yours to light — a review, a comment, a thread all land here.</p>`;
     } else {
+      // Milestone F (Blake B2: "kinda confused on what different things are
+      // supposed to be — maybe some kind of quick guide") — a proper key.
+      // Swatches are tiny inline SVGs in the sky's own purples; the join-day
+      // row explains the gold star in TEXT (no gold ink may live in the
+      // stylesheet, and the star itself stays the surface's only gold).
+      const key = `<div class="wr-key" role="group" aria-label="Star map key">` +
+        `<span class="wr-key-item"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="rgba(216,180,254,0.16)"/><circle cx="8" cy="8" r="3.4" fill="#e3c9ff"/></svg>a review — bigger &amp; brighter, the higher you rated it</span>` +
+        `<span class="wr-key-item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.2 12.8 8 8 12.8 3.2 8Z" fill="#d8b4fe"/></svg>a Tavern thread you started</span>` +
+        `<span class="wr-key-item"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.2" fill="#c9a4ff"/></svg>a comment or reply</span>` +
+        `<span class="wr-key-item"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.4" fill="#b388ff" opacity="0.7"/></svg>a title you saved</span>` +
+        (model.gold ? `<span class="wr-key-item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 9.6 6.4 14.5 8 9.6 9.6 8 14.5 6.4 9.6 1.5 8 6.4 6.4Z" fill="none" stroke="#e3c9ff" stroke-width="1.2"/></svg><span class="wr-legend-gold">the one gold star — the day you joined</span></span>` : '') +
+        `</div>`;
       html = `<p class="wr-lede">Your ${esc(model.year)}${soFar}, drawn in stars.</p>` +
         skySvg(model) +
-        `<p class="wr-legend muted">✦ reviews shine by your rating · ◆ threads · smaller stars are comments, replies, and saves` +
-        (model.gold ? ` · <span class="wr-legend-gold">the gold one is the day you joined</span>` : '') + `</p>` +
+        key +
         (model.skyBegan ? `<p class="wr-began">✦ Your sky began ${esc(new Date(model.skyBegan).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }))}.</p>` : '') +
         statsHtml(model) +
         (model.clipped ? `<p class="wr-clip muted">Showing your newest stars — the busiest skies are drawn from your latest ${LIMITS.items} entries.</p>` : '');

@@ -1219,7 +1219,7 @@ function renderSaved(listEl, emptyEl, items, kind, uid) {
       openBtn.innerHTML = cover +
         `<span class="saved-meta">` +
           `<span class="saved-title">${esc(it.title || it.animeId)}</span>` +
-          `<span class="saved-reviewed" title="Reviewed by Blake">✓ REVIEWED</span>` +
+          `<span class="saved-reviewed" title="Reviewed">✓ REVIEWED</span>` +
         `</span>`;
       openBtn.addEventListener('click', () => {
         // Send them to index and auto-open the modal there

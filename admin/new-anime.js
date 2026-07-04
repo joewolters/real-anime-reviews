@@ -1290,7 +1290,12 @@ function wire() {
       e.target.classList.add('copied');
       setTimeout(() => { e.target.textContent = orig; e.target.classList.remove('copied'); }, 1400);
     } catch (err) {
-      alert('Copy failed: ' + err.message);
+      // gate 31 — no native alert(): report failure the same way success is
+      // reported, inline on the button itself (the status Blake is looking at).
+      console.error('copy failed', err);
+      const orig = e.target.textContent;
+      e.target.textContent = 'Copy failed — grab it by hand';
+      setTimeout(() => { e.target.textContent = orig; }, 2200);
     }
   });
 
@@ -1437,6 +1442,29 @@ async function init() {
         fetchByIdBtn.click();
       }
     }
+
+    // Milestone F — the Curator Studio's "Publish this one" handoff: the studio
+    // stashes its 9-section notes in localStorage (they can't ride a URL), then
+    // sends the admin here with ?anilistId=&fromStudio=1. AniList fills the
+    // metadata; the Review field is BLAKE's own (AniList never touches it), so
+    // loading his studio notes into the section editor here is race-free —
+    // independent of the fetch above. One-shot: the draft is cleared on read.
+    try {
+      if (handoffParams.get('fromStudio') === '1') {
+        const raw = localStorage.getItem('rar:studio-draft');
+        const draft = raw ? JSON.parse(raw) : null;
+        if (draft && String(draft.anilistId) === String(anilistId)) {
+          if (reviewEditor && typeof draft.notesMd === 'string' && draft.notesMd.trim()) {
+            reviewEditor.load(draft.notesMd);
+          }
+          if (draft.title) {
+            const titleInput = document.getElementById('title-input');
+            if (titleInput && !titleInput.value.trim()) titleInput.value = draft.title;
+          }
+        }
+        localStorage.removeItem('rar:studio-draft');
+      }
+    } catch (_) { /* a malformed draft just means no prefill */ }
 
     if (state.serverMode === 'local') {
       $('generate-btn').textContent = 'Submit & Ship';

@@ -328,6 +328,50 @@ function confirmModal({ glyph, kicker, kickerJp, body, okLabel }) {
   });
 }
 
+// ---- Branded notice modal (gate 31 — the alert() replacement) ---------------
+// Same #confirm-modal overlay as confirmModal above, minus the choice: Cancel
+// hides and OK is the only exit. Used where a native alert() used to interrupt
+// — things the admin just needs to SEE, not decide on. Restores the Cancel
+// button on close so confirmModal gets the overlay back intact.
+function noticeModal({ glyph, kicker, kickerJp, body, okLabel }) {
+  return new Promise((resolve) => {
+    const overlay = $('confirm-modal');
+    const card = overlay.querySelector('.confirm-card');
+    const cancelBtn = overlay.querySelector('[data-confirm="cancel"]');
+    const okBtn = overlay.querySelector('[data-confirm="ok"]');
+    $('confirm-glyph').textContent = glyph || '⚠️';
+    $('confirm-kicker').innerHTML = `${escapeAttr(kicker || 'HEADS UP')} <span class="jp-mini">${escapeAttr(kickerJp || '注意')}</span>`;
+    $('confirm-title').textContent = body || '';
+    okBtn.textContent = okLabel || 'Okay';
+    cancelBtn.hidden = true;
+
+    const prevFocus = document.activeElement;
+    overlay.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-open')));
+    okBtn.focus();
+
+    const close = () => {
+      overlay.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey);
+      card.classList.remove('is-open');
+      overlay.hidden = true;
+      cancelBtn.hidden = false;
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
+      resolve();
+    };
+    const onClick = (e) => {
+      if (e.target === overlay) return close();
+      if (e.target.closest('[data-confirm]')) close();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); return close(); }
+      if (e.key === 'Tab') { e.preventDefault(); okBtn.focus(); }   // one focusable — keep Tab inside
+    };
+    overlay.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 // ---- Row removal animation (clone of suggestions' collapse-out) ------------
 
 function collapseAndRemove(row) {
@@ -369,7 +413,7 @@ function wireClicks() {
     if (action === 'view') {
       const href = viewHref(targetType, targetPath);
       if (href) window.open(href, '_blank', 'noopener');
-      else alert('That content type can\'t be opened from here yet.');
+      else noticeModal({ glyph: '🔗', kicker: 'NO VIEW YET', kickerJp: '未対応', body: 'That content type can\'t be opened from here yet.' });
       return;
     }
 
@@ -380,7 +424,7 @@ function wireClicks() {
         collapseAndRemove(row);
       } catch (err) {
         console.error('dismiss failed', err);
-        alert('Could not dismiss — see console.');
+        noticeModal({ kicker: 'DISMISS FAILED', kickerJp: '失敗', body: 'Couldn\'t dismiss that one — the console has the details.' });
         btn.disabled = false;
       }
       return;
@@ -433,14 +477,14 @@ function wireClicks() {
         collapseAndRemove(row);
       } catch (err) {
         console.error('remove failed', err);
-        alert('Could not remove the content — see console. (It may already be gone.)');
+        noticeModal({ kicker: 'REMOVE FAILED', kickerJp: '失敗', body: 'Couldn\'t remove the content — the console has the details. (It may already be gone.)' });
         btn.disabled = false;
       }
       return;
     }
 
     if (action === 'ban') {
-      if (!targetUid) { alert('No target user on this report.'); return; }
+      if (!targetUid) { noticeModal({ glyph: '🚫', kicker: 'NO TARGET USER', kickerJp: '不明', body: 'This report doesn\'t name a user, so there\'s no one to ban.' }); return; }
       const ok = await confirmModal({
         glyph: '🚫', kicker: 'BAN AUTHOR', kickerJp: '追放',
         body: `Ban this account and tombstone everything they've posted? This is reversible from the console, but heavy.`,
@@ -454,7 +498,7 @@ function wireClicks() {
         collapseAndRemove(row);
       } catch (err) {
         console.error('ban failed', err);
-        alert('Could not ban — see console. ' + (err && err.message ? err.message : ''));
+        noticeModal({ glyph: '🚫', kicker: 'BAN FAILED', kickerJp: '失敗', body: 'Couldn\'t ban — the console has the details. ' + (err && err.message ? err.message : '') });
         btn.disabled = false;
       }
       return;
@@ -526,7 +570,7 @@ async function mountKillSwitch() {
       await setDoc(doc(db, 'commentsMeta', 'uploads'), { uploadsEnabled: flipTo }, { merge: true });
       enabled = flipTo;
       paint();
-    } catch (err) { alert('Could not flip the switch: ' + (err && err.message ? err.message : err)); }
+    } catch (err) { noticeModal({ glyph: '🖼', kicker: 'TOGGLE FAILED', kickerJp: '失敗', body: 'Couldn\'t flip the switch: ' + (err && err.message ? err.message : err) }); }
     btn.disabled = false;
   });
 }

@@ -405,13 +405,8 @@ const LATE_TARGETS = [
   // v1.10.2R (adversarial LOW): both pages sat at APP_VERSION "1.9.1" for two
   // ships because only their ?v= lines were targeted — the version marker
   // itself must move with the rest.
-  ['admin/inbox.html',  'window.APP_VERSION (inbox)',      /(<script>window\.APP_VERSION=")([^"]+)(")/],
+  // (Milestone F: admin/inbox.html DELETED — Blake's call; its 6 targets went with it)
   ['admin/reports.html','window.APP_VERSION (reports)',    /(<script>window\.APP_VERSION=")([^"]+)(")/],
-  ['admin/inbox.html',  '../style.css?v= (inbox)',         /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
-  ['admin/inbox.html',  '../mobile.css?v= (inbox)',        /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
-  ['admin/inbox.html',  'inbox.css?v= (inbox)',            /(href="inbox\.css\?v=)([^"]+)(")/],
-  ['admin/inbox.html',  '../firebase.js?v= (inbox)',       /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
-  ['admin/inbox.html',  'inbox.js?v= (inbox)',             /(src="inbox\.js\?v=)([^"]+)(")/],
   ['admin/reports.html','../style.css?v= (reports)',       /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
   ['admin/reports.html','../mobile.css?v= (reports)',      /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
   ['admin/reports.html','reports.css?v= (reports)',        /(href="reports\.css\?v=)([^"]+)(")/],
@@ -436,6 +431,30 @@ const LATE_TARGETS = [
   // MEGA-RUN Milestone D — the shared nav-drawer module (?v= from birth on both pages)
   ['script.js',         "nav-drawer.js?v= import (script)",  /(from '\.\/nav-drawer\.js\?v=)([^']+)(')/],
   ['account.js',        "nav-drawer.js?v= import (account)", /(from '\.\/nav-drawer\.js\?v=)([^']+)(')/],
+  // MEGA-RUN Milestone F — the Curator Studio (admin/studio.html) — every ?v=
+  // surface on the page (the classic helpers it composes + its own module).
+  ['admin/studio.html', 'window.APP_VERSION (studio)',      /(<script>window\.APP_VERSION=")([^"]+)(")/],
+  ['admin/studio.html', '../style.css?v= (studio)',         /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
+  ['admin/studio.html', '../mobile.css?v= (studio)',        /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
+  ['admin/studio.html', 'suggestions.css?v= (studio)',      /(href="suggestions\.css\?v=)([^"]+)(")/],
+  ['admin/studio.html', 'section-editor.css?v= (studio)',   /(href="section-editor\.css\?v=)([^"]+)(")/],
+  ['admin/studio.html', 'studio.css?v= (studio)',           /(href="studio\.css\?v=)([^"]+)(")/],
+  ['admin/studio.html', '../franchise-fetch.js?v= (studio)',/(src="\.\.\/franchise-fetch\.js\?v=)([^"]+)(")/],
+  ['admin/studio.html', '../markdown.js?v= (studio)',       /(src="\.\.\/markdown\.js\?v=)([^"]+)(")/],
+  ['admin/studio.html', 'section-editor.js?v= (studio)',    /(src="section-editor\.js\?v=)([^"]+)(")/],
+  ['admin/studio.html', 'chat-drawer.js?v= (studio)',       /(src="chat-drawer\.js\?v=)([^"]+)(")/],
+  ['admin/studio.html', 'brand-select.js?v= (studio)',      /(src="brand-select\.js\?v=)([^"]+)(")/],
+  ['admin/studio.html', 'modal-scroll-lock.js?v= (studio)', /(src="modal-scroll-lock\.js\?v=)([^"]+)(")/],
+  ['admin/studio.html', '../firebase.js?v= (studio)',       /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
+  ['admin/studio.html', 'studio.js?v= (studio)',            /(src="studio\.js\?v=)([^"]+)(")/],
+  // Milestone F panel (MED): the IN-MODULE versioned import specifiers — the
+  // thrice-bitten stale-TARGETS class (script.js/account.js precedent above).
+  // curation.js's was a pre-existing Milestone-B gap, closed here with it.
+  ['admin/studio.js',   "friendly-errors.js?v= import (studio)",   /(from '\.\.\/friendly-errors\.js\?v=)([^']+)(')/],
+  ['admin/curation.js', "friendly-errors.js?v= import (curation)", /(from '\.\.\/friendly-errors\.js\?v=)([^']+)(')/],
+  // Milestone F panel: curation gained the brandSelect port (the parity lane's
+  // one missed admin page — the visible native select is now the value store).
+  ['admin/curation.html','brand-select.js?v= (curation)',   /(src="brand-select\.js\?v=)([^"]+)(")/],
 ];
 for (const [file, label, pattern] of LATE_TARGETS) {
   TARGETS.push({

@@ -31,6 +31,11 @@ const ADMIN_MENU_ITEMS = [
     href: '/admin/season-reviews.html',
   },
   {
+    label: 'Curator Studio',
+    jp: '工房',
+    href: '/admin/studio.html',
+  },
+  {
     label: 'Curate Cards',
     jp: '整理',
     href: '/admin/curation.html',
@@ -50,11 +55,9 @@ const ADMIN_MENU_ITEMS = [
     jp: '通報',
     href: '/admin/reports.html',
   },
-  {
-    label: 'Inbox',
-    jp: '受信箱',
-    href: '/admin/inbox.html',
-  },
+  // Milestone F (Blake: "get rid of the inbox on my admin page since people
+  // can properly dm me now") — members' letters reach Blake through the ONE
+  // unified account Inbox (account.html#inbox); the admin floor page is gone.
   // Future entries land here:
   // { label: 'Site Health', jp: '監視', href: '/admin/health.html' },
   // { label: 'Audit', jp: '監査', href: '/admin/audit.html' },

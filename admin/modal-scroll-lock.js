@@ -12,9 +12,12 @@
   var SELECTORS = [
     '.edit-modal',            // edit: save/ship confirm + ship progress
     '.edit-preview-overlay',  // edit: live-preview iframe overlay
-    '#chat-drawer',           // shared ✨ ASK drawer (edit + new-anime)
+    '#chat-drawer',           // shared ✨ ASK drawer (edit + new-anime + studio)
     '.sr-editor-overlay',     // season-reviews: editor overlay
-    '.confirm-overlay'        // suggestions: confirm modal (+ any reuse)
+    '.confirm-overlay',       // suggestions: confirm modal (+ any reuse)
+    '#studio-editor'          // studio: the notes editor sheet (Milestone F panel
+                              // fix — closing the ✨ drawer must not unlock the
+                              // page while the editor still covers it)
   ];
 
   function isVisible(el) {

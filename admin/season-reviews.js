@@ -28,6 +28,7 @@ let reviewIndex = new Set();          // ids with a written review
 let serverUp = false;                 // mode1 reachable?
 let editorId = null;                  // id currently in the editor
 let srEditor = null;                  // v1.8.2 — section-aware Review editor (window.RarSectionEditor)
+let srFilter = 'all';                 // gate 31 — list filter (was the native #sr-filter's .value)
 
 function getCatalog() {
   const list = (window.animeData && Array.isArray(window.animeData)) ? window.animeData : [];
@@ -77,7 +78,7 @@ function statusPill(id) {
 }
 
 function renderList(catalog) {
-  const filter = $('sr-filter').value;     // all | reviewed | empty
+  const filter = srFilter;                 // all | reviewed | empty (gate 31 — brand-select state)
   const root = $('sr-list');
   root.innerHTML = '';
   catalog.forEach((c, idx) => {
@@ -228,7 +229,26 @@ function init() {
     }
   });
 
-  $('sr-filter').addEventListener('change', () => renderList(_catalog));
+  // gate 31 — branded filter dropdown (no native <select> in admin). Same
+  // RarBrandSelect the editors use (brand-select.js, classic script); if the
+  // script tag ever goes missing, fall back to a native select wired the same
+  // way so the filter never dies with it.
+  const filterHost = $('sr-filter-host');
+  const FILTER_OPTS = [
+    { value: 'all', label: 'All seasons' },
+    { value: 'empty', label: 'Empty only' },
+    { value: 'reviewed', label: 'Reviewed only' },
+  ];
+  const onFilterChange = (v) => { srFilter = v; renderList(_catalog); };
+  if (window.RarBrandSelect) {
+    window.RarBrandSelect({ host: filterHost, label: 'Show', options: FILTER_OPTS, value: srFilter, onChange: onFilterChange });
+  } else {
+    const sel = document.createElement('select');
+    sel.className = 'sr-filter';
+    FILTER_OPTS.forEach((o) => { const op = document.createElement('option'); op.value = o.value; op.textContent = o.label; sel.appendChild(op); });
+    sel.addEventListener('change', () => onFilterChange(sel.value));
+    filterHost.appendChild(sel);
+  }
   if (window.RarSectionEditor) srEditor = window.RarSectionEditor.mount($('sr-editor-mount'), { onChange: updatePreview });
   $('sr-editor-save').addEventListener('click', saveReview);
   $('sr-editor-delete').addEventListener('click', deleteReview);

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Curator Studio — Real Anime Reviews</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <script>window.APP_VERSION="1.10.2"</script>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Admin-only curator studio — not indexed." />
+
+  <link rel="stylesheet" href="../style.css?v=1.10.2" />
+  <link rel="stylesheet" href="../mobile.css?v=1.10.2" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=1.10.2" />
+  <link rel="stylesheet" href="section-editor.css?v=1.10.2" />
+  <link rel="stylesheet" href="studio.css?v=1.10.2" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="admin-page">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="../index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" id="chat-summon-btn" class="inline-header-btn" disabled title="Pick an anime first" aria-controls="chat-drawer" aria-expanded="false">✨ Ask</button>
+          <button type="button" id="back-btn" class="inline-header-btn" onclick="location.href='../index.html'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-gate-message">
+      <div class="admin-gate-spinner"></div>
+      <p>Verifying admin access…</p>
+    </div>
+  </div>
+
+  <main class="admin-main studio-main" id="admin-main" hidden>
+    <div class="admin-shell">
+
+      <div class="admin-header">
+        <h2 class="admin-title-line">
+          <span class="admin-kicker-inline">CURATOR STUDIO <span class="jp-mini">工房</span></span>
+          <span class="admin-divider">·</span>
+          <span class="admin-title-text">Track, note &amp; publish</span>
+        </h2>
+      </div>
+
+      <p class="studio-intro">
+        Search the whole anime world — track anything, keep detailed private notes
+        as you watch, then publish when a set of notes is ready. Statuses dress the
+        cards; notes are yours alone. Nothing here needs Mode&nbsp;1 until you publish.
+      </p>
+
+      <!-- SEARCH — any anime, not just the 44 -->
+      <div class="studio-search-wrap">
+        <span class="studio-search-icon" aria-hidden="true">🔍</span>
+        <input id="studio-search" type="search" placeholder="Search any anime to track…" autocomplete="off" aria-label="Search any anime by title" />
+        <button type="button" id="studio-search-clear" class="studio-search-clear" aria-label="Clear" hidden>×</button>
+      </div>
+      <ul class="studio-results" id="studio-results" aria-label="Search results"></ul>
+
+      <!-- NOW TRACKING — everything with a status or notes -->
+      <section class="studio-tracking" aria-labelledby="studio-tracking-head">
+        <h3 id="studio-tracking-head" class="studio-section-head">Now tracking <span class="jp-mini">追跡中</span></h3>
+        <p class="studio-tracking-empty" id="studio-tracking-empty" hidden>Nothing tracked yet — search above to start.</p>
+        <ul class="studio-tracking-list" id="studio-tracking-list" aria-label="Tracked anime"></ul>
+      </section>
+
+      <div id="studio-error" class="suggestions-error-card" hidden>
+        <div class="error-glyph" aria-hidden="true">⚠️</div>
+        <div class="error-kicker">COULDN'T LOAD <span class="jp-mini">接続</span></div>
+        <p class="error-body">Couldn't reach the studio data. Reload to retry.</p>
+        <button type="button" class="error-reload-btn" onclick="location.reload()">Reload</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- THE EDITOR SHEET (docked; opens when an anime is picked) -->
+  <div id="studio-editor" class="studio-editor" hidden aria-label="Anime notes editor">
+    <div class="studio-editor-scrim" data-close></div>
+    <aside class="studio-editor-panel" role="dialog" aria-modal="true" aria-labelledby="studio-ed-title">
+      <header class="studio-ed-head">
+        <img id="studio-ed-cover" class="studio-ed-cover" alt="" aria-hidden="true">
+        <div class="studio-ed-headtext">
+          <h3 id="studio-ed-title" class="studio-ed-title"></h3>
+          <p id="studio-ed-sub" class="studio-ed-sub"></p>
+        </div>
+        <button type="button" id="studio-ed-ask" class="studio-ghost-btn studio-ed-ask" aria-controls="chat-drawer" aria-haspopup="dialog" title="Ask about this anime">✨ Ask</button>
+        <button type="button" class="studio-ed-x" data-close aria-label="Close">×</button>
+      </header>
+
+      <div class="studio-ed-body">
+        <!-- STATUS quick-set -->
+        <div class="studio-ed-field">
+          <label class="studio-ed-label">Status <span class="jp-mini">状態</span></label>
+          <div id="studio-status-host"></div>
+          <p class="studio-ed-hint">Public — dresses this anime's card. “— none —” clears it.</p>
+        </div>
+
+        <!-- THE 9 SECTIONS (same template the reviews use → publish maps 1:1) -->
+        <div class="studio-ed-field">
+          <label class="studio-ed-label">Notes <span class="jp-mini">記録</span></label>
+          <p class="studio-ed-hint">The same nine sections as a full review — Music, Overall, and the rest. Private until you publish.</p>
+          <div id="studio-sections-mount"></div>
+        </div>
+
+        <!-- PER-SEASON thoughts -->
+        <div class="studio-ed-field">
+          <label class="studio-ed-label">Per-season thoughts <span class="jp-mini">各期</span></label>
+          <div id="studio-seasons" class="studio-seasons"></div>
+          <button type="button" id="studio-season-add" class="studio-ghost-btn">+ Add a season note</button>
+        </div>
+
+        <!-- QUICK note (the legacy one-liner, kept) -->
+        <div class="studio-ed-field">
+          <label class="studio-ed-label" for="studio-quicknote">Quick note <span class="jp-mini">一言</span></label>
+          <textarea id="studio-quicknote" class="studio-quicknote" maxlength="2000" rows="2" placeholder="A one-line reminder to yourself…"></textarea>
+        </div>
+      </div>
+
+      <footer class="studio-ed-foot">
+        <span id="studio-ed-status" class="studio-ed-savestatus" role="status"></span>
+        <div class="studio-ed-actions">
+          <button type="button" id="studio-publish-btn" class="studio-publish-btn">Publish this one →</button>
+          <button type="button" id="studio-save-btn" class="studio-save-btn">Save</button>
+        </div>
+      </footer>
+    </aside>
+  </div>
+
+  <!-- ✨ ASK drawer (shared controller; same markup contract as edit/new-anime:
+       #chat-empty is a SIBLING of #chat-thread — the controller innerHTMLs the
+       thread, so anything inside it is destroyed on first render). -->
+  <aside id="chat-drawer" class="chat-drawer" hidden aria-label="AI assistant">
+    <div class="chat-drawer-header">
+      <span class="chat-drawer-title">✨ ASK <span class="jp-mini">相談</span></span>
+      <div class="chat-drawer-actions">
+        <button type="button" id="chat-clear-btn" class="chat-header-btn">Clear chat</button>
+        <button type="button" id="chat-close-btn" class="chat-header-btn chat-close" aria-label="Close drawer">✕</button>
+      </div>
+    </div>
+    <div id="chat-thread" class="chat-thread" aria-live="polite"></div>
+    <div id="chat-empty" class="chat-empty">
+      <p class="chat-empty-hint">Pick an anime, then ask anything — themes, what to note, how it compares.</p>
+      <div class="chat-quickstarts">
+        <button type="button" class="chat-quickstart" data-quickstart="What should I pay attention to as I watch this?">What to watch for</button>
+        <button type="button" class="chat-quickstart" data-quickstart="Give me a few angles for notes on the music and sound design.">Music angles</button>
+      </div>
+    </div>
+    <form id="chat-input-row" class="chat-input-row">
+      <textarea id="chat-input" class="chat-input" rows="1" placeholder="Ask about this anime…" autocomplete="off"></textarea>
+      <button type="submit" id="chat-send-btn" class="chat-send-btn" aria-label="Send message">➤</button>
+    </form>
+  </aside>
+
+  <!-- Catalog bridge + the shared classic-script helpers the studio composes. -->
+  <script src="../animeData.js"></script>
+  <script>window.animeData = (typeof animeData !== 'undefined') ? animeData : (window.animeData || []);</script>
+  <script src="../franchise-fetch.js?v=1.10.2"></script>
+  <script src="../markdown.js?v=1.10.2"></script>
+  <script src="section-editor.js?v=1.10.2"></script>
+  <script src="chat-drawer.js?v=1.10.2"></script>
+  <script src="brand-select.js?v=1.10.2"></script>
+  <script src="modal-scroll-lock.js?v=1.10.2"></script>
+
+  <script type="module" src="../firebase.js?v=1.10.2"></script>
+  <script type="module" src="studio.js?v=1.10.2"></script>
+</body>
+</html>

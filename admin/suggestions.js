@@ -544,10 +544,11 @@ function wireListClicks() {
     }
 
     if (action === 'reply') {
-      // gate 18 — suggestion-reply DM: hand the submitter's uid to the Inbox,
-      // which finds-or-creates the kind-'admin' conversation and opens it.
+      // Milestone F — the admin Inbox is gone (Blake's call: the unified
+      // account Inbox is the one letter room). Same door every member walks:
+      // account.html#inbox/new/<uid> composes to the submitter directly.
       const submitterUid = row.dataset.submitterUid;
-      if (submitterUid) window.location.href = 'inbox.html?to=' + encodeURIComponent(submitterUid);
+      if (submitterUid) window.location.href = '../account.html#inbox/new/' + encodeURIComponent(submitterUid);
       return;
     }
 
@@ -571,7 +572,7 @@ function wireListClicks() {
         if (row.dataset.anilistId) offerMigration(row.dataset.anilistId, title);
       } catch (err) {
         console.error('mark-reviewed failed', err);
-        alert('Could not mark as reviewed — see console.');
+        noticeModal('Couldn\'t mark that one as reviewed — the console has the details.', 'MARK FAILED', '失敗');
       } finally {
         btn.disabled = false;
       }
@@ -610,7 +611,7 @@ function wireListClicks() {
         setTimeout(() => { if (!removed) { removed = true; cleanup(); } }, 500);
       } catch (err) {
         console.error('delete failed', err);
-        alert('Could not delete — see console.');
+        noticeModal('Couldn\'t delete that suggestion — the console has the details.', 'DELETE FAILED', '失敗');
         btn.disabled = false;
       }
     }
@@ -652,6 +653,53 @@ async function loadQueue() {
     $('queue-stats').hidden = true;                  // hide stats counter if visible
     $('suggestions-error').hidden = false;           // now actually reached
   }
+}
+
+// ---- Branded notice modal (gate 31 — the alert() replacement) ----------------
+// Same .confirm-overlay/.confirm-card vocabulary as confirmModal (v1.6.12
+// precedent), built on the fly because the static #confirm-modal's glyph/
+// kicker/buttons are delete-specific in the HTML. One Okay button; Escape and
+// the backdrop close too — things the admin just needs to SEE, not decide on.
+// (Declared after the callers — function declarations hoist; parked down here
+// so it can't shift the queue-handler lines a concurrent edit is sitting on.)
+function noticeModal(body, kicker, kickerJp) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  const card = document.createElement('div');
+  card.className = 'confirm-card';
+  card.setAttribute('role', 'alertdialog');
+  card.setAttribute('aria-modal', 'true');
+  const glyph = document.createElement('div');
+  glyph.className = 'confirm-glyph'; glyph.setAttribute('aria-hidden', 'true'); glyph.textContent = '⚠️';
+  const kick = document.createElement('div');
+  kick.className = 'confirm-kicker';
+  kick.textContent = (kicker || 'HEADS UP') + ' ';
+  const jp = document.createElement('span'); jp.className = 'jp-mini'; jp.textContent = kickerJp || '注意';
+  kick.appendChild(jp);
+  const p = document.createElement('p'); p.className = 'confirm-body'; p.textContent = body || '';
+  const actions = document.createElement('div'); actions.className = 'confirm-actions';
+  const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'secondary'; ok.textContent = 'Okay';
+  actions.appendChild(ok);
+  card.appendChild(glyph); card.appendChild(kick); card.appendChild(p); card.appendChild(actions);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  const prevFocus = document.activeElement;
+  // Double-rAF entrance, same as confirmModal (single rAF batches into one frame).
+  requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-open')));
+  ok.focus();
+
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+    if (prevFocus && prevFocus.focus) prevFocus.focus();
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); return close(); }
+    if (e.key === 'Tab') { e.preventDefault(); ok.focus(); }   // one focusable — keep Tab inside
+  };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target === ok) close(); });
+  document.addEventListener('keydown', onKey);
 }
 
 // ---- Auth gate + init ------------------------------------------------------

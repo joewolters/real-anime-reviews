@@ -262,6 +262,13 @@ body > header {
   body > header #site-search { width: 120px; max-width: 22vw; }
   body > header .nav-links { gap: 8px; }
 }
+/* Milestone F (Blake B1: "the search bar gets huge") — the 901-1200 drawer
+   band had NO search rule and fell to the 240px/38vw base, so crossing
+   1201→1200 the input DOUBLED. With the nav in the drawer there's room, but
+   matched-to-desktop reads intentional; huge did not. */
+@media (900px < width <= 1200px) {
+  body > header #site-search { width: 165px; max-width: 26vw; }
+}
 
 @media (max-width: 1200px) {
   .nav-drawer-toggle {
@@ -8791,15 +8798,17 @@ html.rar-welcome-pending::before {
   margin: 12px auto 0; max-width: 560px;
   font: 400 .96rem/1.6 'Outfit', sans-serif; color: #c9bfe0;
 }
-/* milestone E — the door line: his live curator status, one quiet purple
-   breath under the tagline (Blake said YES; the exact copy is staged for his
-   approval at the final smoke). Gold-free by rule; absent between shows. */
-.welcome-watching {
-  margin: 8px auto 0; max-width: 560px;
-  font: 500 0.9rem/1.5 'Outfit', sans-serif;
-  color: #c9a4ff; letter-spacing: 0.02em;
+/* milestone E→F — the "currently watching" line, moved INTO the Den per
+   Blake's final smoke: one quiet masthead breath under the folio dateline
+   (the stamp vocabulary — small, letterspaced, purple). Gold-free by rule;
+   absent between shows; copy staged for his smoke-2 approval. */
+.den-watching {
+  margin: 6px auto 0; max-width: 640px;
+  text-align: center;
+  font: 600 0.78rem/1.5 'Outfit', sans-serif;
+  color: #c9a4ff; letter-spacing: 0.14em; text-transform: uppercase;
 }
-.welcome-watching[hidden] { display: none; }
+.den-watching[hidden] { display: none; }
 .welcome-enter {
   position: relative; isolation: isolate;
   margin-top: 24px;

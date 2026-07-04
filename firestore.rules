@@ -475,9 +475,16 @@ service cloud.firestore {
     // =========================================================================
     match /animeStatus/{slug} {
       allow get, list: if true;                 // dresses cards for everyone
+      // Milestone F (the Curator Studio): the key space widens to ANY anime —
+      // catalog slugs keep feeding the card pills; al:<id> docs (tracked
+      // outside titles) carry an optional `title` so the Den's "currently
+      // watching" line can name them (the client keeps al: keys OFF the
+      // public card feed — a deliberate scope, see loadCuratorStatus).
       allow create, update: if isAdmin()
-        && request.resource.data.keys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['status', 'updatedAt', 'title'])
         && request.resource.data.status in ['watching', 'watchlist', 'on-hold', 'finished', 'rewatching']
+        && (!('title' in request.resource.data)
+            || (request.resource.data.title is string && request.resource.data.title.size() <= 120))
         && request.resource.data.updatedAt == request.time;
       allow delete: if isAdmin();               // clearing a status
     }
@@ -485,11 +492,23 @@ service cloud.firestore {
       // PRIVATE — Blake's eyes only (get + list both admin-gated; a note never
       // reaches a member's client). Separate collection because rules can't
       // field-scope reads on a mixed public/private doc.
+      // Milestone F (the Curator Studio) — the richer shape, all optional:
+      //   note     — the legacy quick note (the Milestone-B field, kept)
+      //   notesMd  — the 9-section studio notes (the compiled review-template
+      //              markdown; publish carries it 1:1 into Add Anime)
+      //   seasons  — per-season thoughts, a map of al-id → markdown
+      //   title    — the tracked anime's name (al:<id> keys have no catalog row)
+      // Sizes are sanity caps, not a threat model — only the admin can write.
       allow get, list: if isAdmin();
       allow create, update: if isAdmin()
-        && request.resource.data.keys().hasOnly(['note', 'updatedAt'])
-        && request.resource.data.note is string
-        && request.resource.data.note.size() <= 2000
+        && request.resource.data.keys().hasOnly(['note', 'notesMd', 'seasons', 'title', 'updatedAt'])
+        && (!('note' in request.resource.data)
+            || (request.resource.data.note is string && request.resource.data.note.size() <= 2000))
+        && (!('notesMd' in request.resource.data)
+            || (request.resource.data.notesMd is string && request.resource.data.notesMd.size() <= 40000))
+        && (!('seasons' in request.resource.data) || request.resource.data.seasons is map)
+        && (!('title' in request.resource.data)
+            || (request.resource.data.title is string && request.resource.data.title.size() <= 120))
         && request.resource.data.updatedAt == request.time;
       allow delete: if isAdmin();
     }

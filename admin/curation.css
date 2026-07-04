@@ -136,12 +136,12 @@
   border-color: rgba(187, 134, 252, 0.62);
   box-shadow: 0 0 12px rgba(187, 134, 252, 0.20);
 }
-/* Dropdown options render in a native menu — force dark-on-light readability so
-   the option text isn't white-on-white in some browsers. */
-.curation-status-select option {
-  color: #1a0a2e;
-  background: #efe7ff;
-}
+/* Panel fix (MED, restored): the native select is normally the HIDDEN value
+   store behind RarBrandSelect (Milestone F parity) — but in the degraded mode
+   where brand-select.js fails to load it renders visibly, and its native
+   option popup inherits near-white text on some browsers' light menus. Keep
+   the options readable there; the rule is inert while the control is hidden. */
+.curation-status-select option { color: #1a0a2e; background: #efe7ff; }
 .curation-note {
   resize: vertical;
   min-height: 44px;

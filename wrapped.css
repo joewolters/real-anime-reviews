@@ -45,6 +45,20 @@
   color: #e7dbff;
   font-size: 1.02rem;
 }
+
+/* Milestone F — the map KEY (Blake asked for a quick guide): swatch chips in
+   the sky's own purples. The join-day row explains the gold star in TEXT —
+   no gold ink lives in this file, ever (the g31 pin). */
+#tab-wrapped .wr-key {
+  display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem;
+  margin: 0.5rem 0 0.9rem;
+}
+#tab-wrapped .wr-key[hidden] { display: none; }   /* the [hidden] twin */
+#tab-wrapped .wr-key-item {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: 0.8rem; color: #b9a6d9; line-height: 1.4;
+}
+#tab-wrapped .wr-key-item svg { width: 15px; height: 15px; flex: 0 0 auto; }
 #tab-wrapped .wr-legend {
   margin: 0.35rem 0 0.9rem;
   font-size: 0.82rem;

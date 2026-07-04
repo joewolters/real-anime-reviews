@@ -367,6 +367,15 @@
   max-height: 240px;
   overflow-y: auto;
 }
+/* gate 31 — the output <pre> is tabbable (tabindex=0) and the block above kills
+   the native outline, so it MUST keep a keyboard ring: this explicit twin of the
+   global .admin-main :focus-visible rule (end of file) guarantees the ring even
+   if that rule ever gets scoped tighter. */
+.copy-target:focus-visible {
+  box-shadow:
+    0 0 0 1px rgba(187, 134, 252, 0.95),
+    0 0 0 4px rgba(187, 134, 252, 0.25);
+}
 .copy-btn {
   position: absolute;
   top: 10px; right: 10px;
@@ -1081,3 +1090,13 @@
 .md-preview a { color: #bb86fc; }
 .md-preview ul { margin: 0 0 8px; padding-left: 20px; }
 .md-preview-empty { color: rgba(255,255,255,0.4); font-style: italic; }
+
+/* ---- Cowork addition #4 — :focus-visible ring (keyboard nav only) ----------
+   gate 31 — copied verbatim from suggestions.css so this page matches the
+   other admin surfaces (they load suggestions.css; this one doesn't). */
+.admin-main *:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(187, 134, 252, 0.95),
+    0 0 0 4px rgba(187, 134, 252, 0.25);
+}

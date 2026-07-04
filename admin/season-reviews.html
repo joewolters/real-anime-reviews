@@ -58,13 +58,11 @@
       </div>
 
       <div class="sr-toolbar">
-        <label class="sr-filter-label">Show
-          <select id="sr-filter" class="sr-filter">
-            <option value="all">All seasons</option>
-            <option value="empty">Empty only</option>
-            <option value="reviewed">Reviewed only</option>
-          </select>
-        </label>
+        <!-- gate 31 — the native <select> is gone (Blake's no-native-selects rule);
+             season-reviews.js mounts a RarBrandSelect (brand-select.js) in the host. -->
+        <span class="sr-filter-label" id="sr-filter-label">Show
+          <span id="sr-filter-host"></span>
+        </span>
       </div>
 
       <div id="sr-list" class="sr-list"></div>
@@ -109,6 +107,7 @@
   <script src="../franchise-fetch.js"></script>
   <script src="../markdown.js"></script>
   <script>window.animeData = (typeof animeData !== 'undefined') ? animeData : (window.animeData || []);</script>
+  <script src="brand-select.js"></script>
   <script src="section-editor.js"></script>
   <script src="modal-scroll-lock.js"></script>
 

@@ -178,8 +178,7 @@ function updateScrollLock() {
   const placeMarker = document.querySelector(".place-marker");
   const homeAiringBlock = document.getElementById("home-airing-block");
   const homeAiringRail = document.getElementById("home-airing");
-  const homeGemsBlock = document.getElementById("home-gems-block");   // milestone C (item 9)
-  const homeGemsRail = document.getElementById("home-gems");
+  // (Milestone F: the home gems refs died with the strip's move to Discover)
   const homeForyouBlock = document.getElementById("home-foryou-block");
   const homeForyouRail = document.getElementById("home-foryou");
 
@@ -285,7 +284,8 @@ function applySavedStateToCard(card, animeId) {
 // milestone B — the curator status labels. Blake's status is HIS mark, so the
 // pill is gold (heart: gold = Blake). animeStatus is public-read; loaded once,
 // cached 1h. Label text is set via textContent (no XSS) from a fixed map.
-let curatorStatusMap = {};   // animeId -> status
+let curatorStatusMap = {};   // catalog animeId -> status (feeds the card pills)
+let curatorTrackedMap = {};  // Milestone F: al:<id> -> {status,title} (feeds ONLY the Den line)
 const CURATOR_STATUS_LABEL = {
   watching:   { label: "Blake is watching",   jp: "視聴中" },
   watchlist:  { label: "On Blake's list",     jp: "予定" },
@@ -327,41 +327,67 @@ async function loadCuratorStatus() {
   // warm from a 1h localStorage cache first (instant paint on repeat visits)
   try {
     const cached = JSON.parse(localStorage.getItem('rar:curatorStatus') || 'null');
-    if (cached && cached.m && (Date.now() - (cached.t || 0)) < 3600000) { curatorStatusMap = cached.m; syncAllCuratorStatus(); fillDoorWatching(); }
+    if (cached && cached.m && (Date.now() - (cached.t || 0)) < 3600000) {
+      curatorStatusMap = cached.m; curatorTrackedMap = cached.al || {};
+      syncAllCuratorStatus(); fillDenWatching();
+    }
   } catch (_) {}
   try {
     const snap = await getDocs(collection(db, 'animeStatus'));
-    const m = {};
-    snap.forEach((d) => { const v = d.data() || {}; if (CURATOR_STATUS_LABEL[v.status]) m[d.id] = v.status; });
-    curatorStatusMap = m;
-    try { localStorage.setItem('rar:curatorStatus', JSON.stringify({ t: Date.now(), m })); } catch (_) {}
+    const m = {}, al = {};
+    // Milestone F: the CARD-pill map stays CATALOG-only (an al:-keyed status
+    // would otherwise paint gold pills on outside Discover cards through the
+    // shared data-animeid — a public behavior that must be a decision, not a
+    // side effect; banked as a pitch). Studio-tracked al:<id> docs feed ONLY
+    // the Den's "currently watching" line, via the title the studio stored.
+    snap.forEach((d) => {
+      const v = d.data() || {};
+      if (!CURATOR_STATUS_LABEL[v.status]) return;
+      if (d.id.indexOf('al:') === 0) al[d.id] = { status: v.status, title: (typeof v.title === 'string' ? v.title : '') };
+      else m[d.id] = v.status;
+    });
+    curatorStatusMap = m; curatorTrackedMap = al;
+    try { localStorage.setItem('rar:curatorStatus', JSON.stringify({ t: Date.now(), m, al })); } catch (_) {}
     syncAllCuratorStatus();
-    fillDoorWatching();
+    fillDenWatching();
   } catch (_) { /* animeStatus is public but a read failure just leaves cards plain */ }
 }
 
-// milestone E — "the site breathes with him" (study §5.2; Blake said YES with
-// his copy approval — the exact wording is STAGED for the final smoke). The
-// welcome door shows his live curator status as one quiet purple line.
+// milestone E→F — "the site breathes with him" (study §5.2; moved off the
+// welcome door INTO the Den per Blake's final smoke; copy staged for his
+// smoke-2 approval). His live curator status as one quiet masthead line.
 // Progressive (the catch-up-door pattern): absent until animeStatus lands,
-// absent when he's between shows. textContent only; titles are his catalog's.
-function fillDoorWatching() {
-  const el = document.getElementById('welcome-watching');
+// absent when he's between shows. textContent only. Titles resolve from the
+// catalog first; a Studio-tracked outside anime (al:<id> key, Milestone F)
+// resolves from the TITLE the studio stored on its status doc.
+function fillDenWatching() {
+  const el = document.getElementById('den-watching');
   if (!el) return;
-  const pick = (want) => Object.keys(curatorStatusMap || {}).filter((s) => curatorStatusMap[s] === want).sort()[0];
-  const watching = pick('watching');
-  const rewatching = pick('rewatching');
-  const chosen = watching || rewatching;
-  if (!chosen) { el.hidden = true; return; }
-  // self-contained catalog access (this runs top-level; the hub's _animeData
-  // helpers live in another closure) — the same triple fallback shape.
-  const data = (typeof window !== 'undefined' && Array.isArray(window.animeData)) ? window.animeData
-    : (typeof window !== 'undefined' && Array.isArray(window.__ANIME_DATA__)) ? window.__ANIME_DATA__
-    : (typeof animeData !== 'undefined' && Array.isArray(animeData)) ? animeData : [];
-  const toSlug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const entry = data.find((a) => a && a.Title && toSlug(a.Title) === chosen);
-  if (!entry) { el.hidden = true; return; }
-  el.textContent = (watching ? 'Blake is currently watching: ' : 'Blake is rewatching: ') + entry.Title;
+  // resolve a {title, verb} — catalog 'watching' first (his 44 stay the
+  // center), then a Studio-tracked outside title, then the rewatching pair.
+  const catalogPick = (want) => {
+    const slugKey = Object.keys(curatorStatusMap || {}).filter((s) => curatorStatusMap[s] === want).sort()[0];
+    if (!slugKey) return null;
+    const data = (typeof window !== 'undefined' && Array.isArray(window.animeData)) ? window.animeData
+      : (typeof window !== 'undefined' && Array.isArray(window.__ANIME_DATA__)) ? window.__ANIME_DATA__
+      : (typeof animeData !== 'undefined' && Array.isArray(animeData)) ? animeData : [];
+    const toSlug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const entry = data.find((a) => a && a.Title && toSlug(a.Title) === slugKey);
+    return entry ? entry.Title : null;
+  };
+  const trackedPick = (want) => {
+    const key = Object.keys(curatorTrackedMap || {})
+      .filter((k) => curatorTrackedMap[k] && curatorTrackedMap[k].status === want && String(curatorTrackedMap[k].title || '').trim())
+      .sort()[0];
+    return key ? String(curatorTrackedMap[key].title).trim().slice(0, 120) : null;
+  };
+  const hit =
+    (catalogPick('watching') && { t: catalogPick('watching'), v: 'watching' }) ||
+    (trackedPick('watching') && { t: trackedPick('watching'), v: 'watching' }) ||
+    (catalogPick('rewatching') && { t: catalogPick('rewatching'), v: 'rewatching' }) ||
+    (trackedPick('rewatching') && { t: trackedPick('rewatching'), v: 'rewatching' }) || null;
+  if (!hit) { el.hidden = true; return; }
+  el.textContent = (hit.v === 'watching' ? 'Blake is currently watching: ' : 'Blake is rewatching: ') + hit.t;
   el.hidden = false;
 }
 if (typeof window !== 'undefined') window.applyCuratorStatusToCard = applyCuratorStatusToCard;
@@ -2750,6 +2776,25 @@ async function buildDiscoverSections() {
   // 3) Airing-by-genre chips + the first genre's rail.
   buildDiscoverGenreChips();
   selectDiscoverGenre(DISCOVER_GENRES[0]);
+
+  // 4) Milestone F (Blake B3) — HIDDEN GEMS at the bottom of Discover (moved
+  //    off the homepage; his "elongated" note dies with the discover-card
+  //    proportions here). hidden-until-real: a fetch failure or empty pool
+  //    leaves the block hidden — never a dead rail.
+  fillDiscoverGems();
+}
+
+async function fillDiscoverGems() {
+  const rail = document.getElementById('discover-gems');
+  const block = document.getElementById('discover-gems-block');
+  if (!rail || !block) return;
+  setRailLoading(rail);
+  const gems = await window.rarDiscovery.fetchHiddenGemsCached();
+  if (!Array.isArray(gems) || gems.length === 0) { block.hidden = true; return; }
+  block.hidden = false;
+  const shuffled = (typeof seededShuffle === 'function') ? seededShuffle(gems, freshSeed()) : gems;
+  renderDiscoverInto(rail, shuffled.slice(0, 12),
+    { empty: 'No gems surfaced right now.', carousel: true, onRetry: fillDiscoverGems });
 }
 
 function buildDiscoverGenreChips() {
@@ -2870,7 +2915,7 @@ function renderDiscoverSearchResults(results, term) {
     shelf.className = 'discover-blake-shelf';
     shelf.innerHTML =
       '<div class="dbs-head"><span class="dbs-seal" aria-hidden="true">&#9733;</span>'
-      + '<span class="dbs-kicker">REVIEWED BY BLAKE <span class="jp-mini">監修</span></span></div>'
+      + '<span class="dbs-kicker">REVIEWED <span class="jp-mini">監修</span></span></div>'
       + '<p class="dbs-sub">Titles he’s actually sat down with</p>';
     shelf.appendChild(grid(pinnedSorted));
     discoverSearchResults.appendChild(shelf);
@@ -3406,24 +3451,8 @@ async function fillHomeAiring() {
   setRailMeta('home-airing-block', seasonLabel());
 }
 
-// milestone C (item 9) — HIDDEN GEMS home strip. The block ships hidden and
-// reveals ONLY when real gems come back (a fetch failure / empty leaves it
-// hidden — no dead rail). Same discovery-card render as airing; unreviewed
-// cards route to the secondary deep-dive (where the yellow-tape review door is).
-async function fillHomeGems() {
-  if (!homeGemsRail) return;
-  setRailLoading(homeGemsRail);
-  const gems = await window.rarDiscovery.fetchHiddenGemsCached();
-  if (!Array.isArray(gems) || gems.length === 0) {
-    if (homeGemsBlock) homeGemsBlock.hidden = true;   // no gems → stay hidden
-    return;
-  }
-  if (homeGemsBlock) homeGemsBlock.hidden = false;
-  // freshness-seed the window so the strip rotates per visit (like trending)
-  const shuffled = (typeof seededShuffle === 'function') ? seededShuffle(gems, freshSeed()) : gems;
-  renderDiscoverInto(homeGemsRail, shuffled.slice(0, 12),
-    { empty: 'No gems surfaced right now.', carousel: true, onRetry: fillHomeGems });
-}
+// (Milestone F: fillHomeGems is GONE — Hidden Gems lives at the bottom of
+// Discover now, per Blake's final smoke; see fillDiscoverGems above.)
 
 // FOR YOU on home — chrome (head/sub/more by auth) + the rail. Signed in: a teaser of
 // the top taste rail (reuses fillForYouRailBands with smaller caps). Signed in + no
@@ -7037,7 +7066,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         const cover = hubSafeCover(m.coverImage && m.coverImage.medium);
         const fav = blake44ByAniListId(m.id);
         const year = m.seasonYear || '';
-        const star = fav ? '<span class="hub-nt-result-star" title="Reviewed by Blake">★</span>' : '';
+        const star = fav ? '<span class="hub-nt-result-star" title="Reviewed">★</span>' : '';
         return `<li><button type="button" class="hub-nt-result${fav ? ' is-fav' : ''}" data-al-id="${escapeHtml(String(m.id))}" data-al-title="${escapeHtml(title)}" data-al-cover="${escapeHtml(cover)}"${fav ? ` data-fav-slug="${escapeHtml(animeSlug(fav))}"` : ''}>
           ${cover ? `<img class="hub-nt-result-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">` : '<span class="hub-nt-result-cover hub-nt-result-cover--none" aria-hidden="true"></span>'}
           <span class="hub-nt-result-body"><span class="hub-nt-result-title">${escapeHtml(title)}</span><span class="hub-nt-result-meta">${star}${year ? `<span class="hub-nt-result-year">${escapeHtml(String(year))}</span>` : ''}</span></span>
@@ -10091,8 +10120,9 @@ function closeModal() {
   // spec (the surfaces themselves wire in next gate). Kept off the hot path.
   window.rarDiscovery = {
     // milestone C panel (HIGH, fixed): fetchHiddenGemsCached was defined but
-    // never exported here — fillHomeGems' bridge call threw a (swallowed)
-    // TypeError and the Hidden Gems strip could never fill.
+    // never exported here — the gems fill's bridge call threw a (swallowed)
+    // TypeError and the Hidden Gems strip could never fill. (Milestone F: the
+    // consumer is fillDiscoverGems — the strip lives at the bottom of Discover.)
     fetchTrendingCached, fetchAiringCached, fetchHiddenGemsCached, searchDiscover,
     // gate 2 — card builders + the AniList->card mapper (G3/G4 render with these).
     createDiscoveryCard, mediaToCardProps, isNewlyReviewed,
@@ -11454,12 +11484,8 @@ function onScrollHeader() {
     setFolioDate();
     lazyFillOnView(homeAiringBlock, fillHomeAiring);
     lazyFillOnView(homeForyouBlock, buildHomeForYou);
-    // milestone C panel (HIGH, fixed): the gems block ships [hidden] →
-    // display:none → an IO observing IT can never intersect (the deadlock:
-    // only fillHomeGems unhides it). Observe the VISIBLE airing strip directly
-    // above instead — same viewport threshold, same lazy first-paint-API-free
-    // discipline; hidden-until-real still holds (fillHomeGems unhides on data).
-    lazyFillOnView(homeAiringBlock, fillHomeGems);   // milestone C (item 9)
+    // (Milestone F: the home gems lazy-fill is GONE — Hidden Gems fills at the
+    // bottom of Discover from buildDiscoverSections now, per Blake.)
     document.getElementById('home-airing-more')?.addEventListener('click', (e) => { e.preventDefault(); showDiscover(); });
     showHome();
     loadCuratorStatus();   // milestone B — paint Blake's per-anime status on the cards (public read; cached)

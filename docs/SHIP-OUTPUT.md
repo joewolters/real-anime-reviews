@@ -1,36 +1,70 @@
-<!-- author: Code | date: 2026-07-03 -->
-# THE MEGA-RUN — Report 7 (FINAL): **MILESTONE E COMPLETE — THE WHOLE RUN IS BUILT.** Your one smoke below, then the one go.
+<!-- author: Code | date: 2026-07-04 -->
+# THE MEGA-RUN — Report 8 (THE FINALE): **MILESTONE F COMPLETE — the Curator Studio, your fix list, the renames, THE STRESS PASS. Ready for humans.** Your short smoke 2 below, then the one go.
 
-Every end state from your directive is now real in the sandbox: the messaging era (A), your curator tools (B), discovery + the Constellation (C), the responsive overhaul (D), and the finale (E) — speed, privacy, and the last riders. Nothing has touched prod. What's left is yours: the numbered smoke below, one copy approval, and the single go.
+**Design vision.** The Studio is your workshop wearing the site's own night: search the whole anime world, track anything, and keep notes *in the same nine sections a review uses* — so the day you hit "Publish this one," the review has already written itself and Add Anime opens pre-filled. Statuses dress the public cards (your 44) and feed one quiet line in The Den — "Blake is currently watching: PLUTO" — the site breathing with your actual season. Everything else this gate did was finishing work: your four smoke fixes, the two renames swept site-wide, the old admin Inbox retired now that people can properly DM you, and one last full-surface stress pass before strangers get the keys.
 
-## What Milestone E added
-- **Speed, measured in megabytes.** Three dead files nobody ever saw were shipping with every deploy (two forgotten full-size backgrounds and a 1.5MB unreferenced favicon) — gone, 6.3MB. Thirty-three oversized images right-sized: your Instagram footer icon was 603KB for a 20px glyph (now 56KB), the Tavern's backdrop went 653→199KB, and every catalog cover recompressed with pixels verified crisp — **~15MB lighter overall**, with the biggest chunks off the wire for every visitor.
-- **Your emails are private now.** Any member's account document (which holds their sign-in email) was readable by anyone — a leftover from how member names used to load. Closed for good: only the member themselves and you can read it. The two enablers shipped with it: a one-time backfill (run at cutover, one console command I'll walk you through) and an automatic step that gives every future signup their public profile at birth — so nobody ever renders as "a former member" by mistake again.
-- **The door line you approved — copy staged for you (smoke step 10).** The welcome door now quietly says ***"Blake is currently watching: Chainsaw Man"*** (or "Blake is rewatching: …") — fed live by your curator panel, purple, absent when you're between shows. Say the word if you want different phrasing; it's one line.
-- **A long-flaky test debt closed:** deep-links to non-catalog seasons now have a fully deterministic test (the outside database is simulated, so it can never flake the suite again). And the old "deep links don't work signed-out" bug on the books? It no longer exists — verified with a fresh repro, closed.
-- **Deliberately banked, not dropped** (all recorded in NEXT with receipts): the "who-liked complete history" (needs a new ledger design — my rec stays: only if you want it), the admin-menu live-count badges (a pitch: your morning at a glance), moving search fully into the drawer on phones (it's usable now; lovelier later), and one dead code block deletion.
+## PART A — the Curator Studio (walked end-to-end in the sandbox, twice)
+- **The full cycle, live:** signed in as you → searched "Pluto" (not in your catalog) → Track → set "Currently watching" via the branded dropdown → wrote into 2 of the 9 sections → added a "Season 1" note → quick note → Save → reloaded the page → the row shows title/status/✎ → Edit restores every field → **Publish landed on Add Anime with your notes pre-filled in the review editor and the title filled** (the draft is one-shot; it clears on read). Firestore verified raw: `animeStatus/al:99088 {status:'watching', title:'PLUTO'}` + `curatorNotes/al:99088 {notesMd…}`.
+- **Catalog anime route also walked** (Frieren — it IS one of your 44): the studio files it under the catalog slug, so its status dresses the public card, exactly as Curate Cards does.
+- **The ✨ ASK drawer:** the missing CSS is in (dark-purple drawer, sampled pixels rgb(21,8,40)); the empty-state quickstarts show and hide correctly; with Mode 1 down it answers with the friendly "double-click MODE 1" bubble + Retry. I also found the header ✨ button was UNREACHABLE while the editor sheet covered it — there's now an **✨ Ask button inside the editor head** (ask mid-note, the whole point), and Esc closes drawer-then-editor in layers.
+- **Private stays private:** curatorNotes is admin-only in rules (200 rules tests green, including the 2 new widening tests — both allow and deny sides).
 
-## THE FINAL SMOKE (the one you asked for — in order, ~20 minutes)
-**Setup:** I'll have the practice sandbox running; you open `http://127.0.0.1:8765/?emu=1`. Sign-ins: you = `blake@practice.test` / `practice123`, a member = `prac-mika@practice.test` / `practice123`.
-1. **The drawer (your sidebar):** narrow the window below ~1200px → the hamburger appears top-left → open it → the seven nav buttons in a night-purple panel, your active place gold-underlined → tap Discover → it closes and lands.
-2. **The header never scrunches:** widen slowly from narrow to full — one clean row the whole way. On a phone-narrow window: hamburger · logo · search · lantern · account, all reachable.
-3. **No clipped cards:** at a laptop width (~1024), View All — three tidy columns, every card fully visible.
-4. **Letters (as mika):** sign in → account → Inbox → message Blake; from a second browser profile as Blake, reply — your row renders gold on mika's side.
-5. **A stranger knocks:** as `prac-newbie@practice.test`, open mika's profile → ✉ Message → send. As mika: the Requests strip shows the knock → Accept → converse. (Decline is silent — the sender only ever sees "request sent".)
-6. **Groups + images:** as mika, Inbox → 👥 New group → create, add from your letters, send a 📎 image — it arrives; in a REQUEST it shows "accept to view" until accepted.
-7. **Your curator tools:** admin FAB → Curate Cards → set an anime to "Watching" → a member's fresh load shows the gold pill on that card.
-8. **The yellow tape:** Discover → open something you haven't reviewed → ★ Community reviews → the full modal under caution-tape, your sections honestly absent, the community column alive (leave a review as mika).
-9. **The Constellation:** as mika, account → Constellation — her year in stars, the single gold star on her join day.
-10. **The door line (copy approval):** open the site fresh (new tab) — the welcome door reads "Blake is currently watching: Chainsaw Man". **Approve or reword.**
-11. **Hidden Gems + Random:** home page, scroll past AIRING NOW → the HIDDEN GEMS rail; the Random dice with the filter's "Unreviewed" setting lands on unreviewed titles.
+## PART B — your four fixes (your numbering)
+1. **Search bar:** it was a side-effect (the 901–1200 band had no rule, so the bar fell back huge). Now 165px in that band — measured live at 1000px and 1201px, pinned in the suite forever.
+2. **Constellation guide:** the legend/key renders beside the sky (swatch chips: what a star, the gold join-day, dust mean) — still zero gold ink in wrapped.css, pinned.
+3. **Hidden Gems:** moved to the BOTTOM of Discover as its own rail, off the homepage, standard card proportions (measured 0.36 vs 0.33 for its neighbors — no more elongation). One honest note: under Discover's "Reviewed" lens every rail empties (gems included — they're unreviewed by nature); that's the lens's existing site-wide behavior, uniform across all four rails, banked as a polish question.
+4. **The door line → The Den:** `#den-watching` sits under the Den folio date line, purple, absent when you're between shows. **Copy staged for your approval:** *"Blake is currently watching: One punch man"* / *"Blake is rewatching: …"* — catalog titles first, then anything you track in the Studio (that's the PLUTO demo in your smoke). Screenshot: `tmp-walk-f-denline.png`.
+5. **(Smoke-#4 debt)** The member-side gold DM row is PROVEN: mika messaged you, you replied, and on mika's side your row renders `is-blake` with the 🏮 lantern painting gold (sampled rgb(246,143,58)) above the plain purple member rows. Screenshot: `tmp-b5-goldrow.png`.
 
-## THE CUTOVER PROPOSAL (nothing moves until your go)
-- **Version: v2.0.0.** The responsive overhaul was your named v2.0 milestone, and this run also carries the messaging era — it's earned the major number. (I run the bump + changelog as the first cutover step.)
-- **Order** (the runbook, extended): bump+commit → deploy **only the backfill function** → run the one-time backfill (one console command, I guide) and verify the count → then **indexes → hosting → firestore rules → storage rules → functions** — the same corruption-proof order as v1.10.0, verified at each step, rollback plan per step.
-- **After:** the close-out checklist (changelog widget, version strings, docs 404 scrub) + a live prod smoke of one vote, one letter, one card pill.
+## PART C — renames + removals (grep-proven)
+1. **Nav "Blake's Den" → "The Den"** on both pages. Site-wide count: 7→**5** survivors, all sanctioned — the section wordmark aria-label, 2 code comments, and 2 changelog-widget history bullets (history stays true).
+2. **"Reviewed by Blake" → "Reviewed":** live renders 13→**0** — the 8 remaining hits are all code comments. The sticker vocabulary matches the curator labels.
+3. Both counts pinned in tests/g33-finale.spec.js (regex-proof against title="/text renders).
+4. **Admin Inbox is gone:** 3 files deleted, page 404s, FAB entry removed, its 6 bump targets retired, and Suggestions "reply" now routes to your real account Inbox (`account.html#inbox/new/<uid>`). Zero orphaned references (comments only).
 
-## Green (final floors)
-Playwright **266** · rules **198** · functions **77** · triggers **78** · end-to-end **21**. Five milestones, five adversarial panels (four multi-agent + one solo re-run independently as your gate condition), every confirmed finding fixed and pinned. The full suite has run green start-to-finish four times across the run.
+## THE ADVERSARIAL PANEL (5 lenses, per-finding skeptics — 19 agents)
+14 raw findings → 14 confirmed, 0 refuted → **9 distinct defects: 8 FIXED, 1 formally accepted.** The record holds — it caught a real HIGH again:
+- **HIGH (fixed):** if the editor's saved-notes load ever failed (an offline blip), the editor opened EMPTY with Save armed — one click would have destroyed up to 40k chars of your private notes behind a "Saved ✓". Save/Publish now stay dead until your docs actually load, with honest copy when they don't.
+- **MED (fixed):** the studio's escaper didn't escape quotes inside `src="…"` — an attribute-injection XSS lane from AniList cover data (admin origin). Quotes escaped + covers scheme-gated to https, matching the site's own hubSafeCover discipline.
+- **MED (fixed):** switching anime fast could load the FIRST anime's notes into the SECOND's editor and save them under the wrong key — an identity guard now discards stale loads (the search-abort pattern).
+- **MED (fixed):** closing the ✨ drawer unlocked page scroll under the still-open editor — `#studio-editor` joined modal-scroll-lock's watch list; one owner for the lock now.
+- **MED (fixed):** the parity lane had deleted curation.css's option-readability rule but **Curate Cards was the one admin page never brandified** — its 44 native selects were still visible. Finished properly: every row now wears the branded dropdown (hidden value-store underneath, saved values sync on load, menu paints rgb(18,5,38) dark — pixel-sampled), and the readability rule is restored for the degraded fallback.
+- **MED (fixed):** the bump script missed studio.js's internal versioned import (the thrice-bitten stale-TARGETS class) — added, plus curation.js's same pre-existing gap; `--check` now reports all 92 strings agreeing.
+- **LOW ×3 (fixed):** reopening the editor within 240ms could blank it (uncancelled hide timer); keyboard focus fell back to the white UA outline inside the editor/drawer (branded ring added); the editor now takes and returns focus like a proper dialog. Catalog covers also resolve correctly from /admin/ now (were 404ing).
+- **ACCEPTED (deliberate call, recorded):** if brand-select.js itself ever fails to load, the studio/season-reviews/curation status controls fall back to a native select rather than dying — resilience over purity in a degraded mode that a normal load can never hit.
+
+## PART D — THE STRESS PASS
+| Area | Evidence | Verdict |
+|---|---|---|
+| Full test tracks | Playwright **274** · rules **200** · functions **77** · triggers **78** · e2e **21** — all floors up, zero flakes this session | **PASS** |
+| Curator Studio cycle | Walked twice (catalog + outside anime), 36 checks incl. Firestore raw docs + publish pre-fill | **PASS** |
+| Concurrency: simultaneous DMs | mika + ren sent at the same instant — both letters landed on both sides | **PASS** |
+| Concurrency: racing group adds | two back-to-back adds, no settle wait — 3 participants, none lost | **PASS** |
+| Concurrency: vote race | two members hit Helpful simultaneously — count went exactly +2 (14→16), no lost update | **PASS** |
+| Letters / requests / decline-silent / groups / sealed images | the 5 e2e cycles green (incl. the real send-to-Blake) | **PASS** |
+| Member-side gold DM row (your smoke-#4 debt) | `tmp-b5-goldrow.png` + sampled gold pixels | **PASS** |
+| Responsive | one-band header at 375/1000/1201/1440 · zero clipped grid cards · zero horizontal overflow · B1 band verified live · drawer toggle ≤1200 | **PASS** |
+| Discover: gems rail + lens | rail at the bottom, 12 cards, standard proportions; "Reviewed" lens empties all rails uniformly (pre-existing, banked) | **PASS** |
+| Den line | catalog-first and Studio-tracked fallback both walked live | **PASS** |
+| Admin parity | zero visible native selects on studio AND curation (pixel-sampled menus) · zero live alert() calls · branded notices in reports/suggestions | **PASS** |
+| Constellation + key | wr-key pinned, zero gold ink in wrapped.css | **PASS** |
+
+**Ready for humans: YES.** Every area of the v2.0 surface re-proven this session, the panel's findings fixed and pinned, and the concurrency seams (the ones strangers will actually hit) held under deliberate races.
+
+## Green (the new floors)
+Playwright **274** (+8 g33 finale pins) · rules **200** (+2 studio widening) · functions **77** · triggers **78** · e2e **21**. Six adversarial panels across the run now; every confirmed finding fixed or formally accepted, 0 refuted this round.
+
+## YOUR SHORT SMOKE 2 (~8 minutes — only what's new; practice is running)
+Open `http://127.0.0.1:8765/?emu=1` · you = `blake@practice.test` / `practice123`.
+1. **The Studio:** admin FAB → **Curator Studio 工房** → search any anime you're actually watching → Track → set a status, write a line into a section or two, add a season note → Save → reload → Edit (everything's back) → **Publish this one →** lands on Add Anime with your notes already in the editor.
+2. **✨ mid-note:** with the editor open, hit the ✨ Ask in the sheet's head — the drawer slides over your notes.
+3. **The renames:** the nav says **The Den**; any reviewed card's sticker says **Reviewed**.
+4. **The Den line (copy approval):** The Den's masthead shows *"Blake is currently watching: …"* fed by what you just tracked. **Approve or reword the line.**
+5. **Hidden Gems:** Discover → scroll to the bottom → the HIDDEN GEMS rail, normal card shapes.
+6. **Curate Cards:** the status dropdowns are the site's purple ones now (no white OS menus anywhere).
+
+## THE CUTOVER (restated — nothing moves until your word)
+**v2.0.0.** Order: bump + CHANGELOG + widget bullets + commit → deploy **only** `functions:backfillProfiles` → run `await window.__rarBackfillProfiles()` in the console as you (I guide, we verify minted+existing==total) → **indexes → hosting → firestore rules → storage rules → functions** — verified at each step, rollback per step. After: the close-out checklist + a live prod smoke (one vote, one letter, one card pill, one studio save).
 
 ## One-liner reply
-The mega-run is built end to end — messaging, curator tools, discovery, the Constellation, the responsive overhaul, and a finale that cut ~15MB of images, sealed member emails behind owner-only rules with a backfill that protects every past and future signup, and staged your door line ("Blake is currently watching: Chainsaw Man") for your approval — floors at 266/198/77/78/21 with everything sandbox-staged, so the only things left in the world are your ~20-minute numbered smoke above, your word on that one line of copy, and your single go for the v2.0.0 cutover.
+Milestone F is verified and stress-passed end to end — the Curator Studio cycle works live from search to the publish button that pre-fills Add Anime, your four fixes and both renames are in with zero stragglers, the admin Inbox is retired, the panel caught and I fixed a genuine HIGH (a failed load could have let one Save destroy your private notes) plus seven more, every floor is up at 274/200/77/78/21 with the concurrency races held, and the whole thing is ready for humans — your ~8-minute smoke above, your word on the Den line copy, then the single go for the v2.0.0 cutover.

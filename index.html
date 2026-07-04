@@ -96,7 +96,7 @@
                then a hairline seam, then the View All / Random / Filter TOOLS. One
                button skin; the seam + a quiet recess on the tools do the separating. -->
           <nav class="nav-places" aria-label="Sections">
-            <button type="button" id="den-btn" class="inline-header-btn place-btn">Blake&rsquo;s Den <span class="jp-mini">隠れ家</span></button>
+            <button type="button" id="den-btn" class="inline-header-btn place-btn">The Den <span class="jp-mini">隠れ家</span></button>
             <button type="button" id="foryou-btn" class="inline-header-btn place-btn">For You <span class="jp-mini">君へ</span></button>
             <button type="button" id="discover-btn" class="inline-header-btn place-btn">Discover <span class="jp-mini">発見</span></button>
             <button type="button" id="community-btn" class="inline-header-btn place-btn">The Tavern <span class="jp-mini">酒場</span></button>
@@ -488,6 +488,13 @@
         <span class="folio-rule" aria-hidden="true"></span>
       </div>
 
+      <!-- Milestone F (Blake: "somewhere neat in Blakes den") — his live curator
+           status, one quiet masthead line under the folio. Filled progressively
+           by fillDenWatching (script.js) from animeStatus; textContent only;
+           purple, gold-free; absent when he's between shows. Copy staged for
+           his approval at smoke 2. -->
+      <p id="den-watching" class="den-watching" hidden></p>
+
       <!-- v1.8.4 gate 5 — AIRING NOW (home mount point #1): the slim "wider world"
            threshold band below the masthead. Outside-card-dominant (his 44 that happen
            to be airing auto-pin gold), clickable into the secondary modal; lazy IO-gated
@@ -505,13 +512,9 @@
       <!-- milestone C (item 9) — HIDDEN GEMS: highly-rated but under-watched titles
            (AniList score >= 75, popularity < 50k; 24h-cached flat query). Lazy
            IO-gated, same Discover rail vocabulary as the airing strip. -->
-      <section class="home-strip gems-strip" id="home-gems-block" aria-label="Hidden gems" hidden>
-        <h3 class="discover-block-head">HIDDEN GEMS <span class="jp-mini">隠れた名作</span></h3>
-        <div class="discover-subrow">
-          <p class="discover-block-sub">Loved by the few who found them &mdash; high scores, small crowds.</p>
-        </div>
-        <div class="discover-rail" id="home-gems"></div>
-      </section>
+      <!-- (Milestone F: the HIDDEN GEMS strip moved to the BOTTOM of Discover
+           per Blake — "they should be in discover at there own rail at the
+           bottom"; see #discover-gems-block.) -->
 
       <!-- v1.8.4 gate 6 — Top 10 + Latest Drop SIDE-BY-SIDE (Blake: "since there's so much
            empty room" — the centered carousel left big flanks). The spotlight cards center
@@ -634,6 +637,15 @@
       <h3 class="discover-block-head">POPULAR RIGHT NOW <span class="jp-mini">人気</span></h3>
       <div class="discover-subrow"><p class="discover-block-sub">What the world&rsquo;s watching right now.</p></div>
       <div class="discover-rail" id="discover-trending" aria-live="polite"></div>
+    </section>
+    <!-- Milestone F (Blake B3) — HIDDEN GEMS lives at the BOTTOM of Discover
+         now (off the homepage; standard discover-card proportions here fix
+         his "elongated" note for free). hidden-until-real still holds: the
+         block only unhides when real gems come back. -->
+    <section class="discover-block" id="discover-gems-block" aria-label="Hidden gems" hidden>
+      <h3 class="discover-block-head">HIDDEN GEMS <span class="jp-mini">隠れた名作</span></h3>
+      <div class="discover-subrow"><p class="discover-block-sub">Loved by the few who found them &mdash; high scores, small crowds.</p></div>
+      <div class="discover-rail" id="discover-gems" aria-live="polite"></div>
     </section>
   </div>
 </section>
@@ -820,11 +832,8 @@
         <span class="welcome-kicker">ようこそ<span class="welcome-kicker-en">WELCOME</span></span>
         <h2 class="welcome-wordmark">Real Anime Reviews</h2>
         <p class="welcome-tagline">A late-night anime den &mdash; one person's honest takes, ranked, reviewed, and watched in full.</p>
-        <!-- milestone E (Blake said YES, copy pending his approval at the final
-             smoke) — the door breathes with him: his live curator status from
-             animeStatus, filled progressively by fillDoorWatching (script.js).
-             textContent only; purple, gold-free; absent when he's between shows. -->
-        <p id="welcome-watching" class="welcome-watching" hidden></p>
+        <!-- (Milestone F: the "Blake is currently watching" line moved off the
+             door INTO the Den per Blake — see #den-watching under the folio.) -->
         <!-- (gate 20.5 item 1 — the door's Surprise-me removed per Blake; the
              nav's Random stays the one dice) -->
         <button type="button" id="welcome-enter" class="welcome-enter">

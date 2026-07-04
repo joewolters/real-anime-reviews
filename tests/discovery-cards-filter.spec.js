@@ -50,7 +50,8 @@ test.describe('v1.8.4 discovery cards + 3-way filter', () => {
     expect(info.title).toBe('Some Outside Show');
   });
 
-  test('upgrade path: a catalog id renders the reviewed card + "Reviewed by Blake" pin', async ({ page }) => {
+  // Milestone F: the pin says "Reviewed" — the gold IS his mark (Blake's rename)
+  test('upgrade path: a catalog id renders the reviewed card + the gold "Reviewed" pin', async ({ page }) => {
     await page.goto('/');
     const info = await page.evaluate(() => {
       // animeData is a classic-script global-lexical const (not window.animeData);
@@ -80,7 +81,8 @@ test.describe('v1.8.4 discovery cards + 3-way filter', () => {
     expect(info.cls).toContain('is-reviewed');       // the REAL reviewed card
     expect(info.cls).toContain('is-blake-pick');
     expect(info.hasPin).toBe(true);
-    expect(info.pinText).toContain('Reviewed by Blake');
+    expect(info.pinText.trim()).toMatch(/Reviewed$/);          // the renamed pin
+    expect(info.pinText).not.toContain('Reviewed by Blake');   // zero stragglers (Blake's C3)
     expect(info.notReviewed).toBe(false);            // not an outside card
     expect(info.cardTitle).toBe(info.catTitle);
   });

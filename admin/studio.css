@@ -1,0 +1,298 @@
+/* ============================================================================
+   admin/studio.css — THE CURATOR STUDIO (MEGA-RUN Milestone F)
+   Layers on suggestions.css (.admin-main/.admin-shell/.admin-header/the
+   :focus-visible ring/.suggestions-error-card inherited). Brand vocabulary:
+   purple-on-dark glass, 'Outfit'/'Montserrat', #bb86fc accent. NO native
+   white elements; gold NOWHERE (this is a tool, not a Blake surface).
+   ============================================================================ */
+
+.studio-intro {
+  margin: 0 0 20px; max-width: 68ch;
+  font-family: 'Outfit', 'Montserrat', sans-serif;
+  font-size: 0.9rem; line-height: 1.55;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+/* ---- Search --------------------------------------------------------------- */
+.studio-search-wrap {
+  position: relative; margin: 0 0 14px;
+}
+.studio-search-icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  font-size: 0.95rem; opacity: 0.6; pointer-events: none;
+}
+#studio-search {
+  width: 100%; box-sizing: border-box;
+  padding: 12px 40px 12px 40px; border-radius: 12px;
+  border: 1px solid rgba(187, 134, 252, 0.30);
+  background: rgba(15, 5, 28, 0.55); color: #efe7ff;
+  font-family: 'Outfit', 'Montserrat', sans-serif; font-size: 0.95rem;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+#studio-search::placeholder { color: rgba(255, 255, 255, 0.40); }
+#studio-search:focus { outline: none; border-color: rgba(187, 134, 252, 0.62); box-shadow: 0 0 14px rgba(187, 134, 252, 0.22); }
+.studio-search-clear {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border-radius: 50%; border: none;
+  background: rgba(187, 134, 252, 0.18); color: #efe7ff; cursor: pointer; font-size: 1rem; line-height: 1;
+}
+.studio-search-clear[hidden] { display: none; }
+
+/* ---- Results -------------------------------------------------------------- */
+.studio-results, .studio-tracking-list {
+  list-style: none; padding: 0; margin: 0 0 8px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.studio-result, .studio-track-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 12px;
+  border: 1px solid rgba(187, 134, 252, 0.18);
+  background: rgba(20, 8, 40, 0.5);
+}
+.studio-result-cover {
+  width: 40px; height: 56px; object-fit: cover; border-radius: 6px; flex: 0 0 auto;
+  background: rgba(187, 134, 252, 0.12);
+}
+.studio-result-nocover { display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+.studio-result-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.studio-result-title, .studio-track-title {
+  font-family: 'Outfit', sans-serif; font-size: 0.94rem; font-weight: 600; color: #efe7ff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.studio-track-title { flex: 1 1 auto; min-width: 0; }
+.studio-result-sub { font-size: 0.76rem; color: rgba(255, 255, 255, 0.5); }
+.studio-result-skel, .studio-result-empty, .studio-tracking-empty {
+  padding: 12px; color: rgba(255, 255, 255, 0.5); font-size: 0.86rem; font-style: italic;
+}
+.studio-tracking-empty[hidden] { display: none; }
+.studio-result-track, .studio-track-edit {
+  flex: 0 0 auto; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(187, 134, 252, 0.5); background: rgba(187, 134, 252, 0.16);
+  color: #efe7ff; font: 700 0.78rem 'Montserrat', sans-serif; letter-spacing: .03em;
+  transition: background .16s ease, border-color .16s ease;
+}
+.studio-result-track:hover, .studio-track-edit:hover { background: rgba(187, 134, 252, 0.28); border-color: rgba(187, 134, 252, 0.85); }
+
+.studio-tracking { margin-top: 28px; }
+.studio-section-head {
+  font-family: 'Montserrat', sans-serif; font-size: 1rem; letter-spacing: 0.06em;
+  color: #efe7ff; margin: 0 0 12px;
+}
+.studio-track-status {
+  flex: 0 0 auto; font: 700 0.68rem 'Montserrat', sans-serif; letter-spacing: .08em;
+  text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
+  background: rgba(187, 134, 252, 0.14); color: #c9a4ff; border: 1px solid rgba(187, 134, 252, 0.3);
+}
+.studio-track-notes { flex: 0 0 auto; color: #b388ff; font-size: 0.9rem; }
+
+/* ---- The EDITOR sheet ----------------------------------------------------- */
+.studio-editor { position: fixed; inset: 0; z-index: 3000; }
+.studio-editor[hidden] { display: none; }
+.studio-editor-scrim {
+  position: absolute; inset: 0; background: rgba(4, 0, 14, 0.66);
+  opacity: 0; transition: opacity .24s ease;
+}
+.studio-editor.is-open .studio-editor-scrim { opacity: 1; }
+.studio-editor-panel {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: min(680px, 96vw); display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(26, 10, 48, 0.99), rgba(12, 4, 26, 0.99));
+  border-left: 1px solid rgba(187, 134, 252, 0.3);
+  box-shadow: -14px 0 44px rgba(0, 0, 0, 0.55);
+  transform: translateX(102%); transition: transform .24s ease;
+}
+.studio-editor.is-open .studio-editor-panel { transform: translateX(0); }
+.studio-ed-head {
+  display: flex; align-items: center; gap: 14px; padding: 18px 20px;
+  border-bottom: 1px solid rgba(187, 134, 252, 0.2); flex: 0 0 auto;
+}
+.studio-ed-cover { width: 44px; height: 62px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+.studio-ed-cover[hidden] { display: none; }
+.studio-ed-headtext { flex: 1 1 auto; min-width: 0; }
+.studio-ed-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 1px; color: #fff; margin: 0; }
+.studio-ed-sub { font-size: 0.78rem; color: rgba(255, 255, 255, 0.5); margin: 2px 0 0; }
+.studio-ed-x {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(187, 134, 252, 0.16); color: #efe7ff; font-size: 1.2rem; line-height: 1;
+}
+.studio-ed-ask { flex: 0 0 auto; align-self: center; }
+.studio-ed-ask:disabled { opacity: 0.45; cursor: default; }
+.studio-ed-body { flex: 1 1 auto; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 22px; }
+.studio-ed-field { display: flex; flex-direction: column; gap: 8px; }
+.studio-ed-label { font: 700 0.82rem 'Montserrat', sans-serif; letter-spacing: 0.06em; color: #d9c9ff; text-transform: uppercase; }
+.studio-ed-hint { margin: 0; font-size: 0.78rem; color: rgba(255, 255, 255, 0.5); line-height: 1.45; }
+.studio-quicknote, .studio-season-body, .studio-season-label {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid rgba(187, 134, 252, 0.28); background: rgba(15, 5, 28, 0.55);
+  color: #efe7ff; font-family: 'Outfit', sans-serif; font-size: 0.9rem; resize: vertical;
+}
+.studio-quicknote:focus, .studio-season-body:focus, .studio-season-label:focus {
+  outline: none; border-color: rgba(187, 134, 252, 0.62); box-shadow: 0 0 12px rgba(187, 134, 252, 0.2);
+}
+.studio-seasons { display: flex; flex-direction: column; gap: 10px; }
+.studio-season-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: start; }
+.studio-season-label { grid-column: 1; }
+.studio-season-body { grid-column: 1 / -1; }
+.studio-season-x {
+  grid-column: 2; grid-row: 1; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(187, 134, 252, 0.3); background: rgba(187, 134, 252, 0.12); color: #efe7ff; font-size: 1rem;
+}
+.studio-ghost-btn {
+  align-self: flex-start; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px dashed rgba(187, 134, 252, 0.45); background: transparent; color: #c9a4ff;
+  font: 600 0.8rem 'Outfit', sans-serif;
+}
+.studio-ghost-btn:hover { border-style: solid; background: rgba(187, 134, 252, 0.12); }
+.studio-status-fallback {
+  padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(187, 134, 252, 0.28);
+  background: rgba(15, 5, 28, 0.7); color: #efe7ff; font-family: 'Outfit', sans-serif;
+}
+
+.studio-ed-foot {
+  display: flex; align-items: center; gap: 12px; padding: 14px 20px; flex: 0 0 auto;
+  border-top: 1px solid rgba(187, 134, 252, 0.2);
+}
+.studio-ed-savestatus { flex: 1 1 auto; font-size: 0.82rem; min-height: 1.2em; }
+.studio-ed-savestatus.is-saved { color: #a8efbe; }
+.studio-ed-savestatus.is-error { color: #ffbdbd; }
+.studio-ed-actions { display: flex; gap: 10px; flex: 0 0 auto; }
+.studio-publish-btn, .studio-save-btn {
+  padding: 11px 22px; border-radius: 999px; cursor: pointer;
+  font: 700 0.84rem 'Montserrat', sans-serif; letter-spacing: .03em; border: 1px solid transparent;
+}
+.studio-publish-btn { background: transparent; border-color: rgba(187, 134, 252, 0.55); color: #c9a4ff; }
+.studio-publish-btn:hover { background: rgba(187, 134, 252, 0.14); }
+.studio-publish-btn[hidden] { display: none; }
+.studio-publish-btn:disabled { opacity: 0.5; cursor: default; }
+.studio-save-btn { background: linear-gradient(180deg, rgba(187, 134, 252, 0.9), rgba(140, 82, 222, 0.9)); color: #12041f; }
+.studio-save-btn:hover { filter: brightness(1.08); }
+.studio-save-btn:disabled { opacity: 0.6; cursor: default; }
+
+@media (max-width: 640px) {
+  .studio-editor-panel { width: 100vw; }
+  .studio-ed-actions { flex: 1 1 auto; }
+  .studio-publish-btn, .studio-save-btn { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-editor-scrim, .studio-editor-panel { transition: none !important; }
+}
+
+/* Panel fix (LOW): the editor sheet + ✨ drawer are SIBLINGS of #admin-main,
+   so suggestions.css's `.admin-main *:focus-visible` ring never reaches them —
+   keyboard focus fell back to the UA's white outline. Same ring, same look. */
+.studio-editor *:focus-visible,
+.chat-drawer *:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(187, 134, 252, 0.95),
+    0 0 0 4px rgba(187, 134, 252, 0.25);
+}
+
+/* ============================================================================
+   ✨ ASK drawer (ported from edit.css — the established admin-CSS-port
+   precedent; same .chat-* classes as the shared chat-drawer.js contract).
+   The summon button is NOT ported: the studio's ✨ Ask lives in the header
+   toolbar as .inline-header-btn by design. z-index 9500 keeps the drawer
+   above .studio-editor (3000) so Blake can ask mid-note.
+   ============================================================================ */
+.chat-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(420px, 90vw);
+  z-index: 9500;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(28, 12, 52, 0.98), rgba(14, 4, 28, 0.99));
+  border-left: 1px solid rgba(187, 134, 252, 0.32);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.45);
+  transform: translateX(100%);
+  transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chat-drawer.open { transform: translateX(0); }
+.chat-drawer[hidden] { display: none; }
+
+.chat-drawer-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.55), rgba(70, 0, 110, 0.5));
+  border-bottom: 1px solid rgba(187, 134, 252, 0.3);
+}
+.chat-drawer-title { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.12em; font-size: 1.3rem; color: #fff; }
+.chat-drawer-actions { display: flex; gap: 8px; align-items: center; }
+.chat-header-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #efe7ff;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 999px; cursor: pointer;
+  transition: background 0.15s ease;
+}
+.chat-header-btn:hover { background: rgba(255, 255, 255, 0.18); }
+.chat-close { padding: 5px 9px; font-size: 0.85rem; }
+
+.chat-thread { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.chat-msg { display: flex; }
+.chat-msg--user { justify-content: flex-end; }
+.chat-msg--assistant { justify-content: flex-start; }
+.chat-bubble {
+  max-width: 85%; padding: 9px 13px; border-radius: 14px;
+  font-family: 'Outfit', sans-serif; font-size: 0.88rem; line-height: 1.45;
+  color: #fff; word-break: break-word;
+}
+.chat-msg--user .chat-bubble { background: linear-gradient(180deg, #a45bff, #7c3bdc); border-bottom-right-radius: 4px; }
+.chat-msg--assistant .chat-bubble { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(187, 134, 252, 0.2); border-bottom-left-radius: 4px; }
+.chat-bubble--error { background: rgba(255, 90, 90, 0.12); border: 1px solid rgba(255, 120, 120, 0.4); color: #ffd2d2; }
+.chat-retry {
+  margin-left: 8px; appearance: none; border: 1px solid rgba(255, 150, 150, 0.5);
+  background: transparent; color: #ffd2d2;
+  font-family: 'Montserrat', sans-serif; font-size: 0.66rem; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; cursor: pointer;
+}
+
+.chat-empty { padding: 0 16px 16px; }
+.chat-empty[hidden] { display: none; }
+.chat-empty-hint { font-family: 'Outfit', sans-serif; font-size: 0.82rem; color: #c9bfe0; margin: 0 0 12px; }
+.chat-quickstarts { display: flex; flex-direction: column; gap: 8px; }
+.chat-quickstart {
+  text-align: left; appearance: none;
+  border: 1px solid rgba(187, 134, 252, 0.32); background: rgba(15, 5, 28, 0.5);
+  color: #efe7ff; font-family: 'Outfit', sans-serif; font-size: 0.84rem;
+  padding: 9px 12px; border-radius: 10px; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.chat-quickstart:hover { background: rgba(40, 18, 70, 0.6); border-color: rgba(187, 134, 252, 0.6); }
+
+.chat-input-row {
+  display: flex; gap: 8px; align-items: flex-end;
+  padding: 12px 14px; border-top: 1px solid rgba(187, 134, 252, 0.22); background: rgba(10, 3, 20, 0.6);
+}
+.chat-input {
+  flex: 1; resize: none; max-height: 120px;
+  padding: 9px 12px; border-radius: 10px;
+  border: 1px solid rgba(187, 134, 252, 0.32); background: rgba(15, 5, 28, 0.6); color: #fff;
+  font-family: 'Outfit', sans-serif; font-size: 0.9rem; line-height: 1.4;
+}
+.chat-input:focus { outline: none; border-color: rgba(187, 134, 252, 0.7); box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.18); }
+.chat-send-btn {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px;
+  border: 1px solid rgba(187, 134, 252, 0.5); background: linear-gradient(180deg, #a45bff, #7c3bdc);
+  color: #fff; font-size: 1rem; cursor: pointer; transition: filter 0.15s ease;
+}
+.chat-send-btn:hover { filter: brightness(1.15); }
+
+.chat-dots { display: inline-flex; gap: 4px; align-items: center; }
+.chat-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(187, 134, 252, 0.85); animation: chat-dot 1s infinite ease-in-out; }
+.chat-dots i:nth-child(2) { animation-delay: 0.15s; }
+.chat-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes chat-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-drawer { transition: none; }
+  .chat-quickstart, .chat-send-btn, .chat-header-btn { transition: none; }
+  .chat-dots i { animation: none; opacity: 0.7; }
+}

@@ -114,8 +114,37 @@
     function addSection(title, body, focusCustom) {
       sectionsEl.insertAdjacentHTML('beforeend', sectionBlockHtml(title, body));
       const block = sectionsEl.lastElementChild;
+      brandifyTitleSelect(block);
       if (focusCustom) { const ci = block.querySelector('.se-section-custom'); if (ci) ci.focus(); }
       return block;
+    }
+
+    // gate 31 — Blake's no-native-selects rule reaches the editors: when
+    // brand-select.js is on the page (window.RarBrandSelect), the title
+    // <select> hides and a branded button+listbox drives it instead. The
+    // native select STAYS in the DOM as the value store — currentTitlesLower()
+    // / value() / the delegated change handler all keep reading it, so the
+    // .load/.value contract is untouched. A page that forgot the script tag
+    // simply keeps the native select (resilience over purity).
+    function brandifyTitleSelect(block) {
+      if (!window.RarBrandSelect) return;
+      const sel = block.querySelector('.se-section-select');
+      if (!sel || sel.hidden) return;
+      const host = document.createElement('span');
+      host.className = 'se-title-dd';
+      sel.after(host);
+      const opts = KNOWN.map(function (k) { return { value: k[0], label: k[0] + ' ' + k[1] }; });
+      opts.push({ value: '__custom', label: 'Custom…' });
+      window.RarBrandSelect({
+        host: host, label: 'Section title', options: opts, value: sel.value,
+        onChange: function (v) {
+          sel.value = v;
+          // Fire the same bubbling change the native select would have — the
+          // container's delegated handler owns the custom-input toggle + emit.
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+      });
+      sel.hidden = true;   // still the value store; just no longer the face
     }
 
     // Wrap the selection in a body textarea (B/I/link).

@@ -129,6 +129,25 @@ function buildRow(entry) {
   select.addEventListener('change', () => saveStatus(li, entry.slug, select.value));
   statusField.appendChild(statusLabel);
   statusField.appendChild(select);
+  // Milestone F (Part A.7 parity — the panel caught curation was the one admin
+  // page the lane missed): the native select becomes the HIDDEN value store;
+  // RarBrandSelect paints the visible themed control (the season-reviews
+  // pattern). style.display, not [hidden] — the author-display trap has three
+  // scalps. If brand-select.js ever fails to load, the native select stays
+  // visible as the resilience fallback (same two-site tradeoff as the studio).
+  if (window.RarBrandSelect) {
+    select.style.display = 'none';
+    select.setAttribute('aria-hidden', 'true');
+    select.tabIndex = -1;
+    const ddHost = document.createElement('span');
+    ddHost.className = 'curation-status-host';
+    statusField.appendChild(ddHost);
+    li._statusCtrl = window.RarBrandSelect({
+      host: ddHost, label: 'Status for ' + entry.title, options: STATUS_OPTIONS,
+      value: select.value,
+      onChange: (v) => { select.value = v; saveStatus(li, entry.slug, v); },
+    });
+  }
 
   // Private note textarea
   const noteField = document.createElement('label');
@@ -189,6 +208,7 @@ async function loadState() {
     const value = (d.data() || {}).status || '';
     const sel = li.querySelector('.curation-status-select');
     if (sel && STATUS_VALUES.has(value)) sel.value = value;
+    if (li._statusCtrl && STATUS_VALUES.has(value)) li._statusCtrl.value = value;
   });
 
   notesSnap.forEach((d) => {

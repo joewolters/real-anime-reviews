@@ -365,6 +365,38 @@ test('curator: curatorNotes are PRIVATE — admin-only read AND write', async ()
   await assertFails(setDoc(doc(as('alice'), 'curatorNotes/frieren'), { note: 'hi', updatedAt: serverTimestamp() }));
 });
 
+// ---------------- MILESTONE F: the Curator Studio ----------------
+test('studio: an al:-keyed status carries its title; members still can\'t write; titles are capped', async () => {
+  // tracking ANY anime — the al:<id> key + the title the Den line resolves
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'animeStatus/al:12345'),
+    { status: 'watching', title: 'Some New Season', updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('alice'), 'animeStatus/al:12345'),
+    { status: 'watching', title: 'Hostile', updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as(ADMIN), 'animeStatus/al:99'),
+    { status: 'watching', title: 'x'.repeat(121), updatedAt: serverTimestamp() }));   // the 120 cap
+  // the tracked doc stays world-readable like every status (title is not a secret)
+  await assertSucceeds(getDoc(doc(anon(), 'animeStatus/al:12345')));
+});
+test('studio: the richer notes shape saves for the admin ONLY — and stays private', async () => {
+  const rich = {
+    note: 'quick take',
+    notesMd: '## Animation\nGorgeous.\n\n## Overall\nWatching weekly.',
+    seasons: { 'al:12345': 'S1 — strong start.' },
+    title: 'Some New Season',
+    updatedAt: serverTimestamp(),
+  };
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'curatorNotes/al:12345'), rich));
+  await assertFails(setDoc(doc(as('alice'), 'curatorNotes/al:12345'), rich));
+  await assertFails(getDoc(doc(as('alice'), 'curatorNotes/al:12345')));            // private, always
+  await assertFails(getDoc(doc(anon(), 'curatorNotes/al:12345')));
+  // unknown fields still bounce (hasOnly holds)
+  await assertFails(setDoc(doc(as(ADMIN), 'curatorNotes/al:777'),
+    { notesMd: 'x', smuggled: true, updatedAt: serverTimestamp() }));
+  // the legacy Milestone-B shape keeps working untouched
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'curatorNotes/one-punch-man'),
+    { note: 'still the quick note', updatedAt: serverTimestamp() }));
+});
+
 // ---------------- GATE 4: comment pin (admin) + thread lock ----------------
 test('comment: HOSTILE self-pin at create is DENIED', async () => {
   await assertFails(setDoc(doc(as('alice'), 'comments/demon-slayer/items/cp'),
