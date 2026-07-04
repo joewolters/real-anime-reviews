@@ -1379,6 +1379,13 @@ function initSavedControls(uid) {
 // =============================================================================
 let unsubCollections = null;
 let _colWired = false;
+// CUTOVER-EVE fix 2 — the shelf-card ⭐ control's render state: a live mirror
+// of profiles/{uid}.featuredShelf. NEVER written into profState by the
+// listener (explicit-pick-only — the A8 discipline); only the ⭐ click and the
+// Studio dropdown change the pick.
+let colFeaturedId = '';
+let colsLast = [];
+let colsLoaded = false;   // first collections snapshot landed (panel LOW: no empty-state flash)
 
 // cover sources are pinned to our own assets or https (hubSafeCover discipline
 // — a collection item is a render sink like any other cover).
@@ -1536,10 +1543,19 @@ function renderCollections(uid, cols) {
     const card = document.createElement('section');
     card.className = 'col-card';
     const isPub = col.public === true;
+    // CUTOVER-EVE fix 2 — "⭐ Feature this shelf" lives ON the card (the Studio
+    // dropdown alone was undiscoverable — Blake never found it). One featured
+    // at a time falls out of the model: featuredShelf is a single field.
+    const isFeat = isPub && col.id === colFeaturedId;
+    const featTitle = !isPub ? 'Private shelves can’t be featured — make it public first.'
+      : (isFeat ? 'This shelf leads your public profile. Click to un-feature.'
+                : 'Feature this shelf — it leads your public profile.');
     card.innerHTML = `<div class="col-card-head">
         <span class="col-card-name">${esc(col.name || '(unnamed)')}</span>
         <button type="button" class="col-vis ${isPub ? 'is-public' : ''}" title="${isPub ? 'Public — on your profile. Click to make private.' : 'Private — only you. Click to publish.'}"
           role="switch" aria-checked="${isPub}">${isPub ? '🌐 Public' : '🔒 Private'}</button>
+        <button type="button" class="col-feat ${isFeat ? 'is-on' : ''} ${!isPub ? 'is-off' : ''}" title="${esc(featTitle)}"
+          ${isPub ? `aria-pressed="${isFeat}"` : 'aria-disabled="true"'}>${isFeat ? '★ Featured' : '⭐ Feature this shelf'}</button>
         <span class="col-count">${(col.items || []).length} title${(col.items || []).length === 1 ? '' : 's'}</span>
         <span class="col-card-tools">
           <button type="button" class="linky col-rename">Rename</button>
@@ -1582,6 +1598,28 @@ function renderCollections(uid, cols) {
     });
     if (!(col.items || []).length) itemsEl.innerHTML = '<span class="muted col-items-empty">empty shelf — add something you love</span>';
     card.querySelector('.col-add').addEventListener('click', () => openColAdder(uid, col));
+    // CUTOVER-EVE fix 2 — feature/un-feature from the card. The write is the
+    // SAME field the Studio dropdown saves (profiles.featuredShelf, owner-only,
+    // shape-pinned in rules); the profiles listener repaints the ★ states.
+    card.querySelector('.col-feat').addEventListener('click', async (e) => {
+      if (!isPub) { showNotice('Private shelves can’t be featured — make it public first.'); return; }
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        // panel LOW: decide from the CURRENT featured id, not the render
+        // closure — a pick changed without a repaint (mid-edit guard, another
+        // device) would otherwise un-feature the wrong shelf.
+        const next = (col.id === colFeaturedId) ? null : col.id;
+        await setDoc(doc(db, 'profiles', uid), { featuredShelf: next }, { merge: true });
+        // an EXPLICIT pick — the one sanctioned profState write outside the
+        // Studio (the A8 never-coerce rule guards fetches, not user acts)
+        profState.featuredShelf = next || '';
+        loadFeaturedShelfChoices(uid);   // the Studio dropdown follows
+      } catch (err2) {
+        console.error('feature shelf failed', err2);
+        showNotice('Could not feature the shelf: ' + friendlyError(err2, { kind: 'save' }));
+      } finally { btn.disabled = false; }
+    });
     card.querySelector('.col-vis').addEventListener('click', async () => {
       try {
         if (!isPub) {
@@ -1778,6 +1816,22 @@ function ensureCollections() {
     nameEl?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('col-create')?.click(); });
   }
   if (unsubCollections) return;   // already live
+  // CUTOVER-EVE fix 2 — the card ★ states follow profiles.featuredShelf LIVE
+  // (a Studio save and a card ⭐ both land here). Render state only — profState
+  // stays explicit-pick-only.
+  onSnapshot(doc(db, 'profiles', u.uid), (snap) => {
+    const v = (snap.data() || {}).featuredShelf;
+    const next = typeof v === 'string' ? v : '';
+    if (next === colFeaturedId) return;
+    colFeaturedId = next;
+    // panel LOW: before the first collections snapshot, colsLast=[] would
+    // flash the empty state at a user who HAS shelves — the id is set, the
+    // collections snapshot paints it moments later.
+    if (!colsLoaded) return;
+    // same mid-edit guard as the collections snapshot — never eat an open input
+    if (document.querySelector('.col-rename-input, .col-desc-input')) return;
+    renderCollections(u.uid, colsLast);
+  }, (err) => console.error('featured-shelf watch failed:', err));
   // LAST CALL A8 — the saved-shelves group rides its own subscription; each
   // ref re-hydrates through the SOURCE's public==true rules, so a shelf gone
   // private/deleted renders honestly instead of silently vanishing.
@@ -1793,13 +1847,15 @@ function ensureCollections() {
   unsubCollections = onSnapshot(
     query(collection(db, 'users', u.uid, 'collections'), orderBy('updatedAt', 'desc')),
     (snap) => {
+      const cols = [];
+      snap.forEach((d) => { const v = d.data() || {}; cols.push({ id: d.id, name: v.name, public: v.public, description: typeof v.description === 'string' ? v.description : '', items: Array.isArray(v.items) ? v.items : [] }); });
+      colsLast = cols;   // the featured listener repaints from this cache
+      colsLoaded = true;
       // adversarial MED (the comment-list rebuild class): a snapshot landing
       // mid-RENAME (or mid-description, gate 20) would innerHTML the open
       // input away and eat the typing. Defer — the commit's own write triggers
       // the next snapshot and repaints everything anyway.
       if (document.querySelector('.col-rename-input, .col-desc-input')) return;
-      const cols = [];
-      snap.forEach((d) => { const v = d.data() || {}; cols.push({ id: d.id, name: v.name, public: v.public, description: typeof v.description === 'string' ? v.description : '', items: Array.isArray(v.items) ? v.items : [] }); });
       renderCollections(u.uid, cols);
     },
     (err) => console.error('Collections failed:', err)

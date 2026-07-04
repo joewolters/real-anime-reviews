@@ -136,6 +136,107 @@ test.describe('mega-batch Part B — live-in-box composer', () => {
     expect(r.model).toContain('**rich**');
   });
 
+  // CUTOVER-EVE fix 1 — the spoiler trap ("it stays as a box forever"): the
+  // toolbar-👁 path inserted the pill with NO ZWS landing pad, so the caret sat
+  // at a bare inline boundary and every keystroke extended the pill. These two
+  // pins drive REAL keystrokes (trusted events — synthetic dispatches don't
+  // exercise contentEditable boundary behavior, which IS the bug).
+  test('REAL KEYS: toolbar 👁 on a selection — typing lands OUTSIDE the pill (the spoiler-trap escape)', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForFunction(() => window.RarLive && typeof window.RarLive.mount === 'function');
+    await page.evaluate(() => {
+      const host = document.createElement('div'); host.id = 'tmp-sp-host';
+      host.style.cssText = 'position:fixed;top:10px;left:10px;width:420px;background:#141225;z-index:99999;padding:10px;';
+      document.body.appendChild(host);
+      const ta = document.createElement('textarea'); host.appendChild(ta);
+      window.RarLive.mount(ta, { mode: 'inline', submit: 'mod' });
+      window.__spTa = ta;
+    });
+    const editor = page.locator('#tmp-sp-host .rar-live');
+    await editor.click();
+    await page.keyboard.type('secret');
+    await page.keyboard.press('Shift+Home');                          // a real selection
+    await page.locator('#tmp-sp-host .ct-btn[data-md="spoiler"]').click();
+    await expect(page.locator('#tmp-sp-host .rar-live-spoiler')).toHaveText('secret');
+    await page.keyboard.type(' after');                                // MUST land outside
+    const model = await page.evaluate(() => window.__spTa.value);
+    expect(model).toBe('||secret|| after');                            // escaped — not ||secret after||
+    await page.evaluate(() => document.getElementById('tmp-sp-host').remove());
+  });
+
+  test('REAL KEYS: 👁 with the caret INSIDE a pill = leave it (toggle-off escape, never a nested pill)', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForFunction(() => window.RarLive && typeof window.RarLive.mount === 'function');
+    await page.evaluate(() => {
+      const host = document.createElement('div'); host.id = 'tmp-sp2-host';
+      host.style.cssText = 'position:fixed;top:10px;left:10px;width:420px;background:#141225;z-index:99999;padding:10px;';
+      document.body.appendChild(host);
+      const ta = document.createElement('textarea'); host.appendChild(ta);
+      window.RarLive.mount(ta, { mode: 'inline', submit: 'mod' });
+      ta.value = 'before ||hidden|| tail';
+      ta.dispatchEvent(new Event('input', { bubbles: true }));         // render the pill
+      window.__sp2Ta = ta;
+    });
+    await page.locator('#tmp-sp2-host .rar-live-spoiler').click();     // caret INSIDE the pill
+    await page.locator('#tmp-sp2-host .ct-btn[data-md="spoiler"]').click();  // 👁 again = leave
+    await page.keyboard.type('X');
+    const model = await page.evaluate(() => window.__sp2Ta.value);
+    expect(model).toBe('before ||hidden||X tail');                     // X escaped the pill
+    expect(await page.locator('#tmp-sp2-host .rar-live-spoiler').count()).toBe(1);  // no nesting
+    await page.evaluate(() => document.getElementById('tmp-sp2-host').remove());
+  });
+
+  // panel HIGH (CUTOVER-EVE): a toolbar-wrapped selection carrying newlines or
+  // pipes used to serialize into ||…|| markdown the reader-side regex can
+  // NEVER re-hide — the spoiler LEAKED as plain text while the editor showed
+  // an intact pill. The wrap now joins lines and drops pipes, so the model
+  // always round-trips the same grammar the typing path produces.
+  test('REAL KEYS: 👁 on multi-line and pipe-carrying selections yields reader-hideable markdown (no spoiler leak)', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForFunction(() => window.RarLive && typeof window.RarLive.mount === 'function');
+    const READER_RX = /\|\|([^|\n]+)\|\|/g;   // markdown.js:48 — what readers can actually hide
+
+    // A — multi-line selection
+    await page.evaluate(() => {
+      const host = document.createElement('div'); host.id = 'tmp-sp3-host';
+      host.style.cssText = 'position:fixed;top:10px;left:10px;width:420px;background:#141225;z-index:99999;padding:10px;';
+      document.body.appendChild(host);
+      const ta = document.createElement('textarea'); host.appendChild(ta);
+      window.RarLive.mount(ta, { mode: 'inline', submit: 'mod' });
+      ta.value = 'the villain wins\neveryone dies';
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      window.__sp3Ta = ta;
+    });
+    await page.locator('#tmp-sp3-host .rar-live').click();
+    await page.keyboard.press('Control+a');
+    await page.locator('#tmp-sp3-host .ct-btn[data-md="spoiler"]').click();
+    let model = await page.evaluate(() => window.__sp3Ta.value);
+    let hidden = Array.from(model.matchAll(READER_RX)).map((m) => m[1]).join(' ');
+    expect(hidden).toContain('the villain wins everyone dies');   // ALL of it hides
+    expect(model.replace(READER_RX, '')).not.toContain('villain');   // nothing leaks outside pills
+    await page.evaluate(() => document.getElementById('tmp-sp3-host').remove());
+
+    // B — selection containing literal pipes
+    await page.evaluate(() => {
+      const host = document.createElement('div'); host.id = 'tmp-sp4-host';
+      host.style.cssText = 'position:fixed;top:10px;left:10px;width:420px;background:#141225;z-index:99999;padding:10px;';
+      document.body.appendChild(host);
+      const ta = document.createElement('textarea'); host.appendChild(ta);
+      window.RarLive.mount(ta, { mode: 'inline', submit: 'mod' });
+      window.__sp4Ta = ta;
+    });
+    const ed4 = page.locator('#tmp-sp4-host .rar-live');
+    await ed4.click();
+    await page.keyboard.type('rating | he dies');
+    await page.keyboard.press('Control+a');
+    await page.locator('#tmp-sp4-host .ct-btn[data-md="spoiler"]').click();
+    model = await page.evaluate(() => window.__sp4Ta.value);
+    hidden = Array.from(model.matchAll(READER_RX)).map((m) => m[1]).join(' ');
+    expect(hidden).toContain('he dies');                            // the payload hides
+    expect(model.replace(READER_RX, '').trim()).toBe('');           // no leaked tail
+    await page.evaluate(() => document.getElementById('tmp-sp4-host').remove());
+  });
+
   test('the post-success clear pattern + readOnly mirror still work (zero composer changes)', async ({ page }) => {
     await page.goto('/');
     await page.waitForFunction(() => window.RarLive && typeof window.RarLive.mount === 'function');

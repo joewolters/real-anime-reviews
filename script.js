@@ -5810,6 +5810,18 @@ function openInlineCommentEditor(editBtn, itemRef) {
         const shelves = [];
         colSnap.forEach((d) => shelves.push(Object.assign({ id: d.id }, d.data() || {})));
         const featId = (prof && typeof prof.featuredShelf === 'string') ? prof.featuredShelf : '';
+        // panel MED (CUTOVER-EVE): the featured pick can sit OUTSIDE the 8
+        // freshest (limit(8) above) — fetch it directly so the owner's pick
+        // always leads. public==true is re-checked (rules enforce it anyway);
+        // a private/deleted pointer stays an honest no-op (freshest leads).
+        if (featId && /^[A-Za-z0-9_-]{1,40}$/.test(featId) && !shelves.some((s) => s.id === featId)) {
+          try {
+            const fSnap = await getDoc(doc(db, 'users', uid, 'collections', featId));
+            if (fSnap.exists() && (fSnap.data() || {}).public === true) {
+              shelves.unshift(Object.assign({ id: fSnap.id }, fSnap.data() || {}));
+            }
+          } catch (_) {}
+        }
         if (featId) shelves.sort((a, b) => (a.id === featId ? -1 : 0) - (b.id === featId ? -1 : 0));
         const shelfViewer = auth.currentUser;
         const blocks = shelves.map((c, i) => {

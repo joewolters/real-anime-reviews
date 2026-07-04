@@ -181,6 +181,16 @@
     return lines.join('\n').replace(/\n$/, '');
   }
 
+  // a ZWS landing pad directly after a node — typing at a bare inline boundary
+  // extends the previous element (the spoiler-trap class: the caret can never
+  // leave the pill); the pad gives the caret a plain text node to land in,
+  // exactly like transformTextNode's completion-path pad. Serialize strips ZWS.
+  function padAfter(node) {
+    const next = node.nextSibling;
+    if (next && next.nodeType === 3 && next.data.charAt(0) === ZWS) return;
+    node.parentNode.insertBefore(document.createTextNode(ZWS), next);
+  }
+
   // place the caret immediately after a node (with the ZWS pad if present)
   function caretAfter(node) {
     const sel = root.getSelection && root.getSelection();
@@ -335,11 +345,38 @@
       // URLs auto-link at render, and hand-typed [text](url) still completes)
       else if (kind === 'spoiler') {
         const sel = root.getSelection && root.getSelection();
-        const selected = sel && sel.rangeCount ? sel.toString() : '';
-        if (selected && editor.contains(sel.anchorNode)) {
-          const pill = spoilerPill(selected);
-          const r = sel.getRangeAt(0);
-          r.deleteContents(); r.insertNode(pill); caretAfter(pill);
+        const anchor = sel && sel.rangeCount ? sel.anchorNode : null;
+        const anchorEl = anchor && (anchor.nodeType === 3 ? anchor.parentNode : anchor);
+        const inPill = anchorEl && anchorEl.closest && anchorEl.closest('.rar-live-spoiler');
+        if (inPill && editor.contains(inPill) && sel.isCollapsed) {
+          // 👁 with the caret INSIDE a pill = leave it (the toggle-off escape):
+          // land on the pad just past the pill — never nest a pill in a pill.
+          padAfter(inPill); caretAfter(inPill);
+        } else if (anchor && !sel.isCollapsed && editor.contains(anchor)) {
+          // panel HIGH: the wrapped text must round-trip the ||…|| grammar
+          // exactly like the typing path ([^|\n]+) — a raw selection can carry
+          // newlines/pipes that serialize into markdown the reader-side regex
+          // can NEVER re-hide (a spoiler LEAK while the editor shows an intact
+          // pill). Join lines with spaces; drop pipes; skip if nothing's left.
+          const txt = sel.toString().replace(/\|/g, '').replace(/\s*\n\s*/g, ' ').trim();
+          if (txt) {
+            const r = sel.getRangeAt(0);
+            r.deleteContents();
+            // panel MED: a drag that PARTLY covered an existing pill leaves the
+            // range inside its remnant (a pill nested in a pill at insert) and
+            // can leave an empty invisible husk — the trap, re-armed. Step the
+            // insertion point out of any remnant, then sweep empty husks.
+            let sc = r.startContainer;
+            sc = sc && sc.nodeType === 3 ? sc.parentNode : sc;
+            const remnant = sc && sc.closest && sc.closest('.rar-live-spoiler');
+            if (remnant) { r.setStartAfter(remnant); r.collapse(true); }
+            editor.querySelectorAll('.rar-live-spoiler').forEach((n) => {
+              if (!n.textContent.split(ZWS).join('')) n.remove();
+            });
+            const pill = spoilerPill(txt);
+            r.insertNode(pill);
+            padAfter(pill); caretAfter(pill);
+          }
         } else insertTextAtCaret('||spoiler||');
       }
       syncModel();

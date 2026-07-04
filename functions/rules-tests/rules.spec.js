@@ -941,6 +941,17 @@ test('profiles: featuredShelf accepts an owner-set shelf id (or null); junk shap
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), prof({ featuredShelf: 'x'.repeat(41) })));
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), prof({ featuredShelf: 'bad id!' })));
 });
+// CUTOVER-EVE fix 2 — the shelf-card ⭐ control writes EXACTLY this shape: a
+// merge touching ONLY featuredShelf. Pin it both ways: it updates an existing
+// profile, and it can never mint an identityless doc (post-backfill every
+// account has one; pre-backfill the client surfaces friendlyError honestly).
+test('profiles: the card ⭐ write — merge-only-featuredShelf updates an EXISTING doc; identityless create + foreign writes DENIED', async () => {
+  await seed((db) => setDoc(doc(db, 'profiles/carol'), { displayName: 'Carol', joinedAt: Timestamp.now() }));
+  await assertSucceeds(setDoc(doc(as('carol'), 'profiles/carol'), { featuredShelf: 'shelfA1' }, { merge: true }));
+  await assertSucceeds(setDoc(doc(as('carol'), 'profiles/carol'), { featuredShelf: null }, { merge: true }));   // un-feature
+  await assertFails(setDoc(doc(as('mallory'), 'profiles/carol'), { featuredShelf: 'shelfEvil' }, { merge: true }));
+  await assertFails(setDoc(doc(as('bob'), 'profiles/bob'), { featuredShelf: 'shelfA1' }, { merge: true }));
+});
 test('collections: HOSTILE 61-char name + unknown extra key are DENIED', async () => {
   await assertFails(setDoc(doc(as('alice'), 'users/alice/collections/colBad1'),
     col({ name: 'x'.repeat(61) })));

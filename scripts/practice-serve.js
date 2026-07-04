@@ -288,9 +288,35 @@ async function seed() {
       accent: 'teal',
       bgRef: bgPath,
       featuredAnime: 'one-punch-man',
+      featuredShelf: 'shelf-comfort',   // CUTOVER-EVE fix 2 — her featured pick
       likesCount: 2,
       joinedAt: TS.fromMillis(Date.now() - 90 * 24 * 3600000),
     }, { merge: true });
+    // CUTOVER-EVE fix 2 — Mika's PUBLIC shelves, durable in the seed (LAST
+    // CALL's walk hand-seeded these into the live emulator; the next practice
+    // restart wiped them — that's why Blake's smoke never SAW a featured
+    // shelf). The featured one is deliberately NOT the freshest, so the
+    // member-side "featured leads" sort proves itself.
+    const shelfCol = db.collection('users/prac-mika/collections');
+    await shelfCol.doc('shelf-comfort').set({
+      name: 'Comfort rewatches', description: 'The ones that fix a bad week.',
+      public: true,
+      items: [
+        { animeId: 'one-punch-man', title: 'One punch man', coverImage: 'assets/one-punch-man.png' },
+        { animeId: 'demon-slayer', title: 'Demon slayer', coverImage: 'assets/demon-slayer.png' },
+      ],
+      createdAt: TS.fromMillis(Date.now() - 12 * 24 * 3600000),
+      updatedAt: TS.fromMillis(Date.now() - 5 * 24 * 3600000),
+    });
+    await shelfCol.doc('shelf-loud').set({
+      name: 'Loud and proud', description: 'Zero chill, all spectacle.',
+      public: true,
+      items: [
+        { animeId: 'black-clover', title: 'Black clover', coverImage: 'assets/black-clover.png' },
+      ],
+      createdAt: TS.fromMillis(Date.now() - 3 * 24 * 3600000),
+      updatedAt: TS.fromMillis(Date.now() - 2 * 3600000),
+    });
     console.log('✓ Seeded practice images (REAL 480x270): inline on th-opm/p0 + card thumbnail on th-new + review cover + Mika\'s dream profile (bg/tags/accent/featured/likes).');
   } catch (e) { console.warn('storage seed skipped:', e.message); }
 

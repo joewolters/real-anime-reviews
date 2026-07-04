@@ -145,13 +145,13 @@ v1.8.4 “Discovery & Blend” SHIPPED 2026-06-06. Its gate-0 design study, buil
 
 <!-- author: Code | date: 2026-06-12 (end-of-session handoff — v1.10.2 STAGED) -->
 <!-- author: Code | date: 2026-07-02 -->
-## 💭 Code's wants — CURRENT (v1.10.2 LIVE · **THE MEGA-RUN IS ONE GATE FROM THE CUTOVER — CUTOVER-EVE staged, then v2.0.0 on Blake's word**). PLANS ONLY CODE KNOWS.
+## 💭 Code's wants — CURRENT (v1.10.2 LIVE · **CUTOVER-EVE CLOSED 2026-07-04 — the v2.0.0 CUTOVER is the ONLY thing left, on Blake's word**). PLANS ONLY CODE KNOWS.
 
 <!-- author: Code | date: 2026-07-04 -->
 **🔑🔑 GATE-0 IS DONE AND STILL LOAD-BEARING THROUGH THE CUTOVER: `docs/MEGA-RUN-DESIGN-STUDY.md`. READ IT IN FULL before the cutover session — §6 is the cutover's shape, §3 is the safety spine you are about to make LIVE, §4-5 are the heart specs every deploy decision leans on. Do NOT re-run a gate-0 study (it exists); do NOT run the cutover without it in your head. This context is exactly what keeps the LAST session of a 9-gate run coherent — its absence is how a ship drifts at the worst possible moment.** The v1.10.0 study is the FORM it followed. Everything below is creative intent + wants only I hold — hand it forward, don't lose it:
 
 **CUTOVER-EVE + cutover intent (2026-07-04, the closing session — only I know these):**
-- **The spoiler-trap ROOT-CAUSE HYPOTHESIS is in CODE-HANDOFF ⚡READ-FIRST** (the toolbar-👁 path lacks the ZWS landing pad the completion path drops after every transformed element) — VERIFY it before building on it; if right the fix is ~3 lines and the real work is the keystroke walk + the pin.
+- **✅ CUTOVER-EVE CLOSED.** The spoiler hypothesis was CONFIRMED as staged (the pad fix + toggle-off-leaves); the panel-lite's real gift was the HIGH nobody guessed — toolbar-wrapped multi-line/pipe selections produced spoiler markdown readers could never re-hide (a silent LEAK; the WYSIWYG lied). Fixed + pinned. Post-cutover want this adds: the same grammar-sanitize discipline for any FUTURE toolbar wrap action (link/code, if ever added) — the completion path's `[^|\n]+` constraint is the contract, not a suggestion.
 - **The cutover is the run's one irreversible moment.** Report 9's script is deliberately paced: the backfill deploys ALONE first because the users-GET tightening lands with firestore.rules LATER in the order — rules-first would tombstone every unmigrated member. Never reorder to "save time." Blake's console step MUST run as him (the callable checks his uid); walk him gently — he has never opened a console.
 - **First prod smoke items that matter most (after his numbers match):** one shared deep link cold-opened + Back-walked ON PROD (rarNav's first real-world contact — cleanUrls + the apex domain are the one environment the sandbox can't fake) · one Discord paste (the og image's debut) · one letter · one vote · one studio save.
 - **v2.0.0's story for the CHANGELOG/widget (write it warm — it's his milestone):** the messaging era + the Curator Studio + every screen + a site that types like Discord and links like a real app. The bump runs AT THE GO, not before.

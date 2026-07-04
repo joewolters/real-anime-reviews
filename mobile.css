@@ -83,6 +83,19 @@ body > header h1{
   width: 100%;
 }
 
+/* ===== Top-10 spotlight: keep the PORTRAIT card on phones (CUTOVER-EVE fix 3)
+   The fluid `.card{width:100%}` above is for the grid + rails — inside the
+   spotlight it inflated the card with the viewport (1382px tall at 900w)
+   while .spotlight-stack stays a FIXED 630px, so the centered card spilled
+   both ends and buried the heading above and the Featured Drop below
+   (Blake's overlap screenshot). The desktop portrait (275px, style.css:505)
+   fits the 630px frame at every width — restore it; the glass plate
+   (clamp 338-372px) frames it exactly like desktop. ===== */
+.spotlight-stack .card{
+  width: 275px;
+  max-width: calc(100vw - 32px);   /* sub-320 guard only */
+}
+
 @media (max-width: 420px){
   .card-container{ grid-template-columns: 1fr; }
 }

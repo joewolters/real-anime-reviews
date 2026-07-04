@@ -10598,6 +10598,11 @@ html[data-surface="account"] .side-link.is-active {
 .col-vis { padding: 4px 11px; border-radius: 999px; cursor: pointer; font: 700 0.68rem 'Montserrat', sans-serif;
   color: #d9c9ff; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.4); }
 .col-vis.is-public { color: #fff; background: rgba(187, 134, 252, 0.22); border-color: rgba(187, 134, 252, 0.8); }
+/* CUTOVER-EVE fix 2 — the on-card featured-shelf control (community purple, never gold) */
+.col-feat { padding: 4px 11px; border-radius: 999px; cursor: pointer; font: 700 0.68rem 'Montserrat', sans-serif;
+  color: #d9c9ff; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.4); }
+.col-feat.is-on { color: #fff; background: rgba(187, 134, 252, 0.22); border-color: rgba(187, 134, 252, 0.8); }
+.col-feat.is-off { opacity: 0.45; cursor: default; }
 .col-count { font: 600 0.72rem 'Montserrat', sans-serif; color: #b8a8d8; }
 .col-card-tools { margin-left: auto; display: inline-flex; gap: 12px; }
 .col-card-desc { margin: -4px 0 10px; color: #c4b2e4; font-size: 0.8rem; line-height: 1.5; }
