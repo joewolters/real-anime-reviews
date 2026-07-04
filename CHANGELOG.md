@@ -20,6 +20,19 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-07-04 -->
+## v2.0.0 — MAJOR (2026-07-04)
+
+**The mega-run lands.** One directive — *"everything must work. It should be intuitive."* — carried through seven milestones, seven adversarial panels, and one long week. The site's biggest single ship, and it reads like three ships wearing one coat:
+
+**The messaging era.** Members can finally write to each other. Peer letters are request-first — a stranger's first message is a quiet knock, never a flood; decline is silent; blocks are real and enforced at the rules layer. Group letters hold up to 15 people. Images ride the full moderation pipeline and stay **sealed until you accept** — the URL is never even fetched before then. Everything lands in the Letter Room, one inbox where Blake's letters are gold by identity and everyone else's are the community's purple. Every message is reportable with the evidence attached.
+
+**The site becomes an app.** One composer everywhere — bold, italic, spoiler boxes, and links render live as you type, in every box on the site (and this release kills the spoiler trap for good: the box lets you leave by every door, and what you hide is exactly what stays hidden for readers). Every view — card, season, deep-dive character, thread, profile — has a real URL you can share, and the Back button retraces your actual steps. Link previews wear the door. The whole layout was rebuilt to hold from a 320px phone to an ultrawide, including the Top-10 spotlight that used to bury its own heading at phone widths.
+
+**The curator's house.** The Curator Studio: track any anime — in the catalog or far outside it — set a live status that breathes on the cards ("BLAKE IS WATCHING"), keep private notes in a nine-section editor, and publish them straight into a pre-filled review. The Den carries the watching line. Discover gained Hidden Gems and the honest yellow tape — 「 NOT REVIEWED — Blake hasn't watched this one yet 」 — with a live community room on every title, reviewed or not. Profiles grew shelves (public, private, one **featured** shelf leading the page — now one click on the card itself), frames, backgrounds, and the Constellation: every member's year drawn as a night sky, one gold star for the day they joined.
+
+Under it all: member emails went private (the users-GET tightening + the profiles backfill), the de-Blake sweep moved his name out of the wallpaper and kept it only where identity is the point, and Black Clover finally reads **friendly-rivalry** — one tag, his call. Floors at ship: Playwright 285 · rules 204 · functions 77 · triggers 78 · e2e 25.
+
 <!-- author: Code | date: 2026-07-02 -->
 ## v1.10.2 — MINOR (2026-07-02)
 
