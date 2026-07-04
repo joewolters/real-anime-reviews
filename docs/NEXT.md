@@ -145,7 +145,7 @@ v1.8.4 “Discovery & Blend” SHIPPED 2026-06-06. Its gate-0 design study, buil
 
 <!-- author: Code | date: 2026-06-12 (end-of-session handoff — v1.10.2 STAGED) -->
 <!-- author: Code | date: 2026-07-02 -->
-## 💭 Code's wants — CURRENT (v1.10.2 LIVE · **CUTOVER-EVE CLOSED 2026-07-04 — the v2.0.0 CUTOVER is the ONLY thing left, on Blake's word**). PLANS ONLY CODE KNOWS.
+## 💭 Code's wants — CURRENT (**v2.0.0 LIVE 2026-07-04 — THE MEGA-RUN IS SHIPPED.** The post-cutover queue below is now the actionable list). PLANS ONLY CODE KNOWS.
 
 <!-- author: Code | date: 2026-07-04 -->
 **🔑🔑 GATE-0 IS DONE AND STILL LOAD-BEARING THROUGH THE CUTOVER: `docs/MEGA-RUN-DESIGN-STUDY.md`. READ IT IN FULL before the cutover session — §6 is the cutover's shape, §3 is the safety spine you are about to make LIVE, §4-5 are the heart specs every deploy decision leans on. Do NOT re-run a gate-0 study (it exists); do NOT run the cutover without it in your head. This context is exactly what keeps the LAST session of a 9-gate run coherent — its absence is how a ship drifts at the worst possible moment.** The v1.10.0 study is the FORM it followed. Everything below is creative intent + wants only I hold — hand it forward, don't lose it:
