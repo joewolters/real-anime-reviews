@@ -1,7 +1,54 @@
 <!-- author: Code | date: 2026-08-09 -->
 # GATE-0 DESIGN STUDY — Cloud Admin: moving the data master off Excel
 
-> **Status: PLAN ONLY. Nothing built, nothing changed.** Blake asked (2026-08-09): *"I want to move my data to the cloud instead of excel sheets."* This is the gate-0 study the project's own convention requires before a build this size (NEXT.md:74 already calls for exactly this and notes it "retires/reworks project rule #1").
+> **Status: PHASE 0 COMPLETE · PHASE 1 BUILT AND PROVEN (not imported to prod).** Blake asked (2026-08-09): *"I want to move my data to the cloud instead of excel sheets"* and then *"start cloud phase 0 and 1."* See §11 for what actually ran.
+
+## ✅ 11. PHASE 0 + 1 — EXECUTION RECORD (2026-08-09)
+**Artifacts:** `Master List/_migration_2026-08-09/` (sibling of the repo — outside git and outside the deploy root, so nothing can leak).
+
+### Phase 0 — the snapshot (`scripts/catalog-snapshot.js`)
+| Backup | Result |
+|---|---|
+| Excel master, byte-copied + hash-verified | 294,688 bytes · sha256 `1b04633608e7e3a8…` ✓ re-hashed after copy |
+| `animeData.js` as shipped | 63,778 bytes · sha256 `79dd3213546f19ce…` |
+| Plain-JSON export of all rows × fields | 44 entries |
+| **Fidelity baseline** (per-review char count + SHA) | 44 reviews · **22,406 review chars** · 21 distinct fields |
+| git HEAD at snapshot | `f03bc3ff` |
+
+**⚠️ The cross-check earned its keep immediately.** Excel reported 22,431 review chars vs animeData's 22,406 — a 25-char divergence. Diagnosed to completion: **25 reviews carry a single trailing space in Excel that the sync trims. Zero content differences.** Recorded here so it is never re-investigated. *Design consequence:* the catalog store seeds from `animeData.js` (the trimmed, shipping truth), which is also why the byte-equality gate below is honest.
+
+### Phase 1 — the store, built and PROVEN (`catalog-export.js` → `catalog-verify.js`)
+44 Firestore-shaped documents built offline, then the acceptance gate run. **All ten gates green:**
+
+| Gate | Result |
+|---|---|
+| `order` dense 0..43, reproduces the live sequence | PASS — "latest drop" preserved |
+| **BYTE-EQUALITY: generated body === live body** | **PASS — exact byte match** |
+| Whole-file reconstruction | PASS — 63,778 == 63,778 bytes |
+| Every field on every row round-trips | PASS — 21 fields × 44 rows |
+| No field went non-empty → empty | PASS — none |
+| Per-review char count + SHA vs baseline | PASS — 44 reviews, 22,406 chars |
+| Total review text unchanged | PASS |
+| `animeId` unique / `slug` non-empty | PASS — 44 ids |
+
+**What this proves:** the cloud representation contains *exactly* today's catalog — every field, every character, every review. Nothing is lost, and that is now a machine-checked fact rather than a promise.
+
+### Also shipped this phase
+- **`scripts/lib/catalog-model.js`** — ONE definition of the slug, the document shape and the renderer, shared by the exporter, the verifier and the test, so they cannot drift. *(The live `sync-excel-to-js.js` keeps its own renderer copy — deliberately untouched; the byte gate pins them together and Phase 2 retires the duplicate.)*
+- **`tests/catalog-migration.spec.js`** — 6 permanent tests, including the byte-equality round-trip and a guard asserting the catalog slug still equals `card-render.js`'s live comment-room key. **Floor 285 → 291.** Full suite green.
+- **`firestore.rules`** — a staged `catalog/{animeId}` block (public read, admin-only write, immutable identity) plus append-only `revisions/` and an admin-only `draft/` for the phone↔desktop hand-off. **Written, NOT deployed.**
+- **`scripts/catalog-import.js`** — dry-run by default, emulator by default; refuses `--prod` without `--blake-said-go`; re-runs the verification gate before touching anything; refuses to run against a non-empty collection; reads every doc back and re-proves field equality.
+
+### 🔴 What is deliberately NOT done (awaiting Blake's word)
+1. **No documents written to production Firestore.** The import is built, guarded, and dry-run tested only.
+2. **`firestore.rules` NOT deployed** — a rules deploy touches live member data and follows the full runbook order.
+3. Nothing pushed, nothing deployed.
+
+**Rollback for everything above:** delete `Master List/_migration_2026-08-09/` and revert the commit. No production state was touched.
+
+---
+
+> Original study follows. Blake asked (2026-08-09): *"I want to move my data to the cloud instead of excel sheets."* This is the gate-0 study the project's own convention requires before a build this size (NEXT.md:74 already calls for exactly this and notes it "retires/reworks project rule #1").
 
 ## ⚡ READ-FIRST — the one-breath version
 - **The site keeps loading a static `animeData.js`. Firestore becomes where you AUTHOR, not what visitors read.** A "Publish" step regenerates `animeData.js` from the database and deploys it. This is the single most important decision in the study — it's why the migration is safe instead of a rewrite (see §3).

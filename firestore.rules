@@ -542,6 +542,53 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // CATALOG — the anime master, Cloud-Admin phase 1 (STAGED, NOT YET LIVE)
+    // =========================================================================
+    // Where the 44 anime rows live once the data master moves off Excel
+    // (docs/CLOUD-MIGRATION-STUDY.md). PHASE 1 IS ADDITIVE: nothing reads this
+    // collection yet — the site still loads the generated animeData.js, and a
+    // Publish step regenerates that file from here (study §3: static publish,
+    // NOT live reads — the site's `const animeData` boot contract is
+    // synchronous and ~16 readers depend on it).
+    //
+    // `animeId` == `slug` == script.js:484 slug(Title) — the SAME key the live
+    // comment and community-review rooms already use. It is stored explicitly
+    // and treated as immutable so renaming an anime can never orphan a thread.
+    match /catalog/{animeId} {
+      allow get, list: if true;                 // public: it is the public catalog
+      // Admin-only writes. Field-shape is intentionally NOT enumerated here the
+      // way animeStatus does it — the catalog carries 21 fields of long prose
+      // and a hasOnly() list would fight every schema change. The protections
+      // that matter are: admin-only, immutable identity, and the append-only
+      // revision trail below.
+      allow create: if isAdmin()
+        && request.resource.data.animeId == animeId
+        && request.resource.data.slug == animeId
+        && request.resource.data.Title is string
+        && request.resource.data.Review is string
+        && request.resource.data.order is int;
+      allow update: if isAdmin()
+        // identity can never move — this is what keeps comments attached
+        && request.resource.data.animeId == resource.data.animeId
+        && request.resource.data.slug == resource.data.slug;
+      allow delete: if isAdmin();
+
+      // Append-only history. Every write records before/after (study §10 item 8)
+      // — this is what replaces "open Excel and see ground truth", and what
+      // makes a bad edit one click from being restored.
+      match /revisions/{revId} {
+        allow get, list: if isAdmin();
+        allow create: if isAdmin();
+        allow update, delete: if false;         // append-only, no exceptions
+      }
+      // Server-side autosaved draft — Blake's phone/desktop hand-off
+      // (study §9 decision 1: neither device is "the" version).
+      match /draft/{docId} {
+        allow get, list, write: if isAdmin();
+      }
+    }
+
+    // =========================================================================
     // COMMUNITY HUB — top-level `forum` (NOT `threads`, to avoid the existing
     // collection-group rule). H2: counters/mod-flags pinned at create; no
     // client branch writes a counter. H5: removing redacts the body/title.
