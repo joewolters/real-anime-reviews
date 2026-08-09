@@ -120,7 +120,35 @@ Firestore's free tier is 50k reads / 20k writes per day. This migration adds **4
 | A service-account key leaking to the public site | **Critical** | Prefer CF-side publishing (no local key). If any key file appears, it goes in `.gitignore` **and** `firebase.json` ignore in the same change (rule #5), verified by a 404 curl |
 | Two sources of truth during Phases 1-2 | Medium | Time-boxed; Excel is read-only fallback, and the byte-equality test proves parity |
 
-## 9. Open questions for Blake
-1. **Phone-first?** Should Phase 3's admin UI be designed mobile-first (you'd be editing from your phone), or desktop-first with mobile as a bonus? *(Recommendation: mobile-first — it's the whole point, and it forces the responsive work Part A item 4 is already about.)*
-2. **Keep an Excel export button?** *(Recommendation: yes — a "Download master .xlsx" keeps your comfort blanket without it being load-bearing.)*
-3. **Publish = one click, or auto-publish on save?** *(Recommendation: explicit Publish. Saving a half-written review shouldn't reach the world.)*
+## 9. DECISIONS — LOCKED by Blake 2026-08-09
+1. **Phone and desktop are BOTH first-class, and work carries between them.** Blake: *"phone and desktop should be asynchronous."* Interpreted as: neither device is "the" version; a draft started on the phone is resumable at the desk. **Implication — drafts are server-side, not device-local:** every edit autosaves to `catalog/{animeId}/draft` (separate from the published fields), with a "last edited on <device> at <time>" line and last-write-wins + a conflict notice if two devices diverge. This is a real Phase 3 requirement, not a nicety. *(If Blake meant something else by "asynchronous," this is the assumption to correct.)*
+2. **Keep a "Download master .xlsx" export.** ✅ Confirmed.
+3. **Explicit Publish button** — never auto-publish on save. ✅ Confirmed.
+
+## 10. 🔒 THE NO-LOSS GUARANTEE
+> Blake, 2026-08-09: *"its really important that nothing is lost with the cloud move."*
+
+He has already lost review text once (Part 0). This section is the answer, and it is the acceptance criterion for the whole migration: **no phase may proceed unless the check below passes.**
+
+### The nine-part protocol
+1. **Three independent backups before anything moves** — (a) hash-verified copy of `Anime_Master_Table.xlsx`, (b) a git tag on the exact commit, (c) a plain-JSON export of all 44 rows × 21 fields. Stored outside the working folder. Recorded hashes go in this doc.
+2. **The migration is ADDITIVE-ONLY.** Phase 1 writes to a *new* collection. It modifies nothing, deletes nothing, and does not touch Excel or `animeData.js`. Rollback = delete the collection. There is no destructive step until Phase 5, and by then five verifications have passed.
+3. **The byte-equality gate.** Generate `animeData.js` *from Firestore* and require it to be **byte-identical** to the committed file. One byte off = migration halts. This single check covers all 21 fields × 44 rows at once.
+4. **Field-level completeness audit.** For every row, assert each of the 21 fields is present and equal. Explicitly flag any field that is non-empty in Excel but empty/null in the DB — that's the classic silent-loss shape a byte check on a *regenerated* file could theoretically mask.
+5. **Character-fidelity check — the encoding trap, generalized.** This project has been bitten twice: openpyxl re-encoded every multi-line cell (`\r\r\n`→`\r\r\r\n`), and the Edit tool has silently converted straight quotes to curly. So the audit asserts, per review: exact character count, exact SHA of the text, **no line-ending mutation, no smart-quote conversion, no whitespace normalization.** Reviews are the crown jewels and get their own per-review hash table, recorded before and after.
+6. **Dual-run period.** For an agreed window (suggest 2-4 weeks), generate from **both** Excel and Firestore on a schedule and diff them. Any divergence raises an alarm. Excel remains a live, working fallback the entire time.
+7. **The shrink tripwire** (from Part 0's prevention item) — refuse to publish if total review text shrinks >2%, or any single review shrinks >25% / >150 chars, without an explicit force. This is the alarm that was missing in May.
+8. **Nothing is ever deleted.** At Phase 5 Excel is *archived*, not removed. And once `revisions/` exists (Phase 4), even a bad edit is one click from being restored — a guarantee Excel never provided.
+9. **Per-phase rollback, written down before the phase starts.** Each phase states its undo. Phases 1-2 are pure additions; Phase 3 keeps the local server working alongside; Phase 4 is additive; only Phase 5 changes the rule, and only on Blake's word.
+
+### What "nothing is lost" concretely means here
+| Asset | How it's protected |
+|---|---|
+| 44 review texts (the crown jewels) | Per-review SHA + char count, before/after; byte-equality; shrink tripwire; 3 backups |
+| The other 20 fields × 44 rows | Field-level completeness audit + byte-equality |
+| Images | Untouched — files stay in `assets/`; only the *filename* moves into the DB |
+| Comments / community reviews / member data | **Not touched by this migration at all** — they already live in Firestore under `slug` keys, and the immutable-`slug` decision (§4) is precisely what keeps them attached |
+| Season reviews (`season-reviews/*.md`) | Out of scope for Phases 1-2; migrated later with the same protocol |
+| Excel itself | Archived, never deleted |
+
+**Bluntly: the risk of losing data by staying on Excel is currently higher than the risk of moving.** Excel has no history and no alarms — that's what let May's loss run for two months. The migration ends with strictly more safety than it starts with.

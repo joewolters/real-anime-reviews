@@ -94,9 +94,15 @@ You asked for the page specifically. Here's the spec, built to match the existin
 │  ● Healthy   Last run: Sun 2:00am   Next: Sun 2:00am   │
 │  Rung 1 · Observer          Catalog: 44   Watched: 44  │
 ├────────────────────────────────────────────────────────┤
-│  ⚠ NEEDS YOU (3)                                        │
-│   • Frieren — new season detected (S2, 12 eps)          │
-│                            [Accept] [Reject] [Details]  │
+│  📺 NEW SEASONS (2)                                     │
+│   • Frieren — S2 finished airing 12 Aug (12 eps)        │
+│       ✍️ Season review due      [Write it] [Not yet]    │
+│       📝 Main review says "1 season"                    │
+│                                 [Update] [Still fine]   │
+│   • Solo Leveling — S3 airing now (ep 4/12)             │
+│       👁 FYI — review due when it finishes  [Dismiss]   │
+├────────────────────────────────────────────────────────┤
+│  ⚠ NEEDS YOU (2)                                        │
 │   • Chainsaw Man — cover art changed on AniList         │
 │              (images are yours — flag only) [Dismiss]   │
 │   • Hell's Paradise — Hulu link 404s        [Details]   │
@@ -135,11 +141,40 @@ Rejected: **GitHub Actions** (ROADMAP hedged "or equivalent"). It would need Fir
 
 **Report delivery [NEW]:** the page is the record; a **Lantern ping** tells you a run finished (you already have the notification system). No email infrastructure needed.
 
-## 8. Open questions for Blake
-1. **Cadence** — weekly (spec says "likely weekly") or fortnightly? *(Recommendation: weekly, Sunday 2am.)*
-2. **Should Mode 2 watch the community side at all** — orphaned uploads, moderation queue depth, CF errors — or stay strictly on the 44-row catalog? *(Recommendation: catalog only for rungs 1-3; the community already has `reapOrphanUploads` and the reports queue.)*
-3. **Broken streaming links** — external links rot constantly. Auto-remove a dead platform, or always propose? *(Recommendation: propose. A 404 can be a temporary outage, and quietly deleting "where to watch" is user-visible.)*
-4. **Does Mode 2 deploy, or just stage?** *(Recommendation: at rungs 1-3 it writes to the store and **stages**; you press Publish. Full auto-deploy waits for rung 4 — it keeps your "nothing deploys without my word" rule intact.)*
+## 8. DECISIONS — LOCKED by Blake 2026-08-09
+1. **Cadence: weekly, Sunday 2:00am.** ✅
+2. **Scope: the 44-row catalog only.** The community side keeps its existing `reapOrphanUploads` + reports queue. ✅
+3. **Dead streaming links: always ask, never auto-remove.** ✅
+4. **Mode 2 stages; Blake publishes.** No autonomous deploys — the "nothing ships without my word" rule stays intact even at rung 4. ✅
+
+## 9. 📺 SEASON WATCH — "a new season dropped, and your review is now out of date"
+> Blake, 2026-08-09: *"Mode 2 also needs to update me on if a new season is released that I need to update my review for the whole anime or seasonal reviews."*
+
+This is the feature Mode 2 exists for, from Blake's point of view — and it's a sharper ask than the docs' vague "new arc surfaced" diff, because he wants to know **which kind of writing the new season demands of him.**
+
+### How detection works (substrate that already exists)
+`KnownAniListIds` is a per-anime snapshot of the whole franchise tree, populated on all 44 rows. Each week Mode 2 re-fetches the tree and diffs it. **Anything in the tree that isn't in the snapshot is a new entry** — a season, a movie, an OVA. AniList's `nextAiringEpisode` and status fields then say whether it is *upcoming*, *airing now*, or *finished airing*.
+
+### The two jobs a new season creates — and Mode 2 must say which
+This is the part Blake specifically asked for. Every season alert names its required action:
+
+| Signal | What it means | The ask |
+|---|---|---|
+| New entry, **not yet aired** | Announced only | 👁 FYI only. No action. Quiet until it airs |
+| New entry, **currently airing** | It's happening now | 📌 "Worth watching — a season review will be due" |
+| New entry, **finished airing**, no `season-reviews/<id>.md` | The natural moment to write | ✍️ **"Write a season review"** → deep-links straight to the season-review editor for that AniList id |
+| New entry finished **AND** the main `Review`/`Seasons` text is now stale | Your whole-anime verdict predates it | 📝 **"Update the main review"** → deep-links to the review editor |
+| Both of the above | Common case for a big franchise | Shows **both** actions, tracked separately so you can do one and not the other |
+
+**How "the main review is stale" is judged (conservatively):** the `Seasons` field's stated count no longer matches the tree, or the review text explicitly references a season count that has been superseded. If Mode 2 isn't confident, it says *"may need updating"* rather than asserting it. It never edits the review to "fix" this — that's Fence 1.
+
+### ⚠️ The subtlety that matters: `Seasons` becomes propose-only when a season lands
+`Seasons` is normally on Mode 2's may-edit list (§4). But if it silently changed *"2 seasons"* → *"3 seasons"* the moment S3 aired, the site would claim coverage Blake hasn't written — his review only covers two. **[NEW] Special rule: once a new season is detected for an anime, `Seasons` is downgraded to propose-only for that anime until Blake resolves the alert.** Accepting the season-review or main-review action is what releases it.
+
+### Closing the loop
+- Accepting an alert **advances `KnownAniListIds`** so it never re-fires (this is the write-once bug from §4/Fence 4).
+- Dismissing marks it handled-but-unwritten; it stays quiet but remains visible in History, so a deferred season isn't lost.
+- Season reviews live at `season-reviews/<aniListId>.md` — a system that exists but currently has **zero** files. This feature is what would actually put it to use.
 
 ## 9. Dependencies before a single line is written
 - [ ] Cloud migration Phases 1-4 (`CLOUD-MIGRATION-STUDY.md`) — the store, publish, and **revisions/**
