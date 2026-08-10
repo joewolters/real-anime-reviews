@@ -1,5 +1,9 @@
 <!-- author: Code | date: 2026-08-10 -->
-# SHIP-OUTPUT — PART A items 6, 7, 2. **PART A IS COMPLETE.** Staged, nothing deployed.
+# SHIP-OUTPUT — PART A items 6, 7, 2. **PART A IS COMPLETE — and v2.1.0 IS LIVE.**
+
+**Deployed 2026-08-10** on Blake's "deploy it, rules then functions then hosting". That order was a deliberate deviation from the runbook, flagged to him first: hosting-first exists to protect the vote-count model (which this ship doesn't touch), and it would have put a Delete Account button in front of members before its backend existed. Going rules-first closed the console deletion hole before anything else moved.
+
+Verified on the live site rather than assumed: version 2.1.0 with the update-log chip agreeing, all 43 functions including the three new ones, and — the one that matters — the new rules proven to actually BITE over the public API (an unauthenticated read of the stats doc returns 403, the public catalog still returns 200). Internal docs, the ~300 leftover scratch files and PERSONAL.md all 404.
 
 ## What Blake asked for, and what he got
 
@@ -30,7 +34,7 @@ The pinned review leads the profile. Everything else is behind one **all reviews
 
 While verifying, an unrelated test started failing. The tempting fix was to raise its timeout. Instead we re-ran the same suite against the pre-change code (79/79 green), which proved the regression was ours — and it turned out the redaction code was **recreating documents that had just been deleted**, because the Firestore call it used creates a document when one is missing. Ghost entries nobody wrote, triggering everything a real new post triggers. Fixed properly. Raising the timeout would have hidden a genuine bug in the deletion path.
 
-## Blake's smoke (when we deploy — nothing is live yet)
+## Blake's smoke — THIS IS LIVE NOW, so these are real
 
 1. **Admin menu → Member Stats.** Numbers should appear (or "nothing counted yet" until the first daily run — press **Refresh now** and they fill in). Check it on your phone too.
 2. **Any profile.** Your pinned review leads; below it one **all reviews (N)** button. Press it → the full list. Press **← Back to profile** → you're back where you were. Then the browser Back button — same thing.
@@ -39,7 +43,9 @@ While verifying, an unrelated test started failing. The tempting fix was to rais
 5. **A thread someone else started, with your reply in it** — that reply must still be there after they leave. This is the one that mattered.
 
 ## Test floors (all re-run at the end, all green)
-`npm test` **348** (was 320) · `test:rules` **218** (211) · `test:cf` **94** (79) · `test:functions` **94** (77) · `test:webkit` **24** (24).
+`npm test` **350** (was 320) · `test:rules` **218** (211) · `test:cf` **94** (79) · `test:functions` **94** (77) · `test:webkit` **24** (24).
+
+(350, not 348: Blake's three post-build smoke fixes added two more — the search-proportionality guard across sixteen widths, and the header-token edge check.)
 
 ## One-liner reply
-Part A is finished: the member-stats page, self-serve account deletion, and the profile-reviews rework are all built and green — and along the way we closed two live problems (any member could have wiped their account from the console, and someone leaving destroyed other members' posts) plus a third we only found by measuring against a baseline instead of raising a timeout; nothing is deployed, it's all waiting on your go.
+Part A is finished and v2.1.0 is live: members can delete their own accounts, nobody else loses their words when someone leaves, profiles no longer drown in reviews — and the two live problems we found on the way (any member could have wiped their account from a browser console, and a departure destroyed other members' posts) are closed in production, with the rules proven to bite rather than merely uploaded.
