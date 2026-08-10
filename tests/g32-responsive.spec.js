@@ -195,3 +195,56 @@ test('gD: source pins — touch block promoted, mobile.css slimmed, the shared d
   const drawer = await (await page.request.get('/nav-drawer.js')).text();
   expect(drawer).toMatch(/toolbar\.addEventListener\('click'[\s\S]{0,200}?, true\)/);
 });
+
+// ---------------------------------------------------------------------------
+// PART A follow-up (Blake, 2026-08-10): "the search bar is WAY too big… lets
+// shrink it down to look proportional."
+// ---------------------------------------------------------------------------
+test('the header search stays PROPORTIONAL across every band (measured, not asserted)', async ({ page }) => {
+  // The pill is `flex: 1 1 auto` under mobile.css so a phone can give it what
+  // is left of the row — and it had no ceiling, so the moment there was spare
+  // room it took all of it: 60% of the viewport at 900px, 55% at 800px, while
+  // 901px (the desktop rule) sat at 27%. Crossing one pixel doubled it.
+  //
+  // This is the SECOND time this exact complaint has been raised — Milestone F
+  // fixed the 901-1200 band and stopped at the media boundary. Pinned by
+  // measurement this time so the next band cannot be missed quietly.
+  const BUDGET = 0.40;   // no width where the search may exceed 40% of the screen
+  const seen = [];
+  for (const width of [1440, 1280, 1100, 950, 901, 900, 860, 800, 700, 600, 500, 430, 390, 375, 360, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/index.html');
+    const m = await page.evaluate(() => {
+      const wrap = document.querySelector('#search-form');
+      const acct = document.querySelector('#auth-open');
+      const w = wrap.getBoundingClientRect();
+      const a = acct ? acct.getBoundingClientRect() : null;
+      return {
+        wrap: Math.round(w.width),
+        acctRight: a ? Math.round(a.right) : 0,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    const share = m.wrap / width;
+    seen.push(`${width}:${m.wrap}px(${Math.round(share * 100)}%)`);
+    expect(share, `search pill at ${width}px is ${Math.round(share * 100)}% of the viewport — ${seen.join(' ')}`)
+      .toBeLessThanOrEqual(BUDGET);
+    // and the item-4 guarantee still holds: the account button stays reachable
+    expect(m.acctRight, `account button off-screen at ${width}px`).toBeLessThanOrEqual(width);
+    expect(m.overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+  }
+});
+
+test('capping the search did not strand the header tokens mid-row', async ({ page }) => {
+  // The pill's growth is what used to push the Lantern + account head to the
+  // right edge. Capping it left them floating 231px short at 900px until the
+  // tokens were given `margin-left:auto`. The edge is the design.
+  for (const width of [900, 800, 700, 600]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/index.html');
+    const right = await page.evaluate(() =>
+      Math.round(document.querySelector('#auth-open').getBoundingClientRect().right));
+    expect(width - right, `account head floats ${width - right}px short of the edge at ${width}px`)
+      .toBeLessThanOrEqual(24);
+  }
+});

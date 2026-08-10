@@ -46,7 +46,26 @@ body > header h1{
   min-width: 0;
   gap: 8px;
 }
-.search-wrap{ flex: 1 1 auto; min-width: 0; }
+/* Blake, 2026-08-10: "the search bar is WAY too big… lets shrink it down to
+   look proportional." MEASURED, and he was right — but only in a band nobody
+   had looked at. `flex: 1 1 auto` is correct on a phone (the pill must take
+   whatever is left between the wordmark and the tokens) and it had no CEILING,
+   so the moment there was spare room it ate all of it:
+       901px -> 267px wide (27% of the viewport)   <- the desktop rule
+       900px -> 542px wide (60%)                   <- falls to THIS rule
+       800px -> 442px wide (55%)
+       390px -> 134px wide (34%)                   <- correct, and untouched
+   A max-width caps growth without ever shrinking the phone sizes, so the
+   360/375/390 budget item 4 fought for is bit-for-bit unchanged.
+   A FLAT cap is not enough — 320px is a reasonable 36% at 900px and a silly
+   46% at 700px — so the ceiling SCALES with the viewport and only the top of
+   the band reaches the absolute limit. Result, measured:
+       900px -> 300px (33%)   800px -> 300px (37%)   700px -> 266px (38%)
+       500px -> 190px (38%)   390px -> 134px (34%, unchanged)
+   901px is 30%, so the old doubling at the media boundary is now a small step.
+   (Same complaint as Milestone F's "the search bar gets huge" one band up —
+   that fix set the 901-1200 width and stopped at the media boundary.) */
+.search-wrap{ flex: 1 1 auto; min-width: 0; max-width: min(300px, 38vw); }
 #site-search{
   width: 100%;
   max-width: none;
@@ -56,6 +75,13 @@ body > header h1{
 .header-tokens{
   gap: 8px;
   flex: 0 0 auto;
+  /* With the search pill uncapped, ITS growth is what pushed the Lantern and
+     the account head to the right edge. Capping the pill (above) stranded them
+     mid-row — measured at 900px: the account button ended at x=668, floating
+     231px short of the edge. The tokens now hold the edge themselves.
+     Inert on phones: at 360px the row is already full, so there is no free
+     space for `auto` to absorb (account still ends at 354, unchanged). */
+  margin-left: auto;
 }
 
 /* ===== Side widgets: stop absolute positioning on phones ===== */

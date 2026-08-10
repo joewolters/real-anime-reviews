@@ -10606,6 +10606,18 @@ html[data-surface="account"] .side-link.is-active {
    stayed on screen next to the panel it had just opened. Measured, not assumed;
    this is the author-display-vs-[hidden] trap's FOURTH scalp on this project. */
 #acct-del-open[hidden] { display: none; }
+/* Blake, 2026-08-10: it "looks clumped against the describing text." It sat
+   flush under the paragraph, left-aligned, with only the card's own line-height
+   between them. Centered, with real air above it, and a 44px tap target — this
+   is the one control on the page you should never hit by accident. */
+#acct-del-open {
+  display: flex;
+  margin: 18px auto 4px;
+  min-height: 44px;
+  justify-content: center;
+}
+/* the describing text reads as a paragraph, not as a label glued to a button */
+.set-card--danger .set-card-body > .muted { margin-bottom: 0; line-height: 1.55; }
 .acct-del-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255, 155, 155, 0.22); }
 .acct-del-panel[hidden] { display: none; }
 .acct-del-h { margin: 0 0 8px; font: 800 0.72rem 'Montserrat', sans-serif; letter-spacing: 0.14em;

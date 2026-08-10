@@ -180,10 +180,26 @@ async function boot() {
   try {
     await load();
   } catch (err) {
-    // The card's own copy is already branded + truthful (the curation
-    // precedent); friendlyError's vocabulary is written for WRITES, so it would
-    // say "that didn't go through" about a read that never went anywhere.
+    // Say WHICH failure this is. A denial and a dropped connection want
+    // opposite reactions, and "couldn't reach the stats" sent Blake looking for
+    // a network problem when the real answer was that the rules for this
+    // collection are written but NOT DEPLOYED yet — the page cannot work until
+    // firestore rules + functions ship, and it should say so instead of
+    // implying a blip. (friendlyError's vocabulary is written for WRITES: it
+    // would say "that didn't go through" about a read that never went anywhere.)
     console.error('[stats] failed to load', err);
+    const code = String((err && (err.code || err.message)) || '').toLowerCase();
+    const denied = /permission|denied|insufficient|unauthenticated/.test(code);
+    const kicker = $('stats-error-kicker');
+    const body = $('stats-error-body');
+    if (denied) {
+      if (kicker) kicker.innerHTML = 'NOT LIVE YET <span class="jp-mini">未公開</span>';
+      if (body) {
+        body.textContent = 'This page is built but not deployed. Its rules and its '
+          + 'counting function have to ship before any numbers exist — until then '
+          + 'the site correctly refuses to hand them over. Nothing is broken.';
+      }
+    }
     const card = $('stats-error');
     if (card) card.hidden = false;
   }
