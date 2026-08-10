@@ -85,23 +85,48 @@ async function applySetBanState(db, FieldValue, setClaim, callerUid, targetUid, 
   return { ok: true, uid: targetUid, banned: !!banned };
 }
 
-// redactionFor — PURE: which fields to empty on a doc + the `removed` tombstone
-// flag. Only touches fields the doc actually has (a forum thread has title+body; a
+// redactionFor — PURE: which fields to empty on a doc + the tombstone flag.
+// Only touches fields the doc actually has (a forum thread has title+body; a
 // comment has text), so we never add an irrelevant empty field to a doc.
-function redactionFor(docData, fields) {
-  const upd = { removed: true };
+//
+// PART A item 7: `flags` makes the tombstone MARK swappable while the emptying
+// logic stays one implementation. Default is the ban cascade's `removed: true`
+// (unchanged, byte-for-byte). Self-deletion passes `{ authorDeleted: true }`
+// instead — deliberately NOT `removed`, because the hub LIST filters
+// `removed !== true`: marking a departed member's thread removed would hide it
+// and take every other member's posts in it out of reach with it. Different
+// mark, different sentence, same erasure.
+function redactionFor(docData, fields, flags) {
+  const upd = Object.assign({}, flags || { removed: true });
   for (const k of Object.keys(fields)) { if (docData && k in docData) upd[k] = fields[k]; }
   return upd;
 }
 
-// redactAuthored — H5-redact every doc a query returns, in batches of CASCADE_PAGE.
-async function redactAuthored(db, query, fields) {
+// redactAuthored — H5-redact every doc a query returns, CASCADE_PAGE at a time.
+//
+// ⚠️ UPDATE, NOT SET-MERGE (PART A item 7). This used `batch.set(ref, upd,
+// {merge:true})`, and set-with-merge CREATES a document that isn't there. The
+// query and the write are not atomic, so any doc deleted in between was
+// RESURRECTED as a ghost tombstone — a doc with no content that nobody wrote,
+// which then fired the create-triggers (rate limiter, post-count, profile
+// mint) as if it were new. Harmless-looking while this path only ran on a ban
+// (rare, and the target's docs are alive); item 7 put it on the account-erasure
+// path, where the whole point is that things are being deleted around it. It
+// surfaced as a trigger storm that starved an unrelated cascade in the cf
+// track — measured against the pre-change baseline, not guessed.
+//
+// `update()` carries an implicit exists-precondition, so a vanished doc simply
+// no-ops. Per-doc rather than batched precisely BECAUSE of that precondition:
+// one missing doc would fail an entire atomic batch and redact nothing. Each
+// doc is independent here, so there is nothing to be atomic about.
+async function redactAuthored(db, query, fields, flags) {
   const snap = await query.get();
   let n = 0;
   for (let i = 0; i < snap.docs.length; i += CASCADE_PAGE) {
-    const batch = db.batch();
-    snap.docs.slice(i, i + CASCADE_PAGE).forEach((d) => { batch.set(d.ref, redactionFor(d.data(), fields), { merge: true }); n++; });
-    await batch.commit();
+    const page = snap.docs.slice(i, i + CASCADE_PAGE);
+    const results = await Promise.all(page.map((d) =>
+      d.ref.update(redactionFor(d.data(), fields, flags)).then(() => 1).catch(() => 0)));
+    n += results.reduce((a, b) => a + b, 0);
   }
   return n;
 }

@@ -63,6 +63,14 @@ const ADMIN_MENU_ITEMS = [
     jp: '通報',
     href: '/admin/reports.html',
   },
+  // PART A item 6 — the member-stats page. Counts only, never content: it reads
+  // ONE Cloud-Function-written doc (adminStats/current), so opening it costs a
+  // single Firestore read however often it is refreshed.
+  {
+    label: 'Member Stats',
+    jp: '統計',
+    href: '/admin/stats.html',
+  },
   // Milestone F (Blake: "get rid of the inbox on my admin page since people
   // can properly dm me now") — members' letters reach Blake through the ONE
   // unified account Inbox (account.html#inbox); the admin floor page is gone.

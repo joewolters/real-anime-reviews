@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Member Stats — Real Anime Reviews</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <script>window.APP_VERSION="2.0.1"</script>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Admin-only member statistics — not indexed." />
+
+  <link rel="stylesheet" href="../style.css?v=2.0.1" />
+  <link rel="stylesheet" href="../mobile.css?v=2.0.1" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=2.0.1" />
+  <link rel="stylesheet" href="stats.css?v=2.0.1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="admin-page">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="../index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" id="back-btn" class="inline-header-btn" onclick="location.href='../index.html'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-gate-message">
+      <div class="admin-gate-spinner"></div>
+      <p>Verifying admin access…</p>
+    </div>
+  </div>
+
+  <main class="admin-main stats-main" id="admin-main" hidden>
+    <div class="admin-shell">
+
+      <div class="admin-header">
+        <h2 class="admin-title-line">
+          <span class="admin-kicker-inline">MEMBER STATS <span class="jp-mini">統計</span></span>
+          <span class="admin-divider">·</span>
+          <span class="admin-title-text">How the place is doing</span>
+        </h2>
+        <div class="stats-freshness" id="stats-freshness" hidden></div>
+      </div>
+
+      <p class="stats-intro">
+        Counts, and only counts. Nothing anyone wrote is read to build this page —
+        not a comment, not a review, and above all not a letter. Numbers are
+        recomputed once a day; hit Refresh for this second's picture.
+      </p>
+
+      <div class="stats-actions">
+        <button type="button" class="stats-refresh-btn" id="stats-refresh">Refresh now</button>
+        <span class="stats-refresh-note" id="stats-refresh-note" role="status" hidden></span>
+      </div>
+
+      <div class="stats-body" id="stats-body" hidden>
+
+        <section class="stats-section" aria-labelledby="stats-h-members">
+          <h3 class="stats-section-title" id="stats-h-members">Members <span class="jp-mini">仲間</span></h3>
+          <div class="stats-tiles">
+            <div class="stats-tile stats-tile--lead">
+              <span class="stats-tile-value" id="s-members-total">—</span>
+              <span class="stats-tile-label">Members, all time</span>
+            </div>
+            <div class="stats-tile">
+              <span class="stats-tile-value" id="s-members-month">—</span>
+              <span class="stats-tile-label">Joined in <span id="s-month-label">this month</span></span>
+            </div>
+            <div class="stats-tile">
+              <span class="stats-tile-value" id="s-members-recent">—</span>
+              <span class="stats-tile-label">Joined in the last 30 days</span>
+            </div>
+            <div class="stats-tile">
+              <span class="stats-tile-value" id="s-members-active">—</span>
+              <span class="stats-tile-label">Active members</span>
+              <span class="stats-tile-note">
+                Posted a comment, review, reply or forum post in the last 30 days.
+                Votes and letters don't count toward this.
+              </span>
+            </div>
+          </div>
+          <p class="stats-aside" id="s-banned-line" hidden></p>
+        </section>
+
+        <section class="stats-section" aria-labelledby="stats-h-content">
+          <h3 class="stats-section-title" id="stats-h-content">What they've written <span class="jp-mini">言葉</span></h3>
+          <table class="stats-table">
+            <caption class="stats-table-caption">
+              Live pieces on the site, and how many landed in the last 30 days.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Surface</th>
+                <th scope="col" class="stats-num">All time</th>
+                <th scope="col" class="stats-num">Last 30 days</th>
+              </tr>
+            </thead>
+            <tbody id="stats-content-rows"></tbody>
+            <tfoot>
+              <tr>
+                <th scope="row">Everything</th>
+                <td class="stats-num" id="s-content-total">—</td>
+                <td class="stats-num" id="s-recent-total">—</td>
+              </tr>
+            </tfoot>
+          </table>
+          <p class="stats-aside" id="s-tombstone-line" hidden></p>
+        </section>
+
+        <section class="stats-section" aria-labelledby="stats-h-letters">
+          <h3 class="stats-section-title" id="stats-h-letters">Letters <span class="jp-mini">手紙</span></h3>
+          <div class="stats-tiles">
+            <div class="stats-tile">
+              <span class="stats-tile-value" id="s-dm-convos">—</span>
+              <span class="stats-tile-label">Conversations</span>
+            </div>
+            <div class="stats-tile">
+              <span class="stats-tile-value" id="s-dm-messages">—</span>
+              <span class="stats-tile-label">Letters sent</span>
+            </div>
+            <div class="stats-tile">
+              <span class="stats-tile-value" id="s-appreciates">—</span>
+              <span class="stats-tile-label">Appreciates given</span>
+            </div>
+          </div>
+          <p class="stats-aside stats-aside--vow">
+            These two numbers are the only thing this page knows about letters.
+            Who wrote them, to whom, and what they said is never read.
+          </p>
+        </section>
+
+      </div>
+
+      <div id="stats-empty" class="stats-empty" hidden>
+        <div class="stats-empty-kicker">NOTHING COUNTED YET <span class="jp-mini">未集計</span></div>
+        <p>The daily recompute hasn't run since this page went up. Hit Refresh now and it'll fill in.</p>
+      </div>
+
+      <div id="stats-error" class="suggestions-error-card" hidden>
+        <div class="error-glyph" aria-hidden="true">⚠️</div>
+        <div class="error-kicker">COULDN'T LOAD <span class="jp-mini">接続</span></div>
+        <p class="error-body">Couldn't reach the stats. Reload to retry.</p>
+        <button type="button" class="error-reload-btn" onclick="location.reload()">Reload</button>
+      </div>
+
+    </div>
+  </main>
+
+  <script type="module" src="../firebase.js?v=2.0.1"></script>
+  <script type="module" src="stats.js?v=2.0.1"></script>
+</body>
+</html>

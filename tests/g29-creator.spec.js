@@ -42,8 +42,13 @@ test('g29: the Creator sheet is a MEMBER sheet + kicker — no flag, Appreciate 
   expect(src).not.toContain('profile-den-path');                          // the gold door is gone
   expect(src).not.toContain('goHomeToDen');
   expect(src).not.toMatch(/setAttribute\('data-frame', 'blake'\)/);       // no forced frame default
-  expect(src).toMatch(/class="profile-act-chip is-active" data-act="reviews"/);   // Reviews tab for everyone (A8: the ONE public tab)
-  expect(src).not.toMatch(/isCreator \? '' : '<button type="button" class="profile-act-chip"/);
+  // ⚠️ CHANGED DELIBERATELY in PART A item 2. This pinned the one-tab tablist
+  // ("Reviews tab for everyone"), which item 2 replaced with the pinned slot +
+  // one disclosure door. The POINT of the assertion — the Creator's sheet gets
+  // exactly what a member's sheet gets, nothing added and nothing withheld —
+  // is unchanged, so it is re-pinned against the control that exists now.
+  expect(src).toContain('profile-reviews-slot');                          // the same reviews surface for everyone
+  expect(src).not.toMatch(/isCreator[^\n]*profile-reviews-(slot|open)/);  // never conditioned on who it is
 });
 
 test('g29: the account page carries the FULL tool set (View All · Random · Filter)', async ({ page }) => {

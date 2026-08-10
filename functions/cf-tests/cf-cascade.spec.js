@@ -27,7 +27,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // (recursiveDelete / onUserDelete / the rate-limit sweep) drift past 20s
 // under full-track load. Same green outcome, honest margin (the heaviest
 // observed pass was ~20.3s — right ON the old line).
-async function waitFor(fn, { timeout = 45000, interval = 400 } = {}) {
+// PART A items 6+7: 45000 → 75000, for margin only. The failure that exposed
+// this was NOT a margin problem and was not fixed by the bump: the item-7
+// erasure's set-with-merge redaction was RESURRECTING docs that clearDb had
+// just deleted, and the resulting create-trigger storm starved this file's
+// first cascade for 75s with zero dispatch. Root-caused by re-running the
+// pre-change baseline (79/79 green) rather than by raising the timeout; the
+// fix is `update` instead of `set-merge` in lib/moderation.js redactAuthored.
+// The margin stays because the emulator now loads three more functions.
+async function waitFor(fn, { timeout = 75000, interval = 400 } = {}) {
   const start = Date.now();
   for (;;) {
     const v = await fn();
@@ -72,8 +80,17 @@ test('hard-deleting a forum thread cascades away its posts', async () => {
   assert.ok(gone, 'posts should be cascaded away');
 });
 
-// 3) onUserDelete — leaves ZERO trace of the user; sweeps foreign votes; tombstones DMs
-test('onUserDelete wipes all authored content + foreign votes + profile, and tombstones DMs', async () => {
+// 3) onUserDelete — the leaver's WORDS are gone; their votes are swept; their
+//    private data is deleted; DMs are locked. Their containers stay.
+//
+// ⚠️ THIS TEST WAS DELIBERATELY CHANGED IN PART A ITEM 7. It used to assert
+// `items.empty` and `!forumT.exists` — i.e. it PINNED the destroy-everything
+// cascade, and that cascade took other members' posts down with the leaver's
+// thread (hazard #2). Blake's locked policy is "tombstone the containers, erase
+// the content", so the assertions now check the words are gone and the slot
+// remains. The third-party-survival test directly below is the one that would
+// have caught the old behaviour.
+test('onUserDelete erases the leaver\'s words, keeps their slots, sweeps foreign votes, and locks DMs', async () => {
   const V = 'victim';
   // the user doc whose deletion triggers the wipe + the user's subtree
   await db.doc('users/' + V).set({ username: 'Victim' });
@@ -81,7 +98,10 @@ test('onUserDelete wipes all authored content + foreign votes + profile, and tom
   await db.doc('users/' + V + '/favorites/f1').set({ animeId: 'x' });
   await db.doc('profiles/' + V).set({ displayName: 'Victim' });
   // authored public content
-  await db.doc('comments/a/items/cV').set({ uid: V, text: 'mine', displayName: 'V', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
+  // photoURL is seeded so the "their face goes too" assertion below is real:
+  // redactionFor only writes fields the doc ACTUALLY has (it must not bolt an
+  // irrelevant empty field onto a doc), so a fixture without one proves nothing.
+  await db.doc('comments/a/items/cV').set({ uid: V, text: 'mine', displayName: 'V', photoURL: 'https://firebasestorage.googleapis.com/v', likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
   await db.doc('comments/a/items/cV/votes/someone').set({ uid: 'someone', value: 1, updatedAt: TS.now() });
   await db.doc('reviews/b/items/' + V).set({ uid: V, title: 'r', body: 'b', rating: 7, likesCount: 0, dislikesCount: 0, createdAt: TS.now() });
   await db.doc('forum/tV').set({ authorUid: V, title: 'T', body: 'b', tag: 'general', postCount: 0, reportCount: 0, pinned: false, locked: false, removed: false, createdAt: TS.now(), lastPostAt: TS.now() });
@@ -94,15 +114,36 @@ test('onUserDelete wipes all authored content + foreign votes + profile, and tom
   await db.doc('users/' + V).delete();
 
   const wiped = await waitFor(async () => {
-    const items = await db.collectionGroup('items').where('uid', '==', V).get();
+    const comment = await db.doc('comments/a/items/cV').get();
+    const review = await db.doc('reviews/b/items/' + V).get();
     const forumT = await db.doc('forum/tV').get();
     const foreignVote = await db.doc('comments/other/items/cOther/votes/' + V).get();
     const profile = await db.doc('profiles/' + V).get();
     const notifs = await db.collection('users/' + V + '/notifications').get();
-    const allGone = items.empty && !forumT.exists && !foreignVote.exists && !profile.exists && notifs.empty;
-    return allGone ? true : null;
+    const emptied = comment.exists && (comment.data().text || '') === ''
+      && review.exists && (review.data().body || '') === ''
+      && forumT.exists && (forumT.data().title || '') === ''
+      && !foreignVote.exists && !profile.exists && notifs.empty;
+    return emptied ? true : null;
   });
-  assert.ok(wiped, 'all of the user\'s public content + foreign votes + profile + notifications should be gone');
+  assert.ok(wiped, 'the words, the foreign votes, the profile and the notifications should all be gone');
+
+  // the containers survive, marked, carrying nothing of the person who left
+  const c = (await db.doc('comments/a/items/cV').get()).data();
+  assert.equal(c.text, '', 'the comment text is erased');
+  assert.equal(c.authorDeleted, true, 'the slot is marked as an author deletion');
+  assert.equal(c.displayName, '[deleted]', 'their name does not stay behind');
+  assert.equal(c.photoURL, null, 'nor their face');
+  // ...and NOT `removed`, which is the moderator mark and would hide the thread
+  assert.notEqual(c.removed, true, 'a self-deletion is not a moderator removal');
+  const t = (await db.doc('forum/tV').get()).data();
+  assert.equal(t.title, '');
+  assert.equal(t.body, '');
+  assert.equal(t.authorDeleted, true);
+  assert.notEqual(t.removed, true, 'the thread must stay listed — other members are in it');
+  // the private data really is deleted, not blanked
+  assert.equal((await db.doc('users/' + V).get()).exists, false);
+  assert.equal((await db.collection('users/' + V + '/favorites').get()).empty, true);
 
   const convo = await waitFor(async () => {
     const c = await db.doc('conversations/conv1').get();

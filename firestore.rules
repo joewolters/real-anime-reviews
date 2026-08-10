@@ -242,7 +242,18 @@ service cloud.firestore {
       // (inbox/suggestions) resolve identities through it.
       allow get: if isOwner(uid) || isAdmin();
       allow list: if isOwner(uid);
-      allow create, update, delete: if isOwner(uid);
+      // PART A item 7 — DELETE IS CLOSED. It used to be `create, update, delete:
+      // if isOwner(uid)`, which made the users doc a client-reachable DETONATOR:
+      // onUserDelete fans a whole-account wipe out of this doc's deletion, so any
+      // signed-in member could fire their entire cascade from devtools — no
+      // reauth, no confirmation, no admin guard, and (before the item-7 rework)
+      // taking other members' posts with it. No UI ever did it; it was one
+      // console line away for everyone. Deletion now goes through the
+      // deleteMyAccount callable, which reauth-gates it, refuses the admin UID
+      // and tombstones rather than shreds. Nothing in the client deletes this
+      // doc (verified), so closing it costs nothing.
+      allow create, update: if isOwner(uid);
+      allow delete: if false;
 
       match /favorites/{animeId} {
         allow get, list, create, update, delete: if isOwner(uid);
@@ -1080,6 +1091,21 @@ service cloud.firestore {
     // =========================================================================
     match /uploadHashes/{id} {
       allow get: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow list, create, update, delete: if false;
+    }
+
+    // =========================================================================
+    // adminStats/{doc} — PART A item 6: the member-stats page's ONE document
+    // (`current`), rewritten daily by the recomputeStats schedule and by the
+    // admin-only refreshStatsNow callable (Admin SDK — both bypass these rules).
+    // Admin GET only: it is a site-wide picture, and even though it holds pure
+    // counts and no member is identifiable in it, nothing here is any member's
+    // business but Blake's. NO list (there is one doc; a list rule would only
+    // ever widen the surface) and NO client write of any kind — the same
+    // CF-only shape as cfProcessed / notifMeta.
+    // =========================================================================
+    match /adminStats/{doc} {
+      allow get: if isAdmin();
       allow list, create, update, delete: if false;
     }
   }

@@ -1450,3 +1450,62 @@ test('A1 group read: participant get OK; non-participant get DENIED (H4 holds fo
   await assertSucceeds(getDoc(doc(as('bob'), 'conversations/grd1')));
   await assertFails(getDoc(doc(as('carol'), 'conversations/grd1')));
 });
+
+// ============================================================================
+// PART A item 6 — adminStats/{doc}. ONE Cloud-Function-written document; admin
+// GET only, no list, and no client write of any kind.
+// ============================================================================
+test('adminStats: the admin may GET the one stats doc', async () => {
+  await seed((db) => setDoc(doc(db, 'adminStats/current'), { members: { total: 3 } }));
+  await assertSucceeds(getDoc(doc(as(ADMIN), 'adminStats/current')));
+});
+test('adminStats: a member, and an anon visitor, are DENIED the read', async () => {
+  await seed((db) => setDoc(doc(db, 'adminStats/current'), { members: { total: 3 } }));
+  await assertFails(getDoc(doc(as('alice'), 'adminStats/current')));
+  await assertFails(getDoc(doc(anon(), 'adminStats/current')));
+});
+test('adminStats: NOBODY writes it from a client — not even the admin', async () => {
+  // The numbers are ground truth from a recompute. A client write path would be
+  // a way to make them say anything.
+  await assertFails(setDoc(doc(as(ADMIN), 'adminStats/current'), { members: { total: 999 } }));
+  await assertFails(setDoc(doc(as('alice'), 'adminStats/current'), { members: { total: 999 } }));
+  await seed((db) => setDoc(doc(db, 'adminStats/current'), { members: { total: 3 } }));
+  await assertFails(updateDoc(doc(as(ADMIN), 'adminStats/current'), { 'members.total': 999 }));
+  await assertFails(deleteDoc(doc(as(ADMIN), 'adminStats/current')));
+});
+test('adminStats: LIST is denied even for the admin (there is one doc; a list only widens)', async () => {
+  await seed((db) => setDoc(doc(db, 'adminStats/current'), { members: { total: 3 } }));
+  await assertFails(getDocs(collection(as(ADMIN), 'adminStats')));
+});
+
+// ============================================================================
+// PART A item 7 — users/{uid} DELETE is no longer a client-reachable trigger.
+// -----------------------------------------------------------------------------
+// HAZARD (live before this change): `allow create, update, delete: if isOwner(uid)`
+// let any signed-in member delete their OWN users/{uid} doc from devtools — and
+// onUserDelete fans a whole-account wipe out of exactly that deletion. No UI did
+// it, but the cascade was one console line away for anyone, with no reauth, no
+// confirmation and no admin guard. Account deletion now goes through the
+// deleteMyAccount callable, which reauth-gates it and refuses the admin UID.
+// ============================================================================
+test('item 7: a member can NO LONGER delete their own users/{uid} doc (the cascade trigger)', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice'), { username: 'Alice' }));
+  await assertFails(deleteDoc(doc(as('alice'), 'users/alice')));
+});
+test('item 7: the admin cannot delete a users/{uid} doc from a client either', async () => {
+  await seed((db) => setDoc(doc(db, 'users/alice'), { username: 'Alice' }));
+  await assertFails(deleteDoc(doc(as(ADMIN), 'users/alice')));
+  await seed((db) => setDoc(doc(db, 'users/' + ADMIN), { username: 'Blake' }));
+  await assertFails(deleteDoc(doc(as(ADMIN), 'users/' + ADMIN)));
+});
+test('item 7: closing delete does NOT disturb the users/{uid} read + write paths', async () => {
+  // The account page writes this doc on every profile save — the fix must be
+  // surgical about delete and nothing else.
+  await assertSucceeds(setDoc(doc(as('alice'), 'users/alice'), { username: 'Alice' }));
+  await assertSucceeds(updateDoc(doc(as('alice'), 'users/alice'), { username: 'Alice2' }));
+  await assertSucceeds(getDoc(doc(as('alice'), 'users/alice')));
+  await assertFails(getDoc(doc(as('bob'), 'users/alice')));
+  // and the private subcollections still delete freely (cleanup must always work)
+  await seed((db) => setDoc(doc(db, 'users/alice/favorites/f1'), { animeId: 'x' }));
+  await assertSucceeds(deleteDoc(doc(as('alice'), 'users/alice/favorites/f1')));
+});

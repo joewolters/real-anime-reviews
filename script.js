@@ -1478,6 +1478,27 @@ query ($id: Int) {
 function nl2br(s) { return String(s ?? "").replace(/\n/g, "<br>"); }
 function toMillis(ts) { return ts?.toMillis ? ts.toMillis() : (typeof ts === 'number' ? ts : Date.now()); }
 
+// PART A item 7 — THE AUTHOR-DELETION TOMBSTONE.
+// Blake's locked policy (2026-08-10): "tombstone the containers, erase the
+// content." When a member deletes their account, everything they wrote is
+// emptied server-side but the doc stays, so the conversation around it still
+// reads and — the whole point — every OTHER member's reply in it survives.
+// The doc comes back carrying `authorDeleted: true`, blank text/body/title, no
+// images, and displayName '[deleted]'. These two helpers are the ONE place the
+// client decides what that looks like.
+//
+// ⚠️ `authorDeleted` is deliberately NOT `removed`. `removed` is the MODERATOR
+// mark, and the hub list filters `removed !== true` — using it here would hide
+// a thread that other members are still talking in, which is the exact harm
+// this rework exists to stop. Two marks, two sentences, one erasure.
+function isAuthorGone(d) { return !!(d && d.authorDeleted === true); }
+function authorGoneHtml() {
+  return '<em class="rar-tombstone">[removed by the author]</em>';
+}
+// exposed for the spec (the lanternModel / coverClamp precedent — script.js is
+// a MODULE, so top-level declarations are not on window by themselves)
+if (typeof window !== 'undefined') window.rarTombstone = { isAuthorGone, authorGoneHtml };
+
 // v1.7.1 — keep a per-anime AniListColor readable as kicker text on the dark
 // modal: very dark colors (e.g. Chainsaw Man's #6b1a1a) get lightened toward a
 // readable band; everything mid/light passes through. Returns rgb() or null.
@@ -4161,7 +4182,7 @@ function positionFeaturedDrop() {
     const d = Math.floor(h / 24); return `${d}d ago`;
   }
 
-  function commentItemEl({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0, pinned = false, showReplies = true, imageRefs = null, imageDocPath = '' }) {
+  function commentItemEl({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0, pinned = false, showReplies = true, imageRefs = null, imageDocPath = '', authorDeleted = false }) {
   const li = document.createElement('li'); li.className = 'comment-item';
   if (pinned) li.classList.add('is-pinned');
   li.dataset.cid = id;
@@ -4197,9 +4218,14 @@ function positionFeaturedDrop() {
 
   // body — rendered through the shared XSS-safe inline renderer (bold/italic/
   // code/links; NO headers). Raw markdown stashed for the inline editor.
+  // PART A item 7: a departed member's slot says so instead of sitting empty.
+  const gone = authorDeleted === true;
   const p = document.createElement('p'); p.className = 'comment-body';
-  p.innerHTML = (window.renderMarkdownInline ? window.renderMarkdownInline(text || '') : escapeHtml(text || ''));
-  p.dataset.raw = text || '';
+  p.innerHTML = gone
+    ? authorGoneHtml()
+    : (window.renderMarkdownInline ? window.renderMarkdownInline(text || '') : escapeHtml(text || ''));
+  p.dataset.raw = gone ? '' : (text || '');
+  if (gone) li.classList.add('is-author-gone');
 
   bubble.appendChild(meta);
   bubble.appendChild(p);
@@ -4207,7 +4233,9 @@ function positionFeaturedDrop() {
   // image overhaul — comments carry images now: [img:N] slots resolve inline,
   // the rest trail as a gallery. Callers that pass no imageRefs/imageDocPath
   // (review-discussion rows, optimistic pendings) render exactly as before.
-  if (Array.isArray(imageRefs) && imageRefs.length && imageDocPath) {
+  // A tombstoned slot never resolves images — the pointers are already dropped
+  // server-side, and refusing here means a stale snapshot can't paint one.
+  if (!gone && Array.isArray(imageRefs) && imageRefs.length && imageDocPath) {
     const imgOpts = { docPath: imageDocPath, authorUid: uid || '' };
     const usedInline = resolveImageSlots(p, imageRefs, imgOpts);
     const rest = imageRefs.filter((x) => !usedInline.has(x));
@@ -4421,6 +4449,7 @@ function setVoteUI(li, value) {
         pinned,
         imageRefs: d.imageRefs,                                   // image overhaul
         imageDocPath: 'comments/' + s + '/items/' + docSnap.id,
+        authorDeleted: isAuthorGone(d),                           // PART A item 7
       });
 
       // live author identity — gate 15: profiles-first, users-fallback
@@ -4896,7 +4925,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
   }
 
   // ---------- COMMENT REPLIES (depth-1) ----------
-  function buildReplyItem({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0, imageRefs = null, imageDocPath = '' }) {
+  function buildReplyItem({ id, uid, displayName, photoURL, text, createdAt, likesCount = 0, dislikesCount = 0, imageRefs = null, imageDocPath = '', authorDeleted = false }) {
     const li = document.createElement('li'); li.className = 'reply-item';
     li.dataset.rid = id || '';
     li.dataset.uid = uid || '';
@@ -4913,12 +4942,16 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const millis = createdAt?.toMillis ? createdAt.toMillis() : (typeof createdAt === 'number' ? createdAt : Date.now());
     const t = document.createElement('time'); t.textContent = timeAgo(millis);
     meta.appendChild(nameEl); meta.appendChild(sep); meta.appendChild(t);
+    const rGone = authorDeleted === true;   // PART A item 7
+    if (rGone) li.classList.add('is-author-gone');
     const p = document.createElement('p'); p.className = 'reply-body';
-    p.innerHTML = (window.renderMarkdownInline ? window.renderMarkdownInline(text || '') : escapeHtml(text || ''));
+    p.innerHTML = rGone
+      ? authorGoneHtml()
+      : (window.renderMarkdownInline ? window.renderMarkdownInline(text || '') : escapeHtml(text || ''));
     // image overhaul — replies carry inline images too (same machinery; rows
     // with no refs render exactly as before).
     let replyGal = null;
-    if (Array.isArray(imageRefs) && imageRefs.length && imageDocPath) {
+    if (!rGone && Array.isArray(imageRefs) && imageRefs.length && imageDocPath) {
       const imgOpts = { docPath: imageDocPath, authorUid: uid || '' };
       const usedInline = resolveImageSlots(p, imageRefs, imgOpts);
       const rest = imageRefs.filter((x) => !usedInline.has(x));
@@ -5030,6 +5063,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
           dislikesCount: (typeof d.dislikesCount === 'number') ? d.dislikesCount : 0,
           imageRefs: d.imageRefs,                                                       // image overhaul
           imageDocPath: 'comments/' + s + '/items/' + cid + '/replies/' + r.id,
+          authorDeleted: isAuthorGone(d),                                               // PART A item 7
         });
         listUl.appendChild(replyLi);
         // live vote state for the current user (mirrors the comment vote sub)
@@ -5582,14 +5616,20 @@ function openInlineCommentEditor(editBtn, itemRef) {
   let profileLayerEl = null;
   function closeProfilePage() {
     if (!profileLayerEl) return;
-    rarNavUnwindWhile('profile');   // LAST CALL B3 — consume the sheet's entry
+    // PART A item 2 — the all-reviews view is a step ON TOP of the sheet, so a
+    // full close must consume BOTH or Back would walk through a dead entry.
+    rarNavUnwindWhile(['profileReviews', 'profile']);   // LAST CALL B3 — consume the sheet's entry
     try { profileLayerEl.remove(); } catch (_) {} profileLayerEl = null;
     if (/^#profile=/.test(location.hash)) {
       try { history.replaceState({ rarDepth: rarNavOwnedDepth() }, '', location.pathname + location.search + (rarNavStack.length ? rarNavStack[rarNavStack.length - 1].hash : '')); } catch (_) {}
     }
   }
-  async function openProfilePage(uid) {
+  // PART A item 2 — `opts.view === 'reviews'` opens straight into the
+  // all-reviews view, so `#profile=<uid>/reviews` is a real shareable link and
+  // not just an address the app happens to be at.
+  async function openProfilePage(uid, opts) {
     if (typeof uid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) return;
+    const openToReviews = !!(opts && opts.view === 'reviews');
     // v1.10.2R (Blake's clarified spec): his sheet is a MEMBER sheet — his own
     // Studio choices, nothing imposed. The ONE difference: the CREATOR 創り手
     // kicker (gold — his mark) where members wear MEMBER 旅人. The one guard
@@ -5599,7 +5639,14 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const isCreator = uid === NOTIF_ADMIN_UID;
     // B3 — replacing an open sheet (profile→profile) keeps the old entry:
     // Back should walk A ← B, so only the DOM is swapped here (suppressed).
-    if (profileLayerEl) { rarNavSuppress = true; try { profileLayerEl.remove(); } catch (_) {} profileLayerEl = null; rarNavSuppress = false; }
+    if (profileLayerEl) {
+      // PART A item 2 — if the outgoing sheet was showing its all-reviews view,
+      // that step must leave with it. Otherwise its entry survives underneath
+      // the new sheet and Back walks through a dead step (the documented
+      // inert-residue class — avoidable here, so avoid it).
+      rarNavUnwindWhile('profileReviews');
+      rarNavSuppress = true; try { profileLayerEl.remove(); } catch (_) {} profileLayerEl = null; rarNavSuppress = false;
+    }
     const layer = document.createElement('div');
     layer.className = 'profile-layer';
     layer.innerHTML = `<div class="profile-scrim"></div>
@@ -5611,6 +5658,14 @@ function openInlineCommentEditor(editBtn, itemRef) {
             <button type="button" class="profile-close" aria-label="Close">&times;</button>
           </span></div>
         <div class="profile-body"><p class="hub-loading">Opening…</p></div>
+        <!-- PART A item 2 — the ALL-REVIEWS view. Blake: "other users now have
+             to click a button that brings up a separate sheet of all the
+             reviews a user has made so it doesn't take up the entire profile."
+             It is a second VIEW of THIS sheet, not a second layer: the profile
+             body is hidden rather than destroyed, so every listener already
+             bound to it (the Appreciate button, the delegated row handlers)
+             survives the round trip and Back costs no refetch. -->
+        <div class="profile-reviews-view" hidden></div>
       </section>`;
     document.body.appendChild(layer);
     profileLayerEl = layer;
@@ -5622,7 +5677,18 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const close = () => closeProfilePage();
     layer.querySelector('.profile-scrim').addEventListener('click', close);
     layer.querySelector('.profile-close').addEventListener('click', close);
-    const onEsc = (e) => { if (e.key === 'Escape' && profileLayerEl === layer) { e.stopPropagation(); close(); document.removeEventListener('keydown', onEsc, true); } };
+    // Esc steps back ONE view: out of the all-reviews view first, then out of
+    // the sheet (the tertiary layer's ← / Esc contract, applied here).
+    const onEsc = (e) => {
+      if (e.key !== 'Escape' || profileLayerEl !== layer) return;
+      e.stopPropagation();
+      if (layer._reviewsOpen && layer._reviewsOpen()) {
+        if (!rarNavConsume('profileReviews')) layer._closeProfileReviews();
+        return;
+      }
+      close();
+      document.removeEventListener('keydown', onEsc, true);
+    };
     document.addEventListener('keydown', onEsc, true);
 
     const bodyEl = layer.querySelector('.profile-body');
@@ -5760,15 +5826,17 @@ function openInlineCommentEditor(editBtn, itemRef) {
     bodyEl.innerHTML = profileHeaderHtml(ident)
       + '<div class="profile-featured-slot"></div>'
       + '<div class="profile-collections-slot"></div>'
-      // LAST CALL A8 (Blake: "threads hidden on public pages; reviews only,
-      // plus anything pinned" — "I just don't want TOO much information on a
-      // public profile"): the Threads tab is GONE from the public sheet; the
-      // one remaining chip stays as the section label. Account-page Activity
-      // keeps the full set — this is the PUBLIC face only.
-      + '<div class="profile-acts" role="tablist" aria-label="Their activity">'
-      +   '<button type="button" class="profile-act-chip is-active" data-act="reviews" role="tab" aria-selected="true">Reviews</button>'
-      + '</div>'
-      + '<ul class="profile-list" data-profile-acts><li class="hub-loading">Looking…</li></ul>';
+      // PART A item 2 — the reviews no longer pour down the profile. The pinned
+      // pick leads (slot above); everything else waits behind ONE disclosure
+      // button, in the `.profile-col-viewall` language the shelves already use
+      // on this same sheet.
+      //
+      // The old `role="tablist"` + single `role="tab"` chip is GONE, not
+      // restyled: LAST CALL A8 removed the Threads tab and left a one-tab
+      // tablist with no tabpanel, which is an accessibility lie — it promises a
+      // screen-reader user a set of tabs to arrow between and there is only
+      // ever one, controlling nothing. A section heading is what it actually was.
+      + '<div class="profile-reviews-slot"><p class="hub-loading">Looking…</p></div>';
 
     // the heart carve-out — wire the like. Signed-out invites sign-in; the
     // owner's own button hides (rules deny self-likes — don't render the tease);
@@ -5909,42 +5977,96 @@ function openInlineCommentEditor(editBtn, itemRef) {
     // gate 20.7 (item 3): Threads + Reviews ONLY — the Comments/Replies tabs,
     // their loaders, and the shortAct snippet helper all left together.
     const actCache = {};
-    const actListEl = bodyEl.querySelector('[data-profile-acts]');
     const actLabel = (key) => key.indexOf('al:') === 0 ? 'a season' : key.replace(/-/g, ' ');
     // gate 20.7 (item 3): the comments half of this split is GONE with the
     // public Comments tab — the items CG read now keeps only reviews/ rows.
+    // PART A item 2: the cap moved from 12 to the query's own 60 — the list is
+    // behind a door now, so it can be complete without crowding anything, and
+    // the fetch was already paying for those rows.
     async function loadItemsSplit() {
       if (actCache.reviews) return;
-      const rows = { reviews: [] };
+      const rows = [];
       try {
         const snap = await getDocs(query(collectionGroup(db, 'items'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(60)));
         snap.forEach((d) => {
-          const v = d.data() || {}; if (v.removed) return;
+          const v = d.data() || {};
+          // PART A item 7: a tombstoned slot is not a review to list — its
+          // author is gone and there is nothing behind the row to open.
+          if (v.removed || isAuthorGone(v)) return;
           const key = d.ref.path.split('/')[1] || '';
           if (d.ref.path.startsWith('reviews/')) {
-            rows.reviews.push(`<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}"><span class="profile-item-title">${escapeHtml(v.title || '(review)')}</span><span class="profile-item-sub">${escapeHtml(actLabel(key))} · ${escapeHtml(String(v.rating || ''))}/10</span></li>`);
+            rows.push(`<li class="profile-item" data-open-target="${escapeHtml(d.ref.path)}" role="link" tabindex="0"><span class="profile-item-title">${escapeHtml(v.title || '(review)')}</span><span class="profile-item-sub">${escapeHtml(actLabel(key))} · ${escapeHtml(String(v.rating || ''))}/10</span></li>`);
           }
         });
       } catch (_) {}
-      actCache.reviews = rows.reviews.slice(0, 12);
+      actCache.reviews = rows;
     }
-    // adversarial perf LOW: memoize both tabs — toggling chips on a sheet (it
-    // opens from any author name site-wide) must not re-query Firestore per click.
-    const actLoaders = {
-      // LAST CALL A8: the threads loader left with its tab (public = reviews
-      // + pinned only). The account page's own Activity keeps the full set.
-      reviews: async () => { await loadItemsSplit(); return actCache.reviews; },
-    };
-    const ACT_EMPTY = { reviews: 'No reviews yet.' };
-    async function showAct(kind) {
-      bodyEl.querySelectorAll('.profile-act-chip').forEach((c) => {
-        const on = c.getAttribute('data-act') === kind;
-        c.classList.toggle('is-active', on); c.setAttribute('aria-selected', String(on));
-      });
-      if (actListEl) actListEl.innerHTML = '<li class="hub-loading">Looking…</li>';
-      const rows = await (actLoaders[kind] ? actLoaders[kind]() : Promise.resolve([]));
-      if (profileLayerEl !== layer || !actListEl) return;   // closed mid-load
-      actListEl.innerHTML = rows.length ? rows.join('') : `<li class="profile-empty">${ACT_EMPTY[kind]}</li>`;
+
+    // ---- PART A item 2 — the disclosure + its view ---------------------------
+    const reviewsSlot = bodyEl.querySelector('.profile-reviews-slot');
+    const reviewsViewEl = layer.querySelector('.profile-reviews-view');
+    const REVIEWS_HASH = '#profile=' + encodeURIComponent(uid) + '/reviews';
+
+    function reviewsHeadingHtml(n) {
+      return '<span class="profile-featured-kicker">✍ THEIR REVIEWS <span class="jp-mini">書評</span></span>'
+        + (n
+          ? '<button type="button" class="profile-col-viewall profile-reviews-open" data-reviews-open>'
+            + 'all reviews (' + n + ')</button>'
+          : '<p class="profile-empty">No reviews yet.</p>');
+    }
+
+    // The reviews VIEW: this sheet, showing the full list, with a ← chip that
+    // walks back one step. The profile body is hidden, never rebuilt.
+    function openProfileReviews(fromDeepLink) {
+      if (!reviewsViewEl || profileLayerEl !== layer) return;
+      const rows = actCache.reviews || [];
+      reviewsViewEl.innerHTML =
+        '<div class="profile-reviews-bar">'
+        + '<button type="button" class="profile-reviews-back" data-reviews-back>← Back to profile</button>'
+        + '</div>'
+        + '<span class="profile-featured-kicker">✍ ALL REVIEWS <span class="jp-mini">書評</span></span>'
+        + (rows.length
+          ? '<ul class="profile-list profile-list--all">' + rows.join('') + '</ul>'
+          : '<p class="profile-empty">No reviews yet.</p>');
+      bodyEl.hidden = true;
+      reviewsViewEl.hidden = false;
+      const back = reviewsViewEl.querySelector('.profile-reviews-back');
+      if (back) back.focus();
+      // rarNavPush decides owned-vs-cold from the URL itself, so one call is
+      // right in both cases.
+      //
+      // ACCEPTED, documented: on a COLD `#profile=<uid>/reviews` load the sheet
+      // push normalises the URL to `#profile=<uid>` first, so this view then
+      // pushes a real entry — a shared reviews link costs TWO Backs (reviews →
+      // profile → off the site) instead of one. That walk is coherent and never
+      // strands anyone; making it one step would mean giving the profile entry
+      // the reviews hash, which then paints the wrong URL when the view closes.
+      // Traded deliberately, like the media-jump residue in the same model.
+      rarNavPush('profileReviews', REVIEWS_HASH);
+      if (fromDeepLink) { /* the URL already reads this view — nothing to fix up */ }
+    }
+    // Back chip / Esc: consume the history entry so the browser stack matches
+    // what is on screen; the popstate re-enters and does the real close.
+    function closeProfileReviews() {
+      if (!reviewsViewEl || reviewsViewEl.hidden) return;
+      reviewsViewEl.hidden = true;
+      reviewsViewEl.innerHTML = '';
+      bodyEl.hidden = false;
+      const btn = bodyEl.querySelector('[data-reviews-open]');
+      if (btn) btn.focus();
+    }
+    layer._closeProfileReviews = closeProfileReviews;
+    layer._reviewsOpen = () => reviewsViewEl && !reviewsViewEl.hidden;
+
+    async function paintReviews(deepLinkView) {
+      await loadItemsSplit();
+      if (profileLayerEl !== layer || !reviewsSlot) return;   // closed mid-load
+      const rows = actCache.reviews || [];
+      reviewsSlot.innerHTML = reviewsHeadingHtml(rows.length);
+      // A deep link opens the view even when the list is EMPTY: the URL says
+      // "all reviews", so showing the profile instead would quietly answer a
+      // different question than the link asked. The view says "No reviews yet."
+      if (deepLinkView) openProfileReviews(true);
     }
 
     // gate 20.8 (Blake fix 2): the card can be open OVER the secondary sheet
@@ -5967,9 +6089,23 @@ function openInlineCommentEditor(editBtn, itemRef) {
         try { if (typeof hubLayerEl !== 'undefined' && hubLayerEl && !hubLayerEl.hidden) closeHubDrawer(); } catch (_) {}
       }
     }
+    // PART A item 2 — the disclosure lives on the SHEET, not on bodyEl: the
+    // reviews view is bodyEl's sibling, so its ← chip and its rows would be
+    // outside a bodyEl-scoped delegation.
+    layer.addEventListener('click', (e) => {
+      if (e.target.closest('[data-reviews-open]')) {
+        e.preventDefault();
+        openProfileReviews(false);
+        return;
+      }
+      if (e.target.closest('[data-reviews-back]')) {
+        e.preventDefault();
+        // NEVER close-then-push synchronously (the two documented HIGH races) —
+        // consume the entry and let the popstate do the closing.
+        if (!rarNavConsume('profileReviews')) closeProfileReviews();
+      }
+    });
     bodyEl.addEventListener('click', (e) => {
-      const chip = e.target.closest('.profile-act-chip');
-      if (chip) { showAct(chip.getAttribute('data-act')); return; }
       // LAST CALL A8 — "view all shelves" reveals the waiting blocks
       const tog = e.target.closest('[data-shelves-toggle]');
       if (tog) {
@@ -6012,25 +6148,34 @@ function openInlineCommentEditor(editBtn, itemRef) {
           () => { try { openAnimeFromId(aid); } catch (_) {} });
         return;
       }
+    });
+    // PART A item 2 — the row-open delegation moved from bodyEl up to the
+    // SHEET, because review rows now live in the reviews view (bodyEl's
+    // sibling) as well as in the pinned slot. One handler, both places, no
+    // chance of a row opening twice.
+    layer.addEventListener('click', (e) => {
       const tg = e.target.closest('[data-open-target]');
-      if (tg) {
-        const p = tg.getAttribute('data-open-target');
-        // openNotifTarget takes the STRING path and parses internally — handing
-        // it the parsed OBJECT threw-and-swallowed, making every review a dead
-        // click (adversarial review, HIGH). panel HIGH: cascade + deferred open.
-        rarNavCascade([closeProfilePage, closeStaleOverlays],
-          () => { try { if (typeof openNotifTarget === 'function') openNotifTarget(p); } catch (_) {} });
-      }
+      if (!tg) return;
+      const p = tg.getAttribute('data-open-target');
+      // openNotifTarget takes the STRING path and parses internally — handing
+      // it the parsed OBJECT threw-and-swallowed, making every review a dead
+      // click (adversarial review, HIGH). panel HIGH: cascade + deferred open.
+      // closeProfilePage unwinds the reviews step with the sheet, so a row
+      // opened FROM the reviews view leaves no orphan entry behind.
+      rarNavCascade([closeProfilePage, closeStaleOverlays],
+        () => { try { if (typeof openNotifTarget === 'function') openNotifTarget(p); } catch (_) {} });
     });
-    // keyboard parity for the cover role="link" spans
-    bodyEl.addEventListener('keydown', (e) => {
+    // keyboard parity for the role="link" spans (shelf covers + review rows)
+    layer.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
-      const cover = e.target && e.target.closest ? e.target.closest('[data-anime-id]') : null;
-      if (!cover || !cover.getAttribute('data-anime-id')) return;
+      const hit = e.target && e.target.closest
+        ? e.target.closest('[data-anime-id], [data-open-target]') : null;
+      if (!hit) return;
+      if (hit.hasAttribute('data-anime-id') && !hit.getAttribute('data-anime-id')) return;
       e.preventDefault();
-      cover.click();
+      hit.click();
     });
-    showAct('reviews');
+    paintReviews(openToReviews);
   }
   window.openProfilePage = openProfilePage;
 
@@ -6051,10 +6196,15 @@ function openInlineCommentEditor(editBtn, itemRef) {
     e.preventDefault(); e.stopPropagation();
     openProfilePage(nm.getAttribute('data-profile-uid'));
   }, true);
-  // deep link: #profile=<uid> on load
+  // deep link: #profile=<uid> — and, PART A item 2, #profile=<uid>/reviews.
+  // The `/reviews` suffix is split off BEFORE decoding: uids are
+  // [A-Za-z0-9_-] so they can never contain a slash, and decoding first would
+  // let a %2F in a hostile hash forge the suffix.
   if (/^#profile=/.test(location.hash)) {
-    const uid = decodeURIComponent(location.hash.slice(9));
-    setTimeout(() => openProfilePage(uid), 400);
+    const raw = location.hash.slice(9);
+    const wantsReviews = /\/reviews$/.test(raw);
+    const uid = decodeURIComponent(wantsReviews ? raw.slice(0, -'/reviews'.length) : raw);
+    setTimeout(() => openProfilePage(uid, wantsReviews ? { view: 'reviews' } : null), 400);
   }
 
   // ⚑ Report / 🗑 Remove — ONE document-level handler for every surface.
@@ -6439,7 +6589,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     // overhaul item 8 — the user-chosen THREAD THUMBNAIL: a text thread gets a
     // picture on its card like the anime-cover threads do. The anime cover wins
     // when both exist; the thumb hydrates via getDownloadURL (data-imgref).
-    const ownThumb = (!t.removed && !cover) ? hubSafeImageRef(t.thumbImage) : '';
+    const ownThumb = (!t.removed && !isAuthorGone(t) && !cover) ? hubSafeImageRef(t.thumbImage) : '';
     const thumbImg = cover
       ? `<img class="hub-card-thumb" src="${escapeHtml(cover)}" alt="" loading="lazy">`
       : (ownThumb ? `<img class="hub-card-thumb" data-imgref="${escapeHtml(ownThumb)}" alt="" loading="lazy">` : '');
@@ -6449,7 +6599,11 @@ function openInlineCommentEditor(editBtn, itemRef) {
     const thumb = thumbImg
       ? `<span class="hub-card-thumbwrap">${thumbImg}<span class="hub-card-tag-overlay">${chip}</span></span>`
       : '';
-    const title = t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)');
+    // PART A item 7 — the two tombstones are different sentences on purpose:
+    // a moderator took this down VS its author left. The thread itself stays
+    // listed either way (other members are still talking in it).
+    const title = t.removed ? '<em>[removed]</em>'
+      : (isAuthorGone(t) ? authorGoneHtml() : escapeHtml(t.title || '(untitled)'));
     return `<li class="hub-card${t.pinned ? ' is-pinned' : ''}${(cover || ownThumb) ? ' has-thumb' : ''}" data-thread-id="${escapeHtml(t.id)}" tabindex="0" role="button">
       ${thumb}<div class="hub-card-main">
       <div class="hub-card-head">${pin}${chip}${lock}<span class="hub-card-time">${escapeHtml(relTimeHub(t.lastPostAt || t.createdAt))}</span></div>
@@ -6489,6 +6643,12 @@ function openInlineCommentEditor(editBtn, itemRef) {
     if (p.removed === true) {
       return `<li class="hub-post hub-post--removed depth-${vdepth}" data-post-id="${id}" data-depth="${depth}">
         <div class="hub-post-body">${replyingTo}<div class="hub-post-text"><em>[taken down]</em></div>${childWrap}</div></li>`;
+    }
+    // PART A item 7 — the same tombstone shape for an author who left. Its
+    // children survive beneath it too: that is the whole point of the rework.
+    if (isAuthorGone(p)) {
+      return `<li class="hub-post hub-post--removed is-author-gone depth-${vdepth}" data-post-id="${id}" data-depth="${depth}">
+        <div class="hub-post-body">${replyingTo}<div class="hub-post-text">${authorGoneHtml()}</div>${childWrap}</div></li>`;
     }
 
     const byline = `<div class="hub-post-by">
@@ -6907,12 +7067,17 @@ function openInlineCommentEditor(editBtn, itemRef) {
           <button type="button" class="action-btn hub-admin" data-hub-admin="lock">${t.locked ? 'Unlock' : 'Lock'}</button>
           <button type="button" class="action-btn hub-admin danger" data-hub-admin="remove">Remove</button>
         </div>` : '';
+      // PART A item 7 — an OP whose author left reads as their doing, not a
+      // moderator's. The thread stays open: the replies under it are other
+      // members' words, and they keep their home.
+      const tGone = isAuthorGone(t);
       const bodyHtml = t.removed ? '<em>[removed by a moderator]</em>'
-        : (window.renderMarkdown ? window.renderMarkdown(t.body || '') : escapeHtml(t.body || ''));
-      const cover = hubSafeCover(t.coverImage);   // gate 8d — attached-anime cover (not gold)
+        : (tGone ? authorGoneHtml()
+          : (window.renderMarkdown ? window.renderMarkdown(t.body || '') : escapeHtml(t.body || '')));
+      const cover = (t.removed || tGone) ? '' : hubSafeCover(t.coverImage);   // gate 8d — attached-anime cover (not gold)
       // mega-batch A2 — the user-chosen thumbnail shows in the thread VIEW too
       // (card ↔ thread consistency); the anime cover still wins when both exist.
-      const ownThumb = (!cover && !t.removed) ? hubSafeImageRef(t.thumbImage) : '';
+      const ownThumb = (!cover && !t.removed && !tGone) ? hubSafeImageRef(t.thumbImage) : '';
       const coverHtml = cover
         ? `<img class="hub-thread-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">`
         : (ownThumb ? `<img class="hub-thread-cover" data-imgref="${escapeHtml(ownThumb)}" alt="" loading="lazy">` : '');
@@ -6921,7 +7086,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
           <div class="hub-thread-head"><span class="hub-tag-chip">${escapeHtml((t.tag && t.tag.indexOf('anime:al:') === 0 && typeof t.animeTitle === 'string' && t.animeTitle) ? t.animeTitle : tagLabel(t.tag))}</span>
             <span class="hub-op-tag" title="Started this thread">OP</span>
             <span class="hub-card-time">${escapeHtml(relTimeHub(t.createdAt))}</span>${t.locked ? '<span class="hub-lock">🔒 Locked</span>' : ''}</div>
-          <h2 class="hub-thread-title">${t.removed ? '<em>[removed]</em>' : escapeHtml(t.title || '(untitled)')}</h2>
+          <h2 class="hub-thread-title">${t.removed ? '<em>[removed]</em>' : (tGone ? authorGoneHtml() : escapeHtml(t.title || '(untitled)'))}</h2>
           <div class="hub-thread-by"><span class="rar-name-link" data-profile-uid="${escapeHtml(t.authorUid || '')}" role="link" tabindex="0">${escapeHtml(name)}</span></div>
           <div class="hub-thread-text">${bodyHtml}</div>
           <div class="hub-op-gallery"></div>
@@ -6934,7 +7099,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
       // overhaul item 5 — inline placement: [img:N] slots in the body resolve to
       // the thread's own imageRefs; whatever isn't placed inline falls through
       // to the trailing gallery (pre-overhaul threads render exactly as before).
-      if (!t.removed) {
+      if (!t.removed && !tGone) {
         const opOpts = { docPath: 'forum/' + tid, authorUid: t.authorUid || '' };
         const usedInline = resolveImageSlots(bodyEl.querySelector('.hub-thread-text'), t.imageRefs, opOpts);
         const rest = Array.isArray(t.imageRefs) ? t.imageRefs.filter((p) => !usedInline.has(p)) : [];
@@ -7853,21 +8018,25 @@ function subscribeReviews(anime) {
       // full-width banner strip ABOVE the headline (was a 48×34 thumb squeezed
       // inline — "looks terrible and not large"). Cover-less rows are untouched;
       // .row-headline carries the old avatar|title|rating grid either way.
-      const rvCover = hubSafeImageRef(d.thumbImage);
+      // PART A item 7 — a departed reviewer's row keeps its slot in the list
+      // (the discussion under it is other members' words) and says what it is.
+      const rvGone = isAuthorGone(d);
+      if (rvGone) li.classList.add('is-author-gone');
+      const rvCover = rvGone ? '' : hubSafeImageRef(d.thumbImage);
       if (rvCover) li.classList.add('has-cover');
       li.innerHTML = `
         <button type="button" class="row-toggle" aria-expanded="false">
           ${rvCover ? `<span class="row-cover-banner"><img class="row-cover" alt="" loading="lazy" decoding="async" data-imgref="${escapeHtml(rvCover)}"></span>` : ''}
           <span class="row-headline">
             ${avatarHtml}
-            <span class="row-title">${escapeHtml(d.title || '—')}</span>
+            <span class="row-title">${rvGone ? authorGoneHtml() : escapeHtml(d.title || '—')}</span>
             <span class="row-rating">${Number.isFinite(rating) ? rating.toFixed(1) : '—'}/10</span>
           </span>
         </button>
 
         <div class="row-detail" hidden>
           <div class="row-meta">by <span class="author-name">${escapeHtml(d.displayName || 'User')}</span> · ${timeAgo(toMillis(d.createdAt))}</div>
-          <div class="row-body">${window.renderMarkdown ? window.renderMarkdown(d.body || '') : nl2br(escapeHtml(d.body || ''))}</div>
+          <div class="row-body">${rvGone ? authorGoneHtml() : (window.renderMarkdown ? window.renderMarkdown(d.body || '') : nl2br(escapeHtml(d.body || '')))}</div>
          
           <div class="row-actions">
             <div class="review-votes">
@@ -7892,7 +8061,7 @@ function subscribeReviews(anime) {
       // the body, the rest trail as a gallery before the action row. A4: the
       // dedicated COVER (thumbImage) leads the collapsed row (the banner above)
       // instead of repeating in the gallery.
-      if (Array.isArray(d.imageRefs) && d.imageRefs.length) {
+      if (!rvGone && Array.isArray(d.imageRefs) && d.imageRefs.length) {
         const rowBody = li.querySelector('.row-body');
         const rvOpts = { docPath: 'reviews/' + s + '/items/' + docSnap.id, authorUid: d.uid || '' };
         const usedInline = resolveImageSlots(rowBody, d.imageRefs, rvOpts);
@@ -8075,7 +8244,8 @@ function subscribeReviews(anime) {
               createdAt: td.createdAt,
               likesCount: likesCountT,
               dislikesCount: dislikesCountT,
-              showReplies: false   // discussion-thread rows have no nested replies
+              showReplies: false,  // discussion-thread rows have no nested replies
+              authorDeleted: isAuthorGone(td),   // PART A item 7
             });
 
             // live author identity — gate 15: profiles-first, users-fallback
@@ -8956,6 +9126,13 @@ function rarNavCloseTop() {      // popstate → close/step-back ONE view
       // hidden layer + empty trail = an inert residue step (media-jump) — skip
     }
     else if (top.type === 'secondary') secondaryBack();
+    // PART A item 2 — one Back steps out of the all-reviews view and leaves the
+    // profile itself open underneath, exactly as it was.
+    else if (top.type === 'profileReviews') {
+      try {
+        if (profileLayerEl && profileLayerEl._closeProfileReviews) profileLayerEl._closeProfileReviews();
+      } catch (_) {}
+    }
     else if (top.type === 'profile') closeProfilePage();
     else if (top.type === 'thread') closeThreadPanel();
     else if (top.type === 'hub') closeHubDrawer();

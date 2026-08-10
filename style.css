@@ -9492,6 +9492,17 @@ html.rar-welcome-pending::before {
 .hub-post.depth-2 > .hub-post-body > .hub-childposts { margin-left: 0; padding-left: 0; border-left: none; }
 .hub-post.is-collapsed > .hub-post-body { display: none; }
 .hub-post--removed > .hub-post-body > .hub-post-text { color: rgba(255, 255, 255, 0.4); font-style: italic; }
+
+/* PART A item 7 — the author-deletion tombstone. Quiet on purpose: the slot is
+   there so the conversation around it still reads, not to draw the eye to an
+   absence. Same weight as the moderator tombstone above, different sentence. */
+.rar-tombstone { color: rgba(255, 255, 255, 0.42); font-style: italic; }
+.is-author-gone .name,
+.is-author-gone .author-name,
+.is-author-gone .hub-card-by { color: rgba(255, 255, 255, 0.42); }
+/* a departed member's name is not a link to a profile that no longer exists */
+.is-author-gone .rar-name-link,
+.is-author-gone .rar-ava-link { pointer-events: none; cursor: default; }
 /* inline edit-own + the branded (no-native-dialog) delete-confirm */
 .hub-edit-input { width: 100%; min-height: 56px; resize: vertical; background: rgba(30, 10, 60, 0.6); color: #fff;
   border: 1px solid rgba(187, 134, 252, 0.45); border-radius: 9px; padding: 8px 10px; font: 400 0.9rem 'Montserrat', sans-serif; }
@@ -10582,6 +10593,54 @@ html[data-surface="account"] .side-link.is-active {
   border-radius: 999px; border: 1px solid rgba(187, 134, 252, 0.4); background: rgba(187, 134, 252, 0.08); }
 .set-member-since:empty { display: none; }
 
+/* — PART A item 7: LEAVING (self-serve account deletion) —
+   Warm, not alarming. A member deciding to go is not an error state, so this
+   card doesn't shout in red — it reads clearly, states what happens, and asks
+   for a typed word. The only red on the page is the final button, because that
+   one really is irreversible. */
+.set-card--danger { border-color: rgba(255, 155, 155, 0.34); background: rgba(255, 120, 120, 0.035); }
+.fld-pill--danger { border-color: rgba(255, 155, 155, 0.5); color: #ffc9c9; }
+
+/* The [hidden] twin for the opener: `.inline-header-btn` sets display:inline-flex,
+   which BEATS the UA [hidden] rule, so hiding it in JS did nothing — the button
+   stayed on screen next to the panel it had just opened. Measured, not assumed;
+   this is the author-display-vs-[hidden] trap's FOURTH scalp on this project. */
+#acct-del-open[hidden] { display: none; }
+.acct-del-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255, 155, 155, 0.22); }
+.acct-del-panel[hidden] { display: none; }
+.acct-del-h { margin: 0 0 8px; font: 800 0.72rem 'Montserrat', sans-serif; letter-spacing: 0.14em;
+  text-transform: uppercase; color: #ffc9c9; }
+.acct-del-list { margin: 0 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 7px;
+  font: 400 0.87rem 'Outfit', 'Montserrat', sans-serif; line-height: 1.5; color: rgba(255, 255, 255, 0.72); }
+.acct-del-list[hidden] { display: none; }
+.acct-del-list b { color: #fff; font-weight: 600; }
+.acct-del-confirm-label { display: block; margin-bottom: 6px;
+  font: 400 0.85rem 'Outfit', 'Montserrat', sans-serif; color: rgba(255, 255, 255, 0.72); }
+.acct-del-input { width: min(240px, 100%); padding: 10px 12px; border-radius: 10px;
+  border: 1px solid rgba(255, 155, 155, 0.4); background: rgba(255, 255, 255, 0.06); color: #fff;
+  font: 600 1rem 'Montserrat', sans-serif; letter-spacing: 0.12em; }
+.acct-del-input:focus { outline: none; border-color: rgba(255, 155, 155, 0.8);
+  box-shadow: 0 0 12px rgba(255, 120, 120, 0.2); }
+.acct-del-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.acct-del-actions[hidden] { display: none; }
+/* 44px tall: the item-4 tap-target floor, and the last thing anyone should
+   mis-tap is this one. */
+.acct-del-go { display: inline-flex; align-items: center; justify-content: center; min-height: 44px;
+  padding: 10px 20px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(255, 120, 120, 0.6); background: rgba(150, 30, 40, 0.5); color: #ffe3e3;
+  font: 700 0.78rem 'Montserrat', sans-serif; letter-spacing: 0.1em; text-transform: uppercase;
+  transition: background 0.18s ease, border-color 0.18s ease; }
+.acct-del-go:hover:not(:disabled) { background: rgba(180, 35, 48, 0.66); border-color: rgba(255, 120, 120, 0.85); }
+.acct-del-go:disabled { opacity: 0.42; cursor: not-allowed; }
+.acct-del-go:focus-visible { outline: 2px solid rgba(255, 170, 170, 0.9); outline-offset: 2px; }
+.acct-del-status { margin: 12px 0 0; font: 400 0.86rem 'Outfit', 'Montserrat', sans-serif; }
+.acct-del-status[hidden] { display: none; }
+.acct-del-status.is-working { color: #d9c9ff; }
+.acct-del-status.is-error { color: #ff9b9b; }
+@media (prefers-reduced-motion: reduce) {
+  .acct-del-go { transition-duration: 0s !important; }
+}
+
 /* — saved lists: list ↔ COVER view — */
 .saved-viewmode { display: inline-flex; gap: 4px; padding: 4px; border-radius: 10px;
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(187, 134, 252, 0.35); }
@@ -10688,9 +10747,34 @@ html[data-surface="account"] .side-link.is-active {
   border: 1px dashed rgba(187, 134, 252, 0.45); background: transparent; color: #c9a4ff;
   font: 600 0.76rem 'Outfit', sans-serif; }
 .profile-col-viewall:hover { border-style: solid; background: rgba(187, 134, 252, 0.1); }
+.profile-col-viewall:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
   .profile-col-cover[data-anime-id], .profile-col-save { transition: none; }
 }
+
+/* — PART A item 2: the reviews DOOR + the all-reviews view —
+   Blake: "other users now have to click a button that brings up a separate
+   sheet of all the reviews a user has made so it doesn't take up the entire
+   profile." The pinned review leads on the profile; the rest live behind one
+   button, in the same dashed-pill language the shelves already use here. */
+.profile-reviews-slot { display: flex; flex-direction: column; gap: 10px; margin: 18px 0 4px; }
+.profile-reviews-slot[hidden] { display: none; }
+/* 44px: the item-4 tap-target floor — this is the profile's one real control. */
+.profile-reviews-open { min-height: 44px; display: inline-flex; align-items: center; }
+
+.profile-reviews-view { display: flex; flex-direction: column; gap: 12px;
+  padding: 18px 22px 26px; overflow: auto; }
+.profile-reviews-view[hidden] { display: none; }
+.profile-reviews-bar { display: flex; align-items: center; }
+.profile-reviews-bar[hidden] { display: none; }
+.profile-reviews-back { min-height: 44px; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(187, 134, 252, 0.45); background: rgba(187, 134, 252, 0.08); color: #d9c9ff;
+  font: 600 0.8rem 'Outfit', sans-serif; display: inline-flex; align-items: center; }
+.profile-reviews-back:hover { background: rgba(187, 134, 252, 0.18); border-color: rgba(187, 134, 252, 0.7); }
+.profile-reviews-back:focus-visible { outline: 2px solid rgba(187, 134, 252, 0.85); outline-offset: 2px; }
+/* the full list can be long — let it scroll inside the sheet, never the page */
+.profile-list--all { gap: 8px; }
+.profile-list--all[hidden] { display: none; }
 
 /* — the heart beats once when you appreciate (transform only) — */
 @keyframes pfHeartBeat { 0% { transform: scale(1); } 30% { transform: scale(1.28); } 60% { transform: scale(0.94); } 100% { transform: scale(1); } }

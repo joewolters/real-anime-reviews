@@ -22,6 +22,8 @@ import {
 
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js';
+// PART A item 7 — the deleteMyAccount callable (self-serve account deletion).
+import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
 
 // (?v= wired at the v1.10.0 cutover — these once-bare imports cache-bust now;
 // bump-version.js carries the import targets.)
@@ -2039,6 +2041,132 @@ resetPassBtn?.addEventListener('click', async () => {
     console.error('reset email failed', e);
     showNotice('Could not send the reset email — ' + friendlyError(e, { kind: 'post' }));
   }
+});
+
+// ===========================================================================
+// PART A item 7 — LEAVING (self-serve account deletion).
+// <!-- author: Code | date: 2026-08-10 -->
+// Blake: "New way to delete your account in user settings that's available to
+// all members." Three deliberate frictions, no more:
+//   1. the panel is closed until they ask for it;
+//   2. what happens is spelled out BEFORE anything is typed;
+//   3. they type DELETE, then re-enter their password.
+// The password step is not theatre — the callable refuses any token whose
+// auth_time is older than five minutes, so an unattended, already-signed-in
+// browser cannot delete the account. Zero native dialogs; the confirmation is
+// the typed word and the branded panel, never confirm().
+// ===========================================================================
+const delOpenBtn   = document.querySelector('#acct-del-open');
+const delPanel     = document.querySelector('#acct-del-panel');
+const delConfirmIn = document.querySelector('#acct-del-confirm');
+const delGoBtn     = document.querySelector('#acct-del-go');
+const delCancelBtn = document.querySelector('#acct-del-cancel');
+const delStatus    = document.querySelector('#acct-del-status');
+
+function delSay(kind, msg) {
+  if (!delStatus) return;
+  delStatus.textContent = msg;
+  delStatus.className = 'acct-del-status ' + (kind === 'error' ? 'is-error' : 'is-working');
+  delStatus.hidden = false;
+}
+function delReset() {
+  if (delPanel) delPanel.hidden = true;
+  if (delConfirmIn) delConfirmIn.value = '';
+  if (delGoBtn) { delGoBtn.disabled = true; delGoBtn.textContent = 'Delete my account'; }
+  if (delStatus) { delStatus.hidden = true; delStatus.textContent = ''; }
+  if (delOpenBtn) delOpenBtn.hidden = false;
+}
+
+delOpenBtn?.addEventListener('click', () => {
+  if (!delPanel) return;
+  delPanel.hidden = false;
+  delOpenBtn.hidden = true;
+  delConfirmIn?.focus();
+});
+delCancelBtn?.addEventListener('click', () => { delReset(); delOpenBtn?.focus(); });
+delPanel?.addEventListener('keydown', (e) => {
+  // Escape backs out of the whole thing — leaving should always be easy to stop.
+  if (e.key === 'Escape') { e.stopPropagation(); delReset(); delOpenBtn?.focus(); }
+});
+// Exact match, trimmed of surrounding whitespace only. Not case-insensitive:
+// the word is the point of the step.
+delConfirmIn?.addEventListener('input', () => {
+  if (delGoBtn) delGoBtn.disabled = delConfirmIn.value.trim() !== 'DELETE';
+});
+
+// Ask for the password inline and prove it, then force a token refresh so the
+// callable sees the FRESH auth_time. Resolves true only on a real reauth.
+function delReauth(u) {
+  return new Promise((resolve) => {
+    if (document.getElementById('acct-del-pass-form')) return resolve(false);
+    const form = document.createElement('div');
+    form.id = 'acct-del-pass-form';
+    form.className = 'acct-pass-form';
+    form.innerHTML = `
+      <input type="password" id="acct-del-pass" autocomplete="current-password" placeholder="Your password" />
+      <div class="acct-pass-actions">
+        <button type="button" class="inline-header-btn small" id="acct-del-pass-go">Confirm it's you</button>
+        <button type="button" class="linky" id="acct-del-pass-cancel">Cancel</button>
+      </div>`;
+    delGoBtn.insertAdjacentElement('afterend', form);
+    const done = (v) => { try { form.remove(); } catch (_) {} resolve(v); };
+    form.querySelector('#acct-del-pass-cancel').addEventListener('click', () => done(false));
+    form.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } });
+    const pass = form.querySelector('#acct-del-pass');
+    pass.focus();
+    form.querySelector('#acct-del-pass-go').addEventListener('click', async () => {
+      const value = pass.value;
+      if (!value) { pass.focus(); return; }
+      try {
+        await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, value));
+        // auth_time only moves on a real sign-in; force the refresh so the
+        // callable is handed the new token rather than the cached one.
+        await u.getIdToken(true);
+        done(true);
+      } catch (err) {
+        console.error('[delete] reauth failed', err);
+        delSay('error', 'That password didn’t match — try again.');
+        pass.select();
+      }
+    });
+  });
+}
+
+delGoBtn?.addEventListener('click', async () => {
+  const u = auth.currentUser;
+  if (!u || !u.email) { showNotice('Sign in first.'); return; }
+  if (delConfirmIn.value.trim() !== 'DELETE') return;
+
+  // Disable BEFORE the reauth prompt: a second click while the password form is
+  // open hits delReauth's already-open guard, which resolves false and reports
+  // "Nothing was deleted" over a flow that is still perfectly alive.
+  delGoBtn.disabled = true;
+  delSay('working', 'One more step — confirm it’s really you.');
+  const proved = await delReauth(u);
+  if (!proved) {
+    delGoBtn.disabled = delConfirmIn.value.trim() !== 'DELETE';
+    delSay('working', 'Nothing was deleted.');
+    return;
+  }
+
+  delGoBtn.disabled = true;
+  delGoBtn.textContent = 'Deleting…';
+  delSay('working', 'Erasing everything you wrote. This can take a moment.');
+  try {
+    await httpsCallable(functions, 'deleteMyAccount')({});
+  } catch (err) {
+    console.error('[delete] failed', err);
+    delGoBtn.disabled = false;
+    delGoBtn.textContent = 'Delete my account';
+    delSay('error', friendlyError(err, { kind: 'save' }) + ' Nothing was deleted — your account is still here.');
+    return;
+  }
+  // The Auth user is gone server-side; sign the (now orphaned) session out and
+  // send them to a page that doesn't need an account, so the last thing they
+  // see isn't a broken members-only screen.
+  delSay('working', 'Done. Take care.');
+  try { await signOut(auth); } catch (_) {}
+  window.location.href = '/index.html';
 });
 
 avatarPick?.addEventListener('click', () => avatarFile?.click());

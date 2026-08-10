@@ -49,6 +49,8 @@ const images = require('./lib/images');               // gate 14 — admin atomi
 const { sha256Hex, hashDocId } = require('./lib/imagehash'); // image overhaul — per-user dedupe
 const { likeDelta, shouldNotifyLike, likeNotifId, bgSweepDecision } = require('./lib/profile'); // dream profile
 const { stripSweepDecision, reapUploadsOrphans } = require('./lib/sweep'); // gate 20 — edit-strip + orphan reaper
+const stats = require('./lib/stats'); // PART A item 6 — the admin member-stats recompute
+const account = require('./lib/account'); // PART A item 7 — self-serve account deletion
 const backfill = require('./lib/backfill');            // milestone E — profiles backfill + the signup mint
 const migrate = require('./lib/migrate'); // gate 20.5 — the gold-flip's MIGRATION half
 
@@ -420,61 +422,46 @@ exports.onForumPostDelete = onDocumentDeleted('forum/{threadId}/posts/{postId}',
   }
 });
 
-// onUserDelete — DAY-1 account deletion (Blake's locked answer). Deleting the
-// users/{uid} doc fans out a full wipe so the privacy page's deletion promise is
-// real: ZERO trace of the user in public content; their foreign votes swept; DMs
-// tombstoned (private 2-party — we lock them, we don't nuke the other person's
-// thread). Naturally idempotent (re-deleting gone docs is a no-op).
+// onUserDelete — the account-erasure trigger. Deleting the users/{uid} doc runs
+// the SAME erasure the deleteMyAccount callable runs (functions/lib/account.js),
+// so there is one definition of what leaving means. Naturally idempotent.
+//
+// ⚠️ PART A item 7 REWROTE WHAT THIS DOES. It used to recursiveDelete the
+// leaver's authored docs — which takes the SUBTREE with them: every other
+// member's posts inside their forum thread, every other member's replies under
+// their comment, every other member's reply thread under their review. Innocent
+// third parties lost their words because someone else left, and it contradicted
+// the site's own former-member tombstone ("what they shared lives where they
+// posted it"). It now TOMBSTONES the containers and erases only the content —
+// Blake's locked decision, 2026-08-10.
+//
+// ⚠️ Client deletion of users/{uid} is now DENIED by the rules. Before item 7 it
+// was owner-writable, which made this doc a detonator any member could reach
+// from devtools. This trigger survives for Admin-SDK deletions (the callable,
+// and any future admin tool); the reachable path is the callable.
 exports.onUserDelete = onDocumentDeleted('users/{uid}', async (event) => {
-  const uid = event.params.uid;
-  const tasks = [];
+  await account.runAccountErasure(db, FieldValue, uploadsBucket(), event.params.uid);
+});
 
-  // authored comments AND community reviews (both under an `items` group, both
-  // carry uid == author) — recursiveDelete each to clean votes/replies/threads.
-  const items = await db.collectionGroup('items').where('uid', '==', uid).get();
-  items.forEach((d) => tasks.push(db.recursiveDelete(d.ref)));
-
-  // authored hub threads (cleans their posts) + authored posts + review-reply
-  // threads + comment replies.
-  const threadsAuthored = await db.collection('forum').where('authorUid', '==', uid).get();
-  threadsAuthored.forEach((d) => tasks.push(db.recursiveDelete(d.ref)));
-  const postsAuthored = await db.collectionGroup('posts').where('authorUid', '==', uid).get();
-  postsAuthored.forEach((d) => tasks.push(db.recursiveDelete(d.ref)));
-  const reviewReplies = await db.collectionGroup('threads').where('uid', '==', uid).get();
-  reviewReplies.forEach((d) => tasks.push(db.recursiveDelete(d.ref)));
-  const commentReplies = await db.collectionGroup('replies').where('uid', '==', uid).get();
-  commentReplies.forEach((d) => tasks.push(db.recursiveDelete(d.ref)));
-
-  // FOREIGN votes — the user's vote docs scattered under OTHER people's content
-  // (the L5 sweep; vote docs carry uid == voter so this is queryable).
-  const foreignVotes = await db.collectionGroup('votes').where('uid', '==', uid).get();
-  foreignVotes.forEach((d) => tasks.push(d.ref.delete()));
-
-  // FOREIGN profile likes (dream profile) — the user's like docs under OTHER
-  // people's profiles (same shape as the votes sweep; like docs carry
-  // uid == liker). Each delete fires onProfileLike, which decrements that
-  // profile's likesCount — counts stay exact as the fan departs.
-  const foreignLikes = await db.collectionGroup('likes').where('uid', '==', uid).get();
-  foreignLikes.forEach((d) => tasks.push(d.ref.delete()));
-
-  // the user's own subtree (favorites/watchlist/notifications/notifPrefs/notifMeta)
-  // + public profile. The profile recursiveDeletes (its likes subcollection
-  // must not orphan), and the doc's deletion trips onProfileWritten -> the bg
-  // object leaves Storage with it.
-  tasks.push(db.recursiveDelete(db.doc('users/' + uid)));
-  tasks.push(db.recursiveDelete(db.doc('profiles/' + uid)));
-
-  // gate 14 — EVERY image they ever uploaded leaves Storage ("ZERO trace" now
-  // spans the bucket, not just Firestore). Avatars live under their own top-
-  // level prefix (NOT uploads/) — sweep it too or it orphans on account wipe.
-  tasks.push(uploadsBucket().deleteFiles({ prefix: 'uploads/' + uid + '/' }).catch(() => {}));
-  tasks.push(uploadsBucket().deleteFiles({ prefix: 'avatars/' + uid + '/' }).catch(() => {}));
-
-  // tombstone DMs they're in (don't half-delete the other party's thread).
-  const convos = await db.collection('conversations').where('participants', 'array-contains', uid).get();
-  convos.forEach((d) => tasks.push(d.ref.set({ state: 'locked', closedByDeletion: true }, { merge: true })));
-
-  await Promise.all(tasks);
+// deleteMyAccount (callable) — PART A item 7: the member-facing door. Blake:
+// "New way to delete your account in user settings that's available to all
+// members." Requires a FRESH sign-in (the token's auth_time, not its issue
+// time), refuses the admin UID, erases, then removes the Auth user so the
+// account cannot simply be signed back into. Guards + erasure live in
+// lib/account.js; this is only the wiring.
+//
+// IMMEDIATE, not a grace period — a grace period means keeping someone's data
+// after they asked you to stop.
+exports.deleteMyAccount = onCall({ timeoutSeconds: 540, memory: '512MiB' }, async (request) => {
+  try {
+    return await account.applyDeleteMyAccount(
+      db, FieldValue, uploadsBucket(),
+      (uid) => admin.auth().deleteUser(uid),
+      request.auth && request.auth.uid,
+      request.auth && request.auth.token,
+      Date.now()
+    );
+  } catch (e) { throw new HttpsError(e.code || 'internal', e.message || 'deleteMyAccount failed'); }
 });
 
 // enforceRateLimit (detect-and-undo) — fires AFTER a create lands (doesn't change
@@ -1199,3 +1186,36 @@ exports.reapOrphanUploads = onSchedule(
     await reapUploadsOrphans(db, uploadsBucket(), { nowMs: Date.now() });
   }
 );
+
+// =============================================================================
+// PART A item 6 — MEMBER STATS. One scheduled recompute writes ONE admin-only
+// doc (`adminStats/current`); the admin page reads that single doc, so opening
+// it costs exactly 1 read no matter how often Blake refreshes. All judgment
+// lives in lib/stats.js (pure + db-injected — provable without the scheduler).
+// Counts only: every read is `.select()`-projected, and the DM lane names NO
+// fields at all, so a letter's text never reaches this process.
+// =============================================================================
+
+exports.recomputeStats = onSchedule(
+  // Same room the orphan reaper needed: this walks every authored collection in
+  // one pass, and the default 60s/256MiB is not a budget for a full-tree read.
+  { schedule: 'every 24 hours', timeoutSeconds: 540, memory: '512MiB' },
+  async () => {
+    await stats.writeStats(db, FieldValue, { nowMs: Date.now(), source: 'schedule' });
+  }
+);
+
+// refreshStatsNow — the page's "Refresh now" button. Admin-only, gated on the
+// SAME literal UID as setBanState (never a client-supplied flag).
+exports.refreshStatsNow = onCall({ timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
+  const callerUid = request.auth && request.auth.uid;
+  if (callerUid !== moderation.ADMIN_UID) {
+    throw new HttpsError('permission-denied', 'Admins only.');
+  }
+  try {
+    const out = await stats.writeStats(db, FieldValue, { nowMs: Date.now(), source: 'manual' });
+    return { ok: true, stats: out };
+  } catch (e) {
+    throw new HttpsError(e.code || 'internal', e.message || 'refreshStatsNow failed');
+  }
+});

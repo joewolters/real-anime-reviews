@@ -6,14 +6,22 @@
 // 5. The sign-in catch-up strip is styled + focusable (item 5c; live flow = e2e).
 const { test, expect } = require('@playwright/test');
 
-test('20.7 (3) → LAST CALL A8: the public profile tab source carries Reviews ONLY', async ({ page }) => {
+test('20.7 (3) → LAST CALL A8 → PART A item 2: the public profile carries reviews ONLY', async ({ page }) => {
   const src = await (await page.request.get('/script.js')).text();
   // gate 20.7 dropped Comments/Replies; LAST CALL A8 dropped Threads too
   // (Blake: "threads hidden on public pages; reviews only, plus anything pinned")
-  expect(src).toContain('data-act="reviews"');
+  //
+  // ⚠️ CHANGED DELIBERATELY in PART A item 2. This asserted
+  // `data-act="reviews"` — the last chip of a one-tab tablist that A8 had
+  // already emptied of siblings. A tablist with one tab and no tabpanel is an
+  // accessibility lie, so item 2 removed it and this assertion went with it.
+  // The CONTRACT it was protecting is unchanged and still pinned below: the
+  // public sheet shows reviews, and nothing else.
+  expect(src).toContain('profile-reviews-slot');
   expect(src).not.toContain('data-act="threads"');
   expect(src).not.toContain('data-act="comments"');
   expect(src).not.toContain('data-act="replies"');
+  expect(src).not.toContain('data-act="reviews"');   // the chip itself is gone
 });
 
 test('20.7 (4): the demand chip docks in the cover column', async ({ page }) => {

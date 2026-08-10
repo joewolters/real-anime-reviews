@@ -473,6 +473,18 @@ const LATE_TARGETS = [
   // LAST CALL Part C: suggest.js joined the shared branded-error module — its
   // in-module versioned import is a bump surface (the thrice-bitten class).
   ['suggest.js',        "friendly-errors.js?v= import (suggest)", /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],
+
+  // PART A item 6 — admin/stats.html (Member Stats). 8 versioned surfaces,
+  // registered in the SAME gate that adds the page. A new surface missing from
+  // TARGETS is the stale-TARGETS trap, which has now bitten three times.
+  ['admin/stats.html',  'window.APP_VERSION (stats)',   /(<script>window\.APP_VERSION=")([^"]+)(")/],
+  ['admin/stats.html',  '../style.css?v= (stats)',      /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
+  ['admin/stats.html',  '../mobile.css?v= (stats)',     /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
+  ['admin/stats.html',  'suggestions.css?v= (stats)',   /(href="suggestions\.css\?v=)([^"]+)(")/],
+  ['admin/stats.html',  'stats.css?v= (stats)',         /(href="stats\.css\?v=)([^"]+)(")/],
+  ['admin/stats.html',  '../firebase.js?v= (stats)',    /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
+  ['admin/stats.html',  'stats.js?v= (stats)',          /(src="stats\.js\?v=)([^"]+)(")/],
+  ['admin/stats.js',    "friendly-errors.js?v= import (stats)", /(from '\.\.\/friendly-errors\.js\?v=)([^']+)(')/],
 ];
 for (const [file, label, pattern] of LATE_TARGETS) {
   TARGETS.push({

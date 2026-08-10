@@ -1,85 +1,55 @@
 <!-- author: Code | date: 2026-08-10 -->
-# PART A — what's done, what's left, and how to finish it
+# PART A — **COMPLETE** (all eight items shipped staged)
 
-> Handoff doc. Items 1, 3, 4, 5, 8a, 8b are SHIPPED (staged/committed). Items **6, 7, 2** remain.
-> Recon for all eight is already done — this doc carries the distilled result so the next session
-> does **not** need to re-run it. Floors at handoff: **npm test 320 · rules 211 · cf 79 · webkit 24**.
+> Items 1, 3, 4, 5, 8a, 8b landed 2026-08-09/10. **Items 6, 7 and 2 landed 2026-08-10** — this
+> file is now the record of what was built, not a brief. Nothing here is outstanding.
+> Floors after: **npm test 348 · rules 218 · cf 94 · functions 94 · webkit 24**.
 
 ## ⚡ READ-FIRST
-- **Blake's content-deletion decision is LOCKED (2026-08-10): "tombstone the containers, erase the content."** A comment/post/review keeps its slot reading `[removed by the author]`; the text, images and display name are erased. Threads stay coherent, nothing they wrote survives. Do NOT re-litigate this.
-- **Two live hazards found during recon, both fixed by item 7 — treat as bugs, not features:**
-  1. **A member can already fire the whole deletion cascade today.** `firestore.rules:245` allows `delete` on `users/{uid}` by its owner, and `onUserDelete` (functions/index.js:428-478) fans out from that doc's deletion. No UI does it, but devtools would. It is live and unguarded.
-  2. **Today's erasure is not scoped to the leaver.** `recursiveDelete` on their forum thread takes **every other member's posts in it** (index.js:439-440); on their comment it takes others' replies; on their review it takes others' reply threads (index.js:434-435). Innocent third parties lose their words. This also contradicts shipped copy — the former-member tombstone at script.js:5606 says "what they shared lives where they posted it".
-- **The admin account must be undeletable** (literal-UID guard, the `setBanState` shape at index.js:691-702).
+- **Blake's content-deletion decision (2026-08-10) is LOCKED and IMPLEMENTED: "tombstone the containers, erase the content."** A comment/post/review keeps its slot reading `[removed by the author]`; the text, images and display name are erased. Threads stay coherent, nothing they wrote survives. Do NOT re-litigate it.
+- **Both live hazards are CLOSED, each reproduced against the emulator before it was fixed:**
+  1. ~~A member can fire the whole deletion cascade from devtools.~~ **CLOSED.** `firestore.rules` `users/{uid}` is now `allow create, update: if isOwner(uid); allow delete: if false;`. Reproduced first: the deny-test FAILED against the old rules (216/218), passes now.
+  2. ~~The erasure is not scoped to the leaver.~~ **CLOSED.** The cascade tombstones instead of `recursiveDelete`. Reproduced first: with the old code and the cascade PROVEN to have run, the bystander's post AND reply were both gone; with the new code both survive. ⚠️ The FIRST reproduction attempt was a false negative (the wait exited before the trigger fired) — hardened, then it reproduced.
+- **The admin account is undeletable at BOTH entry points** — `deleteAccountGuard` (the callable) and `runAccountErasure` itself (the users-delete trigger, which no guard had covered).
 
 ---
 
-## ITEM 6 — admin member-stats page (NOT started)
-Blake: *"track member stats included joined this month, active users, comments, reviews posted etc etc"*. Branded, no native controls, counts only — never content.
+## ITEM 6 — admin member-stats page ✅ SHIPPED
+Blake: *"track member stats included joined this month, active users, comments, reviews posted etc etc"*.
 
-### The design (decided, with the reasoning that settles it)
-**A scheduled Cloud Function recomputes everything and writes ONE admin-read-only stats doc. NOT client-side `count()` aggregation.** Three reasons, in order of weight:
-1. **Two metrics are impossible from a client at any price.** `users` list is owner-only (rules:244) and `conversations`/`messages` list is participant-only with no collection-group rule (rules:733, 864-865, 326). So "active users" and "DM volume" cannot be counted client-side even with unlimited budget. Once a CF is required for two tiles, running all of them there costs nothing extra and keeps ONE code path.
-2. **Billing shape.** `count()` bills 1 read per 1000 index entries, re-charged on **every page open** (and Blake will refresh). A daily CF + a 1-doc read means the admin page costs exactly **1 read per open, forever**.
-3. **Why NOT trigger-maintained counters:** the delete surface here is huge (onUserDelete, onBanCascade, recursiveDelete, soft-removes). One missed decrement corrupts the number permanently with no self-heal — and there is already proof in the tree: `forum.postCount` increments at index.js:311-319 and **nothing ever decrements it** (index.js:416-421). A scheduled recompute overwrites with ground truth, so the drift class cannot exist.
+**Built as designed: a scheduled recompute writes ONE admin-read-only doc.** Opening the page costs exactly 1 Firestore read, forever.
+- `functions/lib/stats.js` — pure window math + a db-injected recompute (the `lib/sweep.js` shape). 17 unit tests, no emulator.
+- `exports.recomputeStats` — `onSchedule('every 24 hours')`, 540s/512MiB (a full-tree pass needs the same room the orphan reaper needed).
+- `exports.refreshStatsNow` — admin-only `onCall` behind the page's "Refresh now".
+- Rules: `match /adminStats/{doc}` — admin `get` only; no list, no client write of any kind (4 rules tests, including "not even the admin can write it").
+- `admin/stats.{html,js,css}` + `ADMIN_MENU_ITEMS` + **8 `bump-version.js` LATE_TARGETS rows in the same gate** (`--check` shows 111 strings agreeing).
+- **Privacy is structural, not a promise:** every read is `.select()`-projected, and the DM lane names NO fields — a letter's body never reaches the function. A cf-test asserts a seeded message body and both member uids are absent from the written doc.
+- **Real-pixel caught a real defect:** the Refresh button painted 37px. Fixed to the item-4 44px tap-target floor.
 
-### Build order
-1. `functions/lib/stats.js` — pure, db-injected core (mirror `lib/sweep.js` / `lib/moderation.js`), exporting the window math + the recompute. Unit-testable without the emulator.
-2. `exports.recomputeStats` — `onSchedule('every 24 hours')`, mirroring `reapOrphanUploads` (index.js:1193-1201, the only existing scheduled CF). Writes `adminStats/current`.
-3. `exports.refreshStatsNow` — admin-only `onCall` for a "Refresh now" button (shape: `backfillProfiles`, index.js:645-649).
-4. Rules: `match /adminStats/{doc}` — `allow get: if isAdmin(); allow write: if false;` (CF-only, like `cfProcessed`).
-5. `admin/stats.html` + `.js` + `.css` — copy the `admin/curation.html` scaffold exactly (gate with the `rendered` latch from curation.js:258-281). Register in `ADMIN_MENU_ITEMS` (admin-fab.js) **and** add the ~9 `bump-version.js` LATE_TARGETS rows in the SAME gate — the stale-TARGETS trap has bitten 3×.
-6. Tests: unit-test the window math; pin the page scaffold + registrations like `tests/catalog-admin.spec.js` does.
-
-### Metrics and their sources
-| Tile | Source |
-|---|---|
-| Members total / joined this month | `profiles/*.joinedAt` (minted at signup, index.js:651) |
-| Active users (define honestly) | writes in the last 30d across authored collections; state the definition **on the page** |
-| Comments / reviews / threads / posts | collection-group counts of `items`, `threads`, `posts` |
-| DM volume | `conversations/*/messages` — counts only, **never content** |
-| Appreciates | `profiles/*.likesCount` (the count-free carve-out) |
-
----
-
-## ITEM 7 — self-serve account deletion (NOT started)
+## ITEM 7 — self-serve account deletion ✅ SHIPPED
 Blake: *"New way to delete your account in user settings thats available to all members."*
+- **Rules hazard closed first** (one line, biggest payoff).
+- `functions/lib/account.js` — `runAccountErasure` is the ONE definition of leaving, called by BOTH the callable and the users-delete trigger. Tombstone pass (reusing `lib/moderation.js`'s H5 redaction with a different flag) → hard-delete pass → DM lock.
+- `exports.deleteMyAccount` — `onCall`; refuses the admin UID, refuses a token whose `auth_time` is older than 5 minutes (an unattended signed-in browser cannot delete an account), erases, then deletes the Auth user so they cannot simply sign back in.
+- Client: the **Leaving** card in account settings — closed by default, states what happens BEFORE asking, type-to-confirm `DELETE`, then a password reauth. Zero native dialogs.
+- Client tombstone rendering on all six surfaces: `[removed by the author]`, distinct from the moderator's `[removed]`.
+- ⚠️ **`authorDeleted`, deliberately NOT `removed`** — the hub list filters `removed !== true`, so the moderator mark would hide the thread and take the bystanders' posts out of reach anyway.
 
-### The content policy — LOCKED
-**Tombstone the container, erase the content.** Per surface:
-- **Comments / replies / forum posts / community reviews** — keep the doc so the thread holds its shape; blank `text`/`body`/`title`, drop `imageRefs`/`thumbImage`, set `displayName` to `[deleted]`, clear `photoURL`, and mark `authorDeleted: true`. **Precedent already in the codebase: the H5 redaction in `onBanCascade` (lib/moderation.js:109-137) — reuse that path rather than writing a second one.**
-- **Forum threads they started** — tombstone the OP the same way. **Do NOT `recursiveDelete`** — that is hazard #2 and it destroys other members' posts.
-- **Their votes** — delete (they are not content, and leaving them inflates counts).
-- **Profile, saves, shelves, savedShelves, notifications, notifPrefs, consent/moderationGate, Storage `uploads/` + `avatars/` + profile bg** — hard delete.
-- **DMs** — keep today's behaviour: lock the conversation, don't nuke the other person's thread (index.js:425 already states this policy).
-- **Reports referencing them** — keep (moderation record), they point at a tombstone now rather than dangling.
+### 🔴 A REAL DEFECT FOUND WHILE VERIFYING — read this before touching the redaction
+`redactAuthored` used `batch.set(ref, upd, {merge:true})`, and **set-with-merge CREATES a document that isn't there.** The query and the write are not atomic, so any doc deleted in between was **resurrected as a ghost tombstone** that then fired the create-triggers. Invisible while the path only ran on a ban (rare, target's docs alive); item 7 put it on the erasure path, where things are being deleted all around it. It surfaced as a trigger storm that starved an unrelated cascade for 75s. **Root-caused by re-running the pre-change baseline (79/79 green), not by raising the timeout.** Fixed: per-doc `update()`, which carries an implicit exists-precondition. Pinned by a regression test.
 
-### Build order
-1. **Close hazard #1 first:** flip `firestore.rules:245` so `users/{uid}` delete is **no longer owner-writable** — deletion must go through the callable. This is a one-line rules change with a big safety payoff; do it even if the rest slips.
-2. `exports.deleteMyAccount` — `onCall`, requires recent login (Firebase Auth reauth requirement), refuses the admin UID, then: tombstone pass → hard-delete pass → Auth user delete.
-3. Rewrite the fan-out to tombstone-not-recursiveDelete (index.js:434-446), reusing `lib/moderation.js`'s redaction.
-4. Settings UI in `account.html`/`account.js` — a branded "Danger" card, type-to-confirm, `friendlyError`, reauth prompt. **Zero native dialogs** (`showNotice` / the `confirmModal` shape at admin/suggestions.js:276-330).
-5. Tests: rules (owner can no longer delete `users/{uid}`; admin undeletable), cf-cascade (tombstone leaves other members' posts intact — assert a third party's reply SURVIVES), and a page-scaffold spec.
-
-### Also decided
-**Immediate, not a grace period** — a grace period means retaining data after they asked you to stop.
-
----
-
-## ITEM 2 — profile reviews rework (NOT started)
+## ITEM 2 — profile reviews rework ✅ SHIPPED
 Blake: *"Users can pin one review and other users now have to click a button that brings up a separate sheet of all the reviews a user has made so it doesn't take up the entire profile."*
-
-Entirely inside `script.js` + `style.css` — **no new file, so no bump-version TARGETS change**.
-1. `script.js:5728-5739` — replace the `.profile-acts` tablist + `<ul class="profile-list" data-profile-acts>` with the pinned slot + one disclosure button in the existing `.profile-col-viewall` language (precedent: script.js:5850-5852 / style.css:10671, already on this sheet).
-2. **Drop `role="tablist"`/`role="tab"`** — a one-tab tablist with no tabpanel is an a11y lie, and the chip was already vestigial (comment at script.js:5731-5735).
-3. Keep the `featuredAnime` fetch (script.js:5772-5789); render the pinned review first.
-4. The "all reviews (N)" button opens the existing sheet layer — reuse it, don't build a second.
-5. **rarNav:** deep-link + Back must behave. NEVER close-then-push synchronously — use `rarNavCascade` (the LAST CALL entry documents the two HIGH races).
+- The pinned review leads; everything else lives behind ONE `all reviews (N)` door in the shelves' existing `.profile-col-viewall` language.
+- **The one-tab tablist is gone, not restyled** — `role="tablist"` with a single `role="tab"` and no tabpanel is an accessibility lie.
+- The all-reviews view is a second VIEW of the SAME sheet: the profile body is hidden, never rebuilt, so every listener already bound to it survives the round trip and Back costs no refetch.
+- **rarNav:** `profileReviews` is its own step; Back/Esc consume the entry and let popstate close (never close-then-push). `#profile=<uid>/reviews` is a real deep link — the suffix is split off BEFORE decoding so a `%2F` can't forge it.
+- Two older specs pinned the removed tablist and were changed deliberately, with the reason inline (`g26-gate207`, `g29-creator`).
 
 ---
 
-## Ops notes for whoever picks this up
-- `npm run test:rules` / `test:cf` **fail in Git Bash** — the scripts call bare `firebase`, which is not on that shell's PATH. Run the same command with `npx firebase`, and set `JAVA_HOME=C:\Users\Owner\jdk-21.0.11+10` first. Sweep ports 8080/9199/5001/9099/8765 before starting emulators; send emulator output to a FILE, never a pipe (SIGPIPE strands port 8080).
-- `npm run test:webkit` is the iOS track (3 iPhone sizes). Keep it separate from `npm test`.
-- Two tests were deliberately changed this run because they **pinned defects**: `cf-profile.spec.js` (asserted an off-origin avatar IS copied) and `g4-comments.spec.js` (asserted the native `<option>`). Both have the reason recorded inline.
-- The parallelism flake list gained `gate5-nav-home` "today's date" and the g15 lightbox `waitForFunction` — both pass isolated; re-run before believing a red.
+## Ops notes (still true)
+- `npm run test:rules` / `test:cf` **fail in Git Bash** — the scripts call bare `firebase`. Use `npx firebase`, with `JAVA_HOME=C:\Users\Owner\jdk-21.0.11+10`. Sweep 8080/9199/5001/9099/8765 first; send emulator output to a FILE, never a pipe.
+- `npm run test:webkit` is the iOS track. Keep it separate from `npm test`.
+- ⚠️ **cf-track ordering matters.** Running an ad-hoc subset in a different order made `cf-moderation` fail on a 20s wait; the canonical 8-file order is green. Judge the floor by the canonical command, not by a convenient subset.
+- Tests changed deliberately this run because they pinned the old behaviour: `cf-cascade` (asserted the destroy-everything cascade), `g26-gate207` + `g29-creator` (the tablist). Reasons are inline in each.

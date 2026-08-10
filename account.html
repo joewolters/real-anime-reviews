@@ -339,6 +339,43 @@
       <button type="button" id="acct-signout-2" class="signout-pill" title="Sign out">Sign out ↪</button>
     </div>
   </section>
+
+  <!-- PART A item 7 — LEAVING. Blake: "New way to delete your account in user
+       settings that's available to all members." It is last on the page, it is
+       closed by default, and it says exactly what happens before it asks for
+       anything. Zero native dialogs; the confirmation is typed, not clicked. -->
+  <section class="set-card set-card--danger" id="acct-danger">
+    <div class="set-card-head"><span class="fld-pill fld-pill--danger">🌙 Leaving</span></div>
+    <div class="set-card-body">
+      <p class="muted">
+        You can delete your account whenever you want. It happens straight away —
+        there's no waiting period where we quietly keep your things.
+      </p>
+      <button type="button" id="acct-del-open" class="inline-header-btn small">Delete my account…</button>
+
+      <div id="acct-del-panel" class="acct-del-panel" hidden>
+        <h4 class="acct-del-h">What happens when you go</h4>
+        <ul class="acct-del-list">
+          <li><b>Everything you wrote is erased.</b> Your comments, replies, reviews and threads are emptied — the words, the pictures and your name.</li>
+          <li><b>The empty slots stay where they were,</b> reading <i>[removed by the author]</i>. That's the only way the replies underneath them still make sense.</li>
+          <li><b>Other members keep their words.</b> Nobody else's post disappears because you left.</li>
+          <li><b>Your profile, saves, shelves and pictures are deleted outright.</b> So are your votes and appreciates.</li>
+          <li><b>Letters are closed, not destroyed</b> — half of every conversation belongs to the other person.</li>
+          <li><b>This cannot be undone,</b> and it can't be reversed by asking.</li>
+        </ul>
+        <label class="acct-del-confirm-label" for="acct-del-confirm">
+          Type <b>DELETE</b> to confirm
+        </label>
+        <input id="acct-del-confirm" class="acct-del-input" type="text" autocomplete="off"
+               spellcheck="false" aria-describedby="acct-del-status" placeholder="DELETE" />
+        <div class="acct-del-actions">
+          <button type="button" id="acct-del-cancel" class="inline-header-btn small">Keep my account</button>
+          <button type="button" id="acct-del-go" class="acct-del-go" disabled>Delete my account</button>
+        </div>
+        <p class="acct-del-status" id="acct-del-status" role="status" hidden></p>
+      </div>
+    </div>
+  </section>
 </article>
 
 
