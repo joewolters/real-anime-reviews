@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catalog — Real Anime Reviews</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <script>window.APP_VERSION="2.0.0"</script>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Admin-only catalog editor — not indexed." />
+
+  <link rel="stylesheet" href="../style.css?v=2.0.0" />
+  <link rel="stylesheet" href="../mobile.css?v=2.0.0" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="suggestions.css?v=2.0.0" />
+  <link rel="stylesheet" href="catalog.css?v=2.0.0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="admin-page">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1><a href="../index.html" id="home-button" class="logo-link">Real Anime Reviews</a></h1>
+        <div class="toolbar">
+          <button type="button" id="back-btn" class="inline-header-btn" onclick="location.href='../index.html'">← Back to site</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-gate-message">
+      <div class="admin-gate-spinner"></div>
+      <p>Verifying admin access…</p>
+    </div>
+  </div>
+
+  <main class="admin-main catalog-main" id="admin-main" hidden>
+    <div class="admin-shell">
+
+      <div class="admin-header">
+        <h2 class="admin-title-line">
+          <span class="admin-kicker-inline">CATALOG <span class="jp-mini">図書</span></span>
+          <span class="admin-divider">·</span>
+          <span class="admin-title-text">Write from anywhere</span>
+        </h2>
+      </div>
+
+      <!-- LIST VIEW -->
+      <section id="cat-list-view">
+        <p class="catalog-intro">
+          Edit any review from any device. Changes save as a draft as you type —
+          start on your phone, finish at your desk. Nothing reaches the site
+          until you publish.
+        </p>
+
+        <div class="catalog-search-wrap">
+          <input id="cat-search" type="search" placeholder="Search your catalog…" autocomplete="off" aria-label="Search catalog by title" />
+        </div>
+
+        <ul class="catalog-list" id="cat-list"></ul>
+        <p class="catalog-empty" id="cat-empty" hidden>No anime match that search.</p>
+
+        <div id="cat-unmigrated" class="catalog-notice" hidden>
+          <div class="catalog-notice-kicker">CATALOG NOT IN THE CLOUD YET <span class="jp-mini">準備</span></div>
+          <p>
+            The cloud catalog is empty, so there's nothing to edit here yet.
+            Phase 1's import hasn't been run against this database.
+            Excel is still the source of truth — keep using it as normal.
+          </p>
+        </div>
+
+        <div id="cat-error" class="suggestions-error-card" hidden>
+          <div class="error-glyph" aria-hidden="true">⚠️</div>
+          <div class="error-kicker">COULDN'T LOAD <span class="jp-mini">接続</span></div>
+          <p class="error-body" id="cat-error-body">Couldn't reach the catalog. Reload to retry.</p>
+          <button type="button" class="error-reload-btn" onclick="location.reload()">Reload</button>
+        </div>
+      </section>
+
+      <!-- EDITOR VIEW -->
+      <section id="cat-edit-view" hidden>
+        <button type="button" class="catalog-back" id="cat-back">← All anime</button>
+
+        <h3 class="catalog-edit-title" id="cat-edit-title">—</h3>
+
+        <div class="catalog-draft-banner" id="cat-draft-banner" hidden>
+          <span id="cat-draft-text">Unsaved changes.</span>
+          <span class="catalog-draft-actions">
+            <button type="button" id="cat-draft-use" class="catalog-mini-btn">Use them</button>
+            <button type="button" id="cat-draft-drop" class="catalog-mini-btn is-quiet">Discard</button>
+          </span>
+        </div>
+
+        <form class="catalog-form" id="cat-form" novalidate>
+          <label class="catalog-field">
+            <span class="catalog-label">Review</span>
+            <textarea id="f-Review" rows="12" spellcheck="true"></textarea>
+            <span class="catalog-hint" id="f-Review-count">0 characters</span>
+          </label>
+
+          <label class="catalog-field">
+            <span class="catalog-label">Description</span>
+            <textarea id="f-Description" rows="4" spellcheck="true"></textarea>
+          </label>
+
+          <div class="catalog-row">
+            <label class="catalog-field">
+              <span class="catalog-label">Rating</span>
+              <input id="f-Rating" type="text" inputmode="decimal" placeholder="9/10" />
+            </label>
+            <label class="catalog-field">
+              <span class="catalog-label">Seasons</span>
+              <input id="f-Seasons" type="text" placeholder="2 seasons" />
+            </label>
+          </div>
+
+          <div class="catalog-row">
+            <label class="catalog-field">
+              <span class="catalog-label">Genre</span>
+              <input id="f-Genre" type="text" placeholder="Shonen/Action" />
+            </label>
+            <label class="catalog-field">
+              <span class="catalog-label">Studio</span>
+              <input id="f-Studio" type="text" placeholder="MAPPA" />
+            </label>
+          </div>
+
+          <label class="catalog-field">
+            <span class="catalog-label">Tags</span>
+            <input id="f-Tags" type="text" placeholder="action, animation, revenge" />
+            <span class="catalog-hint">Separated by commas.</span>
+          </label>
+
+          <label class="catalog-field">
+            <span class="catalog-label">Where to watch</span>
+            <input id="f-Platforms" type="text" placeholder="Crunchyroll, Netflix" />
+            <span class="catalog-hint">Separated by commas.</span>
+          </label>
+
+          <label class="catalog-field">
+            <span class="catalog-label">Trailer</span>
+            <input id="f-Trailer" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=…" />
+            <span class="catalog-hint">Any YouTube link — it gets tidied for you.</span>
+          </label>
+
+          <label class="catalog-field catalog-field--narrow">
+            <span class="catalog-label">Top 10 rank</span>
+            <input id="f-Top10Rank" type="number" min="1" max="10" step="1" placeholder="—" />
+          </label>
+        </form>
+
+        <ul class="catalog-errors" id="cat-errors" hidden></ul>
+
+        <div class="catalog-actions">
+          <span class="catalog-savestate" id="cat-savestate">Up to date</span>
+          <button type="button" class="catalog-save-btn" id="cat-save" disabled>Save to catalog</button>
+        </div>
+
+        <p class="catalog-foot">
+          Saving stores your change in the catalog. The live site updates when
+          you publish — that's a separate, deliberate step.
+        </p>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="brand-select.js?v=2.0.0"></script>
+  <script src="catalog-model.js?v=2.0.0"></script>
+  <script type="module" src="../firebase.js?v=2.0.0"></script>
+  <script type="module" src="catalog.js?v=2.0.0"></script>
+</body>
+</html>

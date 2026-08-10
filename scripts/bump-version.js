@@ -455,6 +455,21 @@ const LATE_TARGETS = [
   // Milestone F panel: curation gained the brandSelect port (the parity lane's
   // one missed admin page — the visible native select is now the value store).
   ['admin/curation.html','brand-select.js?v= (curation)',   /(src="brand-select\.js\?v=)([^"]+)(")/],
+
+  // Cloud migration phase 3 — admin/catalog.html (the Cloud Admin editor).
+  // 8 versioned surfaces. Registered in the SAME gate that adds the page: a
+  // new surface missing from TARGETS is the stale-TARGETS trap, which has
+  // bitten three times.
+  ['admin/catalog.html','window.APP_VERSION (catalog)',   /(<script>window\.APP_VERSION=")([^"]+)(")/],
+  ['admin/catalog.html','../style.css?v= (catalog)',      /(href="\.\.\/style\.css\?v=)([^"]+)(")/],
+  ['admin/catalog.html','../mobile.css?v= (catalog)',     /(href="\.\.\/mobile\.css\?v=)([^"]+)(")/],
+  ['admin/catalog.html','suggestions.css?v= (catalog)',   /(href="suggestions\.css\?v=)([^"]+)(")/],
+  ['admin/catalog.html','catalog.css?v= (catalog)',       /(href="catalog\.css\?v=)([^"]+)(")/],
+  ['admin/catalog.html','brand-select.js?v= (catalog)',   /(src="brand-select\.js\?v=)([^"]+)(")/],
+  ['admin/catalog.html','catalog-model.js?v= (catalog)',  /(src="catalog-model\.js\?v=)([^"]+)(")/],
+  ['admin/catalog.html','../firebase.js?v= (catalog)',    /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
+  ['admin/catalog.html','catalog.js?v= (catalog)',        /(src="catalog\.js\?v=)([^"]+)(")/],
+  ['admin/catalog.js',  "friendly-errors.js?v= import (catalog)", /(from '\.\.\/friendly-errors\.js\?v=)([^']+)(')/],
   // LAST CALL Part C: suggest.js joined the shared branded-error module — its
   // in-module versioned import is a bump surface (the thrice-bitten class).
   ['suggest.js',        "friendly-errors.js?v= import (suggest)", /(from '\.\/friendly-errors\.js\?v=)([^']+)(')/],

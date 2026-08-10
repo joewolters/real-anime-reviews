@@ -40,6 +40,14 @@ const ADMIN_MENU_ITEMS = [
     jp: '整理',
     href: '/admin/curation.html',
   },
+  // Cloud migration phase 3 — the Cloud Admin catalog editor. Reads and writes
+  // catalog/{animeId} straight from Firestore, so it works on any device
+  // (Blake's phone included) with no Mode-1 server and no Excel.
+  {
+    label: 'Catalog',
+    jp: '図書',
+    href: '/admin/catalog.html',
+  },
   {
     label: 'Quotes',
     jp: '名言',
