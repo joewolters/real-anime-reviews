@@ -210,11 +210,62 @@ textarea {
   /* trim the input's own padding rather than widening the pill — widening it
      pushes the account button back off the right edge (measured: only 6px of
      slack at 320px). This buys the 4px "Search" needed to render uncut. */
-  #site-search{ padding-left: 4px; padding-right: 4px; }
+  /* the text is centered now, so side padding is decorative — 2px buys the
+     last 2px "Search" needs to render uncut at 320px */
+  #site-search{ padding-left: 2px; padding-right: 2px; }
 
   /* tokens stay comfortably tappable (>=40px) but stop eating the row */
   .header-tokens{ gap: 5px; }
   .notif-btn, #auth-open, .header-tokens > button{
     width: 40px; height: 40px; min-width: 40px;
   }
+}
+
+/* ===========================================================================
+   PART A item 4 (cont.) — ONE PILL, CENTERED. Blake's eye, measured:
+   "you can see the inner purple pill extending past. Maybe if it was shortened
+   and the word 'search' centered it would all look better."
+   He was right, and it was 3px: .search-wrap draws a bordered pill AND
+   #site-search drew its OWN background + border + radius inside it, with the
+   input's right edge landing 3px past the wrap — which the wrap's
+   overflow:hidden then sliced. Two pills, one of them cut.
+   The wrap is the pill. The input is just text inside it, centered.
+   =========================================================================== */
+#site-search{
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: center;
+  min-width: 0;          /* let it shrink inside the pill instead of spilling */
+  width: 100%;
+  box-sizing: border-box;
+  /* dropping the input's border cost it 2px and took the tap target to 34px.
+     The pill is 46px, but it is a <form>, not a <label> — tapping its padding
+     does NOT focus the input, so the INPUT is the target and it keeps its own
+     comfortable height. */
+  min-height: 38px;
+}
+#site-search:focus{
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+}
+#site-search::placeholder{ text-align: center; }
+/* the focus ring belongs to the ONE pill now, not to a second inner one */
+.search-wrap:focus-within{
+  border-color: rgba(187,134,252,0.66);
+  box-shadow: 0 0 0 3px rgba(187,134,252,0.18);
+}
+
+/* Blake: "the text seems to be off... like the brightness."
+   Measured in both engines: the colour is correct and contrast is ~11:1, but
+   WebKit paints small 500-weight text ~6% dimmer than Chromium because its
+   antialiasing thins the strokes (peak [183,171,207] vs [194,182,218]).
+   600 restores the weight without touching a single colour. */
+body > main p,
+.den-sub,
+#home-airing-block p{
+  font-weight: 600;
 }
