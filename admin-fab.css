@@ -232,3 +232,39 @@
     animation: none;
   }
 }
+
+/* ---- PATCH QUEUE item 5 — the Curator's Desk badges ----
+   <!-- author: Code | date: 2026-08-10 -->
+   A count on the tools that accumulate work: new suggestions, open reports,
+   unread letters. The row is `justify-content: space-between` with the label
+   and the jp sublabel already in it, so the badge is pushed to the end and the
+   jp label keeps its place.
+
+   PURPLE, never gold. Gold marks Blake's identity on this site; it does not
+   decorate a to-do count — not even his own. (The heart rule, and this is
+   exactly the kind of place it quietly gets broken.)
+
+   ⚠️ The [hidden] twin is load-bearing: inline-flex beats the UA [hidden] rule,
+   and a zero-count badge that refuses to disappear would sit on every row. */
+.admin-fab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: rgba(187, 134, 252, 0.28);
+  border: 1px solid rgba(187, 134, 252, 0.55);
+  color: #f1e9ff;
+  font: 700 0.68rem 'Montserrat', sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.admin-fab-badge[hidden] { display: none; }
+.admin-fab-menu-item:hover .admin-fab-badge {
+  background: rgba(187, 134, 252, 0.42);
+  border-color: rgba(187, 134, 252, 0.8);
+}

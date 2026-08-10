@@ -7,8 +7,11 @@
 // Author: Code | date: 2026-05-10 | Mode 1 baseline (v1.6.0)
 // =============================================================================
 
-import { auth } from './firebase.js';
+import { auth, db } from './firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+import {
+  collection, query, where, getDocs, getDoc, doc, getCountFromServer,
+} from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 
@@ -57,11 +60,24 @@ const ADMIN_MENU_ITEMS = [
     label: 'Suggestion Queue',
     jp: '提案',
     href: '/admin/suggestions.html',
+    badge: 'suggestions',
   },
   {
     label: 'Reports',
     jp: '通報',
     href: '/admin/reports.html',
+    badge: 'reports',
+  },
+  // PATCH QUEUE item 5 — the Curator's Desk. Milestone F removed the admin
+  // INBOX page on Blake's word ("people can properly dm me now"), and letters
+  // reach him through the one account Letter Room. This is a shortcut to that
+  // room, not a resurrection of the page — it exists so the unread count has
+  // somewhere to live in "Blake's morning at a glance".
+  {
+    label: 'Letters',
+    jp: '手紙',
+    href: '/account.html#inbox',
+    badge: 'letters',
   },
   // PART A item 6 — the member-stats page. Counts only, never content: it reads
   // ONE Cloud-Function-written doc (adminStats/current), so opening it costs a
@@ -78,6 +94,103 @@ const ADMIN_MENU_ITEMS = [
   // { label: 'Site Health', jp: '監視', href: '/admin/health.html' },
   // { label: 'Audit', jp: '監査', href: '/admin/audit.html' },
 ];
+
+// =============================================================================
+// PATCH QUEUE item 5 — THE CURATOR'S DESK BADGES.
+// <!-- author: Code | date: 2026-08-10 -->
+// "Live counts on the admin-FAB items — new suggestions / open reports /
+// unread DMs = Blake's morning at a glance."
+//
+// Fetched WHEN THE MENU OPENS, not on page load. The FAB mounts on every page
+// of the site; counting on load would bill three query fans per navigation for
+// a number nobody is looking at. Opening the menu is the moment he asks.
+//
+// Suggestions and reports use getCountFromServer — the count comes back as a
+// number without shipping the documents, so the queue's contents never touch a
+// page that isn't the queue. Letters can't: unread is a per-conversation
+// comparison, so it reads the conversation list plus one read-receipt each.
+// =============================================================================
+
+const badgeCounts = { suggestions: 0, reports: 0, letters: 0 };
+let badgeFetchInFlight = false;
+
+const tsMs = (t) => (t && typeof t.toMillis === 'function') ? t.toMillis() : 0;
+
+// Unread letters — the SAME definition the Letter Room uses (account.js
+// isUnread): a newer message that isn't mine and that I haven't read. Copying
+// the rule rather than inventing a second one is the point; two definitions of
+// "unread" would disagree and the badge would lie about the inbox.
+async function countUnreadLetters(uid) {
+  const snap = await getDocs(query(
+    collection(db, 'conversations'), where('participants', 'array-contains', uid)));
+  let n = 0;
+  await Promise.all(snap.docs.map(async (d) => {
+    const c = d.data() || {};
+    if (c.lastSenderUid === uid) return;            // my own send is never unread
+    let lastRead = 0;
+    try {
+      const r = await getDoc(doc(db, 'conversations', d.id, 'reads', uid));
+      lastRead = r.exists() ? tsMs((r.data() || {}).lastReadAt) : 0;
+    } catch (_) { /* unreadable receipt -> treat as never read */ }
+    if (tsMs(c.lastMessageAt) > lastRead) n++;
+  }));
+  return n;
+}
+
+async function fetchBadgeCounts(uid) {
+  // ⚠️ The filters mirror each QUEUE's own rule, not the value that happens to
+  // be there today. suggestions.js splits on `status === 'reviewed'` and
+  // reports.js skips `status === 'resolved'` — so these count the complement of
+  // those, NOT `== 'new'`. Both are equivalent right now (only two values exist
+  // on each, pinned at create by the rules), but a third status added later
+  // would make an `== 'new'` badge quietly disagree with the page it links to,
+  // and a badge that disagrees with its own queue is worse than no badge.
+  const [sug, rep, letters] = await Promise.all([
+    getCountFromServer(query(collection(db, 'suggestions'), where('status', '!=', 'reviewed')))
+      .then((s) => s.data().count).catch(() => null),
+    getCountFromServer(query(collection(db, 'reports'), where('status', '!=', 'resolved')))
+      .then((s) => s.data().count).catch(() => null),
+    countUnreadLetters(uid).catch(() => null),
+  ]);
+  // null = the query failed. Leave that badge's previous value alone rather
+  // than painting a confident 0 over a number we could not check.
+  if (sug !== null) badgeCounts.suggestions = sug;
+  if (rep !== null) badgeCounts.reports = rep;
+  if (letters !== null) badgeCounts.letters = letters;
+}
+
+function paintBadges() {
+  document.querySelectorAll('#admin-fab-menu .admin-fab-badge').forEach((el) => {
+    const n = badgeCounts[el.dataset.badge] || 0;
+    // 99+ so a runaway number can never widen the menu row
+    el.textContent = n > 99 ? '99+' : String(n);
+    el.hidden = n === 0;
+  });
+}
+
+async function refreshBadges() {
+  const user = auth.currentUser;
+  if (!user || user.uid !== ADMIN_UID) return;
+  if (badgeFetchInFlight) return;
+  badgeFetchInFlight = true;
+  try {
+    await fetchBadgeCounts(user.uid);
+    paintBadges();
+  } catch (err) {
+    // A failed count must never break the menu it lives in — the tools still work.
+    console.warn('[admin-fab] badge counts unavailable:', err && err.message);
+  } finally {
+    badgeFetchInFlight = false;
+  }
+}
+
+// Exposed for the spec (the lanternModel / rarStatsView / rarTombstone
+// precedent): the counts can't be produced in a test without an admin session
+// and live data, but the PAINTING is what the badge promises — so the spec
+// drives the real painter with known numbers and measures real pixels.
+if (typeof window !== 'undefined') {
+  window.rarFabBadges = { counts: badgeCounts, paint: paintBadges, refresh: refreshBadges };
+}
 
 function buildFab() {
   if (document.getElementById('admin-fab-root')) return;
@@ -120,6 +233,15 @@ function buildFab() {
       <span class="admin-fab-menu-item-label">${item.label}</span>
       <span class="admin-fab-menu-item-jp">${item.jp}</span>
     `;
+    // PATCH QUEUE item 5 — the count slot. Ships hidden and EMPTY: a badge
+    // reading 0 is noise, and a badge reading a stale number is worse than none.
+    if (item.badge) {
+      const b = document.createElement('span');
+      b.className = 'admin-fab-badge';
+      b.dataset.badge = item.badge;
+      b.hidden = true;
+      btn.appendChild(b);
+    }
     btn.addEventListener('click', () => {
       window.location.href = item.href;
     });
@@ -134,7 +256,7 @@ function buildFab() {
   function setOpen(next) {
     open = next;
     button.setAttribute('aria-expanded', String(open));
-    if (open) menu.classList.remove('admin-fab-menu-hidden');
+    if (open) { menu.classList.remove('admin-fab-menu-hidden'); refreshBadges(); }
     else menu.classList.add('admin-fab-menu-hidden');
   }
 

@@ -159,3 +159,113 @@ test('REAL PIXELS: the ✕ appears only with text, clears, and stays out of the 
     expect(m.over, `no overflow at ${w}px`).toBeLessThanOrEqual(0);
   }
 });
+
+// ---------------------------------------------------------------------------
+// ITEM 5 — the Curator's Desk badges
+// ---------------------------------------------------------------------------
+
+test('item 5: counts are fetched on MENU OPEN, not on every page load', () => {
+  // The FAB mounts on every page of the site. Counting on load would bill three
+  // query fans per navigation for a number nobody is looking at.
+  const src = read('admin-fab.js');
+  has(src, 'refreshBadges();', 'the open path triggers the fetch');
+  expect(src, 'the fetch hangs off setOpen, not init').toMatch(/if \(open\) \{[^}]*refreshBadges\(\)/);
+  lacks(src, 'init() {\n  buildFab();\n  refreshBadges');
+});
+
+test('item 5: each badge counts what its own queue shows', () => {
+  const fab = read('admin-fab.js');
+  // reports.js skips status === 'resolved'; suggestions.js splits on 'reviewed'.
+  // The badges mirror those rules, so a third status can never make a badge
+  // disagree with the page it links to.
+  has(fab, "where('status', '!=', 'reviewed')");
+  has(fab, "where('status', '!=', 'resolved')");
+  has(read('admin/reports.js'), "d.status === 'resolved'", 'the queue rule the badge mirrors');
+  has(read('admin/suggestions.js'), "status === 'reviewed'", 'the queue rule the badge mirrors');
+  // unread letters reuses the Letter Room's definition rather than a second one
+  has(fab, 'c.lastSenderUid === uid', 'my own send is never unread');
+  has(fab, 'lastReadAt');
+  has(read('account.js'), 'c.lastSenderUid !== user.uid', 'the definition being mirrored');
+});
+
+test('item 5: a failed count never paints a confident zero', () => {
+  const src = read('admin-fab.js');
+  has(src, 'if (sug !== null)');
+  has(src, 'if (rep !== null)');
+  has(src, 'if (letters !== null)');
+});
+
+test('REAL PIXELS: badges paint, hide at zero, clamp, and never wear gold', async ({ page }) => {
+  await page.addInitScript(() => { try { sessionStorage.setItem('rar:welcomed', '1'); } catch (e) {} });
+  await page.goto('/index.html');
+  await page.waitForFunction(() => !!window.rarFabBadges, null, { timeout: 20000 });
+
+  const out = await page.evaluate(() => {
+    const m = window.rarFabBadges;
+    // the FAB is hidden for non-admins; reveal the shell so the badges paint
+    document.getElementById('admin-fab-root').classList.remove('admin-fab-hidden');
+    document.getElementById('admin-fab-menu').classList.remove('admin-fab-menu-hidden');
+    Object.assign(m.counts, { suggestions: 3, reports: 0, letters: 128 });
+    m.paint();
+    const grab = (k) => {
+      const el = document.querySelector(`.admin-fab-badge[data-badge="${k}"]`);
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      return { text: el.textContent, hidden: el.hidden, w: Math.round(r.width),
+        h: Math.round(r.height), bg: cs.backgroundColor, color: cs.color };
+    };
+    const res = { sug: grab('suggestions'), rep: grab('reports'), let: grab('letters') };
+    Object.assign(m.counts, { suggestions: 0, reports: 0, letters: 0 });
+    m.paint();
+    res.allZeroHidden = [...document.querySelectorAll('.admin-fab-badge')].every((e) => e.hidden);
+    return res;
+  });
+
+  expect(out.sug.text).toBe('3');
+  expect(out.sug.hidden).toBe(false);
+  expect(out.rep.hidden, 'zero is not news — it hides').toBe(true);
+  expect(out.let.text, 'clamped so a runaway number cannot widen the row').toBe('99+');
+  expect(out.sug.h, 'a real, readable pill').toBeGreaterThanOrEqual(18);
+  expect(out.allZeroHidden, 'every badge disappears at zero').toBe(true);
+
+  // PROTECT THE HEART: gold is Blake's identity mark. It does not decorate a
+  // to-do count, not even his own. Purple only.
+  for (const b of [out.sug, out.let]) {
+    const [r, g, bl] = b.bg.match(/\d+/g).map(Number);
+    expect(bl, `badge background must not be gold (${b.bg})`).toBeGreaterThan(r * 0.6);
+    expect(g < r || bl > g, `badge must not read gold/amber (${b.bg})`).toBe(true);
+  }
+});
+
+test('item 5: the badge ships its [hidden] twin', () => {
+  has(read('admin-fab.css'), '.admin-fab-badge[hidden] { display: none; }');
+});
+
+// ---------------------------------------------------------------------------
+// ITEM 7 — the review-targeted deep link (ONE reachable gap closed; see below)
+// ---------------------------------------------------------------------------
+
+test('item 7: a pending deep-link overrides both review filters', () => {
+  // applyReviewDeepLink() hunts its target among the RENDERED rows and returns
+  // silently when there isn't one. With a ratings band set, or "My review" on,
+  // the deep-linked review was filtered out before the halo could run: the
+  // notification opened the right anime and then did nothing, silently.
+  // v1.9.1b already established the principle for "My review" — it overrides
+  // the band because you always want YOUR review. A deep link earns the same.
+  const src = read('script.js');
+  const at = src.indexOf('PATCH QUEUE item 7 — a pending deep-link OVERRIDES');
+  expect(at, 'the override exists').toBeGreaterThan(-1);
+  const block = src.slice(at, at + 1400);
+  has(block, 'dl.slug === s', 'scoped to THIS anime');
+  has(block, 'rows.some((r) => r.id === dl.id)', 'and only when the target is really there');
+  // the override must come BEFORE the two filters, or it cannot override them
+  expect(block.indexOf('deepLinkHere')).toBeLessThan(block.indexOf('showMineOnly && meUid'));
+});
+
+test('item 7: review rows carry their doc id, not just a dataset attribute', () => {
+  // The override needs to reason about rows BEFORE they are in the DOM. The row
+  // objects only ever had { li, createdAtMillis, score, rating, uid } — the id
+  // lived solely on li.dataset.id, so an id check against the row objects would
+  // have been permanently false and the whole override a no-op.
+  has(read('script.js'), 'rows.push({ id: docSnap.id, li, createdAtMillis, score, rating, uid: d.uid });');
+});

@@ -7896,9 +7896,22 @@ function subscribeReviews(anime) {
     const meUid = auth.currentUser && auth.currentUser.uid;
     let sorted = rows.slice();
 
-    // v1.9.1b — "My review" isolates the signed-in user's own review; it overrides the
-    // ratings band (you always want YOUR review regardless of its score).
-    if (showMineOnly && meUid) sorted = sorted.filter(r => r.uid === meUid);
+    // PATCH QUEUE item 7 — a pending deep-link OVERRIDES both filters, on the
+    // same principle v1.9.1b already established for "My review": you always
+    // want the review you were actually sent to.
+    //
+    // The gap this closes: applyReviewDeepLink() looks for its target among the
+    // RENDERED rows and returns silently when it can't find one. With the
+    // ratings band set, or "My review" on, a deep-linked review outside the
+    // current view was filtered out before the halo ever ran — the notification
+    // opened the right anime and then did nothing, with no error anywhere.
+    // (Reachable and now closed. It is NOT proven to be the whole of the
+    // long-standing "reviews don't ALWAYS highlight" report — that one still
+    // wants a live reproduction before anyone calls it fixed.)
+    const dl = pendingReviewDeepLink;
+    const deepLinkHere = !!(dl && dl.slug === s && rows.some((r) => r.id === dl.id));
+    if (deepLinkHere) { /* show everything for this render — the target must be reachable */ }
+    else if (showMineOnly && meUid) sorted = sorted.filter(r => r.uid === meUid);
     else if (band !== 'all') sorted = sorted.filter(r => bandOf(r.rating) === band);
 
     if (mode === 'newest') {
@@ -8498,7 +8511,10 @@ function subscribeReviews(anime) {
         subscribeReviews._voteUnsubs.push(unsubVote);
       }
 
-      rows.push({ li, createdAtMillis, score, rating, uid: d.uid });
+      // PATCH QUEUE item 7 — the doc id rides the row object. It was only ever
+      // on li.dataset.id, so any logic reasoning about rows BEFORE they are in
+      // the DOM (the deep-link filter override below) had nothing to match on.
+      rows.push({ id: docSnap.id, li, createdAtMillis, score, rating, uid: d.uid });
     });
 
     lastRows = rows;
