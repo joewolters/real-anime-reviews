@@ -137,6 +137,84 @@ body > header h1{
     letter-spacing: 1px;
   }
   .search-wrap{
-    min-width: 84px;
+    /* Part A item 4 — was 84px, which clipped the placeholder to "Search a"
+       on every iPhone (measured: the text needs 103px, the pill gave ~50).
+       96px + the shortened placeholder below means nothing is cut off. */
+    min-width: 96px;
+  }
+}
+
+/* ===========================================================================
+   PART A item 4 — the WebKit / iOS fixes.
+   <!-- author: Code | date: 2026-08-09 -->
+   Blake: Safari + Arc on iPhone "looks bloated and not optimized", and the
+   search UI "feels messy and unorganized". Measured under WebKit at 320/390/430
+   (tests-webkit/ios-audit.spec.js) — these are the two things the audit found,
+   and neither shows up in Chromium.
+   =========================================================================== */
+
+/* 1. THE ZOOM BUG — the real cause of "bloated and not optimized".
+   iOS Safari zooms the ENTIRE page when a focused input is under 16px. The
+   narrow-filter box was .95rem = 15.2px, so tapping the filter yanked the whole
+   layout larger. Nothing else was wrong with it; it just zoomed.
+   16px exactly — no visual change worth noticing, and the zoom stops. */
+.filter-narrow,
+#site-search,
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="password"],
+input[type="url"],
+input[type="number"],
+textarea {
+  font-size: 16px;
+}
+
+/* 2. TAP TARGETS — measured at 29px on every iPhone size.
+   The review-status chips (All / Reviewed / Unreviewed) were 29px tall and the
+   logo's hit area 22px. Grown to a comfortable thumb size WITHOUT changing the
+   type size, so the header design is untouched. */
+.fr-seg {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  min-height: 36px;
+}
+.logo-link {
+  display: inline-block;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+/* ===========================================================================
+   PART A item 4 (cont.) — THE HEADER OVERFLOWED ITS OWN VIEWPORT.
+   <!-- author: Code | date: 2026-08-09 -->
+   Measured under WebKit: the header's right-most control (the account head)
+   ended at x=386 REGARDLESS of viewport width. So on any screen narrower than
+   ~390px the Lantern was clipped and THE ACCOUNT BUTTON WAS COMPLETELY
+   OFF-SCREEN — you could not reach sign-in at all. That breaks 320px, the
+   project's own 360px floor, AND 375px (iPhone SE 2nd/3rd gen, a very common
+   phone). It never surfaced because the body clips the overflow, so there was
+   no sideways scroll to notice and Chromium desktop never renders this narrow.
+   Budget below is measured, not guessed: at 360px everything must end by 352.
+   =========================================================================== */
+@media (max-width: 400px){
+  body > header{ padding: 0 6px; }
+  .header-inner{ gap: 5px; }
+
+  /* the wordmark yields first — it is the only element with slack */
+  body > header h1{ font-size: 0.86rem; letter-spacing: 0.5px; }
+
+  /* the pill keeps enough room for the short "Search" placeholder (44px of
+     text + 16px padding) and no more */
+  .search-wrap{ min-width: 62px; padding: 5px 6px; }
+  /* trim the input's own padding rather than widening the pill — widening it
+     pushes the account button back off the right edge (measured: only 6px of
+     slack at 320px). This buys the 4px "Search" needed to render uncut. */
+  #site-search{ padding-left: 4px; padding-right: 4px; }
+
+  /* tokens stay comfortably tappable (>=40px) but stop eating the row */
+  .header-tokens{ gap: 5px; }
+  .notif-btn, #auth-open, .header-tokens > button{
+    width: 40px; height: 40px; min-width: 40px;
   }
 }

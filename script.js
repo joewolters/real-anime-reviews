@@ -133,6 +133,21 @@ function updateScrollLock() {
   const searchForm = document.getElementById("search-form");
   const searchInput = document.getElementById("site-search");
 
+  // Part A item 4 — Blake, on Arc/iPhone: the search UI "feels messy and
+  // unorganized". Measured cause: "Search anime…" needs 103px of text but the
+  // header pill is 50-100px on a phone, so it rendered as "Search a" — clipped
+  // mid-word. CSS cannot shorten a placeholder, so it is swapped here.
+  // Desktop keeps the full phrase. Re-evaluated on resize/rotate.
+  if (searchInput) {
+    const narrowSearch = window.matchMedia("(max-width: 560px)");
+    const fitPlaceholder = () => {
+      searchInput.placeholder = narrowSearch.matches ? "Search" : "Search anime…";
+    };
+    fitPlaceholder();
+    if (narrowSearch.addEventListener) narrowSearch.addEventListener("change", fitPlaceholder);
+    else if (narrowSearch.addListener) narrowSearch.addListener(fitPlaceholder);
+  }
+
   // Filter
   const filterBtn = document.getElementById("filter-btn");
   const filterPanel = document.getElementById("filter-panel");
