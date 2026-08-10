@@ -20,6 +20,27 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-08-10 -->
+## v2.1.0 — MINOR (2026-08-10)
+
+**You can delete your account.** It's in your settings, at the bottom, under *Leaving*. It happens straight away — there's no quiet waiting period where the site keeps your things after you've asked it to stop. What goes: everything you wrote, your name on it, your pictures, your profile, your shelves, your votes. What stays: the empty slot where a comment or review used to be, reading *[removed by the author]* — because that's the only way the replies underneath it still make sense. Letters are closed rather than destroyed; half of every conversation belongs to the other person.
+
+**Nobody else loses their words when someone leaves.** This is the part that matters. Until now, a member deleting their account took their forum thread with them — and a thread takes every reply inside it, from everyone. The same for replies under their comment and discussion under their review. People who had done nothing would have lost writing because somebody else quit. It also flatly contradicted what this site already tells you when you visit a departed member's page: *what they shared lives where they posted it.* Now it does.
+
+**Two related fixes, said plainly.** Deleting an account used to be possible from a browser's developer console with no password check and no confirmation — no button on the site did it, but the door was open. It's shut. And while proving the new deletion worked, a second problem surfaced in the code that blanks a departing member's posts: it could recreate documents that had just been deleted, leaving empty entries nobody wrote. Also fixed.
+
+**Profiles don't drown in reviews any more.** Your pinned review leads the page, and everything else lives behind one **all reviews** button that opens the full list. The list is shareable — copy the address bar while it's open and the link lands there.
+
+**iPhone and Safari, properly this time.** The whole responsive rebuild had only ever been tested in one browser, which hid four real bugs. The worst: on any phone narrower than about 390 pixels — including the iPhone SE — the account button sat entirely off the edge of the screen, so **signing in was impossible**. Also fixed: tapping a filter box zoomed the entire page (that "bloated" feeling), the search placeholder rendered clipped mid-word, and buttons throughout the header were too small to hit reliably. All measured on three iPhone sizes, which now have their own permanent test run.
+
+**A profile bug that had no workaround.** Members who joined before profiles existed could never save their profile — every attempt failed silently and told them to wait and try again, forever. The cause was an avatar address copied in from the old account system that the site's own rules then refused to accept. Their next save now fixes itself; nothing for them to do.
+
+**Smaller things.** The comic quote bubbles no longer appear on phones. The catch-up strip stopped overlapping the update log. The last four plain dropdowns became branded ones. The profile editor's heading is *Your Corner* instead of a second *Your Constellation*. And the header search bar, which grew to sixty percent of the screen on tablets and small laptops, is proportional again at every width.
+
+**Behind the scenes.** The anime catalog finished moving out of a spreadsheet and into a proper database with per-field history and one-click undo, and there's a new admin page for member counts. Nothing there changes what you see.
+
+---
+
 <!-- author: Code | date: 2026-08-09 -->
 ## v2.0.1 — PATCH (2026-08-09)
 

@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="2.0.1"</script>
+  <script>window.APP_VERSION="2.1.0"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -59,10 +59,10 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=2.0.1">
-  <link rel="stylesheet" href="mobile.css?v=2.0.1" media="(max-width: 900px)">
-  <link rel="stylesheet" href="frames.css?v=2.0.1">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
-  <link rel="stylesheet" href="admin-fab.css?v=2.0.1">
+  <link rel="stylesheet" href="style.css?v=2.1.0">
+  <link rel="stylesheet" href="mobile.css?v=2.1.0" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=2.1.0">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
+  <link rel="stylesheet" href="admin-fab.css?v=2.1.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -266,11 +266,26 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v2.0.1</span>
-     Hotfix
+      <span class="changelog-tag" id="changelog-version">v2.1.0</span>
+     Feature Update
     </div>
 
     <div class="changelog-content">
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v2.1.0</span></div>
+          <span class="vs-tier">Feature Update</span>
+          <div class="version-header">08/10/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li><strong>You can delete your account</strong> — it's in your settings, under <em>Leaving</em>, and it happens straight away. Everything you wrote is erased along with your name and your pictures; the empty slot stays, reading <em>[removed by the author]</em>, so the replies underneath it still make sense.</li>
+          <li><strong>Nobody else loses their words when someone leaves.</strong> A member deleting their account used to take their whole forum thread with them — and every reply inside it, from everyone. That's fixed. What you shared lives where you posted it.</li>
+          <li><strong>Profiles don't drown in reviews</strong> — a pinned review leads the page and the rest live behind one "all reviews" button. Copy the address bar while that list is open and the link lands right there.</li>
+          <li><strong>iPhone and Safari, properly</strong> — on phones under ~390px wide (the iPhone SE included) the account button sat off the edge of the screen, so signing in was impossible. Tapping a filter box also zoomed the whole page, and the search text rendered clipped mid-word. All fixed and measured on three iPhone sizes.</li>
+          <li><strong>A profile bug with no workaround</strong> — members from before profiles existed could never save theirs; every attempt failed silently. Their next save fixes itself, with nothing for them to do.</li>
+          <li>Quote bubbles no longer crowd phones, the catch-up strip stopped overlapping the update log, the last plain dropdowns became branded ones, and the header search bar is proportional again at every width.</li>
+        </ul>
+      </div>
       <div class="version-section" data-tier="hotfix">
         <div class="vs-head">
           <div class="version-chips"><span class="version-chip">v2.0.1</span></div>
