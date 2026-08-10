@@ -20,6 +20,13 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-08-09 -->
+## v2.0.1 — PATCH (2026-08-09)
+
+**Four reviews come home.** Back in December Blake rewrote most of his reviews; in May a sync quietly replaced some of that work with older, shorter text, and nobody noticed for two months. A full forensic pass over every snapshot the project has — git, 42 Excel backups, the old text export, the web archive — found exactly which ones were lost and put them back: **Rascal Does Not Dream of Bunny Girl Senpai** (213 → 710 characters), **An Archdemon's Dilemma** (112 → 337), **Attack on Titan** and **Demon Slayer**. Attack on Titan keeps its "top 3 anime" opening, Blake's call. Two candidates that *looked* recoverable turned out to be corrupt editor scaffolding and were left alone — the versions on the site were already the good ones.
+
+**So it can't happen again.** Publishing now refuses to ship a material shrink in review text: the exact May regression, replayed against the new guard, is stopped with the review named and the character count shown. Behind the scenes the anime catalog also now exists as a proper database with per-field history and one-click undo, proven to reproduce the site's data file byte-for-byte, plus an admin editor that works from a phone. None of that is visitor-facing yet — the site still reads the same static file it always has.
+
 <!-- author: Code | date: 2026-07-04 -->
 ## v2.0.0 — MAJOR (2026-07-04)
 
