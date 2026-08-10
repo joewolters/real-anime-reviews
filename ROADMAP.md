@@ -63,7 +63,7 @@ Mode 2's job is "watch over the site." Runs on a schedule (likely weekly) withou
 
 These rules apply to every AI system that touches the project — Code (the build tool), Mode 1, Mode 2, and any future AI added later. They are not phase-specific; they are always on.
 
-1. **Excel is canonical.** `Anime_Master_Table.xlsx` (in `Master List/`) is the source of truth for anime data. Any AI that changes anime data also updates Excel. Excel is never allowed to drift out of sync with what's deployed. Blake can always open Excel and see ground truth, including data Mode 2 changed while he wasn't watching.
+1. **The catalog is canonical.** <!-- author: Code | date: 2026-08-09 --> `catalog/{animeId}` in Firestore is the source of truth for anime data; `animeData.js` is generated from it by `npm run catalog:publish`. Any AI that changes anime data writes to the catalog, and every write keeps an append-only revision. Excel is an **export** (`npm run catalog:xlsx`), not an input — the old master is archived and `npm run sync` refuses to overwrite from it. *(Changed 2026-08-09; Excel was canonical from v1.5.0. See `docs/CLOUD-MIGRATION-STUDY.md`.)*
 
 2. **Every AI marks its changes.** Every CHANGELOG entry — and any meaningful documentation update — includes an HTML comment marker on the line above:
    ```

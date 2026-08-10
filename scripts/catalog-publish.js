@@ -20,7 +20,12 @@
  * SOURCES:
  *   --from=json      (default) the exported catalog-docs.json — offline, no cloud
  *   --from=emulator  the local Firestore emulator (127.0.0.1:8080)
- *   --from=prod      production Firestore  [requires --blake-said-go]
+ *   --from=rest      production, over the PUBLIC REST read — no credentials
+ *   --from=prod      production via the Admin SDK  [requires --blake-said-go]
+ *
+ * `rest` exists because the catalog is world-readable by design (it IS the
+ * public catalog), so publishing needs no service-account key on disk — which
+ * keeps the highest-risk file in this project from ever existing.
  *
  * Usage (from Current Version/):
  *   node scripts/catalog-publish.js --from=json --stamp=2026-08-09
@@ -60,6 +65,48 @@ const C = { g: '\x1b[32m', r: '\x1b[31m', y: '\x1b[33m', d: '\x1b[90m', x: '\x1b
     if (!fs.existsSync(p)) { console.error('not found:', p); process.exit(2); }
     docs = JSON.parse(fs.readFileSync(p, 'utf8'));
     console.log(`SOURCE: ${p}`);
+  } else if (FROM === 'rest') {
+    // Public REST read of the production catalog — no credentials, no SDK.
+    console.log('SOURCE: PRODUCTION (public REST read)');
+    const https = require('https');
+    const url = 'https://firestore.googleapis.com/v1/projects/real-anime-reviews/databases/(default)/documents/catalog?pageSize=300';
+    // Collect BUFFERS and decode once. Concatenating chunks as strings splits
+    // multi-byte UTF-8 across chunk boundaries and corrupts it — caught by the
+    // byte-equality gate below, which turned バニーガール into バ���ーガール.
+    const body = await new Promise((res, rej) => {
+      https.get(url, (r) => {
+        const chunks = [];
+        r.on('data', (d) => chunks.push(d));
+        r.on('end', () => res(Buffer.concat(chunks).toString('utf8')));
+      }).on('error', rej);
+    });
+    const parsed = JSON.parse(body);
+    if (!parsed.documents || !parsed.documents.length) {
+      console.error(`${C.r}ABORT:${C.x} the production catalog is empty.`); process.exit(1);
+    }
+    if (parsed.nextPageToken) {
+      console.error(`${C.r}ABORT:${C.x} the catalog paginated — refusing to publish a partial catalog.`); process.exit(1);
+    }
+    // Firestore REST wraps every value in a type tag; unwrap to plain JS.
+    const unwrap = (v) => {
+      if (v == null) return null;
+      if ('stringValue' in v) return v.stringValue;
+      if ('integerValue' in v) return parseInt(v.integerValue, 10);
+      if ('doubleValue' in v) return v.doubleValue;
+      if ('booleanValue' in v) return v.booleanValue;
+      if ('nullValue' in v) return null;
+      if ('timestampValue' in v) return v.timestampValue;
+      if ('arrayValue' in v) return (v.arrayValue.values || []).map(unwrap);
+      if ('mapValue' in v) {
+        const o = {}; for (const [k, x] of Object.entries(v.mapValue.fields || {})) o[k] = unwrap(x); return o;
+      }
+      return null;
+    };
+    docs = parsed.documents.map((d) => {
+      const o = {};
+      for (const [k, v] of Object.entries(d.fields || {})) o[k] = unwrap(v);
+      return o;
+    });
   } else if (FROM === 'emulator' || FROM === 'prod') {
     if (FROM === 'prod' && !GO) {
       console.error(`${C.r}REFUSED:${C.x} --from=prod requires --blake-said-go.`);
@@ -78,7 +125,7 @@ const C = { g: '\x1b[32m', r: '\x1b[31m', y: '\x1b[33m', d: '\x1b[90m', x: '\x1b
     if (snap.empty) { console.error(`${C.r}ABORT:${C.x} the catalog collection is empty — nothing to publish.`); process.exit(1); }
     docs = snap.docs.map((d) => d.data());
   } else {
-    console.error('--from must be json | emulator | prod'); process.exit(3);
+    console.error('--from must be json | rest | emulator | prod'); process.exit(3);
   }
 
   docs = [...docs].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));

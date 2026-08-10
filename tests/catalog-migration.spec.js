@@ -123,3 +123,19 @@ test('the Excel sync and the cloud publish share one renderer', () => {
   expect(sync).toMatch(/require\(['"]\.\/lib\/catalog-model['"]\)/);
   expect(sync).not.toMatch(/lines\.push\('const animeData = \['\)/);
 });
+
+test('the Excel sync refuses to silently overwrite the catalog', () => {
+  // Phase 5: the catalog is canonical. `npm run sync` regenerating animeData.js
+  // from a spreadsheet is the exact May 2026 failure, so it now needs an
+  // explicit override. Dry-run and --validate stay free.
+  const sync = fs.readFileSync(path.resolve(__dirname, '..', 'scripts', 'sync-excel-to-js.js'), 'utf8');
+  expect(sync).toContain('--i-know-excel-is-not-canonical');
+  expect(sync).toMatch(/Excel is no longer the source of truth/);
+  expect(sync).toMatch(/!dryRun && !validateOnly/);
+});
+
+test('project rule #1 says the catalog is canonical, not Excel', () => {
+  const claude = fs.readFileSync(path.resolve(__dirname, '..', 'CLAUDE.md'), 'utf8');
+  expect(claude).toMatch(/1\. \*\*The catalog is canonical/);
+  expect(claude).not.toMatch(/1\. \*\*Excel is canonical/);
+});

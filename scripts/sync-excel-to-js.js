@@ -497,6 +497,32 @@ function main() {
   const dryRun = args.includes('--dry-run');
   const validateOnly = args.includes('--validate');
 
+  // ---- v2.1 cloud migration: EXCEL IS NO LONGER CANONICAL ------------------
+  // The catalog store (Firestore) is the source of truth; animeData.js is
+  // produced by `npm run catalog:publish`. This script still works — it is how
+  // the Excel era is reproduced and audited — but it must never SILENTLY
+  // regenerate the site data from a spreadsheet again. That is precisely what
+  // happened in May 2026: a stale master overwrote four hand-written reviews
+  // and nobody noticed for two months. Reading and dry-running stay free.
+  const overrideFlag = '--i-know-excel-is-not-canonical';
+  if (!dryRun && !validateOnly && !args.includes(overrideFlag)) {
+    console.error(`${C.yellow}${C.bold}Excel is no longer the source of truth.${C.reset}`);
+    console.error('');
+    console.error(`  The catalog lives in Firestore. To update the site, run:`);
+    console.error(`    ${C.bold}npm run catalog:publish -- --from=rest --write${C.reset}`);
+    console.error('');
+    console.error(`  This script would regenerate animeData.js from the spreadsheet and`);
+    console.error(`  could quietly undo catalog edits — the May 2026 failure exactly.`);
+    console.error('');
+    console.error(`  Still safe to run:  ${C.gray}npm run sync:check${C.reset} (dry run) · ${C.gray}--validate${C.reset}`);
+    console.error(`  To export the catalog back to a spreadsheet: ${C.gray}npm run catalog:xlsx${C.reset}`);
+    console.error(`  If you genuinely mean to overwrite from Excel, pass ${C.bold}${overrideFlag}${C.reset}.`);
+    process.exit(1);
+  }
+  if (args.includes(overrideFlag)) {
+    console.log(`${C.yellow}!${C.reset} Overwriting animeData.js from EXCEL — the catalog store is being bypassed.`);
+  }
+
   console.log(`${C.bold}${dryRun ? 'DRY RUN: ' : ''}Reading Excel...${C.reset}`);
   console.log(`  Source: ${C.gray}${EXCEL_PATH}${C.reset}`);
 

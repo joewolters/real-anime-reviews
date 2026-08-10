@@ -67,7 +67,16 @@ Blake: *"start phase 2."* **Excel is no longer load-bearing.** The database can 
 - **Line endings:** git's autocrlf checks `animeData.js` out as CRLF while every generator writes LF, so a *raw* comparison reports a phantom ~1-byte-per-line difference. All comparators normalise and say so explicitly. Data is unaffected; `git status` stays clean.
 - **Tests: floor 291 → 296** (5 new: tripwire pass/refuse-May-regression/refuse-missing-title/no-false-alarm, plus a guard that fails if anyone reintroduces a second renderer). Full suite green.
 
-## ◐ 13. PHASE 5 — RETIRE EXCEL (2026-08-09: the export is BUILT; the switch is NOT thrown)
+## ✅ 13. PHASE 5 — RETIRE EXCEL — **COMPLETE 2026-08-09. THE MIGRATION IS DONE.**
+Blake ran the browser import; verified independently over the public REST read: **44 docs, 44 unique ids, 22,406 review chars, no missing fields, order dense 0..43**. Then the whole loop was proven in production — `catalog-publish --from=rest` regenerates animeData.js from the LIVE Firestore catalog with a body **identical to what is live**. Excel is no longer needed, so all three parts landed:
+1. ✅ **Excel is a download** — `npm run catalog:xlsx`.
+2. ✅ **Publish replaces sync** — `npm run sync` now REFUSES to write without `--i-know-excel-is-not-canonical`, naming the May 2026 failure in the error. `sync:check` and `--validate` stay free.
+3. ✅ **Rule #1 rewritten** — CLAUDE.md (rule + READ-FIRST + jump-to) and ROADMAP.md. Pinned by a test.
+- The old master is **archived, not deleted**: `Master List/_archive/Anime_Master_Table.FINAL-EXCEL-ERA.2026-08-09.xlsx`, hash-verified identical, and the original left untouched where it has always been.
+- ⚠️ **A UTF-8 bug the byte gate caught, in MY code:** the first REST publish reported `body: CHANGED` on one line — `バニーガール` had become `バ���ーガール`. Cause: concatenating HTTPS chunks as strings splits a multi-byte character across a chunk boundary. Fixed by buffering and decoding once. The data in Firestore was always correct; the reader was wrong. Without the byte-equality gate this would have silently mangled the Japanese titles on the next publish.
+- Floors: npm test **320** · rules **208**.
+
+### (superseded) the original Phase 5 plan
 Phase 5 is three things. **One is done, two are correctly blocked** — Excel is still the live master until the prod import runs, so flipping the rule now would make the docs lie.
 
 | | Status |
