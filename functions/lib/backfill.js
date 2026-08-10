@@ -18,13 +18,21 @@
 // =============================================================================
 const { ADMIN_UID } = require('./moderation');
 
+const ALLOWED_AVATAR = /^(https:\/\/(firebasestorage\.googleapis\.com|lh3\.googleusercontent\.com)|http:\/\/127\.0\.0\.1:9199)\//;
+
 function minimalProfile(userData, joinedAt) {
   const u = userData || {};
   const out = {};
   const name = (typeof u.displayName === 'string' && u.displayName.trim()) ? u.displayName.trim()
     : (typeof u.username === 'string' && u.username.trim()) ? u.username.trim() : '';
   if (name) out.displayName = name.slice(0, 60);
-  if (typeof u.photoURL === 'string' && u.photoURL) out.photoURL = u.photoURL;
+  // PART A item 5 — do NOT mint a photoURL the rules would reject.
+  // users/{uid} has no shape validation and the pre-profile-era account page
+  // let members type any avatar URL, so copying it verbatim (Admin SDK, rules
+  // bypassed) planted a value in profiles/{uid} that no later client save could
+  // ever re-send: every Studio save came back PERMISSION_DENIED, permanently.
+  // Mirrors the photoURL clause of profileFieldsOk() in firestore.rules.
+  if (typeof u.photoURL === 'string' && ALLOWED_AVATAR.test(u.photoURL)) out.photoURL = u.photoURL;
   if (joinedAt) out.joinedAt = joinedAt;
   return out;
 }

@@ -246,9 +246,27 @@ test('signup mint: a new users doc births a minimal profile — name mapped, EMA
     return p.exists ? p.data() : null;
   });
   assert.equal(prof.displayName, 'Fresh Fan', 'username maps to displayName');
-  assert.equal(prof.photoURL, 'https://example.com/f.png');
+  // PART A item 5 (2026-08-09) — this line used to assert the OPPOSITE:
+  // that an arbitrary off-origin photoURL was copied verbatim into the public
+  // profile. That behaviour was the legacy-member bug. The rules reject those
+  // origins, so a minted doc holding one could never be re-saved by its owner:
+  // every Studio save returned PERMISSION_DENIED, forever. The mint now drops
+  // a URL the rules would refuse, and the member simply has no avatar until
+  // they upload one. Test changed deliberately — it was pinning a real defect.
+  assert.equal('photoURL' in prof, false, 'an off-origin avatar URL is NOT minted into the public profile');
   assert.equal('email' in prof, false, 'the email NEVER crosses into the public profile');
   assert.ok(prof.joinedAt, 'a signup-time mint stamps joinedAt (truthful at birth)');
+});
+
+test('signup mint: a GOOD-origin avatar IS carried into the public profile', async () => {
+  const U = 'signupok_' + Date.now();
+  const good = 'https://firebasestorage.googleapis.com/v0/b/x/o/avatars%2F' + U + '%2Fprofile.jpg';
+  await db.doc('users/' + U).set({ username: 'Ok Fan', photoURL: good });
+  const prof = await waitFor(async () => {
+    const p = await db.doc('profiles/' + U).get();
+    return p.exists ? p.data() : null;
+  });
+  assert.equal(prof.photoURL, good, 'an allowed origin still comes across');
 });
 
 test('backfillProfiles: admin-only; mints the missing, skips the Studio-made, omits joinedAt for legacy', async () => {

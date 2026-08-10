@@ -271,6 +271,53 @@ test('profile: the ADMIN may use his own reserved name on HIS doc (v1.10.2 Creat
 test('profile: HOSTILE member named "blake" (case-folded) stays DENIED post-carve-out', async () => {
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice'), { displayName: 'bLaKe' }));
 });
+// ---------------- PART A item 5: THE LEGACY MEMBER BUG ----------------
+// Blake: "Some users are having trouble conforming their profile if they were a
+// previous member. I straight up can't get one of them to work."
+//
+// The trap: a pre-profile-era member could type ANY avatar URL into Auth +
+// users/{uid} (that page had no origin check, and users/{uid} has no shape
+// validation). backfillProfiles copied it verbatim into profiles/{uid} with the
+// Admin SDK, which BYPASSES rules — so a doc exists holding a photoURL the
+// rules would never have accepted. The Studio then re-sends that same Auth
+// photoURL on every save, the merged doc fails the origin allowlist, and the
+// write is denied forever. account.js swallows the error and tells them to
+// "give it a moment and hit Save again".
+//
+// NOTE: these use a CONSENTED actor on purpose. An un-consented uid fails
+// gateOk() first, which masks the photoURL denial entirely — the first draft of
+// this test "reproduced" the bug for the wrong reason.
+test('LEGACY BUG: a backfilled off-origin photoURL makes every profile save fail', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'moderationGate/legacy'), { banned: false, consentVersion: 1 });
+    await setDoc(doc(db, 'profiles/legacy'),
+      { displayName: 'Legacy Member', photoURL: 'https://example.com/old-avatar.png' });
+  });
+  // exactly what the Studio sends: the Auth photoURL, re-sent, merged
+  await assertFails(setDoc(doc(as('legacy'), 'profiles/legacy'),
+    { displayName: 'Legacy Member', photoURL: 'https://example.com/old-avatar.png', bio: 'hello' },
+    { merge: true }));
+});
+test('LEGACY FIX: dropping the off-origin photoURL to null lets the save through', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'moderationGate/legacy'), { banned: false, consentVersion: 1 });
+    await setDoc(doc(db, 'profiles/legacy'),
+      { displayName: 'Legacy Member', photoURL: 'https://example.com/old-avatar.png' });
+  });
+  await assertSucceeds(setDoc(doc(as('legacy'), 'profiles/legacy'),
+    { displayName: 'Legacy Member', photoURL: null, bio: 'hello' }, { merge: true }));
+});
+test('LEGACY: a good-origin avatar still saves normally', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'moderationGate/legacy'), { banned: false, consentVersion: 1 });
+    await setDoc(doc(db, 'profiles/legacy'), { displayName: 'Legacy Member' });
+  });
+  await assertSucceeds(setDoc(doc(as('legacy'), 'profiles/legacy'),
+    { displayName: 'Legacy Member',
+      photoURL: 'https://firebasestorage.googleapis.com/v0/b/x/o/avatars%2Flegacy%2Fprofile.jpg' },
+    { merge: true }));
+});
+
 test('profile: HOSTILE arbitrary external photoURL is DENIED (M2)', async () => {
   await assertFails(setDoc(doc(as('alice'), 'profiles/alice'),
     { displayName: 'Alice', photoURL: 'https://evil.example.com/track.png' }));

@@ -2117,7 +2117,26 @@ saveBtn.addEventListener('click', async () => {
       if (cb) cb.hidden = true;
     }
 
-    let photo = u.photoURL || null;
+    // Mirrors the photoURL clause of profileFieldsOk() in firestore.rules. Kept
+    // deliberately narrow: this decides what we WRITE, not what we render (render
+    // sinks use safeAvatar). If the rules list ever changes, change both.
+    function allowedAvatarUrl(url) {
+      if (!url || typeof url !== 'string') return false;
+      return /^https:\/\/(firebasestorage\.googleapis\.com|lh3\.googleusercontent\.com)\//.test(url)
+          || /^http:\/\/127\.0\.0\.1:9199\//.test(url);
+    }
+
+    // PART A item 5 — THE LEGACY MEMBER BUG.
+    // A pre-profile-era member could type ANY avatar URL into Auth (that page
+    // had no origin check), and backfillProfiles copied it into profiles/{uid}
+    // with the Admin SDK, which bypasses rules. Re-sending that value here made
+    // the merged doc fail the rules' photoURL origin allowlist, so EVERY save
+    // was PERMISSION_DENIED — forever, with the error swallowed below. That is
+    // "I straight up can't get one of them to work".
+    // Gate it against the same origins rules enforce; null is explicitly legal,
+    // so an unusable old URL simply drops and the member is unblocked on their
+    // next save. Reproduced and pinned in functions/rules-tests/rules.spec.js.
+    let photo = allowedAvatarUrl(u.photoURL) ? u.photoURL : null;
 
     // If a new avatar was picked, upload it
     if (newAvatarBlob) {
@@ -2199,6 +2218,11 @@ saveBtn.addEventListener('click', async () => {
     };
     if (consentOk) try { await writeProfileDoc(); } catch (_profileErr) {
       profWriteOk = false;
+      // PART A item 5 — this used to be swallowed in silence, so a deterministic
+      // rules denial looked like a flaky network hiccup and the member was told
+      // to "give it a moment and hit Save again" forever, with nothing in the
+      // console for anyone to find. Log it; the copy below stays friendly.
+      try { console.error('[profile save] public profile write denied:', _profileErr && (_profileErr.code || _profileErr.message), _profileErr); } catch (_) {}
     }
 
     // gate-20.6 adversarial MED: the bg-upload early-return used to run FIRST,
