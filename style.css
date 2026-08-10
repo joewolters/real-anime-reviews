@@ -8909,11 +8909,6 @@ html.rar-welcome-pending::before {
   .welcome-catchup-btn { padding: 9px 18px; font-size: 0.84rem; }
 }
 .welcome-catchup[hidden] { display: none; }   /* [hidden] symmetry */
-/* PART A item 3 (2026-08-09) — Blake: the strip "needs to not overlap with the
-   update log". The strip floats (absolute, z-index:3) over the card, and the
-   update log is the card's LAST in-flow child, so they fought for the same
-   pixels. JS measures the strip and publishes its height as --rar-catchup-h;
-   the card reserves exactly that lane. No guesswork, holds at any width. */
 /* PART A item 3 (2026-08-09) — once JS re-homes the strip INTO the card it is
    an in-flow block, so every floating property has to come off or it would
    still be positioned out of the flow it just joined. In flow it cannot
