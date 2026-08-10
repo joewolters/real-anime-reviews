@@ -102,6 +102,25 @@ The `'@` close of a here-string does NOT include the newline that visually appea
 
 Some terminal Read tools display curly quotes as straight, hiding the actual file content. Always confirm with byte-level inspection if quote characters matter.
 
+### Firestore `set(ref, data, {merge:true})` CREATES a document that isn't there
+
+<!-- author: Code | date: 2026-08-10 -->
+`update()` fails on a missing doc; `set`-with-merge silently creates one. A query
+and a write are never atomic, so any doc deleted in between comes back — as an
+entry nobody wrote, which then fires every onCreate trigger a real one would.
+
+This shipped undetected for months in `redactAuthored` (lib/moderation.js). It was
+harmless while that path only ran on a ban — the target's docs are alive — and
+became a live bug the moment PART A item 7 put it on the account-erasure path,
+where things are being deleted all around it. It surfaced only as an *unrelated*
+cf test timing out, and the tempting fix was a bigger timeout.
+
+**Two rules from it:** for "modify only what exists", use `update()` per doc with a
+caught not-found — never batched, since one missing doc fails an atomic batch and
+redacts nothing. And when a test starts failing near your change, re-run the suite
+against the **pre-change baseline** before touching its timeout; that comparison is
+what found this.
+
 ### `.gitignore` and `firebase.json` ignore arrays must mirror for sensitive files
 
 Any file added to `.gitignore` in `Current Version/` must also have a matching entry in `firebase.json`'s `ignore` array (or be already covered by an existing pattern like `**/.*` for dotfiles).
