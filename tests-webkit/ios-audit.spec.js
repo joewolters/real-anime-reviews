@@ -118,7 +118,10 @@ test('the search bar fits and behaves', async ({ page }, testInfo) => {
     const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
     return { needs, avail: Math.floor(el.getBoundingClientRect().width - pad), text: el.placeholder };
   });
-  expect(fit.needs, `placeholder "${fit.text}" needs ${fit.needs}px but only ${fit.avail}px is visible — it will render clipped`)
+  // +6px of slack, not a squeak: a probe span measures the text box, but the
+  // rendered glyph's antialiased edge extends past it, so "fits exactly" still
+  // clipped the 'h' in Search on a 320px screen.
+  expect(fit.needs + 6, `placeholder "${fit.text}" needs ${fit.needs}px (+6 slack) but only ${fit.avail}px is visible — the last glyph clips`)
     .toBeLessThanOrEqual(fit.avail);
   await page.screenshot({ path: `tmp-ios-${testInfo.project.name}-search.png` });
 });

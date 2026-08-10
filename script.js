@@ -11399,6 +11399,13 @@ function onScrollHeader() {
       return true;
     }
     function startQuotes() {
+      // PART A item 1 — Blake: "Remove quotes for mobile loading page entirely
+      // not enough room." Supersedes the LAST CALL A1 top-band treatment: on a
+      // phone the door is the card, and the quotes were stealing the room.
+      // Guarded here rather than only in CSS so nothing is built and no 6.5s
+      // interval runs at all; the CSS twin below covers a live resize/rotate.
+      if (isQuotePhone()) { if (quotesLayer) quotesLayer.hidden = true; return; }
+      if (quotesLayer) quotesLayer.hidden = false;
       if (!quotesLayer || !WELCOME_QUOTES.length) return;
       quoteIdx = 0;
       if (REDUCED_MOTION) {                          // one static bubble (outer spot), no motion
@@ -11512,9 +11519,20 @@ function onScrollHeader() {
       if (host.hidden) {
         host.hidden = false;
         host.innerHTML = '<span class="welcome-catchup-kicker">WHILE YOU WERE AWAY <span class="jp-mini">留守の間</span></span>';
+        // PART A item 3 — Blake: the strip "needs to not overlap with the
+        // update log". It used to float (position:absolute, z-index:3) over a
+        // card that is TALLER than the viewport, so the card top-anchors and
+        // scrolls and the strip painted straight across the log. Reserving
+        // space cannot fix that — the card never moves. So the strip stops
+        // floating and joins the card's flow as its last child, exactly the
+        // re-home the update log itself already gets above. In flow it is
+        // physically incapable of overlapping anything.
+        const cardEl = splash && splash.querySelector('.welcome-card');
+        if (cardEl && host.parentElement !== cardEl) cardEl.appendChild(host);
       }
       host.appendChild(node);
     }
+
     // a door row: the MAIN button opens the sheet at its section (Blake: the
     // old behavior "just brought me to my notifications — not what we're
     // looking for"); the quick deep-link sub-chips render INLINE beneath it
@@ -11794,10 +11812,17 @@ function onScrollHeader() {
             catchupAdd(catchupButton(
               '📺 ' + hits.length + ' on your watchlist ' + (hits.length === 1 ? 'is' : 'are') + ' airing now',
               'airing',
-              hits.slice(0, 4).map((m) => ({
+              // PART A item 3 — Blake: the strip "needs to not overlap with the
+              // update log. Maybe it only shows the last 2 on the watchlist and
+              // a '+ 4 more'". Two titles, then one overflow chip into the
+              // sheet that already exists. openCatchupSheet is in this closure.
+              hits.slice(0, 2).map((m) => ({
                 label: String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 44),
                 go: () => { try { window.openSecondaryFromKey && window.openSecondaryFromKey('al:' + Number(m.id)); } catch (_) {} },
-              }))
+              })).concat(hits.length > 2 ? [{
+                label: '+ ' + (hits.length - 2) + ' more',
+                go: () => openCatchupSheet('airing'),
+              }] : [])
             ));
           }
         } catch (_) {}
