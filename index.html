@@ -914,6 +914,12 @@
   document.write(`<script src="markdown.js?v=${v}"><\/script>`);
   // LAST CALL A5 — the superseded **-marker toolbar engine is DELETED;
   // RarLive is the ONE composer everywhere.
+  // PART A item 8b — the branded select engine, needed by the comments/community
+  // sort controls and the report modal. Classic script, loaded before the modules
+  // so window.RarBrandSelect exists by the time any of them build markup. The ?v=
+  // is interpolated from APP_VERSION at runtime, so there is no static literal for
+  // bump-version.js to sweep — this surface is version-correct by construction.
+  document.write(`<script src="admin/brand-select.js?v=${v}"><\/script>`);
   document.write(`<script src="live-composer.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="firebase.js?v=${v}"><\/script>`);
   document.write(`<script type="module" src="script.js?v=${v}"><\/script>`);

@@ -4106,12 +4106,9 @@ function positionFeaturedDrop() {
     '    <div class="comments-controls">',
     '      <label class="sort">',
     '        <span>Sort</span>',
-    '        <select id="comments-sort-' + s + '">',
-    '          <option value="top">Top</option>',
-    '          <option value="newest">Newest</option>',
-    '          <option value="oldest">Oldest</option>',
-    '          <option value="most-liked">Most liked</option>',
-    '        </select>',
+    // PART A item 8b — a host div, not a native <select>: the OS popup can't be
+    // themed (the white outline Blake kept reporting). RarBrandSelect fills it.
+    '        <div id="comments-sort-' + s + '"></div>',
     '      </label>',
     '      <span class="comments-lock-note" id="comments-lock-' + s + '" hidden>🔒 The Creator closed this thread</span>',
     '      <span class="comments-admin-lock" id="comments-adminlock-' + s + '" hidden></span>',
@@ -4316,8 +4313,10 @@ function setVoteUI(li, value) {
   const s = reviewKey(anime);   // gate 19 — catalog slug OR al:<id> (per-season)
   const listEl  = document.getElementById(`comments-list-${s}`);
   const countEl = document.getElementById(`comments-count-${s}`);
-  const sortEl  = document.getElementById(`comments-sort-${s}`);
+  const sortHost = document.getElementById(`comments-sort-${s}`);
   if (!listEl) return () => {};
+  // mounted below, once onSortChange exists
+  let sortEl = null;
 
   const qref = query(collection(db, 'comments', s, 'items'), orderBy('createdAt', 'desc'));
 
@@ -4363,12 +4362,22 @@ function setVoteUI(li, value) {
     sorted.forEach(r => listEl.appendChild(r.li));
   }
 
-  const onSortChange = () => {
-  renderRows(lastRows);
-  // prevent sticky "focused" styling after choosing an option
-  try { sortEl.blur(); } catch(_) {}
-};
-sortEl?.addEventListener('change', onSortChange);
+  const onSortChange = () => { renderRows(lastRows); };
+  // PART A item 8b — the branded control replaces the native select. It reports
+  // through onChange rather than a 'change' event, and it manages its own focus,
+  // so the old blur() hack for sticky :hover styling is no longer needed.
+  sortEl = (sortHost && window.RarBrandSelect) ? window.RarBrandSelect({
+    host: sortHost,
+    label: 'Sort comments',
+    options: [
+      { value: 'top', label: 'Top' },
+      { value: 'newest', label: 'Newest' },
+      { value: 'oldest', label: 'Oldest' },
+      { value: 'most-liked', label: 'Most liked' },
+    ],
+    value: 'top',
+    onChange: onSortChange,
+  }) : null;
 
 
   const unsubMain = onSnapshot(qref, (snap) => {
@@ -4473,7 +4482,7 @@ sortEl?.addEventListener('change', onSortChange);
 
   return () => {
     try { unsubMain(); } catch (_) {}
-    try { sortEl && sortEl.removeEventListener('change', onSortChange); } catch (_) {}
+    // (the branded select has no listener to remove — it dies with the markup)
     try { authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     try { voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     sweepReplies();
@@ -5106,12 +5115,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
         <p class="rar-report-sub">Thanks for the heads up — I read every one of these myself.</p>
         <label class="rar-report-field">
           <span>What's wrong?</span>
-          <select class="rar-report-reason">
-            <option value="spam">Spam</option>
-            <option value="harassment">Harassment</option>
-            <option value="offtopic">Off-topic</option>
-            <option value="other">Something else</option>
-          </select>
+          <div class="rar-report-reason"></div>
         </label>
         <label class="rar-report-field">
           <span>Anything to add? (optional)</span>
@@ -5135,7 +5139,7 @@ function openInlineCommentEditor(editBtn, itemRef) {
     overlay.querySelector('.rar-report-send').addEventListener('click', async () => {
       const u = auth.currentUser;
       if (!u) { openAuth('signin'); return; }
-      const reason = overlay.querySelector('.rar-report-reason').value;
+      const reason = reasonCtl ? reasonCtl.value : 'spam';
       const note = overlay.querySelector('.rar-report-note').value.trim();
       const sendBtn = overlay.querySelector('.rar-report-send');
       sendBtn.disabled = true;
@@ -5418,6 +5422,19 @@ function openInlineCommentEditor(editBtn, itemRef) {
       <img class="rar-lightbox-img" alt="" decoding="async">`;
     overlay.querySelector('.rar-lightbox-img').src = src;
     document.body.appendChild(overlay);
+    // PART A item 8b — the last native <select> on the visitor site. Branded,
+    // so the report modal carries zero OS chrome like every other sink.
+    const reasonCtl = window.RarBrandSelect ? window.RarBrandSelect({
+      host: overlay.querySelector('.rar-report-reason'),
+      label: 'Reason for reporting',
+      options: [
+        { value: 'spam', label: 'Spam' },
+        { value: 'harassment', label: 'Harassment' },
+        { value: 'offtopic', label: 'Off-topic' },
+        { value: 'other', label: 'Something else' },
+      ],
+      value: 'spam',
+    }) : null;
     const prevFocus = document.activeElement;
     const close = () => {
       document.removeEventListener('keydown', onKey, true);
@@ -7495,8 +7512,9 @@ function communityMarkup(anime) {
     '</form>',
     '',
     `<div class="comm-sort-row">`,
-    `  <label class="comm-sort"><span>Sort</span><select id="comm-sort-${s}"><option value="most-liked">Most helpful</option><option value="newest">Newest</option></select></label>`,
-    `  <label class="comm-sort"><span>Ratings</span><select id="comm-filter-${s}"><option value="all">All ratings</option><option value="high">8&ndash;10</option><option value="mid">5&ndash;7</option><option value="low">1&ndash;4</option></select></label>`,
+    // PART A item 8b — host divs; RarBrandSelect fills them (no native popups)
+    `  <div class="comm-sort"><span>Sort</span><div id="comm-sort-${s}"></div></div>`,
+    `  <div class="comm-sort"><span>Ratings</span><div id="comm-filter-${s}"></div></div>`,
     `  <button type="button" class="comm-mine-chip" id="comm-mine-${s}" aria-pressed="false" hidden>★ My review</button>`,
     `</div>`,
     `<ul class="review-list" id="comm-list-${s}"></ul>`
@@ -7548,8 +7566,9 @@ function subscribeReviews(anime) {
   const listEl  = document.getElementById(`comm-list-${s}`);
   const avgEl   = document.getElementById(`comm-avg-${s}`);
   const countEl = document.getElementById(`comm-count-${s}`);
-  const sortEl  = document.getElementById(`comm-sort-${s}`);
-  const filterEl = document.getElementById(`comm-filter-${s}`);
+  const sortHost   = document.getElementById(`comm-sort-${s}`);
+  const filterHost = document.getElementById(`comm-filter-${s}`);
+  let sortEl = null, filterEl = null;   // branded controllers, mounted below
   const mineEl   = document.getElementById(`comm-mine-${s}`);   // v1.9.1b "My review" chip
   const histEl   = document.getElementById(`comm-histogram-${s}`);
   const blakeRating = parseFloat(anime && anime.Rating);
@@ -7737,20 +7756,30 @@ function subscribeReviews(anime) {
     applyReviewDeepLink();
   }
 
-  const onSortChange = () => {
-    renderRows(lastRows);
-
-    // kill the native "stuck hover" look after selecting an option
-    sortEl.classList.add('nohover');
-    setTimeout(() => sortEl.classList.remove('nohover'), 250);
-
-    // remove focus so focus styles don’t stick either
-    setTimeout(() => { try { sortEl.blur(); } catch(_) {} }, 0);
-  };
-
-  if (sortEl) sortEl.addEventListener('change', onSortChange);
-  const onFilterChange = () => { renderRows(lastRows); try { filterEl.blur(); } catch(_) {} };
-  if (filterEl) filterEl.addEventListener('change', onFilterChange);
+  // PART A item 8b — branded controls. They own their focus and hover state, so
+  // the native "stuck hover"/blur workarounds that used to live here are gone.
+  const onSortChange = () => { renderRows(lastRows); };
+  const onFilterChange = () => { renderRows(lastRows); };
+  if (sortHost && window.RarBrandSelect) {
+    sortEl = window.RarBrandSelect({
+      host: sortHost, label: 'Sort reviews',
+      options: [{ value: 'most-liked', label: 'Most helpful' }, { value: 'newest', label: 'Newest' }],
+      value: 'most-liked', onChange: onSortChange,
+    });
+  }
+  if (filterHost && window.RarBrandSelect) {
+    filterEl = window.RarBrandSelect({
+      host: filterHost, label: 'Filter by rating',
+      options: [
+        { value: 'all', label: 'All ratings' },
+        { value: 'high', label: '8–10' },
+        { value: 'mid', label: '5–7' },
+        { value: 'low', label: '1–4' },
+      ],
+      value: 'all', onChange: onFilterChange,
+    });
+  }
+  // (filter handler + mount live with the sort control above)
 
   // v1.9.1b — "My review" chip: isolates the signed-in user's own review. Shown only
   // when they're signed in AND have posted a review here; resets gracefully otherwise.
@@ -8312,8 +8341,8 @@ function subscribeReviews(anime) {
 
   return () => {
     try { unsubMain(); } catch(_) {}
-    try { sortEl?.removeEventListener('change', onSortChange); } catch(_) {}
-    try { filterEl?.removeEventListener('change', onFilterChange); } catch(_) {}
+
+
     try { mineAuthUnsub && mineAuthUnsub(); } catch(_) {}
     try { subscribeReviews._authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     try { subscribeReviews._voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}

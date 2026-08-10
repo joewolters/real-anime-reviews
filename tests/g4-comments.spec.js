@@ -42,9 +42,13 @@ test.describe('v1.9.0 gate 4 — comments overhaul (static surface)', () => {
     await page.waitForSelector('.card-container .card');
     await page.locator('.card-container .card').first().click();
     await expect(page.locator('#anime-modal')).toBeVisible();
-    const sort = page.locator('select[id^="comments-sort-"]').first();
+    // PART A item 8b — the native <select> became a branded RarBrandSelect
+    // (the OS popup could not be themed). Same control, same default; it is a
+    // button + listbox now, so the assertion moved off <option> elements.
+    const sort = page.locator('[id^="comments-sort-"]').first();
     await expect(sort).toBeVisible();
-    await expect(sort.locator('option[value="top"]')).toHaveCount(1);
+    await expect(sort.locator('.acct-dd-btn')).toContainText('Top');
+    await expect(page.locator('select')).toHaveCount(0);   // zero native selects
     // mega-batch Part B: the textarea became the HIDDEN model under the
     // live-in-box editor — the visible composer is the .rar-live editor.
     await expect(page.locator('textarea[id^="composer-input-"]').first()).toBeAttached();
