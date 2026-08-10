@@ -16,7 +16,7 @@ import { auth, db } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs,
-  query, orderBy, serverTimestamp,
+  query, orderBy, limit, serverTimestamp, deleteField,
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { friendlyError, showNotice } from '../friendly-errors.js?v=2.0.0';
 
@@ -132,6 +132,7 @@ async function openEditor(animeId) {
   $('cat-draft-banner').hidden = true;
   setView('edit');
   window.scrollTo(0, 0);
+  loadHistory(animeId);
 
   // Is there a draft waiting — possibly from another device?
   try {
@@ -224,9 +225,142 @@ async function saveToCatalog() {
     setSaveState('Saved ✓', 'ok');
     showNotice(`Saved “${current.Title}”. Publish when you're ready for it to go live.`);
     renderList($('cat-search').value);
+    loadHistory(current.animeId);
   } catch (err) {
     setSaveState(friendlyError(err, { kind: 'save' }), 'error');
     $('cat-save').disabled = false;
+  }
+}
+
+// ---- history + undo (phase 4) ---------------------------------------------
+// Revisions are append-only by rule (update/delete hard-denied), so UNDO is a
+// FORWARD write: the old values go back as a NEW revision. Same discipline as
+// the project's git rule — fix forward, never rewrite. Nothing is erasable.
+
+function fmtWhen(ts) {
+  try {
+    const d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+    if (!d) return 'just now';
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } catch (_) { return ''; }
+}
+
+async function loadHistory(animeId) {
+  const wrap = $('cat-history');
+  const list = $('cat-history-list');
+  const empty = $('cat-history-empty');
+  wrap.hidden = false;
+  list.innerHTML = '';
+  empty.hidden = true;
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'catalog', animeId, 'revisions'), orderBy('at', 'desc'), limit(25),
+    ));
+    if (snap.empty) { empty.hidden = false; return; }
+    snap.docs.forEach((d) => list.appendChild(historyRow(animeId, d.id, d.data())));
+  } catch (err) {
+    empty.hidden = false;
+    empty.textContent = friendlyError(err, { kind: 'save' });
+  }
+}
+
+function historyRow(animeId, revId, rev) {
+  const li = document.createElement('li');
+  li.className = 'catalog-hist';
+
+  const head = document.createElement('div');
+  head.className = 'catalog-hist-head';
+  const what = document.createElement('span');
+  what.className = 'catalog-hist-what';
+  what.textContent = M.summarizeRevision(rev);
+  const when = document.createElement('span');
+  when.className = 'catalog-hist-when';
+  when.textContent = `${fmtWhen(rev.at)}${rev.device ? ' · ' + rev.device : ''}`;
+  head.appendChild(what); head.appendChild(when);
+  li.appendChild(head);
+
+  for (const k of M.revisionFields(rev)) {
+    const before = rev.fields.before ? rev.fields.before[k] : null;
+    const after = rev.fields.after ? rev.fields.after[k] : null;
+    const row = document.createElement('div');
+    row.className = 'catalog-hist-field';
+    const delta = M.lengthDelta(before, after);
+    row.innerHTML =
+      '<span class="catalog-hist-key"></span>' +
+      '<span class="catalog-hist-before"></span>' +
+      '<span class="catalog-hist-arrow" aria-hidden="true">→</span>' +
+      '<span class="catalog-hist-after"></span>' +
+      '<span class="catalog-hist-delta"></span>';
+    row.querySelector('.catalog-hist-key').textContent = k;
+    row.querySelector('.catalog-hist-before').textContent = M.formatValue(before).slice(0, 140);
+    row.querySelector('.catalog-hist-after').textContent = M.formatValue(after).slice(0, 140);
+    const dEl = row.querySelector('.catalog-hist-delta');
+    if (delta) {
+      dEl.textContent = `${delta > 0 ? '+' : ''}${delta} chars`;
+      dEl.classList.add(delta < 0 ? 'is-down' : 'is-up');
+    }
+    li.appendChild(row);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'catalog-hist-actions';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'catalog-mini-btn';
+  btn.textContent = 'Undo this change';
+  btn.addEventListener('click', () => undoRevision(animeId, rev, btn));
+  actions.appendChild(btn);
+  li.appendChild(actions);
+  return li;
+}
+
+async function undoRevision(animeId, rev, btn) {
+  const target = catalog.find((a) => a.animeId === animeId);
+  if (!target) return;
+  const plan = M.planUndo(rev, target);
+
+  if (!plan.ok) {
+    showNotice(`Can't undo that — it would leave the anime invalid: ${plan.errors[0]}`);
+    return;
+  }
+  // A later edit already changed these fields, so undoing also rolls back that
+  // newer work. Say so plainly (branded notice — zero native dialogs), and
+  // proceed: nothing is destroyed, because the undo is itself a new revision
+  // that can be undone in turn.
+  if (plan.conflicts.length) {
+    showNotice(`Heads up: ${plan.conflicts.join(', ')} changed again after this. Undo restores the older words — and this undo is recorded too.`);
+  }
+
+  btn.disabled = true;
+  try {
+    const patch = {};
+    const before = {}; const after = {};
+    for (const [k, v] of Object.entries(plan.patch)) {
+      before[k] = target[k] === undefined ? null : target[k];
+      after[k] = v;
+      patch[k] = (v === null) ? deleteField() : v;
+    }
+    patch.updatedBy = 'blake';
+    patch.updatedAt = serverTimestamp();
+    await updateDoc(doc(db, 'catalog', animeId), patch);
+
+    // The undo is itself a new, append-only entry.
+    await setDoc(doc(collection(db, 'catalog', animeId, 'revisions')), {
+      at: serverTimestamp(), by: 'blake', device: DEVICE_LABEL, undo: true,
+      fields: { before, after },
+    });
+
+    for (const [k, v] of Object.entries(plan.patch)) {
+      if (v === null) delete target[k]; else target[k] = v;
+    }
+    if (current && current.animeId === animeId) fillForm(target);
+    markDirty();
+    showNotice('Put the old words back. The record of both changes is kept.');
+    renderList($('cat-search').value);
+    loadHistory(animeId);
+  } catch (err) {
+    showNotice(friendlyError(err, { kind: 'save' }));
+    btn.disabled = false;
   }
 }
 
@@ -249,7 +383,11 @@ function wire() {
     if (el) el.addEventListener('input', onInput);
   }
   $('cat-search').addEventListener('input', (e) => renderList(e.target.value));
-  $('cat-back').addEventListener('click', () => { setView('list'); current = null; });
+  $('cat-back').addEventListener('click', () => {
+    setView('list');
+    current = null;
+    $('cat-history').hidden = true;
+  });
   $('cat-save').addEventListener('click', saveToCatalog);
   $('cat-draft-use').addEventListener('click', () => {
     if (!currentDraft) return;

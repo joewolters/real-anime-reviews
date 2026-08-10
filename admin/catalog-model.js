@@ -161,9 +161,90 @@
     return 'your desktop';
   }
 
+  // =========================================================================
+  // PHASE 4 — HISTORY + UNDO
+  // -------------------------------------------------------------------------
+  // A revision doc is { at, by, device, fields: { before, after } } holding
+  // ONLY the fields that changed. Revisions are append-only in the rules
+  // (update and delete are hard-denied), so UNDO is a FORWARD operation: it
+  // writes the old values back as a NEW revision. Same discipline as the git
+  // rule — fix forward, never rewrite history. Nothing is ever erasable.
+  // =========================================================================
+
+  /** Field names a revision touched. */
+  function revisionFields(rev) {
+    const after = (rev && rev.fields && rev.fields.after) || {};
+    return Object.keys(after);
+  }
+
+  /** Short human summary: 'Review and Rating changed'. */
+  function summarizeRevision(rev) {
+    const ks = revisionFields(rev);
+    if (!ks.length) return 'No changes recorded';
+    const pretty = ks.map((k) => (k === 'Platforms' ? 'Where to watch' : k === 'Top10Rank' ? 'Top 10 rank' : k));
+    if (pretty.length === 1) return `${pretty[0]} changed`;
+    const last = pretty.pop();
+    return `${pretty.join(', ')} and ${last} changed`;
+  }
+
+  /** Readable one-line rendering of a stored field value. */
+  function formatValue(v) {
+    if (v == null || v === '') return '(empty)';
+    if (Array.isArray(v)) return v.length ? v.join(', ') : '(empty)';
+    return String(v);
+  }
+
+  /** Character delta for a field, for the "−501 chars" style hint. */
+  function lengthDelta(before, after) {
+    const len = (v) => (Array.isArray(v) ? v.join(', ') : String(v == null ? '' : v)).length;
+    return len(after) - len(before);
+  }
+
+  /**
+   * The patch that undoes a revision: its `before` values.
+   * A `null` means the field did not exist then — the caller deletes it.
+   */
+  function revisionUndoPatch(rev) {
+    const before = (rev && rev.fields && rev.fields.before) || {};
+    const patch = {};
+    for (const k of revisionFields(rev)) patch[k] = (k in before) ? before[k] : null;
+    return patch;
+  }
+
+  /**
+   * Has the catalog moved on since this revision? If a field no longer holds
+   * what this revision set, a later edit superseded it — undoing would also
+   * discard that newer work, so the UI must say so out loud.
+   */
+  function undoConflicts(rev, doc) {
+    const after = (rev && rev.fields && rev.fields.after) || {};
+    const out = [];
+    for (const k of Object.keys(after)) {
+      if (!sameValue(doc ? doc[k] : undefined, after[k])) out.push(k);
+    }
+    return out;
+  }
+
+  /**
+   * Undo is only safe if the restored row still passes the same validation a
+   * save would. Returns { ok, patch, errors, conflicts }.
+   */
+  function planUndo(rev, doc) {
+    const patch = revisionUndoPatch(rev);
+    const applied = Object.assign({}, doc);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null) delete applied[k];
+      else applied[k] = v;
+    }
+    const errors = validate(applied);
+    return { ok: errors.length === 0, patch, errors, conflicts: undoConflicts(rev, doc), applied };
+  }
+
   return {
     EDITABLE, ARRAY_FIELDS,
     normalizeTags, normalizePlatforms, normalizeTrailer, normalizeFields,
     validate, diffFields, isDirty, draftState, describeDraft, deviceLabelFrom,
+    revisionFields, summarizeRevision, formatValue, lengthDelta,
+    revisionUndoPatch, undoConflicts, planUndo,
   };
 }));

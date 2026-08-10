@@ -84,6 +84,87 @@ test('the editor cannot write identity or image fields', () => {
 });
 
 // ---------------------------------------------------------------------------
+// phase 4 — history + undo
+// ---------------------------------------------------------------------------
+
+const REV_REVIEW = {
+  device: 'your phone',
+  fields: { before: { Review: 'the long original review text' }, after: { Review: 'short' } },
+};
+
+test('a revision reads like a sentence, not a data dump', () => {
+  expect(M.summarizeRevision(REV_REVIEW)).toBe('Review changed');
+  expect(M.summarizeRevision({ fields: { after: { Rating: '9/10', Tags: ['a'] } } }))
+    .toBe('Rating and Tags changed');
+  expect(M.summarizeRevision({ fields: { after: { Platforms: [], Top10Rank: 3 } } }))
+    .toBe('Where to watch and Top 10 rank changed');
+  expect(M.summarizeRevision({ fields: { after: {} } })).toBe('No changes recorded');
+});
+
+test('the character delta is what makes a silent revert visible', () => {
+  // -24 here; in the real May 2026 case it would have read -501.
+  expect(M.lengthDelta('the long original review text', 'short')).toBe(-24);
+  expect(M.lengthDelta(['a'], ['a', 'b'])).toBeGreaterThan(0);
+  expect(M.formatValue([])).toBe('(empty)');
+  expect(M.formatValue(['x', 'y'])).toBe('x, y');
+  expect(M.formatValue('')).toBe('(empty)');
+});
+
+test('undo restores the previous values', () => {
+  expect(M.revisionUndoPatch(REV_REVIEW)).toEqual({ Review: 'the long original review text' });
+  // a field that did not exist before comes back as null = remove it
+  const added = { fields: { before: {}, after: { Top10Rank: 4 } } };
+  expect(M.revisionUndoPatch(added)).toEqual({ Top10Rank: null });
+});
+
+test('undo warns when a later edit already changed the same field', () => {
+  const moved = { Review: 'something newer entirely' };
+  expect(M.undoConflicts(REV_REVIEW, moved)).toEqual(['Review']);
+  const untouched = { Review: 'short' };
+  expect(M.undoConflicts(REV_REVIEW, untouched)).toEqual([]);
+});
+
+test('undo is refused when it would leave the anime invalid', () => {
+  const doc = {
+    Title: 'X', Genre: 'Action', Rating: '9/10', Description: 'd', Review: 'r',
+    Tags: ['a'], Platforms: ['Netflix'], Trailer: 'https://www.youtube.com/embed/abc',
+  };
+  // undoing back to an empty Review must not be allowed
+  const bad = { fields: { before: { Review: '' }, after: { Review: 'r' } } };
+  const plan = M.planUndo(bad, doc);
+  expect(plan.ok).toBe(false);
+  expect(plan.errors.join(' ')).toMatch(/Review/);
+
+  const good = { fields: { before: { Rating: '8/10' }, after: { Rating: '9/10' } } };
+  const p2 = M.planUndo(good, doc);
+  expect(p2.ok).toBe(true);
+  expect(p2.applied.Rating).toBe('8/10');
+});
+
+test('history is append-only — undo writes forward, never erases', async ({ page }) => {
+  // Same discipline as the git rule. The rules hard-deny update/delete on a
+  // revision, so the client must never attempt one.
+  const js = await (await page.request.get('/admin/catalog.js')).text();
+  expect(js).toMatch(/undo:\s*true/);                 // the undo is itself recorded
+  const undoFn = js.slice(js.indexOf('async function undoRevision'), js.indexOf('// ---- load'));
+  expect(undoFn).not.toMatch(/deleteDoc\([^)]*revisions/);
+  const rules = await (await page.request.get('/firestore.rules')).text();
+  const block = rules.slice(rules.indexOf('match /revisions/{revId}'));
+  expect(block.slice(0, 260)).toMatch(/allow update, delete:\s*if false/);
+});
+
+test('the history panel ships with the editor', async ({ page }) => {
+  const html = await (await page.request.get('/admin/catalog.html')).text();
+  expect(html).toContain('id="cat-history"');
+  expect(html).toContain('id="cat-history-list"');
+  const css = await (await page.request.get('/admin/catalog.css')).text();
+  for (const sel of ['.catalog-history', '.catalog-history-list', '.catalog-hist',
+    '.catalog-hist-field', '.catalog-hist-actions']) {
+    expect(css, `${sel} needs a [hidden] twin`).toContain(`${sel}[hidden] { display: none; }`);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // the page
 // ---------------------------------------------------------------------------
 

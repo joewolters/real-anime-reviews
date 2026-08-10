@@ -155,6 +155,58 @@
   color: #a892c9; font: 400 0.82rem 'Outfit', sans-serif; line-height: 1.6; margin: 4px 0 0;
 }
 
+/* ---------- history (phase 4) ---------- */
+.catalog-history { margin: 26px 0 0; padding-top: 20px; border-top: 1px solid rgba(187, 134, 252, 0.22); }
+.catalog-history[hidden] { display: none; }
+.catalog-history-head { margin: 0 0 6px; }
+.catalog-history-intro { color: #a892c9; font: 400 0.84rem 'Outfit', sans-serif; line-height: 1.6; margin: 0 0 14px; }
+.catalog-history-empty { color: #a892c9; font: 400 0.86rem 'Outfit', sans-serif; margin: 0; }
+.catalog-history-empty[hidden] { display: none; }
+
+.catalog-history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.catalog-history-list[hidden] { display: none; }
+
+.catalog-hist {
+  padding: 13px 15px; border-radius: 12px;
+  border: 1px solid rgba(187, 134, 252, 0.22);
+  background: rgba(20, 8, 38, 0.55);
+  display: flex; flex-direction: column; gap: 9px;
+}
+.catalog-hist[hidden] { display: none; }
+
+.catalog-hist-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.catalog-hist-head[hidden] { display: none; }
+.catalog-hist-what { font: 600 0.9rem 'Outfit', sans-serif; color: #efe6ff; }
+.catalog-hist-when { font: 400 0.76rem 'Outfit', sans-serif; color: #a892c9; margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* before → after stacks on a phone, sits inline on wider screens */
+.catalog-hist-field {
+  display: grid; grid-template-columns: 1fr; gap: 3px;
+  padding: 8px 10px; border-radius: 9px; background: rgba(15, 5, 28, 0.5);
+  font: 400 0.82rem 'Outfit', sans-serif; line-height: 1.5;
+}
+.catalog-hist-field[hidden] { display: none; }
+.catalog-hist-key {
+  font: 700 0.68rem 'Montserrat', sans-serif; letter-spacing: 0.12em;
+  text-transform: uppercase; color: #bb86fc;
+}
+.catalog-hist-before { color: #a892c9; text-decoration: line-through; text-decoration-color: rgba(168, 146, 201, 0.5); }
+.catalog-hist-after { color: #efe6ff; }
+.catalog-hist-arrow { color: #7c5bb0; }
+.catalog-hist-delta { font: 500 0.74rem 'Outfit', sans-serif; font-variant-numeric: tabular-nums; }
+.catalog-hist-delta.is-down { color: #ff9d94; }
+.catalog-hist-delta.is-up { color: #8ee0b0; }
+
+.catalog-hist-actions { display: flex; gap: 8px; }
+.catalog-hist-actions[hidden] { display: none; }
+
+@media (min-width: 720px) {
+  .catalog-hist-field {
+    grid-template-columns: 120px 1fr auto 1fr auto;
+    align-items: baseline; gap: 10px;
+  }
+}
+
 /* ---------- wider screens ---------- */
 @media (min-width: 720px) {
   .catalog-row { flex-direction: row; }
