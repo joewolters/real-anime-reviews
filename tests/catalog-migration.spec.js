@@ -12,11 +12,13 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 const {
-  slug, parseAnimeData, toDocs, renderBody, splitAnimeDataFile,
+  slug, parseAnimeData, toDocs, renderBody, splitAnimeDataFile, checkShrink,
 } = require('../scripts/lib/catalog-model');
 
 const ANIMEDATA = path.resolve(__dirname, '..', 'animeData.js');
-const read = () => fs.readFileSync(ANIMEDATA, 'utf8');
+// Normalise line endings: git's autocrlf checks the file out as CRLF on
+// Windows while every generator writes LF. The data is what matters here.
+const read = () => fs.readFileSync(ANIMEDATA, 'utf8').replace(/\r\n/g, '\n');
 
 test('catalog docs regenerate animeData.js byte-for-byte', () => {
   const text = read();
@@ -69,4 +71,46 @@ test('no review text is lost in the document shape', () => {
   const sum = (xs) => xs.reduce((n, a) => n + String(a.Review || '').length, 0);
   expect(sum(docs)).toBe(sum(list));
   for (let i = 0; i < list.length; i++) expect(docs[i].Review).toBe(list[i].Review);
+});
+
+// --- the shrink tripwire: the alarm that was missing in May 2026 -----------
+
+test('tripwire passes an unchanged catalog', () => {
+  const list = parseAnimeData(read());
+  expect(checkShrink(list, toDocs(list)).ok).toBe(true);
+});
+
+test('tripwire REFUSES the actual May 2026 regression', () => {
+  // Rascal's review was silently replaced by a 209-char stub and shipped.
+  // That exact event must never get past publish again.
+  const list = parseAnimeData(read());
+  const regressed = list.map((a) => (/rascal/i.test(a.Title)
+    ? Object.assign({}, a, { Review: String(a.Review).slice(0, 209) }) : a));
+  const r = checkShrink(list, regressed);
+  expect(r.ok).toBe(false);
+  expect(r.violations.join(' ')).toMatch(/Rascal/);
+});
+
+test('tripwire refuses a title disappearing entirely', () => {
+  const list = parseAnimeData(read());
+  const r = checkShrink(list, list.slice(0, list.length - 1));
+  expect(r.ok).toBe(false);
+  expect(r.violations.join(' ')).toMatch(/missing from the new catalog/);
+});
+
+test('tripwire does NOT false-alarm on an ordinary copy-edit', () => {
+  // Trimming a few words must stay publishable, or the guard becomes noise
+  // and gets disabled — which is worse than not having it.
+  const list = parseAnimeData(read());
+  const edited = list.map((a) => (/death note/i.test(a.Title)
+    ? Object.assign({}, a, { Review: String(a.Review).replace(' honestly', '') }) : a));
+  expect(checkShrink(list, edited).ok).toBe(true);
+});
+
+test('the Excel sync and the cloud publish share one renderer', () => {
+  // Phase 2 retired sync-excel-to-js.js's private copy of the renderer. If a
+  // future edit reintroduces one, the two paths can silently diverge.
+  const sync = fs.readFileSync(path.resolve(__dirname, '..', 'scripts', 'sync-excel-to-js.js'), 'utf8');
+  expect(sync).toMatch(/require\(['"]\.\/lib\/catalog-model['"]\)/);
+  expect(sync).not.toMatch(/lines\.push\('const animeData = \['\)/);
 });

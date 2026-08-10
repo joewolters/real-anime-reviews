@@ -39,6 +39,34 @@
 - **`firestore.rules`** — a staged `catalog/{animeId}` block (public read, admin-only write, immutable identity) plus append-only `revisions/` and an admin-only `draft/` for the phone↔desktop hand-off. **Written, NOT deployed.**
 - **`scripts/catalog-import.js`** — dry-run by default, emulator by default; refuses `--prod` without `--blake-said-go`; re-runs the verification gate before touching anything; refuses to run against a non-empty collection; reads every doc back and re-proves field equality.
 
+## ✅ 12. PHASE 2 — THE PUBLISH PIPELINE (2026-08-09)
+Blake: *"start phase 2."* **Excel is no longer load-bearing.** The database can now produce the site's data file, proven end-to-end through a real Firestore.
+
+### What shipped
+1. **One renderer, shared** — `sync-excel-to-js.js` no longer carries its own copy of the animeData.js formatter; both the Excel path and the cloud Publish path emit through `lib/catalog-model.js` `renderBody()`. That makes "Excel and the database produce identical output" a structural fact rather than a coincidence. **Verified on the shipping pipeline itself:** a real `npm run sync` after the refactor produced **0 non-timestamp changed lines**.
+2. **`scripts/catalog-publish.js`** — regenerates `animeData.js` from the catalog store. Sources: `--from=json` (offline), `--from=emulator`, `--from=prod` (refused without `--blake-said-go`). Dry-run by default; backs up the previous `animeData.js` to `Master List/_publish-backups/` before any write.
+3. **🚨 THE SHRINK TRIPWIRE, pulled forward from Phase 4** — it guards the publish step, so it belongs on it. Refuses to publish when total review text shrinks >2%, or any single review shrinks >25% / >150 chars, or a title vanishes. `--force` overrides, loudly.
+
+### The proof that matters
+**Replayed the actual May 2026 regression against it.** Feeding the tripwire a catalog where Rascal's review is the 209-char stub that really shipped:
+```
+⛔ PUBLISH REFUSED — review text would be lost:
+  ✗ total review text shrank 501 chars (2.24%) — limit 2%
+  ✗ "Rascal Does Not Dream of Bunny Girl Senpai" review shrank 710 → 209 (−501 chars, 70.6%)
+```
+**The event that cost Blake four reviews for two months would now be stopped before it reached the site.** It also does **not** false-alarm on an ordinary copy-edit — a guard that cries wolf gets switched off, which is worse than no guard.
+
+### Full round-trip through a real Firestore (emulator, `emulators:exec`)
+`import → read back → publish from the database`:
+- Wrote 44 documents to `catalog/`
+- **Read-back verified — every field of every document matches the source exactly**
+- Published from Firestore → **body identical to what is live**; tripwire clean (22,406 → 22,406 chars)
+- Emulator shut down cleanly; `animeData.js` untouched (dry run)
+
+### Notes
+- **Line endings:** git's autocrlf checks `animeData.js` out as CRLF while every generator writes LF, so a *raw* comparison reports a phantom ~1-byte-per-line difference. All comparators normalise and say so explicitly. Data is unaffected; `git status` stays clean.
+- **Tests: floor 291 → 296** (5 new: tripwire pass/refuse-May-regression/refuse-missing-title/no-false-alarm, plus a guard that fails if anyone reintroduces a second renderer). Full suite green.
+
 ### 🔴 What is deliberately NOT done (awaiting Blake's word)
 1. **No documents written to production Firestore.** The import is built, guarded, and dry-run tested only.
 2. **`firestore.rules` NOT deployed** — a rules deploy touches live member data and follows the full runbook order.

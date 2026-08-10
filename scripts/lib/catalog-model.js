@@ -111,4 +111,63 @@ function splitAnimeDataFile(text) {
   return { header: text.slice(0, i), body: text.slice(i) };
 }
 
-module.exports = { slug, ALWAYS, OPTIONAL, parseAnimeData, toDocs, renderBody, splitAnimeDataFile };
+/**
+ * THE SHRINK TRIPWIRE — the alarm that was missing in May 2026.
+ * ---------------------------------------------------------------------------
+ * Part 0: the v1.5.0 Excel sync silently regenerated animeData.js from a stale
+ * master, replacing hand-authored review text with shorter versions. Nothing
+ * objected, and it went unnoticed for two months. This is the objection.
+ *
+ * Compares the catalog about to be published against what is currently live
+ * and refuses the publish when review text materially shrinks.
+ *
+ * Thresholds (docs/CLOUD-MIGRATION-STUDY.md §10 item 7):
+ *   - total review text shrinks by more than 2%
+ *   - any single review shrinks by more than 25% OR more than 150 characters
+ * A title disappearing entirely is always a violation.
+ *
+ * @returns {{ok:boolean, violations:string[], notes:string[], totals:object}}
+ */
+function checkShrink(liveList, nextList, opts) {
+  const o = Object.assign({ totalPct: 2, singlePct: 25, singleChars: 150 }, opts || {});
+  const len = (a) => String((a && a.Review) || '').length;
+  const keyOf = (a) => a.slug || slug(a.Title);
+
+  const liveBy = new Map(liveList.map((a) => [keyOf(a), a]));
+  const nextBy = new Map(nextList.map((a) => [keyOf(a), a]));
+
+  const liveTotal = liveList.reduce((n, a) => n + len(a), 0);
+  const nextTotal = nextList.reduce((n, a) => n + len(a), 0);
+  const violations = [];
+  const notes = [];
+
+  const totalDrop = liveTotal - nextTotal;
+  const totalPct = liveTotal === 0 ? 0 : (totalDrop / liveTotal) * 100;
+  if (totalPct > o.totalPct) {
+    violations.push(`total review text shrank ${totalDrop} chars (${totalPct.toFixed(2)}%) — limit ${o.totalPct}%`);
+  }
+
+  for (const [k, a] of liveBy) {
+    const b = nextBy.get(k);
+    if (!b) { violations.push(`"${a.Title}" is missing from the new catalog`); continue; }
+    const before = len(a), after = len(b);
+    const drop = before - after;
+    if (drop <= 0) continue;
+    const pct = before === 0 ? 0 : (drop / before) * 100;
+    if (pct > o.singlePct || drop > o.singleChars) {
+      violations.push(`"${a.Title}" review shrank ${before} → ${after} (−${drop} chars, ${pct.toFixed(1)}%)`);
+    } else {
+      notes.push(`"${a.Title}" −${drop} chars (within tolerance)`);
+    }
+  }
+  for (const k of nextBy.keys()) if (!liveBy.has(k)) notes.push(`new entry: "${nextBy.get(k).Title}"`);
+
+  return {
+    ok: violations.length === 0,
+    violations,
+    notes,
+    totals: { liveTotal, nextTotal, delta: nextTotal - liveTotal, pct: -totalPct },
+  };
+}
+
+module.exports = { slug, ALWAYS, OPTIONAL, parseAnimeData, toDocs, renderBody, splitAnimeDataFile, checkShrink };
