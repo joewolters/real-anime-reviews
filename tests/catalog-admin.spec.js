@@ -174,7 +174,7 @@ test('the old wording is never shown as struck through', async ({ page }) => {
   const js = await (await page.request.get('/admin/catalog.js')).text();
   expect(js).toContain('catalog-hist-tag');
   const html = await (await page.request.get('/admin/catalog.html')).text();
-  expect(html).toMatch(/never deleted/i);
+  expect(html).toMatch(/old data is saved/i);
 });
 
 // ---------------------------------------------------------------------------

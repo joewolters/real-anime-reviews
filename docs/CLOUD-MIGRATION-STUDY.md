@@ -67,6 +67,20 @@ Blake: *"start phase 2."* **Excel is no longer load-bearing.** The database can 
 - **Line endings:** git's autocrlf checks `animeData.js` out as CRLF while every generator writes LF, so a *raw* comparison reports a phantom ~1-byte-per-line difference. All comparators normalise and say so explicitly. Data is unaffected; `git status` stays clean.
 - **Tests: floor 291 → 296** (5 new: tripwire pass/refuse-May-regression/refuse-missing-title/no-false-alarm, plus a guard that fails if anyone reintroduces a second renderer). Full suite green.
 
+## ◐ 13. PHASE 5 — RETIRE EXCEL (2026-08-09: the export is BUILT; the switch is NOT thrown)
+Phase 5 is three things. **One is done, two are correctly blocked** — Excel is still the live master until the prod import runs, so flipping the rule now would make the docs lie.
+
+| | Status |
+|---|---|
+| **1. Excel becomes a download** | ✅ **Done.** `scripts/catalog-to-xlsx.js` (`npm run catalog:xlsx`) rebuilds a real .xlsx from the catalog in the master's own column order. Verified: 44 rows, review text `22406 → 22406` chars, only the reference-only `FORMAT:`/`EXAMPLE:` columns dropped. Sources: json / emulator / prod (prod refused without `--blake-said-go`). |
+| **2. Publish replaces sync** | ⛔ **Blocked on the prod import.** `npm run sync` must stay the live path until the catalog exists in production. |
+| **3. Rewrite project rule #1** | ⛔ **Blocked on 2.** Drafted below, deliberately not applied. |
+
+### The rule #1 rewrite, drafted (apply only after the prod import + a clean publish)
+> **1. The catalog is canonical.** `catalog/{animeId}` in Firestore is the source of truth for anime data. `animeData.js` is generated from it by `npm run catalog:publish` — never hand-edited. Excel is an **export** (`npm run catalog:xlsx`), not an input; the old `Master List/Anime_Master_Table.xlsx` is archived, not deleted. Every write keeps an append-only revision, and publish refuses to ship a material shrink in review text.
+
+Also to change in the same gate: `CLAUDE.md` rule #1 + its READ-FIRST line, `ROADMAP.md` project rules, and the `sync-excel-to-js.js` header (point it at the archive).
+
 ### 🔴 What is deliberately NOT done (awaiting Blake's word)
 1. **No documents written to production Firestore.** The import is built, guarded, and dry-run tested only.
 2. **`firestore.rules` NOT deployed** — a rules deploy touches live member data and follows the full runbook order.
