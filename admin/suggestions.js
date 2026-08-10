@@ -30,6 +30,7 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/fi
 import { collection, query, orderBy, getDoc, getDocs, doc, updateDoc, deleteDoc, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
+import { confirmModal, noticeModal } from './admin-modals.js?v=2.1.0';   // PATCH QUEUE 2 — the shared dialogs
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const SKELETON_COUNT = 3;
@@ -273,51 +274,11 @@ function renderQueue(snaps) {
 
 // ---- Branded confirm modal (v1.6.12 item 2) --------------------------------
 
-// Promise-based replacement for native confirm(). Resolves true on Delete,
-// false on Cancel / backdrop / Escape. Reuses the static #confirm-modal overlay
-// already in the DOM (admin/suggestions.html). Focus trap keeps Tab inside the
-// two buttons while open; reduced-motion is handled in CSS.
-function confirmModal(title) {
-  return new Promise((resolve) => {
-    const overlay = $('confirm-modal');
-    const card = overlay.querySelector('.confirm-card');
-    const cancelBtn = overlay.querySelector('[data-confirm="cancel"]');
-    const okBtn = overlay.querySelector('[data-confirm="ok"]');
-    $('confirm-title').textContent = `Delete suggestion "${title}"?`;
-
-    const prevFocus = document.activeElement;
-    overlay.hidden = false;
-    // Double-rAF so the entrance transition replays reliably on every open
-    // (single rAF batches the hidden-removal + class-add into one frame).
-    requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-open')));
-    cancelBtn.focus();   // default focus on the safe option
-
-    const close = (val) => {
-      overlay.removeEventListener('click', onClick);
-      document.removeEventListener('keydown', onKey);
-      card.classList.remove('is-open');
-      overlay.hidden = true;
-      if (prevFocus && prevFocus.focus) prevFocus.focus();
-      resolve(val);
-    };
-    const onClick = (e) => {
-      if (e.target === overlay) return close(false);          // backdrop = cancel
-      const b = e.target.closest('[data-confirm]');
-      if (b) close(b.dataset.confirm === 'ok');
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); return close(false); }
-      if (e.key === 'Tab') {
-        // Two-stop focus trap between Cancel and Delete.
-        const active = document.activeElement;
-        if (e.shiftKey && active === cancelBtn) { e.preventDefault(); okBtn.focus(); }
-        else if (!e.shiftKey && active === okBtn) { e.preventDefault(); cancelBtn.focus(); }
-      }
-    };
-    overlay.addEventListener('click', onClick);
-    document.addEventListener('keydown', onKey);
-  });
-}
+// PATCH QUEUE item 2 — confirmModal/noticeModal moved to the shared
+// admin/admin-modals.js (reports.js carried a commented CLONE of the pair that
+// used to live here). Call sites below use the shared object shape; the old
+// positional forms are gone rather than shimmed, because a shim that accepts
+// both shapes is the duplication moved, not removed.
 
 // ---- Gold-flip migration picker (v1.10.0 gate 20.5) -------------------------
 
@@ -581,7 +542,10 @@ function wireListClicks() {
 
     if (action === 'delete') {
       // v1.6.12 item 2 — branded modal in place of the native confirm() dialog.
-      if (!(await confirmModal(title))) return;
+      if (!(await confirmModal({
+        glyph: '🗑️', kicker: 'DELETE SUGGESTION', kickerJp: '削除',
+        body: `Delete suggestion "${title}"?`, okLabel: 'Delete',
+      }))) return;
       btn.disabled = true;
       try {
         await deleteDoc(doc(db, 'suggestions', docId));
@@ -653,53 +617,6 @@ async function loadQueue() {
     $('queue-stats').hidden = true;                  // hide stats counter if visible
     $('suggestions-error').hidden = false;           // now actually reached
   }
-}
-
-// ---- Branded notice modal (gate 31 — the alert() replacement) ----------------
-// Same .confirm-overlay/.confirm-card vocabulary as confirmModal (v1.6.12
-// precedent), built on the fly because the static #confirm-modal's glyph/
-// kicker/buttons are delete-specific in the HTML. One Okay button; Escape and
-// the backdrop close too — things the admin just needs to SEE, not decide on.
-// (Declared after the callers — function declarations hoist; parked down here
-// so it can't shift the queue-handler lines a concurrent edit is sitting on.)
-function noticeModal(body, kicker, kickerJp) {
-  const overlay = document.createElement('div');
-  overlay.className = 'confirm-overlay';
-  const card = document.createElement('div');
-  card.className = 'confirm-card';
-  card.setAttribute('role', 'alertdialog');
-  card.setAttribute('aria-modal', 'true');
-  const glyph = document.createElement('div');
-  glyph.className = 'confirm-glyph'; glyph.setAttribute('aria-hidden', 'true'); glyph.textContent = '⚠️';
-  const kick = document.createElement('div');
-  kick.className = 'confirm-kicker';
-  kick.textContent = (kicker || 'HEADS UP') + ' ';
-  const jp = document.createElement('span'); jp.className = 'jp-mini'; jp.textContent = kickerJp || '注意';
-  kick.appendChild(jp);
-  const p = document.createElement('p'); p.className = 'confirm-body'; p.textContent = body || '';
-  const actions = document.createElement('div'); actions.className = 'confirm-actions';
-  const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'secondary'; ok.textContent = 'Okay';
-  actions.appendChild(ok);
-  card.appendChild(glyph); card.appendChild(kick); card.appendChild(p); card.appendChild(actions);
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
-
-  const prevFocus = document.activeElement;
-  // Double-rAF entrance, same as confirmModal (single rAF batches into one frame).
-  requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-open')));
-  ok.focus();
-
-  const close = () => {
-    document.removeEventListener('keydown', onKey);
-    overlay.remove();
-    if (prevFocus && prevFocus.focus) prevFocus.focus();
-  };
-  const onKey = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); return close(); }
-    if (e.key === 'Tab') { e.preventDefault(); ok.focus(); }   // one focusable — keep Tab inside
-  };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target === ok) close(); });
-  document.addEventListener('keydown', onKey);
 }
 
 // ---- Auth gate + init ------------------------------------------------------

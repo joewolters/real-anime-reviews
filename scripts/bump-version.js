@@ -485,6 +485,12 @@ const LATE_TARGETS = [
   ['admin/stats.html',  '../firebase.js?v= (stats)',    /(src="\.\.\/firebase\.js\?v=)([^"]+)(")/],
   ['admin/stats.html',  'stats.js?v= (stats)',          /(src="stats\.js\?v=)([^"]+)(")/],
   ['admin/stats.js',    "friendly-errors.js?v= import (stats)", /(from '\.\.\/friendly-errors\.js\?v=)([^']+)(')/],
+
+  // PATCH QUEUE item 2 — the shared admin confirm/notice dialogs. Two in-module
+  // import specifiers, registered in the SAME gate that creates them (the
+  // thrice-bitten stale-TARGETS class).
+  ['admin/reports.js',     "admin-modals.js?v= import (reports)",     /(from '\.\/admin-modals\.js\?v=)([^']+)(')/],
+  ['admin/suggestions.js', "admin-modals.js?v= import (suggestions)", /(from '\.\/admin-modals\.js\?v=)([^']+)(')/],
 ];
 for (const [file, label, pattern] of LATE_TARGETS) {
   TARGETS.push({

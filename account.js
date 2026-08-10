@@ -2169,6 +2169,23 @@ delGoBtn?.addEventListener('click', async () => {
   window.location.href = '/index.html';
 });
 
+// PATCH QUEUE item 3 — the header search pill carries its own ✕ on this page
+// too; the header is one shared component and a control that exists on one page
+// and not the other is the parity gap that keeps getting filed. Nothing to
+// re-filter here (this form routes to the index), so clearing is just clearing.
+const acctSearchInput = document.querySelector('#site-search');
+const acctSearchClear = document.querySelector('#site-search-clear');
+if (acctSearchInput && acctSearchClear) {
+  const paintAcctClear = () => { acctSearchClear.hidden = !acctSearchInput.value; };
+  paintAcctClear();
+  acctSearchInput.addEventListener('input', paintAcctClear);
+  acctSearchClear.addEventListener('click', () => {
+    acctSearchInput.value = '';
+    paintAcctClear();
+    acctSearchInput.focus();
+  });
+}
+
 avatarPick?.addEventListener('click', () => avatarFile?.click());
 
 let _avatarPreviewUrl = '';   // adversarial LOW: revoke across re-picks

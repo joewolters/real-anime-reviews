@@ -24,6 +24,7 @@ import { collection, query, orderBy, getDocs, getDoc, doc, setDoc, updateDoc, de
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
 import { ref as storRef, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js'; // gate 14 — image-report previews
+import { confirmModal, noticeModal } from './admin-modals.js?v=2.1.0';   // PATCH QUEUE 2 — the shared dialogs
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 
@@ -284,93 +285,11 @@ async function renderQueue(rows) {
   }));
 }
 
-// ---- Branded confirm modal (parameterized clone of suggestions') -----------
-
-function confirmModal({ glyph, kicker, kickerJp, body, okLabel }) {
-  return new Promise((resolve) => {
-    const overlay = $('confirm-modal');
-    const card = overlay.querySelector('.confirm-card');
-    const cancelBtn = overlay.querySelector('[data-confirm="cancel"]');
-    const okBtn = overlay.querySelector('[data-confirm="ok"]');
-    $('confirm-glyph').textContent = glyph || '⚠️';
-    $('confirm-kicker').innerHTML = `${escapeAttr(kicker || 'CONFIRM')} <span class="jp-mini">${escapeAttr(kickerJp || '確認')}</span>`;
-    $('confirm-title').textContent = body || 'Are you sure?';
-    okBtn.textContent = okLabel || 'Confirm';
-
-    const prevFocus = document.activeElement;
-    overlay.hidden = false;
-    requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-open')));
-    cancelBtn.focus();
-
-    const close = (val) => {
-      overlay.removeEventListener('click', onClick);
-      document.removeEventListener('keydown', onKey);
-      card.classList.remove('is-open');
-      overlay.hidden = true;
-      if (prevFocus && prevFocus.focus) prevFocus.focus();
-      resolve(val);
-    };
-    const onClick = (e) => {
-      if (e.target === overlay) return close(false);
-      const b = e.target.closest('[data-confirm]');
-      if (b) close(b.dataset.confirm === 'ok');
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); return close(false); }
-      if (e.key === 'Tab') {
-        const active = document.activeElement;
-        if (e.shiftKey && active === cancelBtn) { e.preventDefault(); okBtn.focus(); }
-        else if (!e.shiftKey && active === okBtn) { e.preventDefault(); cancelBtn.focus(); }
-      }
-    };
-    overlay.addEventListener('click', onClick);
-    document.addEventListener('keydown', onKey);
-  });
-}
-
-// ---- Branded notice modal (gate 31 — the alert() replacement) ---------------
-// Same #confirm-modal overlay as confirmModal above, minus the choice: Cancel
-// hides and OK is the only exit. Used where a native alert() used to interrupt
-// — things the admin just needs to SEE, not decide on. Restores the Cancel
-// button on close so confirmModal gets the overlay back intact.
-function noticeModal({ glyph, kicker, kickerJp, body, okLabel }) {
-  return new Promise((resolve) => {
-    const overlay = $('confirm-modal');
-    const card = overlay.querySelector('.confirm-card');
-    const cancelBtn = overlay.querySelector('[data-confirm="cancel"]');
-    const okBtn = overlay.querySelector('[data-confirm="ok"]');
-    $('confirm-glyph').textContent = glyph || '⚠️';
-    $('confirm-kicker').innerHTML = `${escapeAttr(kicker || 'HEADS UP')} <span class="jp-mini">${escapeAttr(kickerJp || '注意')}</span>`;
-    $('confirm-title').textContent = body || '';
-    okBtn.textContent = okLabel || 'Okay';
-    cancelBtn.hidden = true;
-
-    const prevFocus = document.activeElement;
-    overlay.hidden = false;
-    requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('is-open')));
-    okBtn.focus();
-
-    const close = () => {
-      overlay.removeEventListener('click', onClick);
-      document.removeEventListener('keydown', onKey);
-      card.classList.remove('is-open');
-      overlay.hidden = true;
-      cancelBtn.hidden = false;
-      if (prevFocus && prevFocus.focus) prevFocus.focus();
-      resolve();
-    };
-    const onClick = (e) => {
-      if (e.target === overlay) return close();
-      if (e.target.closest('[data-confirm]')) close();
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); return close(); }
-      if (e.key === 'Tab') { e.preventDefault(); okBtn.focus(); }   // one focusable — keep Tab inside
-    };
-    overlay.addEventListener('click', onClick);
-    document.addEventListener('keydown', onKey);
-  });
-}
+// ---- Branded confirm/notice modals ----------------------------------------
+// PATCH QUEUE item 2: both used to be defined HERE, as commented clones of
+// suggestions'. They now come from the shared admin/admin-modals.js so a fix to
+// the focus trap or the entrance transition lands on every admin page at once.
+// Call shape is unchanged — this file's object form BECAME the shared one.
 
 // ---- Row removal animation (clone of suggestions' collapse-out) ------------
 

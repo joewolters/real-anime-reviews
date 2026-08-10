@@ -240,6 +240,15 @@ textarea {
      last 2px "Search" needs to render uncut at 320px */
   #site-search{ padding-left: 3px; padding-right: 3px; }
 
+  /* PATCH QUEUE item 3 — the header search ✕ does NOT come into this band.
+     MEASURED with it in: the input fell to 24px at 320 and 60px at 360, because
+     the ✕ takes 22px + a gap out of a pill this block had already budgeted to
+     the pixel. Two characters of visible text is a worse bug than a missing
+     clear button. It returns at 401px, where the pill has room to spare.
+     (Holding backspace still clears; the native cancel button can't help —
+     style.css:43 kills it site-wide, which is why this ✕ exists at all.) */
+  .search-clear{ display: none; }
+
   /* tokens stay comfortably tappable (>=40px) but stop eating the row */
   .header-tokens{ gap: 5px; }
   .notif-btn, #auth-open, .header-tokens > button{

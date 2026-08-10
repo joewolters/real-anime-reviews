@@ -132,6 +132,7 @@ function updateScrollLock() {
   // Search
   const searchForm = document.getElementById("search-form");
   const searchInput = document.getElementById("site-search");
+  const searchClearBtn = document.getElementById("site-search-clear");   // PATCH QUEUE 3
 
   // Part A item 4 — Blake, on Arc/iPhone: the search UI "feels messy and
   // unorganized". Measured cause: "Search anime…" needs 103px of text but the
@@ -11194,6 +11195,21 @@ randomBtn?.addEventListener("click", (e) => {
     });
   }
   if (searchInput) {
+    // PATCH QUEUE item 3 — the ✕ appears only when there is something to clear,
+    // so the pill's resting width is exactly what item 4 budgeted.
+    const paintSearchClear = () => {
+      if (searchClearBtn) searchClearBtn.hidden = !searchInput.value;
+    };
+    paintSearchClear();
+    searchInput.addEventListener("input", paintSearchClear);
+    searchClearBtn?.addEventListener("click", () => {
+      searchInput.value = "";
+      // Re-enter through the input handler rather than repeating its
+      // empty-value branch here — "clear" and "delete the last character" must
+      // never be two different code paths that can drift.
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      searchInput.focus();
+    });
     // v1.8.3 gate 4 — live results as you type (debounced). Empty → back home.
     let searchDebounce = null;
     searchInput.addEventListener("input", () => {

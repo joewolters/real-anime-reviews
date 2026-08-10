@@ -3499,6 +3499,39 @@ backface-visibility: hidden;
   box-shadow: 0 0 0 3px rgba(187,134,252,0.20);
 }
 
+/* ---- PATCH QUEUE item 3 — the header search's own ✕ ----
+   The A3 global search-✕ kill removed this pill's only way to clear, and it is
+   the one input on the site that live-filters as you type: with no ✕ the only
+   exit was selecting the text and deleting it.
+
+   A FLEX item, not absolutely positioned like Discover's — the header budget at
+   320-360px was measured to the pixel in item 4, and an overlaid ✕ would sit on
+   top of centred placeholder text there. As a flex child it costs width ONLY
+   while it is visible, and it is visible only when there is text to clear.
+   ⚠️ Its [hidden] twin is load-bearing: inline-flex would otherwise beat the UA
+   rule and the ✕ would sit in the pill permanently (that trap's fifth scalp). */
+.search-clear{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.10);
+  color: #d9c9ff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease;
+}
+.search-clear[hidden]{ display: none; }
+.search-clear:hover{ background: rgba(187,134,252,0.30); color: #fff; }
+.search-clear:focus-visible{ outline: 2px solid rgba(187,134,252,0.85); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce){ .search-clear{ transition: none; } }
+
 /* Search button matches premium header buttons */
 .search-btn{
   position: relative;
