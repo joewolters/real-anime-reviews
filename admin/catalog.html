@@ -68,8 +68,12 @@
         <div id="cat-unmigrated" class="catalog-notice" hidden>
           <div class="catalog-notice-kicker">CATALOG NOT IN THE CLOUD YET <span class="jp-mini">準備</span></div>
           <p>
-            Nothing here yet — the catalog hasn't been imported. Excel is
-            still the source of truth.
+            Nothing here yet. Import your 44 anime from the live site data —
+            this only works once, and it changes nothing on the site.
+          </p>
+          <button type="button" class="catalog-save-btn" id="cat-seed">Import 44 anime</button>
+          <p class="catalog-hint" id="cat-seed-state"></p>
+          <p hidden>
           </p>
         </div>
 
@@ -183,6 +187,10 @@
 
     </div>
   </main>
+
+  <!-- Catalog bridge — the one-time seed reads the shipped catalog. -->
+  <script src="../animeData.js"></script>
+  <script>window.animeData = (typeof animeData !== 'undefined') ? animeData : (window.animeData || []);</script>
 
   <script src="brand-select.js?v=2.0.1"></script>
   <script src="catalog-model.js?v=2.0.1"></script>

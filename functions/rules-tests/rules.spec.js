@@ -365,6 +365,54 @@ test('curator: curatorNotes are PRIVATE — admin-only read AND write', async ()
   await assertFails(setDoc(doc(as('alice'), 'curatorNotes/frieren'), { note: 'hi', updatedAt: serverTimestamp() }));
 });
 
+// ---------------- CLOUD MIGRATION: the catalog ----------------
+test('catalog: PUBLIC-readable, admin-only writes', async () => {
+  await seed((db) => setDoc(doc(db, 'catalog/one-punch-man'),
+    { animeId: 'one-punch-man', slug: 'one-punch-man', order: 0, Title: 'One punch man', Review: 'r' }));
+  await assertSucceeds(getDoc(doc(anon(), 'catalog/one-punch-man')));            // it IS the public catalog
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'catalog/frieren'),
+    { animeId: 'frieren', slug: 'frieren', order: 1, Title: 'Frieren', Review: 'r' }));
+  await assertFails(setDoc(doc(as('alice'), 'catalog/frieren'),
+    { animeId: 'frieren', slug: 'frieren', order: 1, Title: 'Frieren', Review: 'hostile' }));
+  await assertFails(setDoc(doc(anon(), 'catalog/frieren'),
+    { animeId: 'frieren', slug: 'frieren', order: 1, Title: 'x', Review: 'r' }));
+});
+
+test('catalog: identity is immutable — a rename can never orphan a comment room', async () => {
+  // slug IS the live comments/reviews room id. If it could move, every comment
+  // on that anime would be orphaned.
+  await seed((db) => setDoc(doc(db, 'catalog/frieren'),
+    { animeId: 'frieren', slug: 'frieren', order: 0, Title: 'Frieren', Review: 'r' }));
+  await assertFails(updateDoc(doc(as(ADMIN), 'catalog/frieren'), { slug: 'frieren-renamed' }));
+  await assertFails(updateDoc(doc(as(ADMIN), 'catalog/frieren'), { animeId: 'something-else' }));
+  await assertSucceeds(updateDoc(doc(as(ADMIN), 'catalog/frieren'), { Review: 'a better review' }));
+  // create must agree with its own doc id
+  await assertFails(setDoc(doc(as(ADMIN), 'catalog/mismatch'),
+    { animeId: 'other', slug: 'other', order: 2, Title: 'x', Review: 'r' }));
+});
+
+test('catalog: revisions are append-only and admin-only', async () => {
+  await seed((db) => setDoc(doc(db, 'catalog/frieren/revisions/r1'),
+    { at: Timestamp.now(), by: 'blake', fields: { before: { Review: 'a' }, after: { Review: 'b' } } }));
+  await assertFails(getDoc(doc(as('alice'), 'catalog/frieren/revisions/r1')));   // history is Blake's
+  await assertSucceeds(getDoc(doc(as(ADMIN), 'catalog/frieren/revisions/r1')));
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'catalog/frieren/revisions/r2'),
+    { at: serverTimestamp(), by: 'blake', fields: { before: {}, after: {} } }));
+  // the guarantee: history can never be rewritten, even by Blake
+  await assertFails(updateDoc(doc(as(ADMIN), 'catalog/frieren/revisions/r1'), { by: 'someone else' }));
+  await assertFails(deleteDoc(doc(as(ADMIN), 'catalog/frieren/revisions/r1')));
+});
+
+test('catalog: the phone/desktop draft is admin-only', async () => {
+  await seed((db) => setDoc(doc(db, 'catalog/frieren/draft/current'),
+    { fields: { Review: 'half written' }, deviceId: 'phone1' }));
+  await assertFails(getDoc(doc(as('alice'), 'catalog/frieren/draft/current')));  // unpublished words stay private
+  await assertFails(getDoc(doc(anon(), 'catalog/frieren/draft/current')));
+  await assertSucceeds(getDoc(doc(as(ADMIN), 'catalog/frieren/draft/current')));
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'catalog/frieren/draft/current'),
+    { fields: { Review: 'more' }, deviceId: 'desktop1' }));
+});
+
 // ---------------- MILESTONE F: the Curator Studio ----------------
 test('studio: an al:-keyed status carries its title; members still can\'t write; titles are capped', async () => {
   // tracking ANY anime — the al:<id> key + the title the Den line resolves

@@ -240,11 +240,52 @@
     return { ok: errors.length === 0, patch, errors, conflicts: undoConflicts(rev, doc), applied };
   }
 
+  // =========================================================================
+  // THE ONE-TIME SEED — building catalog documents from animeData in the browser
+  // -------------------------------------------------------------------------
+  // scripts/lib/catalog-model.js does this on the Node side, but scripts/** is
+  // firebase-ignored and never served, so the page needs its own copy. The two
+  // are pinned together by a test that runs BOTH over the real 44 entries and
+  // requires identical output — if they ever drift, that test goes red.
+  // =========================================================================
+
+  /** THE canonical slug — script.js:484 / card-render.js:31. The live comment-room key. */
+  function slug(s) {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  }
+
+  const SEED_ALWAYS = ['Title', 'Genre', 'Rating', 'image', 'Seasons', 'Description', 'Review', 'Tags', 'Studio', 'Platforms', 'Trailer'];
+  const SEED_OPTIONAL = ['Top10Rank', 'AniListId', 'IdMal', 'AniListScore', 'AniListColor', 'TitleEnglish', 'TitleRomaji', 'TitleNative', 'WatchedAniListIds', 'KnownAniListIds'];
+
+  /** animeData array -> catalog/{animeId} documents. Throws on a slug collision. */
+  function toCatalogDocs(list) {
+    const docs = [];
+    const seen = new Map();
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      const s = slug(a.Title);
+      if (seen.has(s)) throw new Error(`slug collision "${s}": ${seen.get(s)} vs ${a.Title}`);
+      seen.set(s, a.Title);
+      const d = { animeId: s, slug: s, order: i };
+      for (const f of SEED_ALWAYS) d[f] = a[f];
+      for (const f of SEED_OPTIONAL) if (a[f] !== undefined) d[f] = a[f];
+      d.updatedBy = 'migration';
+      d.updatedAt = null;
+      d.publishedAt = null;
+      docs.push(d);
+    }
+    return docs;
+  }
+
   return {
     EDITABLE, ARRAY_FIELDS,
     normalizeTags, normalizePlatforms, normalizeTrailer, normalizeFields,
     validate, diffFields, isDirty, draftState, describeDraft, deviceLabelFrom,
     revisionFields, summarizeRevision, formatValue, lengthDelta,
     revisionUndoPatch, undoConflicts, planUndo,
+    slug, toCatalogDocs,
   };
 }));

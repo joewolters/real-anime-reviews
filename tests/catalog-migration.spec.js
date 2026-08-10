@@ -75,6 +75,15 @@ test('no review text is lost in the document shape', () => {
 
 // --- the shrink tripwire: the alarm that was missing in May 2026 -----------
 
+test('the browser seed builds the SAME documents as the node exporter', () => {
+  // scripts/** is never served, so admin/catalog-model.js carries its own copy
+  // of the doc-shaping. This is what stops the two from drifting.
+  const browser = require('../admin/catalog-model.js');
+  const list = parseAnimeData(read());
+  expect(browser.toCatalogDocs(list)).toEqual(toDocs(list));
+  expect(browser.slug('An Archdemon’s Dilemma')).toBe('an-archdemon-s-dilemma');
+});
+
 test('tripwire passes an unchanged catalog', () => {
   const list = parseAnimeData(read());
   expect(checkShrink(list, toDocs(list)).ok).toBe(true);

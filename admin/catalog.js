@@ -370,6 +370,49 @@ async function undoRevision(animeId, rev, btn) {
   }
 }
 
+// ---- the one-time seed ------------------------------------------------------
+// Runs as Blake in the browser, so no service-account key ever has to exist on
+// disk. Additive and idempotent: refuses if the collection already has
+// anything in it, and reads every document back before declaring success.
+async function seedCatalog() {
+  const btn = $('cat-seed');
+  const state = $('cat-seed-state');
+  const src = Array.isArray(window.animeData) ? window.animeData : [];
+  if (!src.length) { state.textContent = "Couldn't read the site catalog."; return; }
+
+  btn.disabled = true;
+  state.textContent = 'Checking…';
+  try {
+    const existing = await getDocs(query(collection(db, 'catalog'), limit(1)));
+    if (!existing.empty) {
+      state.textContent = 'Already imported — nothing to do.';
+      return;
+    }
+    const docs = M.toCatalogDocs(src);
+    state.textContent = `Writing ${docs.length}…`;
+    for (const d of docs) {
+      await setDoc(doc(db, 'catalog', d.animeId),
+        Object.assign({}, d, { updatedAt: serverTimestamp() }));
+    }
+    // read back and count review characters — the same no-loss check the CLI does
+    const snap = await getDocs(query(collection(db, 'catalog'), orderBy('order')));
+    const backChars = snap.docs.reduce((n, x) => n + String(x.data().Review || '').length, 0);
+    const srcChars = src.reduce((n, a) => n + String(a.Review || '').length, 0);
+    if (snap.size !== docs.length || backChars !== srcChars) {
+      state.textContent = `Check failed: ${snap.size}/${docs.length} docs, ${backChars}/${srcChars} chars.`;
+      return;
+    }
+    state.textContent = `Imported ${snap.size} anime · ${backChars} review characters verified.`;
+    showNotice('Catalog imported. Everything checked out.');
+    catalog = snap.docs.map((d) => d.data());
+    $('cat-unmigrated').hidden = true;
+    renderList('');
+  } catch (err) {
+    state.textContent = friendlyError(err, { kind: 'save' });
+    btn.disabled = false;
+  }
+}
+
 // ---- load ------------------------------------------------------------------
 async function load() {
   try {
@@ -395,6 +438,8 @@ function wire() {
     $('cat-history').hidden = true;
   });
   $('cat-save').addEventListener('click', saveToCatalog);
+  const seedBtn = $('cat-seed');
+  if (seedBtn) seedBtn.addEventListener('click', seedCatalog);
   $('cat-draft-use').addEventListener('click', () => {
     if (!currentDraft) return;
     fillForm(Object.assign({}, current, currentDraft.fields));
