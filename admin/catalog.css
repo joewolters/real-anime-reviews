@@ -190,7 +190,17 @@
   font: 700 0.68rem 'Montserrat', sans-serif; letter-spacing: 0.12em;
   text-transform: uppercase; color: #bb86fc;
 }
-.catalog-hist-before { color: #a892c9; text-decoration: line-through; text-decoration-color: rgba(168, 146, 201, 0.5); }
+/* NOT struck through, deliberately: strikethrough reads as "deleted", and the
+   old wording is never deleted — it is kept forever and restorable in a click.
+   Blake read the first version of this view as having destroyed his review. */
+.catalog-hist-before { color: #a892c9; }
+.catalog-hist-side { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.catalog-hist-side[hidden] { display: none; }
+.catalog-hist-tag {
+  font: 700 0.62rem 'Montserrat', sans-serif; letter-spacing: 0.14em;
+  text-transform: uppercase; color: #7c5bb0;
+}
+.catalog-hist-tag.is-now { color: #9d7fd6; }
 .catalog-hist-after { color: #efe6ff; }
 .catalog-hist-arrow { color: #7c5bb0; }
 .catalog-hist-delta { font: 500 0.74rem 'Outfit', sans-serif; font-variant-numeric: tabular-nums; }

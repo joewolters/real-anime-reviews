@@ -159,9 +159,22 @@ test('the history panel ships with the editor', async ({ page }) => {
   expect(html).toContain('id="cat-history-list"');
   const css = await (await page.request.get('/admin/catalog.css')).text();
   for (const sel of ['.catalog-history', '.catalog-history-list', '.catalog-hist',
-    '.catalog-hist-field', '.catalog-hist-actions']) {
+    '.catalog-hist-field', '.catalog-hist-actions', '.catalog-hist-side']) {
     expect(css, `${sel} needs a [hidden] twin`).toContain(`${sel}[hidden] { display: none; }`);
   }
+});
+
+test('the old wording is never shown as struck through', async ({ page }) => {
+  // Blake read the first draft of this view as having DELETED his review,
+  // because the previous value was struck through. Nothing here is ever
+  // deleted, so nothing here may look deleted. "was / now" labels instead.
+  const css = await (await page.request.get('/admin/catalog.css')).text();
+  const block = css.slice(css.indexOf('.catalog-hist-before'), css.indexOf('.catalog-hist-arrow'));
+  expect(block).not.toMatch(/line-through/);
+  const js = await (await page.request.get('/admin/catalog.js')).text();
+  expect(js).toContain('catalog-hist-tag');
+  const html = await (await page.request.get('/admin/catalog.html')).text();
+  expect(html).toMatch(/never deleted/i);
 });
 
 // ---------------------------------------------------------------------------

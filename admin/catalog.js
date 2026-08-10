@@ -285,11 +285,17 @@ function historyRow(animeId, revId, rev) {
     const row = document.createElement('div');
     row.className = 'catalog-hist-field';
     const delta = M.lengthDelta(before, after);
+    // "was / now" labels rather than a strikethrough: struck-through text
+    // reads as DESTROYED, and nothing here is ever destroyed (Blake's own
+    // reaction to the first draft of this view — he thought the old review
+    // had been deleted). The old wording is kept forever and is one click away.
     row.innerHTML =
       '<span class="catalog-hist-key"></span>' +
-      '<span class="catalog-hist-before"></span>' +
+      '<span class="catalog-hist-side"><span class="catalog-hist-tag">was</span>' +
+        '<span class="catalog-hist-before"></span></span>' +
       '<span class="catalog-hist-arrow" aria-hidden="true">→</span>' +
-      '<span class="catalog-hist-after"></span>' +
+      '<span class="catalog-hist-side"><span class="catalog-hist-tag is-now">now</span>' +
+        '<span class="catalog-hist-after"></span></span>' +
       '<span class="catalog-hist-delta"></span>';
     row.querySelector('.catalog-hist-key').textContent = k;
     row.querySelector('.catalog-hist-before').textContent = M.formatValue(before).slice(0, 140);
