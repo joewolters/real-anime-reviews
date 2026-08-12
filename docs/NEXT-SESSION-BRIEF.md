@@ -174,10 +174,70 @@ must go **propose-only** for that anime — otherwise the site claims coverage B
 > "also note for how creating lists for users work."
 > "Plus looking into the app supports"
 
-### Status
-A five-lane research pass (Crunchyroll · other streamers · anime trackers · scrobbler bridges ·
-legal/privacy), each adversarially re-checked, was running when this brief was written.
-**Its findings are not in this file yet — read them before scoping anything here.**
+### RESEARCH COMPLETE (2026-08-12) — five lanes, each adversarially re-checked
+
+**The Crunchyroll half is CLOSED. Everything else he asked for is buildable.**
+
+- **Crunchyroll: no.** No developer programme, no "Log in with Crunchyroll", no application to
+  fill in. The only third party ever granted a real account link is Discord, via a corporate deal.
+  Netflix killed its public API in 2014 and never replaced it; Hulu, Disney+, HIDIVE, Prime are the
+  same or worse. **No major streamer offers user-level OAuth to third parties for viewing data.**
+- **The unofficial routes are refused, not merely risky.** They need the member's actual password
+  or a session token dug out of devtools. Both breach Crunchyroll's terms (no credential sharing;
+  they may cancel a paid account "for any reason"), both endanger a member's paid subscription, and
+  asking an anime fan to type their Crunchyroll password into this site is indistinguishable from a
+  phishing page. ⚠️ Crunchyroll itself settled a **$16M class action** over leaking viewing data,
+  and was sued again March 2026 — storing what people watched is regulated even at hobby scale.
+
+**THE KEY IDEA — connect to the thing that already knows.** Members already use trackers
+(**AniList**, MyAnimeList, **Simkl**) which *want* third-party connections. Registering an AniList
+app takes minutes, costs nothing, needs no approval. And a bridge from Crunchyroll into those
+trackers already exists, maintained by other people: **MAL-Sync** (70k+ users) and Simkl's own
+extension. Chain: **Crunchyroll → (someone else's extension) → tracker → this site.** We never
+touch Crunchyroll and never see a streaming password. For live-action, **Trakt** has built-in
+Netflix/Hulu/Disney+/Prime sync configured in Trakt's own app (does NOT cover Crunchyroll/HIDIVE).
+
+**What that honestly delivers:** auto-update what they're watching ✓ · detect
+watching→completed and prompt for a review ✓ (the strongest part) · **"real time" ✗** — nobody in
+the chain offers push, so poll every ~15 min, which is fine for "you finished this yesterday" ·
+**Crunchylists specifically: UNVERIFIED** — the bridges carry watch *history*; treat list import as
+unproven · members who watch only on the CR phone app or a console and install nothing get nothing,
+**so always keep a manual "mark as finished" button.**
+
+**⚠️ Known traps:** AniList tokens last **one year with no auto-renew** — build "reconnect" from
+day one or the feature dies silently in twelve months; tokens have **no permission scoping**, so
+store them server-side ONLY. AniList terms have a competing-service clause with an explicit
+exception for real syncing — send a courtesy email to contact@anilist.co and keep the reply.
+AniList is currently at **30 req/min** (reduced from 90). **Skip MyAnimeList** — its developer
+agreement forbids storing user list data on our server. **Skip Kitsu** — login requires collecting
+the user's actual password. Keep analytics/ad pixels OFF any page showing viewing history; that
+combination is exactly what the lawsuits target.
+
+**Recommended first step (small and provable):** build ONE thing — *"Connect your AniList
+account."* Pull their list once, poll every 15 min, and when something flips to completed show
+"You finished this — write a review?" No Crunchyroll, no extensions, no Simkl/Trakt in v1. It's
+free, needs no approval, and **uses the AniList IDs this site already has**. If it works, a help
+page pointing members at MAL-Sync makes their Crunchyroll viewing flow in by itself — and the
+feature looks like Crunchyroll integration without us having built any.
+
+*This is research, not legal advice.*
+
+### How lists would work (his "note for how creating lists for users work")
+Keep **shelves** as the thing members hand-build and show off. A synced tracker list is a different
+animal and mixing them will confuse people:
+- **Watch status** (watching / completed / dropped + episode count) comes from the tracker, is
+  **read-only** here, and drives exactly one thing: the review prompt. It is data, not a collection.
+- **Shelves stay hand-made.** Sync only offers a shortcut — "12 completed titles from your AniList,
+  add any to a shelf?" They pick. **Nothing is ever auto-dumped into a shelf.**
+- **Default everything synced to PRIVATE.** A public "currently watching" feed is precisely the
+  fact pattern in the viewing-privacy lawsuits — separate, off-by-default opt-in, never bundled
+  into the "connect account" button.
+- **"Disconnect" is its own button**, distinct from deleting the account: revoke the link, delete
+  the imported history, keep their reviews and shelves. (This lands on top of the item-7 deletion
+  policy already shipped.)
+- **Show "last synced: 2 hours ago."** When a member's extension silently breaks after a
+  Crunchyroll redesign, the site just keeps seeing "no new data" and nobody notices. That one line
+  prevents most of the support load.
 
 ⚠️ If this becomes a build, this project's own rule applies: **a genuinely new feature run gets its
 own gate-0 design study first**, not code.
