@@ -98,10 +98,14 @@ body > header h1{
   right: auto;
 }
 
-/* ===== Main card grid: 2 columns (1 on tiny phones) ===== */
+/* ===== Main card grid — which is ALSO the search-results grid =====
+   Blake: search results "look huge". MEASURED at 390px: 2 columns of 174x526,
+   62% of the screen per card. Three columns puts a grid card at ~111px — the
+   same size the rails now use — so a search result and a rail card read as the
+   same object rather than two different ones. */
 .card-container{
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 10px;
   padding: 0 var(--m-pad);
 }
 
@@ -148,6 +152,10 @@ body > header h1{
 #home-foryou .card,
 #discover-view .card,
 #for-you-view .card,
+.rail-track .card,                /* ⚠️ the Den's "by genre" rails — MISSED by the
+                                     first pass and still 220x616 (73% of the
+                                     screen) when Blake reported it */
+.discover-rail .card,             /* any future rail, by construction */
 .disc-skel{                       /* the skeleton matches, or it shifts on load */
   width: var(--m-rail-card);
   flex: 0 0 auto;
@@ -167,19 +175,18 @@ body > header h1{
    card stayed two-thirds of the screen. That is the actual "oversized" bug.
    Clamped to 3 title lines / 2 romaji lines: long names still read, but one
    title can no longer set the height of the whole rail.
-   Scoped to the RAILS on purpose — the Top-10 spotlight keeps its full-size
-   text, because Blake's own reference screenshot shows that card large. */
-#home-airing .card .info,
-#home-foryou .card .info,
-#discover-view .card .info,
-#for-you-view .card .info{
+   The Top-10 spotlight keeps its full-size text — Blake's own reference
+   screenshot shows that card large — and is restored explicitly below. */
+/* ⚠️ EVERY card, not a list of named surfaces. The first pass named four
+   containers and the genre rails were left behind at 220x616 — and the header
+   search grid at 174x526 (62% of the screen). A per-surface list is a list you
+   forget to extend; this is the rule, and the ONE exception is stated once
+   below. Blake: "This kind of thinking needs to be applied all over the site." */
+.card .info{
   padding: 7px 6px 8px;
   min-height: 0;
 }
-#home-airing .card .info h3,
-#home-foryou .card .info h3,
-#discover-view .card .info h3,
-#for-you-view .card .info h3{
+.card .info h3{
   font-size: 0.74rem;
   line-height: 1.22;
   margin-bottom: 4px;
@@ -188,10 +195,7 @@ body > header h1{
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-#home-airing .card .info p,
-#home-foryou .card .info p,
-#discover-view .card .info p,
-#for-you-view .card .info p{
+.card .info p{
   font-size: 0.65rem;
   line-height: 1.28;
   margin-bottom: 4px;
@@ -200,10 +204,7 @@ body > header h1{
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-#home-airing .card .info span,
-#home-foryou .card .info span,
-#discover-view .card .info span,
-#for-you-view .card .info span{
+.card .info span{
   font-size: 0.7rem;
 }
 
@@ -213,10 +214,7 @@ body > header h1{
    It shrinks with the card it sits on. (`white-space: nowrap` on .card-corner
    means it can never wrap to a second line — it can only clip — so the size
    has to come down rather than be left to reflow.) */
-#home-airing .card-corner,
-#home-foryou .card-corner,
-#discover-view .card-corner,
-#for-you-view .card-corner{
+.card-corner{
   top: 6px;
   left: 6px;
   padding: 2px 5px;
@@ -225,19 +223,17 @@ body > header h1{
   letter-spacing: 0.2px;
   max-width: calc(100% - 12px);
 }
-#home-airing .not-reviewed-badge .nr-eye,
-#home-foryou .not-reviewed-badge .nr-eye,
-#discover-view .not-reviewed-badge .nr-eye,
-#for-you-view .not-reviewed-badge .nr-eye{
+.not-reviewed-badge .nr-eye{
   font-size: 0.56rem;
 }
 
 /* The main catalog grid went to ONE column below 420px — a single card as wide
    as the phone, which is the other half of "one large oversized card looking at
-   me". Two columns hold to 360px (≈174px per card at 390, the same size the
-   rails now use); one column only below that, where two would leave ~150px. */
+   me". Three columns hold to 360px; below that three tracks leave ~88px —
+   narrower than a cover can carry a readable title — so it steps down to two
+   rather than shipping unreadable art. */
 @media (max-width: 359px){
-  .card-container{ grid-template-columns: 1fr; }
+  .card-container{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ===== Filter panel: full-screen friendly ===== */
@@ -418,3 +414,62 @@ body > main p,
 #home-airing-block p{
   font-weight: 600;
 }
+
+
+/* ===== THE ONE EXCEPTION — the Top-10 spotlight keeps DESKTOP sizing =====
+   The compact rules above deliberately apply to `.card` site-wide, so this is
+   the single place that opts out. Blake's reference screenshot shows the Top-10
+   card large and he has never asked for it smaller; its 275px width is also the
+   documented CUTOVER-EVE fix. Values here mirror style.css's originals exactly
+   (.card .info 14px/12px/13px + min-height 90, h3/p/span 1rem, .card-corner
+   0.6rem) — if those ever change, change them here too or the spotlight will
+   quietly drift away from the desktop card it is supposed to match. */
+.spotlight-stack .card .info{
+  padding: 14px 12px 13px;
+  min-height: 90px;
+}
+.spotlight-stack .card .info h3{
+  font-size: 1rem;
+  line-height: normal;
+  margin-bottom: 8px;
+  display: block;                 /* undo the -webkit-box clamp */
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.spotlight-stack .card .info p{
+  font-size: 1rem;
+  line-height: normal;
+  margin-bottom: 8px;
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.spotlight-stack .card .info span{ font-size: 1rem; }
+.spotlight-stack .card-corner{
+  top: 8px; left: 8px; padding: 3px 8px; gap: 4px;
+  font-size: 0.6rem; letter-spacing: 0.5px; max-width: none;
+}
+.spotlight-stack .not-reviewed-badge .nr-eye{ font-size: 0.66rem; }
+
+/* the genre rails' own gutter (style.css .rail-track gap:16px) */
+.rail-track{ gap: 10px; }
+
+/* ===== THE TAVERN — Blake: "apply the same logic to the tavern and its
+   threads. Threads just look pretty big." =====
+   Thread cards and posts are PROSE, not cover art, so this is a modest trim
+   rather than the aggressive clamp the cards get: padding and chrome come down,
+   and the body text stays readable. A thread title you cannot read is not a
+   smaller thread list, it is a broken one. */
+.hub-cards{ gap: 8px; }
+.hub-card{ padding: 10px 12px; border-radius: 10px; }
+.hub-card-head{ gap: 6px; margin-bottom: 4px; }
+.hub-card-title{ font-size: 0.92rem; line-height: 1.25; }
+.hub-card-by{ font-size: 0.74rem; }
+.hub-card-time{ font-size: 0.66rem; }
+.hub-tag-chip, .hub-anime-chip{ font-size: 0.58rem; padding: 2px 6px; }
+.hub-posts{ gap: 8px; }
+.hub-post{ padding: 9px 11px; }
+.hub-post-by{ font-size: 0.72rem; }
+.hub-post-text{ font-size: 0.86rem; line-height: 1.45; }
+.hub-thread-title{ font-size: 1.12rem; }
+.hub-thread-scroll{ padding: 16px 15px 48px; }

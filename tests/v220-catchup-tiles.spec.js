@@ -218,6 +218,90 @@ test('item 1: the readiness gate always settles, so Enter can never hang', async
 });
 
 // ---------------------------------------------------------------------------
+// THE iPHONE SIGN-IN BUG — Blake: "on my phone I can never sign into my
+// account… 'wrong password or username' when my login credentials are the same
+// one I use on the computer." (iPhone 15, Arc.)
+// Cause: the form advertised autocomplete="username" on a HIDDEN, ENABLED input
+// while the visible identifier said "email". iOS / iCloud Keychain fills the
+// USERNAME field — the invisible one — so the saved login landed out of sight
+// and the visible Email box submitted empty. Firebase answered user-not-found,
+// which the UI renders as "Incorrect email or password."
+// ---------------------------------------------------------------------------
+
+test('sign-in: no HIDDEN field may advertise a credential to autofill', async ({ page }) => {
+  await noDoor(page);
+  await page.goto('/index.html');
+  await page.click('#auth-open');
+  await page.waitForSelector('#auth-modal.active', { timeout: 10000 });
+
+  const out = await page.evaluate(() => {
+    const f = document.getElementById('auth-form');
+    const rows = [...f.querySelectorAll('input')].map((el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        id: el.id,
+        ac: el.getAttribute('autocomplete'),
+        disabled: el.disabled,
+        visible: r.width > 0 && r.height > 0,
+      };
+    });
+    return { rows, title: document.getElementById('auth-title').textContent.trim() };
+  });
+
+  expect(out.title).toBe('Sign in');
+  const CREDENTIAL = ['username', 'current-password', 'new-password'];
+  for (const r of out.rows) {
+    if (!r.visible && CREDENTIAL.includes(r.ac)) {
+      expect(r.disabled, `#${r.id} is hidden and advertises "${r.ac}" — it MUST be disabled or autofill will target it`).toBe(true);
+    }
+  }
+  // the identifier a password manager fills must be the VISIBLE one
+  const idField = out.rows.find((r) => r.ac === 'username' && !r.disabled);
+  expect(idField, 'a visible, enabled username field exists').toBeTruthy();
+  expect(idField.id, 'and it is the email box the member can actually see').toBe('auth-email');
+  expect(idField.visible).toBe(true);
+});
+
+test('sign-in: switching to Create account re-arms the fields correctly', async ({ page }) => {
+  await noDoor(page);
+  await page.goto('/index.html');
+  await page.click('#auth-open');
+  await page.waitForSelector('#auth-modal.active', { timeout: 10000 });
+  await page.click('#auth-switch a[data-mode="signup"]');
+  await page.waitForTimeout(200);
+
+  const out = await page.evaluate(() => ({
+    title: document.getElementById('auth-title').textContent.trim(),
+    userDisabled: document.getElementById('auth-username').disabled,
+    userAc: document.getElementById('auth-username').getAttribute('autocomplete'),
+    emailAc: document.getElementById('auth-email').getAttribute('autocomplete'),
+    passAc: document.getElementById('auth-password').getAttribute('autocomplete'),
+  }));
+
+  expect(out.title).toBe('Create account');
+  expect(out.userDisabled, 'the display-name field is usable when shown').toBe(false);
+  expect(out.userAc, 'a display name is not a credential').toBe('nickname');
+  expect(out.emailAc, 'signup email is a new address, not the saved identifier').toBe('email');
+  expect(out.passAc, 'so a manager offers to SAVE rather than fill').toBe('new-password');
+});
+
+test('sign-in: the email box is hardened against iOS autocorrect', async ({ page }) => {
+  await noDoor(page);
+  await page.goto('/index.html');
+  const attrs = await page.evaluate(() => {
+    const e = document.getElementById('auth-email');
+    return {
+      cap: e.getAttribute('autocapitalize'), corr: e.getAttribute('autocorrect'),
+      spell: e.getAttribute('spellcheck'), mode: e.getAttribute('inputmode'),
+    };
+  });
+  expect(attrs.cap).toBe('none');
+  expect(attrs.corr).toBe('off');
+  expect(attrs.spell).toBe('false');
+  expect(attrs.mode).toBe('email');
+});
+
+// ---------------------------------------------------------------------------
 // HEADER SEARCH — Blake, 2026-08-12: "The general search bar available
 // everywhere (top right of the screen) if a user looks up an anime it should
 // show animes that I haven't reviewed with the proper headline ofc."
@@ -335,6 +419,87 @@ test('item 2: several rail cards fit on a phone, and none is oversized', async (
   }
 });
 
+// Blake, after the first pass: "the anime by genre (the den area just scroll
+// down). It still looks the same size as before" · search results "look huge".
+// Both were missed because the first pass named four containers instead of
+// styling the card itself.
+test('item 2: EVERY card surface is compact, not just the ones named first', async ({ page }) => {
+  await noDoor(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/index.html');
+  // ⚠️ the AIRING rail is lazy + network-fed, so `#home-airing > *` can be
+  // SKELETONS rather than cards. The genre rails come from the local catalog
+  // and always render — wait on those, and treat the airing rail as optional
+  // so a slow AniList response cannot fail a layout assertion.
+  await page.waitForSelector('#genre-rails .card', { timeout: 25000 });
+
+  const den = await page.evaluate(() => {
+    const one = (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { w: Math.round(b.width), h: Math.round(b.height), pct: b.height / window.innerHeight };
+    };
+    return { rail: one('#home-airing .card'), genre: one('#genre-rails .card') };
+  });
+
+  // the genre rails were 220x616 (73% of the screen) when he reported it
+  expect(den.genre, 'the Den has genre rails').toBeTruthy();
+  expect(den.genre.w, 'a genre card is compact').toBeLessThan(180);
+  expect(den.genre.pct, 'and well under half the screen').toBeLessThan(0.55);
+  // and it must MATCH the home rail — one look, not two. Only when that rail
+  // actually rendered; its data comes over the network.
+  if (den.rail) {
+    expect(Math.abs(den.genre.w - den.rail.w), 'genre and home rails are the same size').toBeLessThanOrEqual(2);
+  }
+
+  // the header-search results grid: was 2 columns of 174x526 (62%)
+  await page.fill('#site-search', 'demon');
+  await page.waitForTimeout(1200);
+  const grid = await page.evaluate(() => {
+    const g = document.querySelector('.card-container');
+    const cards = [...g.querySelectorAll('.card')];
+    const b = cards[0].getBoundingClientRect();
+    return {
+      cols: getComputedStyle(g).gridTemplateColumns.split(' ').length,
+      w: Math.round(b.width), pct: b.height / window.innerHeight,
+    };
+  });
+  expect(grid.cols, 'three across at 390px, like the rails').toBe(3);
+  expect(grid.pct, 'a search result is not two-thirds of the screen').toBeLessThan(0.5);
+});
+
+// Blake: "lets also apply the same logic to the tavern and its threads.
+// Threads just look pretty big."
+// The Tavern's threads need a signed-in session, which a deterministic run
+// doesn't have — so this mounts the real classes and reads the computed style,
+// the same technique the [hidden]-twin specs use. It proves the RULES land.
+test('item 2: the Tavern trims down on phones', async ({ page }) => {
+  await noDoor(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/index.html');
+
+  const phone = await page.evaluate(() => {
+    const mk = (cls, tag = 'div') => {
+      const el = document.createElement(tag);
+      el.className = cls; el.textContent = 'x';
+      document.body.appendChild(el);
+      const cs = getComputedStyle(el);
+      const out = { padding: cs.padding, fontSize: cs.fontSize };
+      el.remove(); return out;
+    };
+    return { card: mk('hub-card'), title: mk('hub-card-title', 'h3'),
+      post: mk('hub-post'), postText: mk('hub-post-text') };
+  });
+
+  // desktop values are padding 13px 15px / title 1.02rem (16.32px) / post 10px 13px
+  expect(phone.card.padding, 'thread card padding comes down').toBe('10px 12px');
+  expect(parseFloat(phone.title.fontSize), 'thread title is smaller than desktop 16.32px').toBeLessThan(16);
+  expect(phone.post.padding, 'post padding comes down').toBe('9px 11px');
+  // ...but the BODY text stays readable — this is prose, not a card label
+  expect(parseFloat(phone.postText.fontSize), 'post text stays legible').toBeGreaterThanOrEqual(13);
+});
+
 test('item 2 LANDMINE GUARD: the Top-10 spotlight card stays 275px on phones', async ({ page }) => {
   // ⚠️ `.spotlight-stack .card { width: 275px }` in mobile.css is the CUTOVER-EVE
   // fix that is the ENTIRE reason the Top-10 fits phones, and CODE-HANDOFF says
@@ -354,6 +519,19 @@ test('item 2 LANDMINE GUARD: the Top-10 spotlight card stays 275px on phones', a
     const expected = Math.min(275, w - 32);
     expect(m.spotlight, `the Top-10 card holds its size at ${w}px`).toBe(expected);
     expect(m.docScrollW, `and the page never scrolls sideways at ${w}px`).toBeLessThanOrEqual(m.vw);
+
+    // ⚠️ The compact text rules now apply to `.card` SITE-WIDE, so the spotlight
+    // opts out explicitly. If that opt-out is ever dropped, the Top-10 card
+    // silently shrinks its title and clamps it — the exact drift this guards.
+    const text = await page.evaluate(() => {
+      const h3 = document.querySelector('.spotlight-stack .card .info h3');
+      if (!h3) return null;
+      const cs = getComputedStyle(h3);
+      return { font: cs.fontSize, clamp: cs.webkitLineClamp, display: cs.display };
+    });
+    expect(text, 'the spotlight card has a title').toBeTruthy();
+    expect(text.font, `full-size title at ${w}px (desktop 1rem)`).toBe('16px');
+    expect(text.clamp, `and it is NOT line-clamped at ${w}px`).toBe('none');
   }
 });
 

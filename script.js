@@ -1636,8 +1636,21 @@ function stripAccidentalPaste(s) {
   // ---------- AUTH MODAL ----------
   function openAuth(mode = 'signin') {
     authMode = mode;
-    authTitleEl.textContent = mode === 'signup' ? 'Create account' : 'Sign in';
-    rowUsername.style.display = mode === 'signup' ? '' : 'none';
+    const isSignup = mode === 'signup';
+    authTitleEl.textContent = isSignup ? 'Create account' : 'Sign in';
+    rowUsername.style.display = isSignup ? '' : 'none';
+    // ⚠️ v2.2.1 — the iPhone sign-in bug. A hidden-but-ENABLED credential input
+    // still gets autofilled by iOS / iCloud Keychain, which is how Blake's saved
+    // login ended up in a box he could not see while the visible Email field
+    // submitted empty ("Incorrect email or password" with correct credentials,
+    // phone only). Disabled inputs are excluded from BOTH autofill and form
+    // submission, so the hidden row is disabled whenever it is hidden.
+    if (userInput) userInput.disabled = !isSignup;
+    // and the password hint has to match the mode, or a manager offers to
+    // "save a new password" during a sign-in (and suggests a strong one).
+    if (passInput) passInput.setAttribute('autocomplete', isSignup ? 'new-password' : 'current-password');
+    // on signup the email is a NEW address, not the saved identifier
+    if (emailInput) emailInput.setAttribute('autocomplete', isSignup ? 'email' : 'username');
     authError.textContent = '';
     emailInput.value = '';
     passInput.value = '';

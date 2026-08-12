@@ -768,19 +768,34 @@
     <h2 id="auth-title" class="modal-title">Sign in</h2>
 
     <form id="auth-form">
+      <!-- ⚠️ v2.2.1 — Blake could never sign in on his iPhone ("wrong password or
+           username" with the SAME credentials that work on his computer).
+           Cause: this form used to advertise autocomplete="username" on the
+           HIDDEN field below while the visible identifier said "email". iOS /
+           iCloud Keychain fills the USERNAME field — the invisible one — so his
+           saved login went into a box he could not see and the visible Email
+           box submitted empty. Firebase then answered user-not-found, which the
+           UI renders as "Incorrect email or password."
+           On this site the EMAIL *is* the login identifier, so it carries
+           autocomplete="username" (what password managers expect on a sign-in
+           form, even when the value is an email). The display-name field is
+           "nickname" — it is not a credential — and JS disables it while it is
+           hidden, so it can never be autofilled or submitted. -->
       <div class="form-row" id="row-username" style="display:none;">
   <label for="auth-username">Username</label>
-  <input id="auth-username" type="text" autocomplete="username" />
+  <input id="auth-username" type="text" autocomplete="nickname" disabled />
 </div>
 
 <div class="form-row">
   <label for="auth-email">Email</label>
-  <input id="auth-email" type="email" autocomplete="email" required />
+  <input id="auth-email" type="email" autocomplete="username" inputmode="email"
+         autocapitalize="none" autocorrect="off" spellcheck="false" required />
 </div>
 
 <div class="form-row">
   <label for="auth-password">Password</label>
-  <input id="auth-password" type="password" autocomplete="current-password" required minlength="6" />
+  <input id="auth-password" type="password" autocomplete="current-password"
+         autocapitalize="none" autocorrect="off" spellcheck="false" required minlength="6" />
 </div>
 
 
