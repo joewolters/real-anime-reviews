@@ -17,15 +17,15 @@
 
 ## ⚡ STATUS (updated 2026-08-12, after the items 1 + 4 session)
 
-- **v2.1.1 is LIVE** (the patch queue reached real people).
-- ✅ **Item 1 — DONE, built, committed, NOT deployed.** Blake locked 5 decisions first; they are
+- 🚀 **v2.2.0 IS LIVE** (deployed 2026-08-12, hosting only, prod-smoked). Items 1, 4 and 2 plus the header-search shelf all reached real people.
+- ✅ **Item 1 — DONE and LIVE.** Blake locked 5 decisions first; they are
   recorded in the gate log. ⚠️ **This brief's §1 claim that the anime routing "already branches
   this way" was WRONG** — it did not, and the branch had to be built. Left in place below so the
   next reader sees what a confident-but-unverified claim looks like.
-- ✅ **Item 4 — DONE, built, committed, NOT deployed.** All eleven tools stay; Blake: *"Ill tell
+- ✅ **Item 4 — DONE and LIVE.** All eleven tools stay; Blake: *"Ill tell
   you which ones to drop later."* The scroll he asked for turned out to be a real bug — the menu
   had no `max-height` and no `overflow` and ran off-screen.
-- ✅ **Item 2 (mobile) — DONE.** Rail cards had NO mobile override: fixed 200×581 at every width. Now 117×307, 3.06 visible, 36% of screen (was 69%). The `.spotlight-stack` 275px landmine is untouched and now test-guarded.
+- ✅ **Item 2 (mobile) — DONE and LIVE.** Rail cards had NO mobile override: fixed 200×581 at every width. Now 117×307, 3.06 visible, 36% of screen (was 69%). The `.spotlight-stack` 275px landmine is untouched and now test-guarded.
 - ✅ **Header search** now shows a NOT REVIEWED YET shelf (his mid-session ask).
 - ⏳ **Item 6 (shelves) NOT started.** **Item 3 (Mode 2) still wants its own session.**
 - **New floor: `npm test` 387.** webkit 24 · functions 94 held; rules 218 · cf 94 untouched.

@@ -1,7 +1,11 @@
 <!-- author: Code | date: 2026-08-12 -->
 # SHIP-OUTPUT — banked items **1** (notification overhaul) and **4** (admin tiles)
 
-**Built and committed. NOT deployed** — nothing here is live until Blake says so. v2.1.1 remains the live version; no version bump and no CHANGELOG entry yet, matching how the patch queue was handled (build commits stay clean; the bump and changelog land together at the ship gate).
+**🚀 v2.2.0 IS LIVE IN PRODUCTION — deployed 2026-08-12** on Blake's explicit *"deploy it. make sure to update the changelog and whatnot."* Hosting only (`--only hosting`): this ship touches HTML/JS/CSS and nothing else, so the runbook's firestore-rules, storage-rules and functions legs did not apply and were not run.
+
+**Verified live rather than assumed:** `APP_VERSION` **2.2.0** with the update-log chip agreeing (the static-vs-runtime mismatch that bit in `fe0dc4a` — checked, they match) · the door's catch-up strip **absent from the live HTML** · `enterDen` / `openAiringTarget` / the `all-world` shelf all present in the shipped `script.js` · the phone rail rule live in `mobile.css` · **a real read-only smoke driven against production**: the door shows with no strip and Enter goes straight in for a first-time visitor with nothing waiting, the header search returns the **NOT REVIEWED YET 未レビュー** shelf (5 cards, 5 not-reviewed badges, **0 gold**), and at 390/375/320 the rails show **3.06 cards at 31% of the screen with the Top-10 spotlight still exactly 275px and no sideways scroll**. 12 stickers checked on prod, none clipped. Leak check: `docs/**`, `PERSONAL.md` and `tests/**` all **404**.
+
+*(FYI, not a regression: `CHANGELOG.md` serves publicly at 200. It always has — `firebase.json` hasn't changed since v1.10.0, the file is the same text as the public update-log widget, and the repo is public. Say the word if you'd rather it were ignored.)*
 
 Blake picked these two to share a session, and locked eight decisions before a line was written.
 
