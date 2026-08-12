@@ -162,6 +162,49 @@ test('item 1: an airing row Blake HAS reviewed routes to his review, not the air
     .not.toContain('al:' + out.id);
 });
 
+// ⚠️ The tests above drive openCatchupSheet() directly. That proves the RENDER
+// but not the WIRING — and the wiring is the whole feature. These two press the
+// real Enter button on the real door.
+test('item 1: pressing ENTER on the real door opens the surface', async ({ page }) => {
+  // deliberately do NOT suppress the door — this test needs it
+  await page.goto('/index.html');
+  await page.waitForSelector('#welcome-splash:not([hidden])', { timeout: 20000 });
+  await page.waitForFunction(() => !!window.rarCatchup, null, { timeout: 20000 });
+
+  // something is waiting for this member
+  await page.evaluate(() => {
+    Object.assign(window.rarCatchup.state, {
+      fresh: [], airing: [{ id: 101922, title: { english: 'Demon Slayer' } }],
+      pings: [{ fromUid: 'x', fromDisplayName: 'Mika', verb: 'replied to you' }],
+    });
+  });
+
+  await page.click('#welcome-enter');
+  // the door closes and the sheet takes over
+  await page.waitForSelector('#catchup-sheet:not([hidden])', { timeout: 10000 });
+  await expect(page.locator('#welcome-splash')).toBeHidden();
+  expect(await page.locator('#catchup-body .catchup-col').count(),
+    'the two panels are what Enter lands on').toBe(2);
+});
+
+test('item 1: pressing ENTER with nothing waiting goes straight into the Den', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.waitForSelector('#welcome-splash:not([hidden])', { timeout: 20000 });
+  await page.waitForFunction(() => !!window.rarCatchup, null, { timeout: 20000 });
+
+  await page.evaluate(() => {
+    Object.assign(window.rarCatchup.state, { fresh: [], airing: [], pings: [] });
+  });
+
+  await page.click('#welcome-enter');
+  await expect(page.locator('#welcome-splash')).toBeHidden({ timeout: 10000 });
+  // wait past the door gap AND the signal cap — if the sheet were going to open
+  // on a quiet visit, it would have opened by now.
+  await page.waitForTimeout(2000);
+  await expect(page.locator('#catchup-sheet'),
+    'Blake: a quiet visit is not made to click through a page').toBeHidden();
+});
+
 test('item 1: the readiness gate always settles, so Enter can never hang', async ({ page }) => {
   await noDoor(page);
   await page.goto('/index.html');
@@ -270,6 +313,56 @@ test('item 4: the badges survive the redesign and still hide at zero', async ({ 
   expect(out.sugH, 'still a real pill after the reflow').toBeGreaterThanOrEqual(18);
   expect(out.repHidden, 'zero still hides').toBe(true);
   expect(out.insideTile, 'the badge stays within its tile').toBe(true);
+});
+
+// Blake, mid-session 2026-08-12: "I want them all of equal sizing and centered
+// in the middle of my screen (on pc)."
+test('item 4: every tile is exactly the same size, and no text is clipped', async ({ page }) => {
+  await noDoor(page);
+  for (const [w, h] of [[1280, 900], [1024, 768], [390, 844], [360, 780]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto('/index.html');
+    await page.waitForFunction(() => !!document.getElementById('admin-fab-menu'), null, { timeout: 20000 });
+    const out = await page.evaluate(() => {
+      document.getElementById('admin-fab-root').classList.remove('admin-fab-hidden');
+      document.getElementById('admin-fab-menu').classList.remove('admin-fab-menu-hidden');
+      const tiles = [...document.querySelectorAll('.admin-fab-tile')];
+      const boxes = tiles.map((t) => t.getBoundingClientRect());
+      return {
+        heights: [...new Set(boxes.map((b) => Math.round(b.height)))],
+        widths: [...new Set(boxes.map((b) => Math.round(b.width)))],
+        // a fixed row height is only safe if nothing overflows it
+        clipped: tiles.filter((t) => t.scrollHeight > t.clientHeight + 1)
+          .map((t) => t.querySelector('.admin-fab-menu-item-label').textContent),
+      };
+    });
+    expect(out.heights, `all tiles share one height at ${w}px`).toHaveLength(1);
+    expect(out.widths, `all tiles share one width at ${w}px`).toHaveLength(1);
+    expect(out.clipped, `no tile clips its own text at ${w}px`).toEqual([]);
+  }
+});
+
+test('item 4: on PC the menu is centred on the screen, not stuck in the corner', async ({ page }) => {
+  await noDoor(page);
+  for (const [w, h] of [[1920, 1080], [1280, 900], [1024, 768]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto('/index.html');
+    await page.waitForFunction(() => !!document.getElementById('admin-fab-menu'), null, { timeout: 20000 });
+    const out = await page.evaluate(() => {
+      document.getElementById('admin-fab-root').classList.remove('admin-fab-hidden');
+      document.getElementById('admin-fab-menu').classList.remove('admin-fab-menu-hidden');
+      const r = document.getElementById('admin-fab-menu').getBoundingClientRect();
+      const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+      return {
+        dx: Math.round((r.left + r.right) / 2 - vw / 2),
+        dy: Math.round((r.top + r.bottom) / 2 - vh / 2),
+        onScreen: r.top >= 0 && r.bottom <= vh && r.left >= 0 && r.right <= vw,
+      };
+    });
+    expect(Math.abs(out.dx), `horizontally centred at ${w}px`).toBeLessThanOrEqual(2);
+    expect(Math.abs(out.dy), `vertically centred at ${w}px`).toBeLessThanOrEqual(2);
+    expect(out.onScreen, `and fully on screen at ${w}px`).toBe(true);
+  }
 });
 
 test('item 4: a phone width drops to one column rather than shipping cramped labels', async ({ page }) => {

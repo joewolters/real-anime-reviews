@@ -36,6 +36,8 @@ The notification and airing signals are asynchronous — auth plus two round-tri
 
 **The scroll he asked for was a real bug, not a nice-to-have.** The old menu had no height limit and no overflow at all: at eleven tools it grew to roughly 580px and ran off the top of a short screen, and every tool added made it worse. Measured after the change — the menu now fits on screen at every width from 320px to 1280px, and the tiles scroll inside it.
 
+**Then he asked for two changes, mid-session, and got them:** every tile is now *exactly* the same size (a fixed row height per screen size — matching row heights alone wasn't enough, because one label that wrapped made its whole row taller), and on desktop the menu **opens centred in the middle of the screen** instead of in the bottom corner. Measured at eight screen sizes from 320px to 1920px: identical tiles everywhere, dead-centre on desktop, and no description clipped anywhere. Phones keep the corner, since he said "on pc".
+
 Two smaller things: the live badge counts (suggestions, reports, unread letters) survive the redesign and sit on the tile's first line, where a long description can't push them out of view; and the file's header comment had claimed the button was in the bottom-right corner ever since it moved to the left in v1.7.3 — he was right about the corner, the comment was wrong.
 
 ## What he should look at
@@ -43,7 +45,8 @@ Two smaller things: the live badge counts (suggestions, reports, unread letters)
 1. **Close the tab, reopen the site, press Enter.** If anything is waiting you should land on *While you were away* — new reviews across the top, airing on the left, your lantern on the right. Click a notification: it should take you to that exact comment and highlight it. Click an anime you've reviewed: **it should open your review**, not the airing page.
 2. **Do it again when nothing is waiting.** You should go straight into the Den with no extra page.
 3. **The door itself** — check there's no strip appearing on it a second after it opens, on both phone and desktop.
-4. **Admin menu, on your phone and on desktop.** Eleven tiles, name plus a short line each. Scroll it. Tell me if any description is wrong about what its page does — those are my words, not yours.
+4. **Admin menu on desktop.** It should open **centred in the middle of your screen**, eleven tiles all exactly the same size, and scroll. Tell me if any description is wrong about what its page does — those are my words, not yours.
+5. **Admin menu on your phone.** Still opens from the bottom-left corner there, two tiles across (one on the smallest phones), and scrolls.
 
 ## Still open, still honestly labelled
 
@@ -55,13 +58,13 @@ Two smaller things: the live badge counts (suggestions, reports, unread letters)
 
 | track | floor | result |
 |---|---|---|
-| `npm test` | 368 → **378** | **378 pass, 0 fail** (10 new specs for this work) |
+| `npm test` | 368 → **382** | **382 pass, 0 fail** (14 new specs for this work) |
 | `test:webkit` | 24 | **24 pass** |
 | `test:functions` | 94 | **94 pass** |
 | `test:rules` | 218 | not affected — no rules touched |
 | `test:cf` | 94 | not affected — no functions touched |
 
-⚠️ Two failures appeared during the run and **both were environment flakes, proven, not assumed**: one `ERR_NO_BUFFER_SPACE` and one burst of 404s, on different specs in different runs, each passing in isolation and the full suite then passing 378/378 clean. Nothing was silenced and no timeout was touched.
+⚠️ **Four different tests failed at some point across seven full runs — all environment, proven rather than assumed.** Each failed with a network-ish error (socket exhaustion, stray 404s, one timeout), each passed on its own, and the failures kept moving to different tests. The decisive check: your site was reverted to the pre-change code and the whole suite ran clean (368/368), then restored and run clean again (382/382). It's the machine running out of network handles on a long test run, not the new code. **Nothing was silenced and no timeout was raised.**
 
 ## One-liner reply
 The door is a door again — Enter now opens a real two-panel "while you were away" page, the admin menu is eleven scrolling tiles, and an anime you've reviewed finally opens your review instead of the airing page.

@@ -26,7 +26,7 @@
   you which ones to drop later."* The scroll he asked for turned out to be a real bug — the menu
   had no `max-height` and no `overflow` and ran off-screen.
 - ⏳ **Items 2 (mobile) and 6 (shelves) NOT started.** **Item 3 (Mode 2) still wants its own session.**
-- **New floor: `npm test` 378.** webkit 24 · functions 94 held; rules 218 · cf 94 untouched.
+- **New floor: `npm test` 382.** webkit 24 · functions 94 held; rules 218 · cf 94 untouched.
 - Full record: `docs/SHIP-OUTPUT.md` + the newest `docs/v1.10.0-GATE-LOG.md` entry.
 
 ---

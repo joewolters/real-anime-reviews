@@ -170,6 +170,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  /* Blake 2026-08-12: "I want them all of equal sizing." A fixed auto-row makes
+     EVERY tile identical, not just the two sharing a row — otherwise a label
+     that wraps ("Suggestion Queue") makes its whole row taller than the others
+     and the grid stops looking deliberate. Heights are measured per breakpoint
+     against the longest label + description, not guessed. */
+  grid-auto-rows: 88px;
   /* the cap is viewport-relative, minus the FAB, its gap and the menu header,
      so the tiles always end above the top edge no matter the screen. */
   max-height: min(56vh, 420px);
@@ -250,6 +256,34 @@
   white-space: nowrap;
 }
 
+/* ---- Blake 2026-08-12: "centered in the middle of my screen (on pc)" ----
+   On desktop the menu leaves the FAB's corner and centres on the viewport.
+   It is `position: fixed` against the viewport — #admin-fab-root carries no
+   transform or filter, so it does not become a containing block and the
+   centring is true to the screen rather than to the button.
+   ⚠️ The open animation had to be forked: the corner keyframes animate
+   `transform`, which is also what does the centring, so reusing them would
+   have yanked the panel off-centre for the length of the animation. */
+@media (min-width: 701px) {
+  .admin-fab-menu {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transform-origin: center;
+    animation: admin-fab-menu-in-center 0.18s ease;
+    width: 580px;
+    max-width: calc(100vw - 48px);
+    z-index: 9001;   /* above the FAB button it no longer sits beside */
+  }
+  /* more vertical room in the middle of the screen than in the corner */
+  .admin-fab-grid { max-height: min(64vh, 520px); }
+  @keyframes admin-fab-menu-in-center {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+}
+
 @media (max-width: 700px) {
   #admin-fab-root {
     bottom: 16px;
@@ -265,14 +299,17 @@
   }
   .admin-fab-tile { padding: 10px; }
   .admin-fab-menu-item-label { font-size: 13px; }
-  /* the phone has less height to give, so the scroll starts sooner */
-  .admin-fab-grid { max-height: min(52vh, 360px); }
+  /* the phone has less height to give, so the scroll starts sooner.
+     Taller equal rows here than on desktop: at two ~165px columns the longer
+     labels wrap to two lines, and every tile matches the tallest case. */
+  .admin-fab-grid { max-height: min(52vh, 360px); grid-auto-rows: 104px; }
 }
 /* Below ~380px two tracks leave ~130px of usable width — narrower than
    "Suggestion Queue" sets at any readable size — so it goes single-column
    rather than shipping a grid of three-line labels. */
 @media (max-width: 380px) {
-  .admin-fab-grid { grid-template-columns: 1fr; }
+  /* one full-width column, so nothing wraps and the rows can be shorter again */
+  .admin-fab-grid { grid-template-columns: 1fr; grid-auto-rows: 82px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
