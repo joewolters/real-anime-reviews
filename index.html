@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="2.2.0"</script>
+  <script>window.APP_VERSION="2.2.1"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -59,10 +59,10 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=2.2.0">
-  <link rel="stylesheet" href="mobile.css?v=2.2.0" media="(max-width: 900px)">
-  <link rel="stylesheet" href="frames.css?v=2.2.0">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
-  <link rel="stylesheet" href="admin-fab.css?v=2.2.0">
+  <link rel="stylesheet" href="style.css?v=2.2.1">
+  <link rel="stylesheet" href="mobile.css?v=2.2.1" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=2.2.1">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
+  <link rel="stylesheet" href="admin-fab.css?v=2.2.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -267,11 +267,24 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v2.2.0</span>
-     Feature Update
+      <span class="changelog-tag" id="changelog-version">v2.2.1</span>
+     Hotfix
     </div>
 
     <div class="changelog-content">
+      <div class="version-section" data-tier="hotfix">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v2.2.1</span></div>
+          <span class="vs-tier">Hotfix</span>
+          <div class="version-header">08/12/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li><strong>Signing in on an iPhone works now.</strong> If your phone offered to fill in your saved login, it was putting it into a field the page kept hidden &mdash; so the box you could actually see stayed empty, and the site told you your email or password was wrong even though it wasn&rsquo;t. The same details always worked on a computer, which is what made it so confusing. The form now hands your password manager the box you can see.</li>
+          <li><strong>The rest of the site caught up on phones.</strong> The last update shrank the cards on the home rails; the anime-by-genre rows further down, and the results you get when you search, had been left at their desktop size &mdash; one card taking about three quarters of the screen. They now match everything else, and search results sit three across instead of two.</li>
+          <li><strong>The Tavern reads tighter on a phone</strong> &mdash; thread cards and posts carry less padding and chrome, while the writing itself stays the same size, because a thread you have to squint at isn&rsquo;t an improvement.</li>
+          <li>The Top&nbsp;10 card is deliberately untouched by all of this and stays full size.</li>
+        </ul>
+      </div>
       <div class="version-section" data-tier="minor">
         <div class="vs-head">
           <div class="version-chips"><span class="version-chip">v2.2.0</span></div>

@@ -21,14 +21,14 @@ import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.2.0';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.2.1';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.2.0';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.2.1';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
-import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.2.0';
+import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.2.1';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.2.0';
+import { initNavDrawer } from './nav-drawer.js?v=2.2.1';
 initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals

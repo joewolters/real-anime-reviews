@@ -21,6 +21,19 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-12 -->
+## v2.2.1 — PATCH (2026-08-12)
+
+**Signing in on an iPhone works now.** If your phone offered to fill in your saved login, it was putting it into a field this page kept hidden — so the box you could actually see stayed empty, and the site answered that your email or password was wrong when it wasn't. The same details always worked on a computer, which is exactly what made it so confusing. The cause was ours: the form told password managers that the hidden field was the account name, and iOS believed it. The visible email box is now the one your password manager fills, the hidden field is switched off entirely while it's out of sight, and the email box no longer lets autocorrect edit what you typed.
+
+**The rest of the site caught up on phones.** The previous release shrank the cards in the home rails, but only there — the anime-by-genre rows further down the Den, and the results you get from the search box, were still at their desktop size, with a single card taking about three quarters of the screen. Card sizing is now one rule that applies everywhere rather than a list of places somebody has to remember to extend, so those surfaces match the rest, and search results sit three across instead of two.
+
+**The Tavern reads tighter on a phone.** Thread cards and posts carry less padding and chrome. The writing itself is unchanged in size — a thread you have to squint at is not an improvement.
+
+**The Top-10 is deliberately untouched** and keeps its full-size card, as it did before.
+
+---
+
+<!-- author: Code | date: 2026-08-12 -->
 ## v2.2.0 — MINOR (2026-08-12)
 
 **"While you were away."** The welcome door used to interrupt itself: a second or so after it opened, a strip appeared over it listing what you'd missed. That's gone entirely, on phones and on desktop. Press *Enter* and you land on a proper page instead — what's airing from your watchlist on one side, who replied to you and who wrote to you on the other, and anything newly reviewed across the top. Every row goes to that exact anime or that exact comment, scrolled to and highlighted. If nothing is waiting for you, the page doesn't appear at all and you go straight in; nobody gets made to click through a screen telling them there's nothing.
