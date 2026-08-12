@@ -1,7 +1,9 @@
-<!-- author: Code | date: 2026-05-09 -->
+<!-- author: Cowork | date: 2026-06-02 -->
 # AI Session-Start Primer
 
 > **Read this first if you're an AI starting a new session on this project.** This is a 60-second orientation. The full docs are richer; this is the minimum viable context to start work without re-deriving everything.
+>
+> **In-flight work?** Always read `docs/HANDOFF.md` immediately after this — that's the live state of whatever ship is mid-flight (which gate, what's applied, what's left, working-tree state). HANDOFF is the project's session-bridge doc; this primer is the orientation behind it.
 
 ---
 
@@ -21,10 +23,15 @@
 
 ## 4 · Where the project is right now
 
-- **Live at v1.6.4** (Mode 1 baseline + local "one-click ship" server shipped 2026-05-10 as v1.6.0; v1.6.1 was a same-day hotfix for Bug 10 — `spawn EINVAL` on Windows + Node ≥20.12.2 broke the local pipeline; v1.6.2 is the next-day prevention ship — startup smoke check + `docs/DECISIONS.md` lesson on testing pipeline plumbing at the commit you're shipping; v1.6.3 is the polish bundle — `/api/health` version drift fix, skill cross-references, and the first widget update under the new visitor-first `widget-update-skill.md`; v1.6.4 is the update log widget upgrade — shipped-on dates, date-grouped sections, cap raised 5 → 10, internal scroll containment, and the widget skill rewritten for the new rules). Phase A (Excel sync, v1.5.0) and Phase B baseline both done.
+<!-- author: Cowork | date: 2026-07-02 -->
+> **⚠️ THIS SECTION IS A HISTORICAL SNAPSHOT (June 2026 era).** Current truth: **v1.10.1 LIVE** (the full Community Hub — Tavern forum, profiles + frames, rooms everywhere, DM Blake, the Lantern, images, moderation/ban spine); **v1.10.2R staged**; the MEGA-RUN (DMs/groups/mobile/everything — NEXT.md superseding directive) is next. **`docs/HANDOFF.md` + `docs/CODE-HANDOFF.md` are the live state — read those, not the bullets below.**
+
+<!-- author: Cowork | date: 2026-06-03 -->
+- **Live at v1.7.1** (commit `e78f7d6`, shipped 2026-06-03). The v1.6.x → v1.7.x arc has been all-in on AniList integration: v1.6.8 added a collapsible More Info panel on every modal; v1.6.9 added inline episode / recommendation / staff clusters; v1.6.10/11/12 closed out polish + Suggestion Box + admin viewer; v1.7.0 backfilled AniList IDs across all 44 reviews and shipped the gold-RATING / purple-ANILIST twin badge; v1.7.1 shipped a polish bundle (romaji+native subtitles in `「 」` brackets, per-anime AniListColor accents, premium NO-MATCHES empty-state, widget version chips). Multi-hop franchise traversal + franchise-episode aggregation were carved out of v1.6.10 (AniList complexity-budget 500s) and rolled into v1.7.2 as the load-bearing architecture below.
+- **In flight:** v1.7.2 — **the de facto More Info panel overhaul.** Multi-fetch data architecture (`Promise.all`-batched parallel AniList fetches), multi-hop franchise traversal (BFS w/ seen-set + caps), franchise-episode aggregation, UX overhaul of the panel (spine chain w/ `--current` highlight + connector line + grouped sections by relationType + "✓ Reviewed" in-catalog pill that opens Blake's modal), partial-fail notice + retry, 24h localStorage L2 cache keyed by `APP_VERSION`, episode counter toggle (PER SEASON / CONTINUOUS). See `docs/HANDOFF.md` for the live gate state. v1.7.3 = Watched-set feature (new column + admin multi-select + Mode 1 auto-fill); v1.7.4 = in-site secondary modal (pushed back from v1.7.3 by the watched-set slot-in).
 - **What Mode 1 is** (already shipped, use it): admin "+ Add Anime" floating button bottom-right of every page (visible only to admin UID); opens an admin form at `/admin/new-anime` with AniList prefill; if `npm run mode1` is running locally, the form auto-detects the server and "Submit & Ship" runs the full 9-step pipeline (Excel backup + append → image download → sync → widget update → version bump → CHANGELOG entry → tests → git commit + push → Firebase deploy) with SSE-streamed progress, paused for explicit confirmation before the production deploy.
-- **Up next:** v1.6.5 — Mode 1 polish (live preview as you type: search-as-you-type AniList dropdown + live card preview, with ID-import as a co-equal entry point per the `b+` design note in `docs/NEXT.md`). Requires extracting the homepage card-render function from `script.js`. AniList `Media(search:)` recovered partway through the v1.6.4 ship after ~36 hours down — feature is now unblocked.
-- **Full backlog:** see `docs/NEXT.md` for everything queued (Phase B remaining, Phase D Mode 2 stages, audit polish bundles, polish + tech debt, big-vision ideas, deferred items).
+- **The Cowork–Code split** (effective v1.6.8+): for big multi-gate ships, **Cowork** sits beside Blake (the manager) writing lean SHIP-PROMPT.md files for each gate; **Code** (the CLI tool) applies them and writes SHIP-OUTPUT.md back. The 12-gate workflow (recon → 3 build gates → local smoke → docs cascade → audits → commit → preview deploy → preview smoke → prod deploy → prod verify) is documented in `docs/HANDOFF.md` § "Gate structure". Solo-Code ships (no Cowork in the loop) still use `release-skill.md` / `hotfix-skill.md` end-to-end.
+- **Full backlog:** see `docs/NEXT.md` for everything queued (v1.7.2 in flight, v1.7.3 watched-set, v1.7.4 secondary modal, v1.8.0 AniList tab on cards, etc.). `ROADMAP.md` for the phased arc.
 - **Mode 2 (long-term):** autonomous site caretaker, weekly schedule. Phase D — not started yet. Mode 1 needs to be in active use first to inform Mode 2's design.
 - **Long-term end goal:** two AI modes — Mode 1 (Blake-initiated, shipped) and Mode 2 (AI-initiated, future). See `ROADMAP.md` for the full arc.
 
@@ -53,7 +60,7 @@ PROJECTS/Real Anime Reviews/
 │   ├── scripts/
 │   │   ├── mode1-server.js                       ← `npm run mode1` (one-click ship)
 │   │   ├── sync-excel-to-js.js                   ← `npm run sync` (Excel → JS)
-│   │   ├── bump-version.js                       ← bumps 14 version strings
+│   │   ├── bump-version.js                       ← bumps 18 version strings (see § 8)
 │   │   └── anilist-fetch.js                      ← AniList CLI for ad-hoc queries
 │   ├── tests/ (Playwright), docs/, README.md, CHANGELOG.md, ROADMAP.md, CLAUDE.md
 │   └── PERSONAL.md (gitignored — never commit; Firebase login, admin UID)
@@ -75,7 +82,7 @@ PROJECTS/Real Anime Reviews/
 
 ## 8 · Version bumping (now scripted)
 
-Don't hand-edit version strings. Use `node scripts/bump-version.js 1.5.0` from `Current Version/`. The script updates all 7 places (`window.APP_VERSION` in two HTML files, three `style.css?v=` / `mobile.css?v=` cache-busters, the changelog widget static fallback). Run `node scripts/bump-version.js --check` to verify all 7 strings agree before committing. The static fallback (`changelog-version` span) and `APP_VERSION` MUST agree, or the bug from v1.3.4 commit `fe0dc4a` will recur.
+Don't hand-edit version strings. Use `node scripts/bump-version.js X.Y.Z` from `Current Version/`. The script updates all **18 targets** as of v1.6.11 — `window.APP_VERSION` in `index.html` / `account.html` / `admin/new-anime.html` / `suggest.html`, the corresponding `style.css?v=` / `mobile.css?v=` / `admin-fab.css?v=` / `admin/new-anime.css?v=` / `suggest.css?v=` cache-busters, and the `<span id="changelog-version">` static fallback in the widget. Run `node scripts/bump-version.js --check` to verify all 18 strings agree before committing. The static fallback (`changelog-version` span) and `APP_VERSION` MUST agree, or the bug from v1.3.4 commit `fe0dc4a` will recur. When adding a new HTML page that loads versioned CSS, also extend the bump script's TARGETS table — every new ship that introduces a page is also a ship that grows the target count (precedent: v1.6.11 added 4 `suggest.html` targets, 14 → 18).
 
 ## 9 · Things you must NEVER do
 
@@ -93,14 +100,17 @@ Ask. Blake is collaborative, not directive. He'd rather answer a clarifying ques
 
 ## 11 · For deeper context
 
+- **`docs/HANDOFF.md`** — live state of whatever ship is currently mid-flight. **Read this immediately after the primer.** Updated at every session pause OR ship close. Includes the locked 12-gate Cowork-Code ship structure.
+- **`docs/SHIP-PROMPT.md` / `docs/SHIP-OUTPUT.md`** — rolling files for the current gate. Cowork writes PROMPT; Code writes OUTPUT. Overwrite per gate. All three (HANDOFF + SHIP-*) are firebase-ignored and roll into the gate-7 commit.
 - `ROADMAP.md` — full phased plan, the 9 project rules, every big-vision idea, Phase D (Mode 2) build order
+- `docs/NEXT.md` — current backlog (v1.7 plan, v1.6.x polish queue, deferred items)
 - `CLAUDE.md` — Code-specific operational rules, version-bump checklist, gotchas in full detail
 - `docs/ARCHITECTURE.md` — Firestore data model, script.js section map, file structure
 - `docs/DEPLOYMENT.md` — local server, preview channels, production deploys
-- `docs/anilist-spike.md` — what AniList offers, ready-to-run queries, schema-design decisions for v1.5.0/v1.6.0
+- `docs/anilist-spike.md` — what AniList offers, ready-to-run queries, schema-design decisions
 - `docs/CODE-PROMPTS.md` — copy-paste prompts that match Blake's collaboration style
 - `docs/DECISIONS.md` — the WHY behind project choices that aren't obvious from code
-- `docs/SKILLS/release-skill.md` — full release procedure (any AI follows this to ship a new version)
+- `docs/SKILLS/release-skill.md` — full release procedure (Code-solo or as the operational backbone of the Cowork-Code 12-gate ship)
 - `docs/SKILLS/hotfix-skill.md` — abbreviated procedure for small urgent PATCH fixes
 - `docs/SKILLS/widget-update-skill.md` — visitor-first rules for the homepage CHANGELOG widget bullets (runs as a sub-step of the two skills above)
 - `CHANGELOG.md` — what shipped when, with author markers

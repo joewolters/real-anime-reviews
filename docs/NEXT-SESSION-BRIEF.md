@@ -7,9 +7,11 @@
 > My reading of each is marked separately, and my open questions are at the bottom of each item.
 > **Do not treat my reading as his decision.**
 >
-> State when banked: **v2.1.0 LIVE**, Part A complete, patch queue items 2/3/5 shipped,
-> 7 partial, 4 closed-as-deliberate, 6 (comment-list) being done at the end of the banking session.
-> Floors: npm test 365 · rules 218 · cf 94 · functions 94 · webkit 24.
+> State when banked: **v2.1.0 LIVE**, Part A complete, **the patch queue is CLOSED** — items
+> 2/3/5/6 shipped, 7 partial (one gap closed, the intermittent report still unreproduced),
+> 4 closed-as-deliberate by Blake. 1 was already done by PART A item 8b.
+> Floors: **npm test 368** · rules 218 · cf 94 · functions 94 · webkit 24. Nothing is deployed
+> since v2.1.0 — every patch-queue change is committed and pushed but NOT live.
 
 ---
 

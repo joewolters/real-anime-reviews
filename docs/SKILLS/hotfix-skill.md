@@ -1,4 +1,4 @@
-<!-- author: Code | date: 2026-05-10 -->
+<!-- author: Cowork | date: 2026-06-02 -->
 # Skill: Ship a hotfix
 
 > **Purpose:** ship a small, urgent bug fix to Real Anime Reviews quickly and safely. Companion to `release-skill.md`. Use this skill when the fix is small, blocking, and PATCH-tier.
@@ -6,6 +6,8 @@
 > **Tier of this skill:** PATCH only. If a fix turns out to need more than a handful of lines or starts touching multiple subsystems, stop and switch to `release-skill.md` instead.
 >
 > **Who should follow this:** Code (the CLI tool), Cowork sessions, future Mode 1 implementations, Blake manually if no AI is available.
+>
+> **Cowork–Code context:** hotfixes typically run as a compressed solo-Code path — the 12-gate Cowork-Code workflow is overkill for a 2-3 line revert. Hotfixes collapse gates 0–7 into one Code prompt, then run gate 8 (preview deploy) → gate 9 (Blake smoke) → gate 10 (prod) → gate 11 (verify) as separate steps. If a hotfix grows beyond 2-3 files, stop and switch to the full 12-gate ship.
 
 ---
 

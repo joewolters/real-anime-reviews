@@ -142,7 +142,7 @@ Mark the CHANGELOG entry (if added) with <!-- author: Code | date: --> as always
 Verify-only pass. No code changes.
 
 1. From Current Version/, run `npm test` and report the result
-2. Run `node scripts/bump-version.js --check` and confirm all 7 version strings agree
+2. Run `node scripts/bump-version.js --check` and confirm all 18 version strings agree
 3. Run `git status` and report whether the working tree is clean
 4. Open the live site (https://realanimereviews.com) — load the homepage, click one anime card to confirm the modal opens, close it
 5. Check the console for errors during that flow

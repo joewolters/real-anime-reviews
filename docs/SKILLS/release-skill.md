@@ -1,4 +1,4 @@
-<!-- author: Code | date: 2026-05-09 -->
+<!-- author: Cowork | date: 2026-06-02 -->
 # Skill: Release a new version
 
 > **Purpose:** ship a new version of Real Anime Reviews from working tree to live site, following every project rule, in the right order, without skipping steps.
@@ -6,6 +6,31 @@
 > **Tier of this skill:** any. Works for PATCH, MINOR, and MAJOR.
 >
 > **Who should follow this:** Code (the CLI tool), Cowork sessions, future Mode 1 implementations, any AI assistant doing release work on this project. Blake himself can also follow it manually if no AI is available.
+
+---
+
+## Two contexts for this skill (READ FIRST)
+
+**1. Solo-Code ship** (no Cowork manager in the loop): follow this skill's 12 steps below end-to-end. Code owns test / bump / CHANGELOG / preview / prod with Blake gating each approval inline.
+
+**2. Cowork–Code ship** (effective v1.6.8+, the default for multi-gate feature ships): the 12-gate Cowork-Code workflow in `docs/HANDOFF.md` is primary. Cowork writes lean SHIP-PROMPT.md files per gate; Code applies them and reports via SHIP-OUTPUT.md. The 12 steps below still describe the *operational shape* (what `npm test` looks like, where the CHANGELOG entry lives, what the bump-script does) — they just map onto the 12 gates instead of running as one sequential Code session:
+
+| Skill step | Cowork-Code gate |
+|---|---|
+| Step 1 (preconditions) | Gate 0 — recon |
+| Step 2 (`npm test`) | Gate 6 — audits |
+| Step 3 (bump) + Step 4 (CHANGELOG) + Step 4.5 (widget) + Step 5 (ROADMAP) | Gate 5 — docs cascade (bundled, FAST-TRACK) |
+| Step 6 (diff review) | Gate 6 — audits (`git diff` is one of three audits) |
+| Step 7 (commit) + Step 8 (push) | Gate 7 — commit + push |
+| Step 9 (preview deploy) | Gate 8 — preview deploy |
+| Step 10 (prod deploy) | Gate 10 — prod deploy (on Blake's "ship it" go-signal) |
+| Step 11 (verify) | Gate 11 — prod verify |
+
+If `firestore.rules` is touched: gates 8 + 10 each gain a `firebase deploy --only firestore:rules` sub-step. Rules are global per-project (no preview channel), so the gate-8 rules deploy has immediate prod effect — Code flags this clearly.
+
+Blake's role in the Cowork-Code flow is: build approvals at gates 0/1/2/3, **gate 4** (local browser smoke), **gate 9** (preview smoke), the "ship it" go-signal between gates 9 and 10, **gate 11** (prod verify). Code runs the actual deploy commands; Blake doesn't open a terminal.
+
+For everything else, the skill below remains correct. Solo-Code shippers read top-to-bottom; Cowork-Code shippers map per the table.
 
 ---
 
@@ -40,7 +65,7 @@ node scripts/bump-version.js --check
 
 Confirm:
 - Working tree shows ONLY the intended change set (no surprise modifications).
-- `--check` reports all 7 version strings agree at the *current* version (not the target).
+- `--check` reports all 18 version strings agree at the *current* version (not the target). (Count grows as new HTML pages are added — was 7 in v1.5.0 era, 14 in v1.6.4 era, 18 from v1.6.11 onward after `suggest.html`.)
 - The HEAD commit message and date make sense for the next release.
 
 If any of these are unexpected, STOP and surface the discrepancy. Do not proceed.
@@ -72,7 +97,7 @@ node scripts/bump-version.js X.Y.Z
 node scripts/bump-version.js --check
 ```
 
-`--check` should now report all 7 strings agree at the new version.
+`--check` should now report all 18 strings agree at the new version.
 
 ### Step 4 — Write the CHANGELOG entry
 
@@ -212,6 +237,6 @@ Report success to Blake with:
 
 ## Why this skill exists in this exact shape
 
-The release flow has historically been a 7-step manual checklist in `CLAUDE.md`'s "Version bump checklist" section, plus various ad-hoc reminders about CHANGELOG markers, tests, deploy ladders, and approval gates. Without consolidation, every release session re-derived the steps and occasionally missed one (the v1.3.4 widget bug was missing one of the 7 version strings — exact category this skill prevents).
+The release flow has historically been a 7-step manual checklist in `CLAUDE.md`'s "Version bump checklist" section, plus various ad-hoc reminders about CHANGELOG markers, tests, deploy ladders, and approval gates. Without consolidation, every release session re-derived the steps and occasionally missed one (the v1.3.4 widget bug was missing one of the original 7 version strings — exact category this skill prevents).
 
-When Mode 1 ships in v1.6.0, its implementation should literally execute the steps in this skill. This file is the spec; Mode 1 is the automation.
+Mode 1 shipped in v1.6.0 and its 9-step pipeline literally executes the steps in this skill for new-anime ships. The 12-gate Cowork-Code workflow added in v1.6.8+ wraps the *same* operational steps in a different orchestration shape: instead of one Code session driving all 12 steps sequentially, Cowork breaks them into discrete gates (each gate is its own SHIP-PROMPT.md → SHIP-OUTPUT.md round-trip) so Blake can run his own browser smokes at gates 4 / 9 / 11 while Code handles the deterministic mechanical work. The skill stays the spec; what changes is who pauses where.

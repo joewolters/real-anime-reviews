@@ -1,4 +1,5 @@
 <!-- author: Code | date: 2026-05-11 -->
+<!-- author: Cowork | date: 2026-06-03 — v1.7.3: removed the 10-bullet cap rule. Widget container already scrolls (max-height: 300px); show every ship since accurate logging began (v1.6.1, 2026-05-10). -->
 # Skill: Update the website's CHANGELOG widget on every ship
 
 > **Purpose:** ensure visitors to realanimereviews.com see the changelog widget update on every ship — not just feature ships. This is the operational arm of project rule #6 ("Every code-and-data change updates the website's CHANGELOG widget").
@@ -13,11 +14,15 @@
 
 Every ship updates two things on the website's homepage CHANGELOG widget:
 
-1. **The version line** — `<span id="changelog-version">vX.Y.Z</span>` in `index.html` and `account.html`. Bumped automatically by `scripts/bump-version.js` (it's one of the 14 targets). No manual action required as long as the bump script runs.
+1. **The version line** — `<span id="changelog-version">vX.Y.Z</span>` in `index.html` and `account.html`. Bumped automatically by `scripts/bump-version.js` (it's one of 18 targets as of v1.6.11 — was 14 in v1.6.4 era; grew when `suggest.html` was added). No manual action required as long as the bump script runs.
 
-2. **The bullet list** — a rolling list of up to 10 most-recent bullets, grouped under MM/DD/YYYY date headers (one section per ship date). Oldest drops off when prepending new bullets pushes the total past 10. This requires curation per ship per the decision tree below. **Curation never gets skipped — even for tooling/hotfix ships.** If there's nothing user-facing to say, the bullet is generic ("Behind-the-scenes improvements") but it still exists.
+2. **The bullet list** — a list of bullets grouped under MM/DD/YYYY date headers (one section per ship date). **No cap** as of v1.7.3 — every ship since accurate logging began (v1.6.1, 2026-05-10) stays in the widget. The container scrolls (`max-height: 300px`) so the list can grow indefinitely without pushing the homepage down. This requires curation per ship per the decision tree below. **Curation never gets skipped — even for tooling/hotfix ships.** If there's nothing user-facing to say, the bullet is generic ("Behind-the-scenes improvements") but it still exists.
 
 3. **The date header** — every ship's bullets land under an `MM/DD/YYYY` date header inside `<div class="version-section">`. Today's bullets prepend to today's section if one already exists; otherwise create a new section above the previous most-recent one. The widget body is internally scrollable (`max-height: 300px`); long ship histories don't push the rest of the homepage down.
+
+<!-- author: Cowork | date: 2026-06-06 — v1.8.4 G8b: the tier-label authoring shape (Blake's update-log redesign) -->
+<!-- author: Code | date: 2026-06-11 — gate 20.6 (Blake item 7): "Big Update" renamed "Major Update" on Blake's word; the gold semver-MAJOR tier takes "Milestone Update" so the two labels can't collide -->
+4. **The tier label + rail (v1.8.4+ widget shape).** Every `.version-section` now carries `data-tier="hotfix|patch|minor|big|major"` (drives the tier-colored left rail) and its head is a `.vs-head` grid: row 1 = the `.version-chips` cell + a `.vs-tier` label cell (the tier label is its OWN grid cell — never a second child inside `.version-chips`, that breaks the chip stagger), row 2 = the date. **Tier derivation is token-first and honest:** read the CHANGELOG H2 semver token (`## vX.Y.Z — PATCH|MINOR|MAJOR`), then refine within band — PATCH → "Hotfix" if the bold lead opens with `Hotfix:`, else "Patch"; MINOR → "Major Update" if the lead says *Overhaul* (or the ROADMAP row carries `★` — that signal lives in ROADMAP, not CHANGELOG), else "Minor Update" (label renamed from "Big Update" at gate 20.6 on Blake's word; the `data-tier="big"` attribute is unchanged — it keys the purple rail); MAJOR → "Milestone Update" (gold rail; unused until a real MAJOR ships). Folded/range sections take the **max tier** in the range. **Never fabricate tier variety the history doesn't have.**
 
 ---
 
@@ -90,12 +95,14 @@ Actual widget structure (v1.6.4 onward):
   </div>
   <div class="changelog-content">
     <div class="version-section">
+      <div class="version-chips"><span class="version-chip">vX.Y.Z</span></div>
       <div class="version-header">MM/DD/YYYY</div>
       <ul class="changelog-list">
         <li>Newest bullet here</li>
       </ul>
     </div>
     <div class="version-section">
+      <div class="version-chips"><span class="version-chip version-chip-range">vA.B.C<span class="vc-arrow" aria-hidden="true">→</span>vX.Y.Z</span></div>
       <div class="version-header">MM/DD/YYYY</div>
       <ul class="changelog-list">
         <li>Bullets from a previous ship date</li>
@@ -109,8 +116,12 @@ When adding a new bullet:
 
 1. **Check today's date header.** If a `.version-section` for today's `MM/DD/YYYY` already exists at the top, prepend the new `<li>` to its `<ul>`. Multi-piece ships add multiple `<li>` elements under the same date header.
 2. **Otherwise, create a new section** above the previous most-recent one — a new `<div class="version-section">` with today's date header and the new bullet(s) inside.
-3. **Cap is 10 bullets total** across all visible sections. If prepending a new bullet pushes the total past 10, drop bullets from the oldest section first; remove the entire `.version-section` when its last bullet is dropped.
+3. **No cap on bullet count** (v1.7.3+). Never drop sections. The `.changelog-content` container scrolls (`max-height: 300px`) — every ship since v1.6.1 (2026-05-10) stays visible. Adding a new section above the previous most-recent never displaces older ones.
 4. **Date format is always `MM/DD/YYYY` with the year shown** — even for current-year ships. No `May 11`, `5/11`, or `2026-05-11` shorthand. The format is canonical so the widget doesn't drift.
+5. **Version chips above each date header** (v1.7.1+). Every `.version-section` carries a `<div class="version-chips">` *above* its `.version-header` listing which version(s) shipped that date (from CHANGELOG.md):
+   - **1-2 ships on a date** → one `<span class="version-chip">` per version, stacked newest-first (the `.version-chips` flex column handles layout).
+   - **3+ ships on a date** → a single range chip: `<span class="version-chip version-chip-range">v<earliest><span class="vc-arrow" aria-hidden="true">→</span>v<latest></span>` (one line, NOT stacked).
+   - When you add today's bullet under a new/existing section, set/update that section's chip accordingly. The chip reflects ship **versions**, the header reflects the ship **date**.
 
 ---
 
@@ -118,4 +129,4 @@ When adding a new bullet:
 
 Project rule #6 says the widget stays in sync with `CHANGELOG.md`. In practice, hotfix and tooling ships have historically updated only the version number, leaving bullets static. Blake's intent (codified 2026-05-11) is for visitors to see the widget *change* on every ship — even tooling ones — as a sign of life. This skill operationalizes that intent.
 
-The trade-off was previously: a rolling 5-bullet widget meant tooling-ship bullets pushed out previous user-facing bullets. Mitigation was the "generic phrasing for tooling ships" rule. As of v1.6.4 the cap is raised to 10 with date-grouped sections and an internally scrollable widget body, so tooling-ship bullets coexist with user-facing news rather than displacing it. The "generic phrasing for tooling" rule still applies — it keeps the widget readable for first-time visitors regardless of cap.
+The trade-off was previously: a rolling 5-bullet widget meant tooling-ship bullets pushed out previous user-facing bullets. Mitigation was the "generic phrasing for tooling ships" rule. As of v1.6.4 the cap was raised to 10 with date-grouped sections and an internally scrollable widget body. **As of v1.7.3 (2026-06-03) the cap is removed entirely** — the container already scrolls, so visitors can scroll back through every ship since accurate logging began (v1.6.1). The "generic phrasing for tooling" rule still applies — it keeps the widget readable for first-time visitors regardless of list length.
