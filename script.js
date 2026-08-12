@@ -11851,18 +11851,45 @@ function onScrollHeader() {
 
     function onWelcomeKey(e) {
       if (e.key !== 'Escape' && e.key !== 'Enter') return;
-      // gate-20 adversarial MED: Enter on a FOCUSED door button (Surprise-me /
-      // a catch-up row) must activate IT, not dismiss the door out from under it.
-      if (e.key === 'Enter' && e.target && e.target.closest
-        && e.target.closest('.welcome-surprise, .welcome-catchup')) return;
+      // (v2.2.0 item 1 — the old guard here excluded Enter pressed on a focused
+      // .welcome-surprise / .welcome-catchup door button. Both elements are now
+      // gone from the door, so the guard guarded nothing and went with them.)
       // gate-20 adversarial MED: contain the key — a deep-linked secondary
       // modal stacked under the door must NOT also tear down on the same Esc.
       e.preventDefault();
       e.stopPropagation();
-      closeWelcome();
+      enterDen();
     }
 
-    if (enterBtn) enterBtn.addEventListener('click', closeWelcome);
+    // v2.2.0 item 1 — EVERY way through the door lands here, Esc included. Esc
+    // is not a "skip": it is the keyboard's way in, and routing it past the
+    // surface would silently cost keyboard users the notifications everyone
+    // else gets shown.
+    function enterDen() {
+      closeWelcome();
+      maybeOpenCatchup();
+    }
+
+    // Blake's call: a quiet visit goes STRAIGHT into the Den — nobody is made to
+    // click through a page telling them there is nothing. So this opens only
+    // when something is genuinely waiting.
+    async function maybeOpenCatchup() {
+      try {
+        // The door's exit animation and the bounded signal wait run TOGETHER;
+        // whichever is longer sets the pace, so the common case (warm cache,
+        // signals already home) costs exactly the door animation and no more.
+        const doorGap = new Promise((r) => setTimeout(r, REDUCED_MOTION ? 0 : 620));
+        const signals = Promise.race([
+          catchupReady,
+          new Promise((r) => setTimeout(r, CATCHUP_SIGNAL_CAP_MS)),
+        ]);
+        await Promise.all([doorGap, signals]);
+        if (!catchupHasContent()) return;
+        openCatchupSheet();
+      } catch (_) {}
+    }
+
+    if (enterBtn) enterBtn.addEventListener('click', enterDen);
     // v1.8.4 gate 3b — entry is ONLY via the Enter button (+ Esc/Enter keys). A
     // stray backdrop click no longer dismisses the door (removed the
     // click-on-backdrop -> closeWelcome handler per Blake).
@@ -11878,56 +11905,46 @@ function onScrollHeader() {
     //   3) new reviews in the 44 since your last visit  → the review modal
     // Buttons appear progressively as data resolves; a quiet visit shows none.
     const CATCHUP_SEEN_KEY = 'rar:seenSlugs';
-    // gate 20.5 (item 3) — the signals feed a STATE the catch-up SHEET renders
-    // from; the door strip is the teaser, the sheet is the destination.
+    // v2.2.0 item 1 — Blake: "whenever you click enter, you get a new page that
+    // says, hey. While you were away." The signals no longer paint a teaser ON
+    // the door; they fill a STATE, and the sheet that state feeds is what Enter
+    // opens. Nothing renders on the door any more, so the PART A item 3 class of
+    // bug (a late button reflowing the card under the cursor, or painting across
+    // the update log) is now structurally impossible rather than merely fixed.
     const catchupState = { fresh: [], pings: [], airing: [] };
-    function catchupHost() { return document.getElementById('welcome-catchup'); }
-    function catchupAdd(node) {
-      const host = catchupHost();
-      if (!host || splash.hidden) return;
-      if (host.hidden) {
-        host.hidden = false;
-        host.innerHTML = '<span class="welcome-catchup-kicker">WHILE YOU WERE AWAY <span class="jp-mini">留守の間</span></span>';
-        // PART A item 3 — Blake: the strip "needs to not overlap with the
-        // update log". It used to float (position:absolute, z-index:3) over a
-        // card that is TALLER than the viewport, so the card top-anchors and
-        // scrolls and the strip painted straight across the log. Reserving
-        // space cannot fix that — the card never moves. So the strip stops
-        // floating and joins the card's flow as its last child, exactly the
-        // re-home the update log itself already gets above. In flow it is
-        // physically incapable of overlapping anything.
-        const cardEl = splash && splash.querySelector('.welcome-card');
-        if (cardEl && host.parentElement !== cardEl) cardEl.appendChild(host);
-      }
-      host.appendChild(node);
+    function catchupHasContent() {
+      return !!(catchupState.fresh.length || catchupState.pings.length || catchupState.airing.length);
     }
 
-    // a door row: the MAIN button opens the sheet at its section (Blake: the
-    // old behavior "just brought me to my notifications — not what we're
-    // looking for"); the quick deep-link sub-chips render INLINE beneath it
-    // (they stay, per the prompt — one click, no toggle).
-    function catchupButton(label, section, subs) {
-      const wrap = document.createElement('div');
-      wrap.className = 'welcome-catchup-row';
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'welcome-catchup-btn';
-      b.innerHTML = `<span class="wc-label"></span><span class="wc-go" aria-hidden="true">›</span>`;
-      b.querySelector('.wc-label').textContent = label;
-      b.addEventListener('click', () => { closeWelcome(); setTimeout(() => openCatchupSheet(section), REDUCED_MOTION ? 0 : 620); });
-      wrap.appendChild(b);
-      if (subs && subs.length) {
-        const subWrap = document.createElement('div');
-        subWrap.className = 'welcome-catchup-subs';
-        subs.slice(0, 4).forEach((s) => {
-          const sb = document.createElement('button');
-          sb.type = 'button'; sb.className = 'welcome-catchup-sub';
-          sb.textContent = s.label;
-          sb.addEventListener('click', () => { closeWelcome(); setTimeout(s.go, REDUCED_MOTION ? 0 : 600); });
-          subWrap.appendChild(sb);
-        });
-        wrap.appendChild(subWrap);
-      }
-      return wrap;
+    // ⚠️ Signals 1-2 are ASYNC (auth resolve + two Firestore round-trips) while
+    // signal 3 is synchronous. A fast Enter therefore beats them, and a member
+    // with letters waiting would sail straight into the Den having been shown
+    // nothing — silently, and only on fast connections or warm auth, which is
+    // exactly the kind of defect that never reproduces. So Enter WAITS, bounded:
+    // resolve as soon as the signals land, give up at the cap and show whatever
+    // did arrive. The cap is the promise that Enter can never hang on a dead
+    // network — the door must always open.
+    const CATCHUP_SIGNAL_CAP_MS = 1100;
+    let markCatchupReady;
+    const catchupReady = new Promise((res) => { markCatchupReady = res; });
+    // idempotent: whichever of the signed-out bail / signal completion / error
+    // path gets there first settles it, and later calls are no-ops.
+    const settleCatchupReady = () => { try { markCatchupReady(); } catch (_) {} };
+
+    // Blake: "you can click on that anime. It will take you to the anime page,
+    // whether it be my review or something that's currently airing either one
+    // based on, you know, whether I reviewed it."
+    // ⚠️ The handoff claimed this branch already existed. It did NOT — the airing
+    // rows called openSecondaryFromKey unconditionally, so a title Blake HAS
+    // reviewed still opened the AniList deep-dive instead of his review. This is
+    // that branch, and it reuses the two matchers the franchise rows already use
+    // rather than inventing a second definition of "reviewed".
+    function openAiringTarget(aniListId) {
+      const id = Number(aniListId);
+      if (!Number.isFinite(id) || id <= 0) return;
+      const s = (typeof primarySlugForAniListId === 'function') ? primarySlugForAniListId(id) : null;
+      // a primary catalog slug → Blake's review; anything else → the airing page
+      try { openAnimeFromId(s || ('al:' + id)); } catch (_) {}
     }
 
     // gate 20.7 (Blake item 5c, Code's latitude) — a user who signs in MID-
@@ -11991,9 +12008,12 @@ function onScrollHeader() {
       if (!sheet || !body) return;
       const esc = escapeHtml;
       let html = '';
-      // 1 — FROM BLAKE: new reviews since the last visit, as cover cards
+      // 1 — FROM BLAKE: new reviews since the last visit, as cover cards.
+      // Blake's call (2026-08-12): this KEEPS the top slot, full width, above
+      // the two panels. It is also the ONLY signal that works signed-out, so it
+      // is the one thing a logged-out visitor can be shown on this surface.
       if (catchupState.fresh.length) {
-        html += '<section class="catchup-sec" data-sec="blake">'
+        html += '<section class="catchup-sec catchup-sec--fresh" data-sec="blake">'
           + '<h3 class="catchup-sec-kicker">✍ NEW REVIEWS <span class="jp-mini">新作</span></h3>'
           + '<p class="catchup-sec-sub">Reviewed since you were last here.</p>'
           + '<div class="catchup-cards">'
@@ -12005,32 +12025,48 @@ function onScrollHeader() {
             }).join('')
           + '</div></section>';
       }
-      // 2 — YOUR LANTERN: the unread pings as letters (gold = Blake-origin)
-      if (catchupState.pings.length) {
-        html += '<section class="catchup-sec" data-sec="lantern">'
-          + '<h3 class="catchup-sec-kicker">🏮 YOUR LANTERN <span class="jp-mini">灯り</span></h3>'
-          + '<p class="catchup-sec-sub">What landed while you were out.</p>'
-          + '<div class="catchup-pings">'
-          + catchupState.pings.slice(0, 10).map((n, i) => {
-              const blake = n.fromUid === NOTIF_ADMIN_UID;
-              const who = esc(String(n.fromDisplayName || (blake ? 'The Creator' : 'Someone')).slice(0, 40));
-              const verb = esc(String(n.verb || 'sent you something').slice(0, 90));
-              const title = n.animeTitle ? ` — <i>${esc(String(n.animeTitle).slice(0, 60))}</i>` : '';
-              return `<button type="button" class="catchup-ping${blake ? ' is-blake' : ''}" data-ping="${i}">`
-                + `<b>${who}</b> ${verb}${title}<span class="catchup-ping-go" aria-hidden="true">›</span></button>`;
-            }).join('')
-          + '</div></section>';
-      }
-      // 3 — AIRING FOR YOU: watchlist titles airing right now
-      if (catchupState.airing.length) {
-        html += '<section class="catchup-sec" data-sec="airing">'
+      // 2 + 3 — THE TWO PANELS, side by side. Blake: "Maybe this page is split
+      // in two as two separate models. Here's who responded to you. Here's, uh,
+      // who messaged you." Airing on one side, the lantern on the other.
+      // When only ONE has content the other still renders with a quiet line:
+      // two columns where one is empty reads as deliberate, whereas a single
+      // orphaned column in a two-column frame reads as broken.
+      if (catchupState.pings.length || catchupState.airing.length) {
+        const airingRows = catchupState.airing.length
+          ? '<div class="catchup-rows">'
+            + catchupState.airing.slice(0, 8).map((m, i) =>
+                `<button type="button" class="catchup-chip" data-air="${i}">`
+                + '<span class="catchup-row-icon" aria-hidden="true">📺</span>'
+                + `<span class="catchup-row-text">${esc(String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 60))}</span>`
+                + '<span class="catchup-row-go" aria-hidden="true">›</span></button>'
+              ).join('')
+            + '</div>'
+          : '<p class="catchup-col-empty">Nothing on your list is airing right now.</p>';
+        const lanternRows = catchupState.pings.length
+          ? '<div class="catchup-rows">'
+            + catchupState.pings.slice(0, 10).map((n, i) => {
+                const blake = n.fromUid === NOTIF_ADMIN_UID;
+                const who = esc(String(n.fromDisplayName || (blake ? 'The Creator' : 'Someone')).slice(0, 40));
+                const verb = esc(String(n.verb || 'sent you something').slice(0, 90));
+                const title = n.animeTitle ? ` — <i>${esc(String(n.animeTitle).slice(0, 60))}</i>` : '';
+                return `<button type="button" class="catchup-ping${blake ? ' is-blake' : ''}" data-ping="${i}">`
+                  + `<span class="catchup-row-text"><b>${who}</b> ${verb}${title}</span>`
+                  + '<span class="catchup-row-go" aria-hidden="true">›</span></button>';
+              }).join('')
+            + '</div>'
+          : '<p class="catchup-col-empty">No new replies or letters.</p>';
+        html += '<div class="catchup-panels">'
+          + '<section class="catchup-sec catchup-col" data-sec="airing">'
           + '<h3 class="catchup-sec-kicker">📺 AIRING FOR YOU <span class="jp-mini">放送中</span></h3>'
           + '<p class="catchup-sec-sub">From your watchlist, on the air right now.</p>'
-          + '<div class="catchup-chips">'
-          + catchupState.airing.slice(0, 8).map((m, i) =>
-              `<button type="button" class="catchup-chip" data-air="${i}">📺 ${esc(String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 50))}</button>`
-            ).join('')
-          + '</div></section>';
+          + airingRows
+          + '</section>'
+          + '<section class="catchup-sec catchup-col" data-sec="lantern">'
+          + '<h3 class="catchup-sec-kicker">🏮 YOUR LANTERN <span class="jp-mini">灯り</span></h3>'
+          + '<p class="catchup-sec-sub">Who replied, and who wrote to you.</p>'
+          + lanternRows
+          + '</section>'
+          + '</div>';
       }
       if (!html) html = '<p class="catchup-empty">All caught up — the den is just as you left it. 🏮</p>';
       body.innerHTML = html;
@@ -12046,7 +12082,8 @@ function onScrollHeader() {
       }));
       body.querySelectorAll('.catchup-chip').forEach((el) => el.addEventListener('click', () => {
         const m = catchupState.airing[Number(el.dataset.air)];
-        if (m) leave(() => { try { window.openSecondaryFromKey && window.openSecondaryFromKey('al:' + Number(m.id)); } catch (_) {} });
+        // Blake's branch: his review when he has one, the airing page otherwise.
+        if (m) leave(() => openAiringTarget(m.id));
       }));
 
       sheet.hidden = false;
@@ -12105,6 +12142,22 @@ function onScrollHeader() {
     document.getElementById('catchup-close')?.addEventListener('click', closeCatchupSheet);
     document.getElementById('catchup-enter')?.addEventListener('click', closeCatchupSheet);
     document.querySelector('#catchup-sheet .catchup-scrim')?.addEventListener('click', closeCatchupSheet);
+
+    // Exposed for the spec — the lanternModel / rarFabBadges / rarStatsView
+    // precedent. The signals need live auth and Firestore, which a deterministic
+    // Playwright run cannot have; what this surface PROMISES is the rendering
+    // and the routing. So the spec seeds the state, drives the real renderer,
+    // and measures real pixels — rather than grepping the source and calling a
+    // string match a passing test.
+    if (typeof window !== 'undefined') {
+      window.rarCatchup = {
+        state: catchupState,
+        open: openCatchupSheet,
+        close: closeCatchupSheet,
+        hasContent: catchupHasContent,
+        routeAiring: openAiringTarget,
+      };
+    }
     function initWelcomeCatchup() {
       // signal 3 — new in the 44 since the last visit (works signed-out too)
       try {
@@ -12117,43 +12170,36 @@ function onScrollHeader() {
         if (prevRaw) {
           const prev = new Set(JSON.parse(prevRaw));
           const fresh = list.filter((a) => !prev.has(mk(a.Title)));
-          if (fresh.length) {
-            catchupState.fresh = fresh;
-            catchupAdd(catchupButton(
-              '✍ ' + fresh.length + ' new review' + (fresh.length === 1 ? '' : 's') + ' since your last visit',
-              'blake',
-              fresh.slice(0, 4).map((a) => ({
-                label: String(a.Title).slice(0, 44),
-                go: () => { try { openModal(a); } catch (_) {} },
-              }))
-            ));
-          }
+          if (fresh.length) catchupState.fresh = fresh;
         }
       } catch (_) {}
       // signals 1 + 2 need a signed-in user
       onAuthStateChanged(auth, async (user) => {
-        if (!user || splash.hidden) return;
-        // signal 1 — unread lantern pings (count vs lastSeenAt, lantern-style)
+        // ⚠️ signed-out (or a door already dismissed) still has to SETTLE the
+        // readiness gate — an unsettled promise would make Enter wait out the
+        // full cap for signals that are never coming, on every signed-out visit.
+        if (!user || splash.hidden) { settleCatchupReady(); return; }
+        // ⚠️ try/FINALLY, not a settle at the end: signal 2 below carries early
+        // `return`s (no franchiseFetch, an empty watchlist), and a settle placed
+        // after them would be skipped — leaving Enter to wait out the whole
+        // 1100ms cap on every visit by a member with nothing on their list.
+        // `finally` runs on those returns too, so the gate always settles.
         try {
-          const [notifSnap, prefSnap] = await Promise.all([
-            getDocs(query(collection(db, 'users', user.uid, 'notifications'), orderBy('createdAt', 'desc'), limit(10))),
-            getDoc(doc(db, 'users', user.uid, 'notifPrefs', 'prefs')),
-          ]);
-          const seenMs = (() => { try { return prefSnap.exists() ? (prefSnap.data().lastSeenAt?.toMillis() || 0) : 0; } catch (_) { return 0; } })();
-          const unreadDocs = [];
-          notifSnap.forEach((d) => { try { if ((d.data().createdAt?.toMillis() || 0) > seenMs) unreadDocs.push(d.data()); } catch (_) {} });
-          if (unreadDocs.length > 0 && !splash.hidden) {
-            catchupState.pings = unreadDocs;   // the sheet renders these as letters
-            catchupAdd(catchupButton(
-              // (20.7 adversarial LOW: '+' only when the unread set fills the
-              // whole fetch window — same fix as the sign-in strip)
-              '🏮 ' + unreadDocs.length + ' new lantern ping' + (unreadDocs.length === 1 ? '' : 's') + (unreadDocs.length >= 10 ? '+' : ''),
-              'lantern'
-            ));
-          }
-        } catch (_) {}
-        // signal 2 — watchlist titles airing now (the Discover airing pool)
-        try {
+          // signal 1 — unread lantern pings (count vs lastSeenAt, lantern-style)
+          try {
+            const [notifSnap, prefSnap] = await Promise.all([
+              getDocs(query(collection(db, 'users', user.uid, 'notifications'), orderBy('createdAt', 'desc'), limit(10))),
+              getDoc(doc(db, 'users', user.uid, 'notifPrefs', 'prefs')),
+            ]);
+            const seenMs = (() => { try { return prefSnap.exists() ? (prefSnap.data().lastSeenAt?.toMillis() || 0) : 0; } catch (_) { return 0; } })();
+            const unreadDocs = [];
+            notifSnap.forEach((d) => { try { if ((d.data().createdAt?.toMillis() || 0) > seenMs) unreadDocs.push(d.data()); } catch (_) {} });
+            // the door may have been dismissed while this was in flight; the
+            // STATE is still worth filling (Enter's gate reads it), so unlike
+            // the old strip there is no splash.hidden guard on the assignment.
+            if (unreadDocs.length > 0) catchupState.pings = unreadDocs;
+          } catch (_) {}
+          // signal 2 — watchlist titles airing now (the Discover airing pool)
           const ff = window.franchiseFetch;
           if (!ff || typeof ff.fetchAiringList !== 'function') return;
           const wlSnap = await getDocs(query(collection(db, 'users', user.uid, 'watchlist'), limit(120)));
@@ -12163,7 +12209,7 @@ function onScrollHeader() {
             const n = Number(v.aniListId || (String(d.id).indexOf('al:') === 0 ? d.id.slice(3) : NaN));
             if (Number.isFinite(n) && n > 0) wantIds.add(n);
           });
-          if (!wantIds.size || splash.hidden) return;
+          if (!wantIds.size) return;
           // adversarial MED: don't hit the network per fresh session — the
           // airing pool barely moves; a 6h localStorage cache carries the door.
           let airing = null;
@@ -12176,25 +12222,8 @@ function onScrollHeader() {
             try { localStorage.setItem('rar:doorAiring', JSON.stringify({ at: Date.now(), list: (airing || []).map((m) => ({ id: m.id, title: m.title })) })); } catch (_) {}
           }
           const hits = (airing || []).filter((m) => m && wantIds.has(Number(m.id)));
-          if (hits.length && !splash.hidden) {
-            catchupState.airing = hits;
-            catchupAdd(catchupButton(
-              '📺 ' + hits.length + ' on your watchlist ' + (hits.length === 1 ? 'is' : 'are') + ' airing now',
-              'airing',
-              // PART A item 3 — Blake: the strip "needs to not overlap with the
-              // update log. Maybe it only shows the last 2 on the watchlist and
-              // a '+ 4 more'". Two titles, then one overflow chip into the
-              // sheet that already exists. openCatchupSheet is in this closure.
-              hits.slice(0, 2).map((m) => ({
-                label: String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 44),
-                go: () => { try { window.openSecondaryFromKey && window.openSecondaryFromKey('al:' + Number(m.id)); } catch (_) {} },
-              })).concat(hits.length > 2 ? [{
-                label: '+ ' + (hits.length - 2) + ' more',
-                go: () => openCatchupSheet('airing'),
-              }] : [])
-            ));
-          }
-        } catch (_) {}
+          if (hits.length) catchupState.airing = hits;
+        } catch (_) {} finally { settleCatchupReady(); }
       });
     }
     // (called from openWelcome — the door must be VISIBLE before any signal

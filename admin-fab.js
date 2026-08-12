@@ -1,10 +1,19 @@
 // admin-fab.js — Admin Mode floating action button (FAB)
 // =============================================================================
-// What this is: a floating "Admin" pill in the bottom-right corner of every
-// page, visible ONLY to Blake (admin UID). Click to open dropdown of admin
-// tools. Currently one tool: "+ Add Anime".
+// What this is: a floating "Admin" pill in the bottom-LEFT corner of every page,
+// visible ONLY to Blake (admin UID). Click to open a grid of admin tool tiles.
 //
 // Author: Code | date: 2026-05-10 | Mode 1 baseline (v1.6.0)
+// (corner corrected 2026-08-12 — it moved left in v1.7.3 gate 3c to clear the
+//  search bar and chat drawer; this comment had said "bottom-right" ever since.)
+//
+// v2.2.0 item 4 — Blake: "when I click admin, eight models pop up, like,
+// rectangles on my screen that look neat. They say what it is in a quick
+// description of what it's doing... short and sweet to the point... And as we
+// add more models, we can, like, scroll down."
+// So: TILES, each carrying a `desc` short enough to read at a glance, in a
+// scrolling grid. Note he remembered eight; there are eleven — Letters and
+// Member Stats are new, and on 2026-08-12 he said all eleven stay for now.
 // =============================================================================
 
 import { auth, db } from './firebase.js';
@@ -17,30 +26,39 @@ const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 
 // hrefs MUST be root-absolute — the FAB also mounts on /admin/* pages (new-anime),
 // where a relative 'admin/…' href doubles to /admin/admin/… → 404.
+// ⚠️ `desc` is Blake's "short and sweet to the point" — his own examples were
+// "edit anime" and "change seasonal reviews". Keep them at a GLANCE length; a
+// sentence here defeats the point of the redesign. Each one describes what the
+// page actually does (checked against the pages themselves, not guessed).
 const ADMIN_MENU_ITEMS = [
   {
     label: 'Add Anime',
     jp: '新規追加',
+    desc: 'Write a brand-new review',
     href: '/admin/new-anime.html',
   },
   {
     label: 'Edit a Review',
     jp: '編集',
+    desc: 'Change one you already wrote',
     href: '/admin/edit.html',
   },
   {
     label: 'Season Reviews',
     jp: '感想',
+    desc: 'Per-season write-ups',
     href: '/admin/season-reviews.html',
   },
   {
     label: 'Curator Studio',
     jp: '工房',
+    desc: 'Private notes on any anime',
     href: '/admin/studio.html',
   },
   {
     label: 'Curate Cards',
     jp: '整理',
+    desc: 'Watch status on every card',
     href: '/admin/curation.html',
   },
   // Cloud migration phase 3 — the Cloud Admin catalog editor. Reads and writes
@@ -49,22 +67,26 @@ const ADMIN_MENU_ITEMS = [
   {
     label: 'Catalog',
     jp: '図書',
+    desc: 'Edit anime data from anywhere',
     href: '/admin/catalog.html',
   },
   {
     label: 'Quotes',
     jp: '名言',
+    desc: 'The quote bubbles on the door',
     href: '/admin/quotes.html',
   },
   {
     label: 'Suggestion Queue',
     jp: '提案',
+    desc: 'What members asked you to watch',
     href: '/admin/suggestions.html',
     badge: 'suggestions',
   },
   {
     label: 'Reports',
     jp: '通報',
+    desc: 'Flagged comments and posts',
     href: '/admin/reports.html',
     badge: 'reports',
   },
@@ -76,6 +98,7 @@ const ADMIN_MENU_ITEMS = [
   {
     label: 'Letters',
     jp: '手紙',
+    desc: 'Messages members sent you',
     href: '/account.html#inbox',
     badge: 'letters',
   },
@@ -85,14 +108,16 @@ const ADMIN_MENU_ITEMS = [
   {
     label: 'Member Stats',
     jp: '統計',
+    desc: 'How many people are here',
     href: '/admin/stats.html',
   },
   // Milestone F (Blake: "get rid of the inbox on my admin page since people
   // can properly dm me now") — members' letters reach Blake through the ONE
   // unified account Inbox (account.html#inbox); the admin floor page is gone.
-  // Future entries land here:
-  // { label: 'Site Health', jp: '監視', href: '/admin/health.html' },
-  // { label: 'Audit', jp: '監査', href: '/admin/audit.html' },
+  // Future entries land here — give every one a `desc`, or its tile renders
+  // shorter than its neighbours and the grid stops looking deliberate:
+  // { label: 'Site Health', jp: '監視', desc: 'Is anything on fire', href: '/admin/health.html' },
+  // { label: 'Audit', jp: '監査', desc: 'Who changed what', href: '/admin/audit.html' },
 ];
 
 // =============================================================================
@@ -224,29 +249,55 @@ function buildFab() {
   header.innerHTML = `ADMIN MODE <span class="admin-fab-jp">管理</span>`;
   menu.appendChild(header);
 
+  // v2.2.0 item 4 — the tiles live in their OWN scrolling grid, so the "ADMIN
+  // MODE" header stays pinned while the tools scroll under it. Blake: "as we
+  // add more models, we can, like, scroll down." The old menu had no max-height
+  // and no overflow at all — at eleven items it simply grew off the top of the
+  // screen, so this is a fix, not only a restyle.
+  const grid = document.createElement('div');
+  grid.className = 'admin-fab-grid';
   for (const item of ADMIN_MENU_ITEMS) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'admin-fab-menu-item';
+    btn.className = 'admin-fab-tile';
     btn.setAttribute('role', 'menuitem');
-    btn.innerHTML = `
-      <span class="admin-fab-menu-item-label">${item.label}</span>
-      <span class="admin-fab-menu-item-jp">${item.jp}</span>
-    `;
+    // textContent, not innerHTML interpolation — these strings are authored in
+    // this file today, but a tile whose label is ever sourced from data must not
+    // become an HTML sink. Building the nodes costs nothing and closes it now.
+    const top = document.createElement('span');
+    top.className = 'admin-fab-tile-top';
+    const lab = document.createElement('span');
+    lab.className = 'admin-fab-menu-item-label';
+    lab.textContent = item.label;
+    const jp = document.createElement('span');
+    jp.className = 'admin-fab-menu-item-jp';
+    jp.textContent = item.jp;
+    top.appendChild(lab);
+    top.appendChild(jp);
+    btn.appendChild(top);
     // PATCH QUEUE item 5 — the count slot. Ships hidden and EMPTY: a badge
     // reading 0 is noise, and a badge reading a stale number is worse than none.
+    // It sits in the tile's TOP row so it keeps its own line and cannot be
+    // pushed out of view by a long description.
     if (item.badge) {
       const b = document.createElement('span');
       b.className = 'admin-fab-badge';
       b.dataset.badge = item.badge;
       b.hidden = true;
-      btn.appendChild(b);
+      top.appendChild(b);
+    }
+    if (item.desc) {
+      const d = document.createElement('span');
+      d.className = 'admin-fab-tile-desc';
+      d.textContent = item.desc;
+      btn.appendChild(d);
     }
     btn.addEventListener('click', () => {
       window.location.href = item.href;
     });
-    menu.appendChild(btn);
+    grid.appendChild(btn);
   }
+  menu.appendChild(grid);
 
   root.appendChild(button);
   root.appendChild(menu);

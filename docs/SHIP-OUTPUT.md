@@ -1,51 +1,67 @@
-<!-- author: Code | date: 2026-08-10 -->
-# SHIP-OUTPUT — PART A items 6, 7, 2. **PART A IS COMPLETE — and v2.1.0 IS LIVE.**
+<!-- author: Code | date: 2026-08-12 -->
+# SHIP-OUTPUT — banked items **1** (notification overhaul) and **4** (admin tiles)
 
-**Deployed 2026-08-10** on Blake's "deploy it, rules then functions then hosting". That order was a deliberate deviation from the runbook, flagged to him first: hosting-first exists to protect the vote-count model (which this ship doesn't touch), and it would have put a Delete Account button in front of members before its backend existed. Going rules-first closed the console deletion hole before anything else moved.
+**Built and committed. NOT deployed** — nothing here is live until Blake says so. v2.1.1 remains the live version; no version bump and no CHANGELOG entry yet, matching how the patch queue was handled (build commits stay clean; the bump and changelog land together at the ship gate).
 
-Verified on the live site rather than assumed: version 2.1.0 with the update-log chip agreeing, all 43 functions including the three new ones, and — the one that matters — the new rules proven to actually BITE over the public API (an unauthenticated read of the stats doc returns 403, the public catalog still returns 200). Internal docs, the ~300 leftover scratch files and PERSONAL.md all 404.
+Blake picked these two to share a session, and locked eight decisions before a line was written.
 
-## What Blake asked for, and what he got
+## Item 1 — the enter-page overhaul
 
-**Item 6 — "track member stats included joined this month, active users, comments, reviews posted etc etc"**
-A new admin page, **Member Stats**, in the Admin menu. Members total · joined this month · joined in the last 30 days · active members · a table of comments/reviews/replies/threads/posts (all-time and last-30-days) · letters sent · appreciates given. A **Refresh now** button when he doesn't want to wait for the daily count.
+**What he asked for:** kill the catch-up strip that appears on the welcome door a second or two after it opens, and replace it with a real surface *after* you press Enter — "While you were away" — with what's airing from your list on one side and your notifications on the other, every row clicking through to the exact anime or the exact comment.
 
-It reads **one document**. A scheduled function walks everything once a day and writes that single doc, so opening the page costs exactly one read no matter how often he refreshes it — and the two numbers that are impossible to count from a browser (active users, letter volume) are possible at all.
+**What he got.** The door is a door again: art, wordmark, tagline, Enter. Nothing loads late onto it and nothing reflows under the cursor any more — that whole class of bug is now impossible rather than merely fixed, because there is no longer anything on the door to arrive late.
 
-**Counts only, never content — structurally.** Every read names the exact fields it needs, and the letters lane names *none*, so a letter's text never reaches the process that builds this page. A test asserts a seeded message body and both members' ids are absent from the stored document. The page says so out loud, too.
+Press Enter and the catch-up sheet opens. He was right that "a system like this kind of exists" — the sheet was already there, already headed **WHILE YOU WERE AWAY**, already deep-linking correctly. It was just buried behind a strip button. So this is the rebuild he asked for on top of machinery that already worked, not new plumbing:
 
-**Item 7 — "New way to delete your account in user settings that's available to all members"**
-A **Leaving** card at the bottom of account settings. Closed until asked for. It says what will happen *before* it asks for anything, then wants the word `DELETE` typed and the password re-entered. No pop-up boxes anywhere.
+- **Two panels, side by side** — *Airing for you* and *Your lantern* — his "split in two as two separate models". They collapse to a single stack on a phone, and they're equal height so the pair reads as deliberate.
+- **New reviews keeps the top slot**, full width above the panels — his call. It's also the only part that works signed-out, so it's the one thing a logged-out visitor can be shown here.
+- **A quiet visit skips the surface entirely** and goes straight into the Den. Nobody is made to click through a page telling them there's nothing waiting.
+- **One empty side still renders** as a panel with a quiet line, rather than leaving a lone orphan column in a two-column frame.
 
-His locked policy is what it does: **tombstone the containers, erase the content.** Their words, pictures and name are gone; the empty slot stays where it was reading *[removed by the author]*, so the replies underneath still make sense — and **nobody else's post disappears because someone left.**
+## A gap found while building this — the handoff was wrong
 
-**Item 2 — "pin one review… a button that brings up a separate sheet of all the reviews"**
-The pinned review leads the profile. Everything else is behind one **all reviews (N)** button that opens the full list as its own view of the same sheet, with a ← back chip. The profile stops being a wall of reviews.
+The brief said the anime rows "already branch" to Blake's review versus the currently-airing page. **They did not.** Every airing row called the same function unconditionally, so a title Blake *had* reviewed still opened the AniList deep-dive instead of his own review — exactly the thing he asked for by name: *"whether it be my review or something that's currently airing either one based on whether I reviewed it."*
 
-## Two live problems found and fixed — both reproduced first
+That branch is now built, reusing the two matchers the franchise rows already use rather than inventing a second definition of "reviewed". It is covered by a test that was **deliberately broken first to prove it bites** — the first version of that test passed against deliberately broken code, because it only asserted an absence. It now measures the review actually opening.
 
-**1. Any member could have deleted their whole account from the browser console, today.** Not through the site — there was no button — but the rule that let them do it was live and unguarded, and the account-wipe cascade fired straight off it: no password check, no confirmation, no protection for the Creator's account. The deny-test was written first and *failed* against the live rules, which is how we know it was real. It's closed.
+## A race that would never have reproduced
 
-**2. When someone left, other members' words went with them.** The old cleanup deleted their forum thread — and a thread deletion takes every reply inside it, from everyone. Same for replies under their comment and discussion under their review. Innocent people lost writing because somebody else quit, and it contradicted what the site already tells visitors ("what they shared lives where they posted it"). Reproduced against the emulator: with the old code, a bystander's post *and* their reply were both destroyed. With the fix, both survive. That test is permanent now, and it's written from the bystander's side, because it was their loss.
+The notification and airing signals are asynchronous — auth plus two round-trips — while Enter is instant. A fast press beat them, and a member with letters waiting would have sailed straight into the Den having been shown nothing: silently, only on fast connections or warm sign-ins, and never reproducibly. Enter now waits for those signals, but only up to a bounded cap, so the door can never hang on a dead network. The settle sits in a `finally`, because the code path underneath has early exits that would otherwise have skipped it on every visit by someone with an empty watchlist.
 
-⚠️ Worth saying plainly: **the first attempt to reproduce #2 was wrong** — it reported "everything survived" because the check finished before the cleanup had even run. Hardened, it reproduced immediately. A green result from a test that never exercised the thing is worse than no test.
+## Item 4 — the admin menu
 
-## A third problem, found only because we measured against a baseline
+**What he asked for:** tiles instead of a list, each with a name and a very short description, scrollable as more get added, matching the site.
 
-While verifying, an unrelated test started failing. The tempting fix was to raise its timeout. Instead we re-ran the same suite against the pre-change code (79/79 green), which proved the regression was ours — and it turned out the redaction code was **recreating documents that had just been deleted**, because the Firestore call it used creates a document when one is missing. Ghost entries nobody wrote, triggering everything a real new post triggers. Fixed properly. Raising the timeout would have hidden a genuine bug in the deletion path.
+**What he got:** eleven tiles in a two-across grid, each with its name, its Japanese sublabel and a description short enough to read at a glance — "Write a brand-new review", "Watch status on every card", "Flagged comments and posts". Every description was written against what the page actually does, not guessed from its title. One column on the narrowest phones, where two tracks would have left every label wrapping three ways.
 
-## Blake's smoke — THIS IS LIVE NOW, so these are real
+**The scroll he asked for was a real bug, not a nice-to-have.** The old menu had no height limit and no overflow at all: at eleven tools it grew to roughly 580px and ran off the top of a short screen, and every tool added made it worse. Measured after the change — the menu now fits on screen at every width from 320px to 1280px, and the tiles scroll inside it.
 
-1. **Admin menu → Member Stats.** Numbers should appear (or "nothing counted yet" until the first daily run — press **Refresh now** and they fill in). Check it on your phone too.
-2. **Any profile.** Your pinned review leads; below it one **all reviews (N)** button. Press it → the full list. Press **← Back to profile** → you're back where you were. Then the browser Back button — same thing.
-3. **Copy a profile link while the reviews list is open** and open it in a new tab. It should land on the reviews list, not the top of the profile.
-4. **Account → Settings, scroll to the bottom.** You'll see **Leaving**. Open it, read it, type `DELETE` — the red button wakes up. **Then press Keep my account.** Please don't test the real thing on your own account; if you want it tested end to end, make a throwaway account first.
-5. **A thread someone else started, with your reply in it** — that reply must still be there after they leave. This is the one that mattered.
+Two smaller things: the live badge counts (suggestions, reports, unread letters) survive the redesign and sit on the tile's first line, where a long description can't push them out of view; and the file's header comment had claimed the button was in the bottom-right corner ever since it moved to the left in v1.7.3 — he was right about the corner, the comment was wrong.
 
-## Test floors (all re-run at the end, all green)
-`npm test` **350** (was 320) · `test:rules` **218** (211) · `test:cf` **94** (79) · `test:functions` **94** (77) · `test:webkit` **24** (24).
+## What he should look at
 
-(350, not 348: Blake's three post-build smoke fixes added two more — the search-proportionality guard across sixteen widths, and the header-token edge check.)
+1. **Close the tab, reopen the site, press Enter.** If anything is waiting you should land on *While you were away* — new reviews across the top, airing on the left, your lantern on the right. Click a notification: it should take you to that exact comment and highlight it. Click an anime you've reviewed: **it should open your review**, not the airing page.
+2. **Do it again when nothing is waiting.** You should go straight into the Den with no extra page.
+3. **The door itself** — check there's no strip appearing on it a second after it opens, on both phone and desktop.
+4. **Admin menu, on your phone and on desktop.** Eleven tiles, name plus a short line each. Scroll it. Tell me if any description is wrong about what its page does — those are my words, not yours.
+
+## Still open, still honestly labelled
+
+- The intermittent **"review deep-links don't always highlight"** report is **not** fixed and was not touched this run. One reachable gap was closed previously; the intermittent case has still never been reproduced.
+- The **Razr Flip 8** question (folded or unfolded) is still unanswered, and still doesn't block anything.
+- **Items 2 (mobile card sizing) and 6 (shelf autopopulate) were not started.** Mode 2 remains its own session, as agreed.
+
+## Test floors — all re-run at the end
+
+| track | floor | result |
+|---|---|---|
+| `npm test` | 368 → **378** | **378 pass, 0 fail** (10 new specs for this work) |
+| `test:webkit` | 24 | **24 pass** |
+| `test:functions` | 94 | **94 pass** |
+| `test:rules` | 218 | not affected — no rules touched |
+| `test:cf` | 94 | not affected — no functions touched |
+
+⚠️ Two failures appeared during the run and **both were environment flakes, proven, not assumed**: one `ERR_NO_BUFFER_SPACE` and one burst of 404s, on different specs in different runs, each passing in isolation and the full suite then passing 378/378 clean. Nothing was silenced and no timeout was touched.
 
 ## One-liner reply
-Part A is finished and v2.1.0 is live: members can delete their own accounts, nobody else loses their words when someone leaves, profiles no longer drown in reviews — and the two live problems we found on the way (any member could have wiped their account from a browser console, and a departure destroyed other members' posts) are closed in production, with the rules proven to bite rather than merely uploaded.
+The door is a door again — Enter now opens a real two-panel "while you were away" page, the admin menu is eleven scrolling tiles, and an anime you've reviewed finally opens your review instead of the airing page.

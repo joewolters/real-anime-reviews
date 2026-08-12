@@ -109,8 +109,9 @@
 .admin-fab-menu {
   display: flex;
   flex-direction: column;
-  min-width: 260px;
-  max-width: 320px;
+  /* v2.2.0 item 4 — wide enough for a two-across tile grid. */
+  width: 460px;
+  max-width: calc(100vw - 48px);
   padding: 10px;
   background: linear-gradient(180deg, rgba(40, 18, 70, 0.92), rgba(20, 6, 38, 0.96));
   border: 1px solid rgba(187, 134, 252, 0.42);
@@ -155,19 +156,40 @@
   font-weight: 500;
 }
 
-.admin-fab-menu-item {
+/* ---- v2.2.0 item 4 — THE TILE GRID ----
+   <!-- author: Code | date: 2026-08-12 -->
+   Blake: "eight models pop up, like, rectangles on my screen that look neat...
+   And as we add more models, we can, like, scroll down."
+
+   ⚠️ The SCROLL is the real fix. The old menu had neither max-height nor
+   overflow: at eleven items it grew ~580px from bottom:24px and ran off the top
+   of a short screen, and every tool added made it worse. The grid caps its
+   height against the viewport and scrolls inside — so the list can grow
+   forever without the FAB ever pushing a tool off-screen. */
+.admin-fab-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  /* the cap is viewport-relative, minus the FAB, its gap and the menu header,
+     so the tiles always end above the top edge no matter the screen. */
+  max-height: min(56vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+
+.admin-fab-tile {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 11px 14px;
-  margin: 2px 0;
-  border-radius: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 12px;
   text-align: left;
   color: #efe7ff;
-  background: transparent;
-  border: 1px solid transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(187, 134, 252, 0.26);
   font-family: inherit;
   cursor: pointer;
   transition:
@@ -176,18 +198,35 @@
     transform 0.14s ease;
 }
 
-.admin-fab-menu-item:hover {
+.admin-fab-tile:hover {
   background: linear-gradient(180deg, rgba(140, 70, 220, 0.22), rgba(70, 0, 110, 0.32));
-  border-color: rgba(187, 134, 252, 0.42);
+  border-color: rgba(187, 134, 252, 0.55);
 }
 
-.admin-fab-menu-item:focus-visible {
+.admin-fab-tile:focus-visible {
   outline: 2px solid #ffd6ff;
   outline-offset: 1px;
 }
 
-.admin-fab-menu-item:active {
+.admin-fab-tile:active {
   transform: scale(0.99);
+}
+
+/* the tile's first line: name, jp, and the badge — so a long description can
+   never push the count out of the tile. */
+.admin-fab-tile-top {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-fab-tile-desc {
+  font: 500 11px 'Montserrat', sans-serif;
+  line-height: 1.35;
+  color: #b9a9d6;
+  letter-spacing: 0.01em;
 }
 
 .admin-fab-menu-item-label {
@@ -196,6 +235,10 @@
   color: #ffffff;
   letter-spacing: 0.01em;
   font-family: 'Montserrat', sans-serif;
+  /* min-width:0 lets a long name wrap inside its grid track instead of forcing
+     the track wider and breaking the two-across layout. */
+  min-width: 0;
+  line-height: 1.25;
 }
 
 .admin-fab-menu-item-jp {
@@ -217,15 +260,25 @@
     font-size: 0.9rem;
   }
   .admin-fab-menu {
-    min-width: 240px;
+    width: calc(100vw - 32px);
     max-width: calc(100vw - 32px);
   }
+  .admin-fab-tile { padding: 10px; }
+  .admin-fab-menu-item-label { font-size: 13px; }
+  /* the phone has less height to give, so the scroll starts sooner */
+  .admin-fab-grid { max-height: min(52vh, 360px); }
+}
+/* Below ~380px two tracks leave ~130px of usable width — narrower than
+   "Suggestion Queue" sets at any readable size — so it goes single-column
+   rather than shipping a grid of three-line labels. */
+@media (max-width: 380px) {
+  .admin-fab-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   #admin-fab-button,
   #admin-fab-button::before,
-  .admin-fab-menu-item {
+  .admin-fab-tile {
     transition: none !important;
   }
   .admin-fab-menu {
@@ -264,7 +317,7 @@
   flex: 0 0 auto;
 }
 .admin-fab-badge[hidden] { display: none; }
-.admin-fab-menu-item:hover .admin-fab-badge {
+.admin-fab-tile:hover .admin-fab-badge {
   background: rgba(187, 134, 252, 0.42);
   border-color: rgba(187, 134, 252, 0.8);
 }

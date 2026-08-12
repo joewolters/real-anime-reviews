@@ -8926,59 +8926,14 @@ html.rar-welcome-pending::before {
 .welcome-enter-arrow { font-size: 1.05em; transition: transform .18s ease; }
 .welcome-enter:hover .welcome-enter-arrow { transform: translateX(3px); }
 
-/* gate 20.5 — Surprise-me retired from the door (Blake item 1); the catch-up
-   strip stays and goes BIGGER (item 3): a real door feature, not a footnote. */
-/* a bottom strip pinned to the splash — buttons arriving async never move the
-   card. gate 20.5 (item 3): BIGGER — a door feature, not a footnote. */
-.welcome-catchup { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%);
-  z-index: 3; display: flex; flex-direction: column; gap: 11px; align-items: center;
-  max-width: min(760px, 94vw); padding: 16px 26px; border-radius: 18px;
-  background: rgba(14, 4, 30, 0.78); border: 1px solid rgba(187, 134, 252, 0.45);
-  box-shadow: 0 14px 44px rgba(6, 1, 14, 0.6), 0 0 30px rgba(185, 0, 255, 0.14);
-  /* adversarial MED: never bury the card/Enter on short viewports */
-  max-height: 34vh; overflow-y: auto; }
-@media (max-height: 720px) {
-  .welcome-catchup { bottom: 12px; padding: 10px 16px; gap: 7px; max-height: 26vh; }
-  .welcome-catchup-btn { padding: 9px 18px; font-size: 0.84rem; }
-}
-.welcome-catchup[hidden] { display: none; }   /* [hidden] symmetry */
-/* PART A item 3 (2026-08-09) — once JS re-homes the strip INTO the card it is
-   an in-flow block, so every floating property has to come off or it would
-   still be positioned out of the flow it just joined. In flow it cannot
-   overlap the update log at any width or height — which is the requirement.
-   (An earlier attempt reserved a lane via a --rar-catchup-h custom property;
-   it was measured and it did NOT work — the card is taller than the viewport,
-   so it top-anchors and scrolls and no amount of reserved space moves it.) */
-.welcome-card .welcome-catchup {
-  position: static;
-  transform: none;
-  left: auto;
-  bottom: auto;
-  margin: 18px auto 0;
-  max-height: none;      /* it no longer competes with the card for the screen */
-  width: 100%;
-}
-.welcome-catchup-kicker { font: 800 0.84rem 'Montserrat', sans-serif; letter-spacing: 0.22em;
-  color: #f6efff; text-shadow: 0 0 16px rgba(187, 134, 252, 0.55); }
-.welcome-catchup-kicker .jp-mini { font-size: 0.7rem; opacity: 0.9; color: #d9c9ff; }
-.welcome-catchup-row { display: flex; flex-direction: column; gap: 7px; align-items: center; }
-.welcome-catchup-btn { display: inline-flex; align-items: center; gap: 12px; padding: 13px 26px;
-  border-radius: 999px; cursor: pointer; font: 700 1rem 'Montserrat', sans-serif;
-  color: #fff; background: linear-gradient(120deg, rgba(176, 108, 255, 0.30), rgba(120, 40, 210, 0.45));
-  border: 1px solid rgba(187, 134, 252, 0.7);
-  box-shadow: 0 6px 20px rgba(6, 1, 14, 0.45);
-  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
-.welcome-catchup-btn:hover { transform: translateY(-1px); border-color: rgba(216, 180, 254, 0.95);
-  box-shadow: 0 9px 26px rgba(120, 40, 200, 0.45); }
-.welcome-catchup-btn .wc-go { font-size: 1.2em; color: #d9c9ff; }
-.welcome-catchup-subs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.welcome-catchup-sub { padding: 7px 15px; border-radius: 999px; cursor: pointer;
-  font: 600 0.8rem 'Montserrat', sans-serif; color: #e9dbff;
-  background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.4); }
-.welcome-catchup-sub:hover { background: rgba(187, 134, 252, 0.2); }
-@media (prefers-reduced-motion: reduce) {
-  .welcome-catchup-btn { transition: none; }
-}
+/* v2.2.0 item 1 — the door's catch-up strip is DELETED (Blake: "I wanna
+   completely get rid of that on both mobile and PC"). Every .welcome-catchup*
+   rule went with it — the in-flow re-home from PART A item 3, the max-height
+   viewport guards, the pill buttons and sub-chips. What they carried now lives
+   on the catch-up sheet, which Enter opens. The door is a door again.
+   (Deliberately not left as dead CSS: the re-home rule in particular only made
+   sense against markup that no longer exists, and a future reader would have
+   had to reconstruct why a static override existed for an absent element.) */
 
 /* gate 20.7 (item 5c) — the MID-SESSION sign-in catch-up strip: a compact,
    dismissible echo of the door's strip, fixed under the header. Removed from
@@ -9018,15 +8973,18 @@ html.rar-welcome-pending::before {
   .signin-catchup { animation: none; }
 }
 
-/* ── gate 20.5 (item 3) — THE CATCH-UP SHEET: the door buttons' destination.
-   A full veil surface: cosmos scrim, a tall centered panel, premium sections
-   (cover cards / lantern letters / airing chips). ── */
+/* ── THE CATCH-UP SHEET — "while you were away".
+   gate 20.5 (item 3) built it as the door buttons' destination; v2.2.0 item 1
+   made it the destination of ENTER itself, and the door strip that used to tease
+   it is gone. A full veil surface: cosmos scrim, a centered panel, the new-
+   reviews rail across the top, then the two panels. Widened 780→980px in
+   v2.2.0 — two columns inside 780px left each one too narrow to hold a title. ── */
 .catchup-sheet { position: fixed; inset: 0; z-index: 7800; display: flex;
   align-items: center; justify-content: center; }
 .catchup-sheet[hidden] { display: none; }   /* [hidden] symmetry */
 .catchup-scrim { position: absolute; inset: 0;
   background: radial-gradient(120% 100% at 50% 20%, rgba(20, 8, 40, 0.94) 0%, rgba(8, 2, 18, 0.97) 70%); }
-.catchup-panel { position: relative; width: min(780px, 94vw); max-height: 88vh;
+.catchup-panel { position: relative; width: min(980px, 94vw); max-height: 88vh;
   display: flex; flex-direction: column; border-radius: 22px; overflow: hidden;
   background: linear-gradient(170deg, rgba(36, 11, 66, 0.97), rgba(18, 5, 38, 0.98));
   border: 1px solid rgba(187, 134, 252, 0.55);
@@ -9059,20 +9017,52 @@ html.rar-welcome-pending::before {
 .catchup-card:hover .catchup-card-img { transform: translateY(-3px); border-color: rgba(216, 180, 254, 0.9); }
 .catchup-card-img--ph { display: block; background: rgba(187, 134, 252, 0.1); }
 .catchup-card-title { font: 700 0.78rem 'Montserrat', sans-serif; color: #f1e9ff; line-height: 1.3; }
-.catchup-pings { display: flex; flex-direction: column; gap: 7px; }
-.catchup-ping { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
-  padding: 11px 15px; border-radius: 12px; cursor: pointer; color: #e9dbff;
+/* ── v2.2.0 item 1 — THE TWO PANELS. Blake: "Maybe this page is split in two
+   as two separate models. Here's who responded to you. Here's, uh, who
+   messaged you." Two framed columns side by side, collapsing to one stacked
+   column on a narrow screen. The airing rail and the lantern now share ONE row
+   vocabulary (.catchup-rows / .catchup-row-*) so the two panels read as
+   siblings — the old design had pill chips on one side and letter rows on the
+   other, which looked like two unrelated features sharing a modal. ── */
+/* stretch, not start: two panels of different heights read as an accident.
+   Equal-height columns are what makes the pair look deliberate — Blake's
+   word for the admin tiles was "neat", and it applies here too. */
+.catchup-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+.catchup-col { min-width: 0; padding: 16px 16px 14px; border-radius: 16px;
+  background: rgba(255, 255, 255, 0.028); border: 1px solid rgba(187, 134, 252, 0.26); }
+.catchup-col .catchup-sec-kicker { margin-top: 0; }
+/* one column on phones + narrow tablets — two 1fr columns at 360px would give
+   each ~150px, which cannot hold a title row without wrapping every word. */
+@media (max-width: 720px) {
+  .catchup-panels { grid-template-columns: 1fr; gap: 12px; }
+  /* MEASURED at 390×844: the full-size 120×168 covers pushed the lantern panel
+     clean below the fold, so the one thing a member opened this surface to read
+     was the one thing off-screen. Smaller covers on phones buy that room back.
+     (Scoped to .catchup-card only — this does NOT go near mobile.css's
+     `.spotlight-stack .card { width: 275px }`, which is what makes the Top-10
+     fit phones at all and is documented as not-to-be-unified.) */
+  .catchup-card { flex-basis: 92px; }
+  .catchup-card-img { width: 92px; height: 129px; }
+  .catchup-card-title { font-size: 0.72rem; }
+  .catchup-sec-sub { margin-bottom: 8px; }
+}
+.catchup-rows { display: flex; flex-direction: column; gap: 7px; }
+.catchup-ping, .catchup-chip { display: flex; align-items: center; gap: 9px; width: 100%;
+  text-align: left; padding: 11px 14px; border-radius: 12px; cursor: pointer; color: #e9dbff;
   font: 500 0.86rem 'Montserrat', sans-serif; line-height: 1.45;
   background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(187, 134, 252, 0.32);
   border-left: 3px solid rgba(187, 134, 252, 0.5); }
-.catchup-ping:hover { background: rgba(187, 134, 252, 0.1); }
+.catchup-ping:hover, .catchup-chip:hover { background: rgba(187, 134, 252, 0.1); }
 .catchup-ping.is-blake { border-left: 3px solid rgba(255, 213, 74, 0.6); }   /* Blake-origin = his gold edge */
-.catchup-ping-go { margin-left: auto; color: #cbb0ff; font-size: 1.05em; }
-.catchup-chips { display: flex; gap: 9px; flex-wrap: wrap; }
-.catchup-chip { padding: 9px 17px; border-radius: 999px; cursor: pointer;
-  font: 600 0.84rem 'Montserrat', sans-serif; color: #f1e9ff;
-  background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.45); }
-.catchup-chip:hover { background: rgba(187, 134, 252, 0.2); }
+.catchup-row-icon { flex: 0 0 auto; font-size: 0.95em; }
+/* min-width:0 is what actually lets a long title ellipsize inside a grid column
+   — a flex child defaults to min-content and would otherwise force the column
+   wider than its track and blow the two-up layout apart. */
+.catchup-row-text { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.catchup-ping .catchup-row-text { white-space: normal; overflow: visible; }
+.catchup-row-go { margin-left: auto; flex: 0 0 auto; color: #cbb0ff; font-size: 1.05em; }
+.catchup-col-empty { margin: 4px 0 2px; color: #a294c4; font-size: 0.82rem; font-style: italic; }
 .catchup-empty { margin: 20px 0; text-align: center; color: #c4b2e4; font-style: italic; }
 .catchup-foot { padding: 14px 28px 22px; display: flex; justify-content: center; }
 .catchup-foot .welcome-enter { margin-top: 0; }

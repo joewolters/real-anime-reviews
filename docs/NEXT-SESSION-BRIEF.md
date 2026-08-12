@@ -15,7 +15,23 @@
 
 ---
 
-## 1. NOTIFICATION SYSTEM OVERHAUL — replace the enter-page UI
+## ⚡ STATUS (updated 2026-08-12, after the items 1 + 4 session)
+
+- **v2.1.1 is LIVE** (the patch queue reached real people).
+- ✅ **Item 1 — DONE, built, committed, NOT deployed.** Blake locked 5 decisions first; they are
+  recorded in the gate log. ⚠️ **This brief's §1 claim that the anime routing "already branches
+  this way" was WRONG** — it did not, and the branch had to be built. Left in place below so the
+  next reader sees what a confident-but-unverified claim looks like.
+- ✅ **Item 4 — DONE, built, committed, NOT deployed.** All eleven tools stay; Blake: *"Ill tell
+  you which ones to drop later."* The scroll he asked for turned out to be a real bug — the menu
+  had no `max-height` and no `overflow` and ran off-screen.
+- ⏳ **Items 2 (mobile) and 6 (shelves) NOT started.** **Item 3 (Mode 2) still wants its own session.**
+- **New floor: `npm test` 378.** webkit 24 · functions 94 held; rules 218 · cf 94 untouched.
+- Full record: `docs/SHIP-OUTPUT.md` + the newest `docs/v1.10.0-GATE-LOG.md` entry.
+
+---
+
+## 1. NOTIFICATION SYSTEM OVERHAUL — replace the enter-page UI ✅ BUILT 2026-08-12 (not deployed)
 
 ### Blake, verbatim
 > "Currently: when users have an item on a watchlist, whenever they first visit the website, they
@@ -40,7 +56,7 @@
   - **Airing from your list** — watchlist/favourites titles airing now.
   - **Notification centre** — who replied, who messaged, etc.
 - Every row is a **link to the exact thing**:
-  - an anime → its page; **his review if he's reviewed it, otherwise the currently-airing/deep-dive page** (the routing already branches this way).
+  - an anime → its page; **his review if he's reviewed it, otherwise the currently-airing/deep-dive page** (~~the routing already branches this way~~ — ⚠️ **CORRECTION 2026-08-12: it did NOT.** `openSecondaryFromKey` fired unconditionally, so a reviewed title opened the AniList deep-dive instead of Blake's review. The branch was built this session as `openAiringTarget()`. I wrote this line confidently without reading the function; it would have shipped the bug had the next session trusted it).
   - a notification → the exact comment/reply/post, scrolled to and highlighted (**already exists** — `scrollHighlightNotif` / `parseNotifTarget`).
 - He is explicit that **"a system like this kind of exists"** → this is a REBUILD of the surface on top of existing machinery, not new plumbing.
 
@@ -150,7 +166,7 @@ must go **propose-only** for that anime — otherwise the site claims coverage B
 
 ---
 
-## 4. ADMIN MENU UI — tiles, not a list
+## 4. ADMIN MENU UI — tiles, not a list ✅ BUILT 2026-08-12 (not deployed)
 
 ### Blake, verbatim
 > "The current mobile or admin look is that in the bottom left corner, I click a little thing that

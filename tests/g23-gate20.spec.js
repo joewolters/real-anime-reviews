@@ -92,19 +92,27 @@ test('gate 20 → A2: the LETTER ROOM wears the premium classes (the hero card i
   expect(m.cursor).toBe('pointer');
 });
 
-test('gate 20.5: the door carries the catch-up block but NO Surprise-me (Blake item 1)', async ({ page, request }) => {
+// REWRITTEN v2.2.0 item 4 (2026-08-12). This used to assert the door CARRIED
+// the catch-up strip. Blake: "I wanna completely get rid of that on both mobile
+// and PC." So it now pins the opposite — the door is a door, and the surface it
+// used to tease is reached by pressing Enter instead.
+test('v2.2.0 item 1: the door carries NO catch-up strip and no Surprise-me', async ({ page, request }) => {
   const html = await (await request.get('/index.html')).text();
   expect(html).not.toContain('id="welcome-surprise"');   // removed per Blake — the nav's Random is the one dice
-  expect(html).toContain('id="welcome-catchup"');
+  expect(html, 'the door strip is gone from the markup').not.toContain('id="welcome-catchup"');
+  const js = await (await request.get('/script.js')).text();
+  // the strip's whole machinery went with it — not just its markup
+  expect(js, 'the strip builder is gone').not.toContain('function catchupButton(');
+  expect(js, 'the strip host is gone').not.toContain('function catchupHost(');
+  // ...and Enter now routes through the gate that decides whether to show it
+  expect(js, 'Enter goes through enterDen').toContain('function enterDen(');
+  expect(js).toContain('enterBtn.addEventListener(\'click\', enterDen)');
+  // the door's CSS went too — a stale .welcome-catchup rule would be dead weight
+  const css = await (await request.get('/style.css')).text();
+  expect(css).not.toContain('.welcome-catchup-btn');
   await page.goto('/index.html');
-  const d = await page.evaluate(() => {
-    const el = document.createElement('div');
-    el.className = 'welcome-catchup'; el.setAttribute('hidden', '');
-    document.body.appendChild(el);
-    const v = getComputedStyle(el).display;
-    el.remove(); return v;
-  });
-  expect(d).toBe('none');
+  // the door itself still opens and still has its Enter button
+  expect(await page.locator('#welcome-enter').count()).toBe(1);
 });
 
 test('gate 20 (gold-flip): the secondary/<id> notif target parses and routes', async ({ page }) => {
