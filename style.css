@@ -894,6 +894,32 @@ body > header h1:hover {
    hover-scaled cards a little vertical room so they don't clip at the row edges. */
 .discover-results-grid { padding-top: 12px; padding-bottom: 12px; }
 
+/* ── v2.2.0 — THE HEADER SEARCH'S "NOT REVIEWED YET" SHELF.
+   <!-- author: Code | date: 2026-08-12 -->
+   Blake: the global search "should show animes that I haven't reviewed with the
+   proper headline ofc." His 44 render in the grid above; this is the second
+   shelf beneath them. Deliberately NOT gold and NOT the Discover hero slab —
+   gold marks what he has actually reviewed, and this is the opposite of that.
+   It reuses .discover-results-grid so the cards match Discover exactly. */
+.all-world { margin: 26px auto 8px; max-width: 1400px; padding: 0 20px; }
+.all-world[hidden] { display: none; }          /* the [hidden] twin — 6th scalp avoided */
+.all-world-head {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 14px 0 2px;
+  border-top: 1px solid rgba(187, 134, 252, 0.18);
+}
+.aw-kicker {
+  font: 800 0.9rem 'Montserrat', sans-serif; letter-spacing: 0.16em;
+  color: #f6efff; text-shadow: 0 0 14px rgba(187, 134, 252, 0.4);
+}
+.aw-kicker .jp-mini { font-size: 0.7rem; color: #d9c9ff; letter-spacing: 0.05em; }
+.aw-sub { margin: 0; color: #b8a8d8; font-size: 0.82rem; font-style: italic; }
+@media (max-width: 900px) {
+  .all-world { padding: 0 14px; margin-top: 18px; }
+  .aw-kicker { font-size: 0.8rem; }
+  .aw-sub { font-size: 0.75rem; }
+}
+
 /* Search */
 .discover-search-wrap {
     position: relative;
@@ -9046,7 +9072,14 @@ html.rar-welcome-pending::before {
   .catchup-card-title { font-size: 0.72rem; }
   .catchup-sec-sub { margin-bottom: 8px; }
 }
-.catchup-rows { display: flex; flex-direction: column; gap: 7px; }
+/* Blake, smoke 2026-08-12: "Make sure the watchlist is scrollable in case many
+   items are on a users list." Each panel's rows scroll INSIDE the panel, so a
+   long watchlist can never push the other panel — or the Step inside button —
+   off the surface. Capped per panel, not per sheet, so the two stay level. */
+.catchup-rows { display: flex; flex-direction: column; gap: 7px;
+  max-height: min(38vh, 300px); overflow-y: auto; overscroll-behavior: contain;
+  /* room for the scrollbar so it never sits on top of the › chevrons */
+  padding-right: 4px; }
 .catchup-ping, .catchup-chip { display: flex; align-items: center; gap: 9px; width: 100%;
   text-align: left; padding: 11px 14px; border-radius: 12px; cursor: pointer; color: #e9dbff;
   font: 500 0.86rem 'Montserrat', sans-serif; line-height: 1.45;

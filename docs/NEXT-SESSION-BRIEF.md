@@ -25,8 +25,10 @@
 - ✅ **Item 4 — DONE, built, committed, NOT deployed.** All eleven tools stay; Blake: *"Ill tell
   you which ones to drop later."* The scroll he asked for turned out to be a real bug — the menu
   had no `max-height` and no `overflow` and ran off-screen.
-- ⏳ **Items 2 (mobile) and 6 (shelves) NOT started.** **Item 3 (Mode 2) still wants its own session.**
-- **New floor: `npm test` 382.** webkit 24 · functions 94 held; rules 218 · cf 94 untouched.
+- ✅ **Item 2 (mobile) — DONE.** Rail cards had NO mobile override: fixed 200×581 at every width. Now 117×307, 3.06 visible, 36% of screen (was 69%). The `.spotlight-stack` 275px landmine is untouched and now test-guarded.
+- ✅ **Header search** now shows a NOT REVIEWED YET shelf (his mid-session ask).
+- ⏳ **Item 6 (shelves) NOT started.** **Item 3 (Mode 2) still wants its own session.**
+- **New floor: `npm test` 387.** webkit 24 · functions 94 held; rules 218 · cf 94 untouched.
 - Full record: `docs/SHIP-OUTPUT.md` + the newest `docs/v1.10.0-GATE-LOG.md` entry.
 
 ---
@@ -77,7 +79,7 @@
 
 ---
 
-## 2. MOBILE ENHANCEMENTS — the layout differs wildly per phone
+## 2. MOBILE ENHANCEMENTS — the layout differs wildly per phone ✅ BUILT 2026-08-12 (not deployed)
 
 ### Blake, verbatim
 > "(context: first and second image are from a pixel 10, 3rd image is from a razr flip 8, 4th is

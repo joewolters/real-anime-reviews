@@ -11170,11 +11170,89 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
     });
   }
 
+  // ── v2.2.0 — Blake, 2026-08-12: "The general search bar available everywhere
+  // (top right of the screen) if a user looks up an anime it should show animes
+  // that I haven't reviewed with the proper headline ofc."
+  // The header search used to stop at his 44. It now shows a SECOND shelf under
+  // his results with everything else that matches, using the SAME wider-world
+  // data and the SAME card as the Discover search — so the two surfaces can
+  // never disagree about what "not reviewed" means or how it looks.
+  let allWorldAbort = null;
+  let allWorldDebounce = null;
+  const AW_HEAD =
+    '<span class="aw-kicker">NOT REVIEWED YET <span class="jp-mini">未レビュー</span></span>'
+    + '<p class="aw-sub">Everything else out there matching your search.</p>';
+  function allWorldHost() {
+    let host = document.getElementById('all-world');
+    if (!host && cardContainer && cardContainer.parentNode) {
+      host = document.createElement('section');
+      host.id = 'all-world';
+      host.className = 'all-world';
+      host.hidden = true;
+      cardContainer.parentNode.insertBefore(host, cardContainer.nextSibling);
+    }
+    return host;
+  }
+  function clearAllWorld() {
+    if (allWorldDebounce) { clearTimeout(allWorldDebounce); allWorldDebounce = null; }
+    if (allWorldAbort) { try { allWorldAbort.abort(); } catch (_) {} allWorldAbort = null; }
+    const host = document.getElementById('all-world');
+    if (host) { host.hidden = true; host.innerHTML = ''; }
+  }
+  function renderAllWorld(term) {
+    const host = allWorldHost();
+    if (!host) return;
+    // ⚠️ AniList is 30 req/min — one fetch per keystroke would burn the quota the
+    // gems rail also shares. This waits LONGER than the 180ms grid debounce and
+    // aborts whatever is still in flight, so a fast typist costs one request.
+    if (allWorldDebounce) clearTimeout(allWorldDebounce);
+    allWorldDebounce = setTimeout(() => {
+      allWorldDebounce = null;
+      if (allWorldAbort) { try { allWorldAbort.abort(); } catch (_) {} }
+      const api = window.rarDiscovery;
+      if (!api || typeof api.searchDiscover !== 'function') { host.hidden = true; return; }
+      const ctrl = new AbortController();
+      allWorldAbort = ctrl;
+      host.hidden = false;
+      host.innerHTML = `<div class="all-world-head">${AW_HEAD}</div>`
+        + `<div class="discover-results-grid">${railSkeleton(4)}</div>`;
+      api.searchDiscover(term, ctrl.signal).then((results) => {
+        if (ctrl.signal.aborted || ctrl !== allWorldAbort) return;
+        // rankDiscoverResults splits his 44 (pinned) from everything else —
+        // reused so "not reviewed" has ONE definition across the whole site.
+        const split = rankDiscoverResults(Array.isArray(results) ? results : [], term) || {};
+        const outside = split.outside || [];
+        if (!outside.length) { host.hidden = true; host.innerHTML = ''; return; }
+        host.innerHTML = '';
+        const head = document.createElement('div');
+        head.className = 'all-world-head';
+        head.innerHTML = AW_HEAD;               // static markup, no interpolation
+        host.appendChild(head);
+        const grid = document.createElement('div');
+        grid.className = 'discover-results-grid';
+        outside.slice(0, 12).forEach((m) => {
+          const c = api.createDiscoveryCard && api.createDiscoveryCard(m);
+          if (c) grid.appendChild(c);
+        });
+        host.appendChild(grid);
+      }).catch(() => {
+        if (ctrl !== allWorldAbort) return;
+        // a dead network must never break the results he DOES have
+        host.hidden = true; host.innerHTML = '';
+      });
+    }, 420);
+  }
+
   function rerenderAll() {
     const f = readFilters();
     let base = (animeData || []).filter((a) => matchesFilters(a, f));
     const q = currentQuery();
     if (q) base = base.filter((a) => matchesSearch(a, q));
+
+    // ⚠️ BEFORE the no-match early-return below: "he hasn't reviewed it" is
+    // exactly the case where his 44 come back empty, and that is the search
+    // this feature exists for. Returning first would hide it precisely then.
+    if (q) renderAllWorld(q); else clearAllWorld();
 
     if (!base.length) {
       cardContainer.classList.remove("is-sparse");
@@ -11198,6 +11276,7 @@ function renderAvatarGridIntoModal(gridEl, currentUrl){
   }
 
   function showHome() {
+    clearAllWorld();                         // v2.2.0 — the wider-world shelf belongs to a live search only
     hideDiscover();                          // v1.8.4 gate 3 — leave Discover if active
     hideForYou();                            // v1.8.4 gate 4 — leave For You if active
     setActivePlace(denBtn);                  // v1.8.4 gate 5 — Den is the active place at home
@@ -12034,7 +12113,11 @@ function onScrollHeader() {
       if (catchupState.pings.length || catchupState.airing.length) {
         const airingRows = catchupState.airing.length
           ? '<div class="catchup-rows">'
-            + catchupState.airing.slice(0, 8).map((m, i) =>
+            // Blake's smoke: the panel scrolls now, so a big watchlist is no
+            // longer capped at what happens to fit — 8 → 24. (The lantern stays
+            // at 10 because the FETCH is 10; raising the slice there would
+            // promise rows that were never queried.)
+            + catchupState.airing.slice(0, 24).map((m, i) =>
                 `<button type="button" class="catchup-chip" data-air="${i}">`
                 + '<span class="catchup-row-icon" aria-hidden="true">📺</span>'
                 + `<span class="catchup-row-text">${esc(String(m.title?.english || m.title?.romaji || ('#' + m.id)).slice(0, 60))}</span>`

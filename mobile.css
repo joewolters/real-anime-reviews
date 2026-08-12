@@ -122,7 +122,121 @@ body > header h1{
   max-width: calc(100vw - 32px);   /* sub-320 guard only */
 }
 
-@media (max-width: 420px){
+/* ===== v2.2.0 item 2 — RAIL CARDS ON PHONES =====
+   Blake: "on the Google Pixel ten, the website looks shrunk, and you can
+   actually scroll and see several different entries instead of only, like, one
+   or two"  ·  "Its not just one large oversized card looking at me."
+
+   MEASURED BEFORE THE CHANGE: every rail card was a fixed **200×581 at EVERY
+   phone width** — there was no mobile override at all, so a 320px phone got the
+   identical card a 1440px desktop gets. 581px is 69% of an 844px screen for ONE
+   card, and only **1.44 (320px) to 1.99 (430px)** cards were visible. That is
+   his "one or two", exactly, and it is why the page felt oversized.
+
+   The clamp keeps ~2.5-2.8 cards in view across 320-430 while staying legible;
+   ~4 per screen (his desktop-width reference) would put the title at ~87px on a
+   390px phone, which is smaller than the text can carry.
+
+   ⚠️ THE LANDMINE, DELIBERATELY UNTOUCHED: `.spotlight-stack .card{width:275px}`
+   above is the CUTOVER-EVE fix that is the entire reason the Top-10 fits phones,
+   and CODE-HANDOFF says in terms: do not "unify" it back into a fluid rule.
+   Nothing here targets .spotlight-stack — these selectors are the RAILS only. */
+:root{
+  --m-rail-card: clamp(104px, 30vw, 128px);
+}
+#home-airing .card,
+#home-foryou .card,
+#discover-view .card,
+#for-you-view .card,
+.disc-skel{                       /* the skeleton matches, or it shifts on load */
+  width: var(--m-rail-card);
+  flex: 0 0 auto;
+}
+/* tighter rail gutter + less vertical padding — the 20px top/bottom was budgeted
+   for a desktop hover-scale that phones never trigger. */
+.discover-rail{
+  gap: 10px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+/* ⚠️ WIDTH ALONE DID NOT FIX IT — measured: 200×581 → 148×565, barely moved.
+   The poster is `aspect-ratio: 2/3`, so at 148px wide it is only ~222px tall;
+   the other ~343px was TEXT. `.card .info h3/p` are 1rem — sized for a 275px
+   desktop card — so on a narrow card the title wrapped to FIVE lines and the
+   card stayed two-thirds of the screen. That is the actual "oversized" bug.
+   Clamped to 3 title lines / 2 romaji lines: long names still read, but one
+   title can no longer set the height of the whole rail.
+   Scoped to the RAILS on purpose — the Top-10 spotlight keeps its full-size
+   text, because Blake's own reference screenshot shows that card large. */
+#home-airing .card .info,
+#home-foryou .card .info,
+#discover-view .card .info,
+#for-you-view .card .info{
+  padding: 7px 6px 8px;
+  min-height: 0;
+}
+#home-airing .card .info h3,
+#home-foryou .card .info h3,
+#discover-view .card .info h3,
+#for-you-view .card .info h3{
+  font-size: 0.74rem;
+  line-height: 1.22;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#home-airing .card .info p,
+#home-foryou .card .info p,
+#discover-view .card .info p,
+#for-you-view .card .info p{
+  font-size: 0.65rem;
+  line-height: 1.28;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#home-airing .card .info span,
+#home-foryou .card .info span,
+#discover-view .card .info span,
+#for-you-view .card .info span{
+  font-size: 0.7rem;
+}
+
+/* MEASURED DEFECT from shrinking the cards: the corner sticker is a fixed
+   0.6rem with 8px padding and 0.5px letter-spacing — it needed ~116px and a
+   117px card only offers ~101px, so "NOT REVIEWED" rendered as "NOT REVIEWE".
+   It shrinks with the card it sits on. (`white-space: nowrap` on .card-corner
+   means it can never wrap to a second line — it can only clip — so the size
+   has to come down rather than be left to reflow.) */
+#home-airing .card-corner,
+#home-foryou .card-corner,
+#discover-view .card-corner,
+#for-you-view .card-corner{
+  top: 6px;
+  left: 6px;
+  padding: 2px 5px;
+  gap: 3px;
+  font-size: 0.5rem;
+  letter-spacing: 0.2px;
+  max-width: calc(100% - 12px);
+}
+#home-airing .not-reviewed-badge .nr-eye,
+#home-foryou .not-reviewed-badge .nr-eye,
+#discover-view .not-reviewed-badge .nr-eye,
+#for-you-view .not-reviewed-badge .nr-eye{
+  font-size: 0.56rem;
+}
+
+/* The main catalog grid went to ONE column below 420px — a single card as wide
+   as the phone, which is the other half of "one large oversized card looking at
+   me". Two columns hold to 360px (≈174px per card at 390, the same size the
+   rails now use); one column only below that, where two would leave ~150px. */
+@media (max-width: 359px){
   .card-container{ grid-template-columns: 1fr; }
 }
 

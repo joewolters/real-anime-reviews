@@ -40,6 +40,35 @@ The notification and airing signals are asynchronous — auth plus two round-tri
 
 Two smaller things: the live badge counts (suggestions, reports, unread letters) survive the redesign and sit on the tile's first line, where a long description can't push them out of view; and the file's header comment had claimed the button was in the bottom-right corner ever since it moved to the left in v1.7.3 — he was right about the corner, the comment was wrong.
 
+
+## Your smoke feedback — both handled
+
+**"Make sure the watchlist is scrollable in case many items are on a users list."** Done. Each panel scrolls inside itself now, capped so the two stay level and a long watchlist can never push the other panel — or the Step inside button — off the page. The airing list also went from a maximum of 8 titles to 24. (The notifications side stays at 10, because 10 is what actually gets fetched; showing more would be promising rows nobody asked the server for.)
+
+**"admin mode panels look good"** — noted, nothing changed there.
+
+## Item 2 — the mobile enhancement
+
+**What was actually wrong, measured before touching anything:** every card in the Den's rails was a fixed **200 wide by 581 tall at every phone width**. There was no phone-specific rule at all — a 320px phone was handed the identical card a 1440px desktop gets. 581px is **69% of your screen for one card**, and only **1.4 to 2 cards** were ever in view. That is your "only, like, one or two", exactly.
+
+**The first fix didn't work, and only measuring showed it.** Making the card narrower (200→148) moved the height by 16px. The poster scales, but the *text* didn't: the title is sized for a wide desktop card, so on a narrow one it wrapped to **five lines** and the card stayed enormous. Capping the title at three lines is what actually fixed it.
+
+**Now, at your phone's width:** **117 × 307**, **3 cards in view**, **36% of the screen** instead of 69%. "See more in Discover" is visible without scrolling.
+
+**A defect the shrink created, and I caught it by looking at the result:** the "NOT REVIEWED" sticker is fixed-size and can't wrap, so on a smaller card it was rendering as "NOT REVIEWE". It scales with the card now — checked at 320, 360, 390 and 430.
+
+**The Top-10 is untouched, and now protected.** The 275px spotlight card is the fix that made the Top-10 fit phones at all, and the notes say plainly not to merge it back in. Nothing I added goes near it — and there's now a test that fails if anyone ever does.
+
+**Honest limit:** your reference screenshot shows about 4½ cards, but that image is a desktop-width page. Four cards on a real 390px phone means an 87px card — narrower than the title can be read at. Three is the most that stays legible; if you want them smaller still, say so and I'll take it further.
+
+## The header search
+
+**Your ask:** looking something up should show anime you *haven't* reviewed, with the proper headline.
+
+The global search stopped at your 44. Searching the wider world already existed — but only inside Discover. Now your results come first, and beneath them a second shelf headed **NOT REVIEWED YET 未レビュー** with everything else that matches, every card marked NOT REVIEWED.
+
+Two details worth knowing: it shows up **even when none of your 44 match** (that's the whole point — I verified it live on a title with zero catalog hits), and it waits a beat longer than the grid before calling out, because that service allows 30 requests a minute and the Hidden Gems rail shares the same budget. It uses the same data and the same card as Discover, so the two can never disagree about what "not reviewed" means. No gold on that shelf — gold is for what you've actually reviewed, and a test enforces it.
+
 ## What he should look at
 
 1. **Close the tab, reopen the site, press Enter.** If anything is waiting you should land on *While you were away* — new reviews across the top, airing on the left, your lantern on the right. Click a notification: it should take you to that exact comment and highlight it. Click an anime you've reviewed: **it should open your review**, not the airing page.
@@ -47,6 +76,8 @@ Two smaller things: the live badge counts (suggestions, reports, unread letters)
 3. **The door itself** — check there's no strip appearing on it a second after it opens, on both phone and desktop.
 4. **Admin menu on desktop.** It should open **centred in the middle of your screen**, eleven tiles all exactly the same size, and scroll. Tell me if any description is wrong about what its page does — those are my words, not yours.
 5. **Admin menu on your phone.** Still opens from the bottom-left corner there, two tiles across (one on the smallest phones), and scrolls.
+6. **The Den on your phone.** You should see about three cards across in AIRING NOW and be able to scroll them — not one filling the screen. The welcome door is deliberately unchanged.
+7. **Type an anime you haven't reviewed into the search box, top right.** Under your own results you should get **NOT REVIEWED YET** with cards from the wider world.
 
 ## Still open, still honestly labelled
 
@@ -58,7 +89,7 @@ Two smaller things: the live badge counts (suggestions, reports, unread letters)
 
 | track | floor | result |
 |---|---|---|
-| `npm test` | 368 → **382** | **382 pass, 0 fail** (14 new specs for this work) |
+| `npm test` | 368 → **387** | **387 pass, 0 fail** (19 new specs for this work) |
 | `test:webkit` | 24 | **24 pass** |
 | `test:functions` | 94 | **94 pass** |
 | `test:rules` | 218 | not affected — no rules touched |

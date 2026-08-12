@@ -218,6 +218,146 @@ test('item 1: the readiness gate always settles, so Enter can never hang', async
 });
 
 // ---------------------------------------------------------------------------
+// HEADER SEARCH — Blake, 2026-08-12: "The general search bar available
+// everywhere (top right of the screen) if a user looks up an anime it should
+// show animes that I haven't reviewed with the proper headline ofc."
+// ⚠️ searchDiscover is STUBBED here on purpose: live AniList is barred from the
+// deterministic suite (project rule), and a network-dependent assertion would
+// flake. The stub exercises the real render + the real ranking split.
+// ---------------------------------------------------------------------------
+
+const FAKE_MEDIA = (id, romaji) => ({
+  id, title: { romaji, english: romaji, native: romaji },
+  coverImage: { large: '', extraLarge: '' },
+  averageScore: 74, genres: ['Drama'], format: 'TV', seasonYear: 2026,
+  episodes: 12, status: 'FINISHED', description: 'x',
+});
+
+test('header search: a not-reviewed shelf appears under the results, with the headline', async ({ page }) => {
+  await noDoor(page);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto('/index.html');
+  await page.waitForFunction(() => !!window.rarDiscovery, null, { timeout: 20000 });
+
+  await page.evaluate(() => {
+    // ids far outside the catalog so the ranking split puts them in `outside`
+    window.rarDiscovery.searchDiscover = () => Promise.resolve([
+      { id: 999000001, title: { romaji: 'Zzz Test Alpha', english: 'Zzz Test Alpha' },
+        coverImage: { large: '' }, averageScore: 70, genres: ['Drama'], format: 'TV', seasonYear: 2026 },
+      { id: 999000002, title: { romaji: 'Zzz Test Beta', english: 'Zzz Test Beta' },
+        coverImage: { large: '' }, averageScore: 71, genres: ['Action'], format: 'TV', seasonYear: 2026 },
+    ]);
+  });
+
+  await page.fill('#site-search', 'zzz test');
+  await page.waitForSelector('#all-world:not([hidden]) .discover-results-grid .card', { timeout: 15000 });
+
+  const out = await page.evaluate(() => {
+    const host = document.getElementById('all-world');
+    return {
+      headline: host.querySelector('.aw-kicker').textContent.replace(/\s+/g, ' ').trim(),
+      sub: host.querySelector('.aw-sub').textContent.trim(),
+      cards: host.querySelectorAll('.card').length,
+      badges: host.querySelectorAll('.not-reviewed-badge').length,
+      goldPins: host.querySelectorAll('.blake-pin').length,
+    };
+  });
+
+  expect(out.headline, 'the "proper headline" he asked for').toContain('NOT REVIEWED YET');
+  expect(out.cards).toBeGreaterThan(0);
+  // every card on this shelf must WEAR the not-reviewed marking
+  expect(out.badges, 'each card is marked not reviewed').toBe(out.cards);
+  // PROTECT THE HEART: gold marks what Blake actually reviewed. Never here.
+  expect(out.goldPins, 'nothing on this shelf wears his gold pin').toBe(0);
+});
+
+test('header search: clearing the box removes the shelf', async ({ page }) => {
+  await noDoor(page);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto('/index.html');
+  await page.waitForFunction(() => !!window.rarDiscovery, null, { timeout: 20000 });
+  await page.evaluate(() => {
+    window.rarDiscovery.searchDiscover = () => Promise.resolve([
+      { id: 999000003, title: { romaji: 'Zzz Test Gamma', english: 'Zzz Test Gamma' },
+        coverImage: { large: '' }, averageScore: 70, genres: ['Drama'], format: 'TV', seasonYear: 2026 },
+    ]);
+  });
+  await page.fill('#site-search', 'zzz test');
+  await page.waitForSelector('#all-world:not([hidden]) .card', { timeout: 15000 });
+  await page.fill('#site-search', '');
+  await expect(page.locator('#all-world')).toBeHidden({ timeout: 10000 });
+});
+
+test('header search: the shelf ships its [hidden] twin', async ({ page }) => {
+  // the 6th scalp of the [hidden]-vs-author-display trap, pre-empted
+  await noDoor(page);
+  await page.goto('/index.html');
+  const d = await page.evaluate(() => {
+    const el = document.createElement('section');
+    el.className = 'all-world'; el.setAttribute('hidden', '');
+    document.body.appendChild(el);
+    const v = getComputedStyle(el).display;
+    el.remove(); return v;
+  });
+  expect(d).toBe('none');
+});
+
+// ---------------------------------------------------------------------------
+// ITEM 2 — mobile card sizing
+// Blake: "you can actually scroll and see several different entries instead of
+// only, like, one or two" · "Its not just one large oversized card looking at me."
+// MEASURED BEFORE: every rail card was a fixed 200×581 at EVERY phone width.
+// ---------------------------------------------------------------------------
+
+test('item 2: several rail cards fit on a phone, and none is oversized', async ({ page }) => {
+  await noDoor(page);
+  for (const [w, h] of [[430, 932], [390, 844], [375, 812], [360, 780], [320, 700]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto('/index.html');
+    await page.waitForSelector('#home-airing > *', { timeout: 25000 });
+    const m = await page.evaluate(() => {
+      const rail = document.querySelector('#home-airing');
+      const first = rail.children[0].getBoundingClientRect();
+      return {
+        cardW: Math.round(first.width),
+        cardH: Math.round(first.height),
+        visible: rail.getBoundingClientRect().width / first.width,
+        scrolls: rail.scrollWidth > rail.clientWidth,
+        vh: window.innerHeight,
+      };
+    });
+    // "several", not one or two. Before this change it was 1.44-1.99.
+    expect(m.visible, `more than two cards in view at ${w}px`).toBeGreaterThan(2.2);
+    expect(m.scrolls, `the rail scrolls at ${w}px`).toBe(true);
+    // "not one large oversized card": before, 581px of an 844px screen (69%).
+    expect(m.cardH / m.vh, `a card is well under half the screen at ${w}px`).toBeLessThan(0.55);
+    expect(m.cardW, `and narrower than the old fixed 200px at ${w}px`).toBeLessThan(180);
+  }
+});
+
+test('item 2 LANDMINE GUARD: the Top-10 spotlight card stays 275px on phones', async ({ page }) => {
+  // ⚠️ `.spotlight-stack .card { width: 275px }` in mobile.css is the CUTOVER-EVE
+  // fix that is the ENTIRE reason the Top-10 fits phones, and CODE-HANDOFF says
+  // in terms: do not "unify" it back into the fluid rule. The item-2 rail work
+  // deliberately did not touch it. This test exists so nobody can, by accident.
+  await noDoor(page);
+  for (const [w, h] of [[430, 932], [390, 844], [375, 812], [320, 700]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto('/index.html');
+    await page.waitForSelector('.spotlight-stack .card', { timeout: 25000 });
+    const m = await page.evaluate(() => ({
+      spotlight: Math.round(document.querySelector('.spotlight-stack .card').getBoundingClientRect().width),
+      docScrollW: document.documentElement.scrollWidth,
+      vw: document.documentElement.clientWidth,
+    }));
+    // 275 everywhere except the sub-320 guard (max-width: calc(100vw - 32px))
+    const expected = Math.min(275, w - 32);
+    expect(m.spotlight, `the Top-10 card holds its size at ${w}px`).toBe(expected);
+    expect(m.docScrollW, `and the page never scrolls sideways at ${w}px`).toBeLessThanOrEqual(m.vw);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // ITEM 4 — the admin tiles
 // ---------------------------------------------------------------------------
 
