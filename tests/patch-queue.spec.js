@@ -269,3 +269,97 @@ test('item 7: review rows carry their doc id, not just a dataset attribute', () 
   // have been permanently false and the whole override a no-op.
   has(read('script.js'), 'rows.push({ id: docSnap.id, li, createdAtMillis, score, rating, uid: d.uid });');
 });
+
+// ---------------------------------------------------------------------------
+// ITEM 6 — comment-list DIFF rendering (the oldest banked debt)
+// ---------------------------------------------------------------------------
+
+test('item 6: the snapshot handler no longer nukes the list or the listeners', () => {
+  const src = read('script.js');
+  const lo = src.indexOf('PATCH QUEUE item 6 — DIFF RENDERING');
+  expect(lo, 'the diff handler exists').toBeGreaterThan(-1);
+  const block = src.slice(lo, src.indexOf('if (countEl) countEl.textContent', lo));
+
+  // the three things it used to do to EVERY row on EVERY snapshot
+  lacks(block, "listEl.innerHTML = ''", 'the list is never wiped');
+  lacks(block, 'sweepReplies();', 'open reply panels are not swept on snapshot');
+  lacks(block, 'authorUnsubs.length = 0', 'listeners are not mass-killed per snapshot');
+
+  has(block, 'prev.sig === sig', 'unchanged rows are left alone');
+  has(block, 'rows.push(prev.row)');
+  has(block, 'newHost.replaceWith(oldHost)', 'an open reply panel is transplanted, not discarded');
+});
+
+test('item 6: the signature covers every field the row renders', () => {
+  // If commentItemEl renders a field the signature ignores, that field silently
+  // stops updating — the worst kind of bug this design can produce.
+  const src = read('script.js');
+  const sig = src.slice(src.indexOf('const rowSignature = (d) =>'),
+    src.indexOf('const rowSignature = (d) =>') + 800);
+  for (const field of ['text', 'likesCount', 'dislikesCount', 'pinned',
+    'displayName', 'photoURL', 'removed', 'imageRefs', 'editedAt']) {
+    has(sig, field, `signature must cover ${field}`);
+  }
+  has(sig, 'isAuthorGone(d)', 'and the item-7 tombstone');
+});
+
+test('REAL DOM: a half-typed reply survives the list reordering around it', async ({ page }) => {
+  // THE BUG, stated as a test. Someone else posts, the list re-sorts, and the
+  // reply you were halfway through writing must still be there — with the caret
+  // where you left it.
+  await page.addInitScript(() => { try { sessionStorage.setItem('rar:welcomed', '1'); } catch (e) {} });
+  await page.goto('/index.html');
+  await page.waitForFunction(() => !!window.rarCommentDiff, null, { timeout: 20000 });
+
+  const out = await page.evaluate(() => {
+    const { reorderListPreservingState } = window.rarCommentDiff;
+    const ul = document.createElement('ul');
+    ul.id = 'diff-harness';
+    document.body.appendChild(ul);
+
+    const rows = ['a', 'b', 'c'].map((id) => {
+      const li = document.createElement('li');
+      li.dataset.cid = id;
+      const ta = document.createElement('textarea');
+      ta.className = 'draft';
+      li.appendChild(ta);
+      ul.appendChild(li);
+      return li;
+    });
+
+    // member starts typing a reply on row "b" and leaves the caret mid-word
+    const draft = rows[1].querySelector('.draft');
+    draft.value = 'half a thought';
+    draft.focus();
+    draft.setSelectionRange(4, 4);
+
+    // somebody else posts: a new row arrives and the order changes
+    const fresh = document.createElement('li');
+    fresh.dataset.cid = 'new';
+    ul.appendChild(fresh);
+    const moved = reorderListPreservingState(ul, [fresh, rows[2], rows[1], rows[0]]);
+
+    const after = ul.querySelector('[data-cid="b"] .draft');
+    const res = {
+      moved,
+      sameNode: after === draft,
+      value: after.value,
+      focused: document.activeElement === after,
+      caret: after.selectionStart,
+      order: Array.from(ul.children).map((n) => n.dataset.cid),
+    };
+
+    // and a no-op reorder must not touch the DOM at all
+    res.noopReturnedFalse = reorderListPreservingState(ul, Array.from(ul.children));
+    ul.remove();
+    return res;
+  });
+
+  expect(out.moved, 'the reorder actually happened').toBe(true);
+  expect(out.sameNode, 'the SAME element survived — not a rebuilt clone').toBe(true);
+  expect(out.value, 'the half-typed reply is intact').toBe('half a thought');
+  expect(out.focused, 'and the member is still typing in it').toBe(true);
+  expect(out.caret, 'with the caret exactly where they left it').toBe(4);
+  expect(out.order).toEqual(['new', 'c', 'b', 'a']);
+  expect(out.noopReturnedFalse, 'an unchanged order touches nothing').toBe(false);
+});

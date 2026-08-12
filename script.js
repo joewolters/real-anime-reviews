@@ -1492,6 +1492,49 @@ function toMillis(ts) { return ts?.toMillis ? ts.toMillis() : (typeof ts === 'nu
 // mark, and the hub list filters `removed !== true` — using it here would hide
 // a thread that other members are still talking in, which is the exact harm
 // this rework exists to stop. Two marks, two sentences, one erasure.
+// =============================================================================
+// PATCH QUEUE item 6 — REORDER, NEVER REBUILD.
+// <!-- author: Code | date: 2026-08-12 -->
+// The comment list used to do `listEl.innerHTML = ''` on every snapshot, which
+// throws away every row. appendChild on an EXISTING node MOVES it and keeps its
+// state, so an open reply panel and a half-typed draft survive somebody else
+// posting — which is the whole bug.
+//
+// Two details that are easy to get wrong and both matter:
+//   • Moving a node blurs whatever is focused inside it. Fixing the lost draft
+//     while still kicking the caret out of the box mid-sentence is not a fix,
+//     so focus AND selection are restored around the move.
+//   • If the order hasn't changed, touch nothing at all. The common case — a
+//     vote count ticking somewhere in the room — should not move a single node.
+// Exposed for the spec (the lanternModel / rarStatsView precedent).
+// =============================================================================
+function reorderListPreservingState(listEl, wanted) {
+  if (!listEl) return false;
+  const current = Array.from(listEl.children);
+  const same = current.length === wanted.length && current.every((n, i) => n === wanted[i]);
+  if (same) return false;
+
+  const active = document.activeElement;
+  const keepFocus = active && listEl.contains(active) ? active : null;
+  const selStart = keepFocus && 'selectionStart' in keepFocus ? keepFocus.selectionStart : null;
+  const selEnd = keepFocus && 'selectionEnd' in keepFocus ? keepFocus.selectionEnd : null;
+
+  const frag = document.createDocumentFragment();
+  wanted.forEach((li) => frag.appendChild(li));   // moves, never clones
+  listEl.appendChild(frag);
+
+  if (keepFocus && keepFocus.isConnected) {
+    try {
+      keepFocus.focus({ preventScroll: true });
+      if (selStart != null && typeof keepFocus.setSelectionRange === 'function') {
+        keepFocus.setSelectionRange(selStart, selEnd);
+      }
+    } catch (_) {}
+  }
+  return true;
+}
+if (typeof window !== 'undefined') window.rarCommentDiff = { reorderListPreservingState };
+
 function isAuthorGone(d) { return !!(d && d.authorDeleted === true); }
 function authorGoneHtml() {
   return '<em class="rar-tombstone">[removed by the author]</em>';
@@ -4357,6 +4400,11 @@ function setVoteUI(li, value) {
   const authorUnsubs = [];
   const voteUnsubs = [];
 
+  // PATCH QUEUE item 6 — the row cache. cid -> { li, sig, unsubAuthor, unsubVote }.
+  // A row is only rebuilt when its DATA actually changed; otherwise its existing
+  // node (and everything living inside it) is reused untouched.
+  const rowById = new Map();
+
   let lastRows = [];
 
   // close any open reply-panel listeners (they live on .replies-host._unsub and
@@ -4387,8 +4435,7 @@ function setVoteUI(li, value) {
     // pinned comments always float to the top, regardless of sort mode (stable sort)
     sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
-    listEl.innerHTML = '';
-    sorted.forEach(r => listEl.appendChild(r.li));
+    reorderListPreservingState(listEl, sorted.map((r) => r.li));
   }
 
   const onSortChange = () => { renderRows(lastRows); };
@@ -4409,26 +4456,76 @@ function setVoteUI(li, value) {
   }) : null;
 
 
+  // ===========================================================================
+  // PATCH QUEUE item 6 — DIFF RENDERING (the oldest banked debt, since gate 4b).
+  // <!-- author: Code | date: 2026-08-12 -->
+  // This handler used to, on EVERY snapshot: kill every author + vote listener,
+  // sweep every open reply panel, rebuild every row from scratch, and wipe the
+  // list with innerHTML = ''. So anyone else posting a comment — or any vote
+  // landing anywhere in the room — destroyed YOUR half-typed reply and snapped
+  // YOUR open reply panel shut. That is the real user harm; the rest is cost.
+  //
+  // Now: reconcile. A row is rebuilt ONLY when its own data changed, judged by a
+  // signature over every field that renders. Unchanged rows keep their node,
+  // their listeners, and everything the member has going on inside them.
+  //
+  // Three things this also stops paying for on every snapshot: a getCountFromServer
+  // read PER COMMENT, and a fresh author + vote subscription per comment.
+  // ===========================================================================
+
+  // Everything that can change what a row LOOKS like. If two snapshots agree on
+  // this string, the rendered row is identical and must not be touched.
+  // ⚠️ Add a field here whenever commentItemEl starts rendering a new one, or
+  // that field will silently stop updating.
+  const rowSignature = (d) => [
+    d.text || '',
+    (typeof d.likesCount === 'number' ? d.likesCount : 0),
+    (typeof d.dislikesCount === 'number' ? d.dislikesCount : 0),
+    d.pinned === true ? 1 : 0,
+    d.displayName || '',
+    d.photoURL || '',
+    d.removed === true ? 1 : 0,
+    isAuthorGone(d) ? 1 : 0,
+    Array.isArray(d.imageRefs) ? d.imageRefs.join('') : '',
+    d.editedAt && d.editedAt.toMillis ? d.editedAt.toMillis() : '',
+  ].join('');
+
+  // Kill one row's live subscriptions + any reply panel it has open.
+  const disposeRow = (entry) => {
+    if (!entry) return;
+    try { if (entry.unsubAuthor) entry.unsubAuthor(); } catch (_) {}
+    try { if (entry.unsubVote) entry.unsubVote(); } catch (_) {}
+    try {
+      entry.li.querySelectorAll('.replies-host').forEach((h) => {
+        if (h._unsub) { try { h._unsub(); } catch (_) {} h._unsub = null; }
+        if (h._voteUnsubs) { try { h._voteUnsubs.forEach((fn) => fn && fn()); } catch (_) {} h._voteUnsubs = null; }
+      });
+    } catch (_) {}
+  };
+
   const unsubMain = onSnapshot(qref, (snap) => {
-    // stop previous per-author listeners
-    try { authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
-    authorUnsubs.length = 0;
-
-    // stop previous per-vote listeners
-    try { voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
-    voteUnsubs.length = 0;
-
-    // close any open reply-panel listeners before the list is rebuilt
-    sweepReplies();
-
     const rows = [];
     let n = 0;
+    const seen = new Set();
 
     const user = auth.currentUser;
 
     snap.forEach((docSnap) => {
       n++;
       const d = docSnap.data();
+      const cid = docSnap.id;
+      seen.add(cid);
+
+      const sig = rowSignature(d);
+      const prev = rowById.get(cid);
+
+      // THE WHOLE POINT: nothing about this row changed, so leave it completely
+      // alone — its open reply panel, its half-typed draft, its listeners and
+      // its already-fetched reply count all survive untouched.
+      if (prev && prev.sig === sig) {
+        rows.push(prev.row);
+        return;
+      }
 
       const createdAtMillis = d.createdAt?.toMillis
         ? d.createdAt.toMillis()
@@ -4453,11 +4550,16 @@ function setVoteUI(li, value) {
         authorDeleted: isAuthorGone(d),                           // PART A item 7
       });
 
+      // PATCH QUEUE item 6 — hoisted: the ROW owns these now (they used to be
+      // pushed into a per-surface array and mass-killed on every snapshot).
+      let unsubAuthor = null;
+      let unsubVote = null;
+
       // live author identity — gate 15: profiles-first, users-fallback
       if (d && d.uid) {
         const nameLink = li.querySelector('.name');
         if (nameLink) { nameLink.classList.add('rar-name-link'); nameLink.setAttribute('data-profile-uid', d.uid); nameLink.setAttribute('role', 'link'); nameLink.setAttribute('tabindex', '0'); }
-        const unsubAuthor = authorLiveSub(d.uid, (a) => {
+        unsubAuthor = authorLiveSub(d.uid, (a) => {
           const u = { username: a.name, photoURL: a.photo };
 
           const nameEl = li.querySelector('.name');
@@ -4476,18 +4578,16 @@ function setVoteUI(li, value) {
             }
           }
         });
-        authorUnsubs.push(unsubAuthor);
       }
 
       // live vote state (current user only)
       setVoteUI(li, 0);
       if (user && user.uid) {
         const vref = doc(db, 'comments', s, 'items', docSnap.id, 'votes', user.uid);
-        const unsubVote = onSnapshot(vref, (vs) => {
+        unsubVote = onSnapshot(vref, (vs) => {
           const val = (vs.exists() && typeof vs.data()?.value === 'number') ? vs.data().value : 0;
           setVoteUI(li, val);
         });
-        voteUnsubs.push(unsubVote);
       }
 
       // up-front reply count so the toggle reads "💬 N replies" BEFORE opening
@@ -4501,8 +4601,32 @@ function setVoteUI(li, value) {
         } catch (_) {}
       })();
 
-      rows.push({ li, createdAtMillis, likesCount, dislikesCount, pinned });
+      // A rebuild would throw away an OPEN reply panel that this member may be
+      // typing in right now. Transplant it instead: same element, same DOM
+      // state, same live subscription, new parent row.
+      if (prev) {
+        const oldHost = prev.li.querySelector(':scope > .bubble > .replies-host');
+        const newHost = li.querySelector(':scope > .bubble > .replies-host');
+        if (oldHost && newHost && (oldHost._unsub || oldHost.childNodes.length)) {
+          newHost.replaceWith(oldHost);
+        }
+        try { if (prev.unsubAuthor) prev.unsubAuthor(); } catch (_) {}
+        try { if (prev.unsubVote) prev.unsubVote(); } catch (_) {}
+        if (prev.li.isConnected) prev.li.replaceWith(li);
+      }
+
+      const row = { li, createdAtMillis, likesCount, dislikesCount, pinned };
+      rowById.set(cid, { li, sig, row, unsubAuthor, unsubVote });
+      rows.push(row);
     });
+
+    // rows that left the room: unsubscribe, close their panels, drop the node
+    for (const [cid, entry] of Array.from(rowById)) {
+      if (seen.has(cid)) continue;
+      disposeRow(entry);
+      try { entry.li.remove(); } catch (_) {}
+      rowById.delete(cid);
+    }
 
     lastRows = rows;
     renderRows(lastRows);
@@ -4513,6 +4637,13 @@ function setVoteUI(li, value) {
   return () => {
     try { unsubMain(); } catch (_) {}
     // (the branded select has no listener to remove — it dies with the markup)
+    // PATCH QUEUE item 6 — every live subscription now hangs off its ROW, so
+    // teardown walks the row cache. The old per-surface arrays are KEPT (now
+    // empty) rather than deleted: the round-3 adversarial HIGH they exist for —
+    // one room's teardown killing the OTHER room's listeners — is exactly the
+    // class this change must not reintroduce.
+    try { rowById.forEach((entry) => disposeRow(entry)); } catch (_) {}
+    rowById.clear();
     try { authorUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     try { voteUnsubs.forEach(fn => fn && fn()); } catch(_) {}
     sweepReplies();
