@@ -27,18 +27,18 @@ import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebas
 
 // (?v= wired at the v1.10.0 cutover — these once-bare imports cache-bust now;
 // bump-version.js carries the import targets.)
-import { initLantern } from './lantern.js?v=2.1.0';
+import { initLantern } from './lantern.js?v=2.1.1';
 // round 2 — the ONE consent implementation (shared with script.js): the
 // account page accepts the community rules IN PLACE (Blake: "its dumb for
 // users to have to go comment to accept the terms").
-import { ensureConsent, peekConsent } from './consent.js?v=2.1.0';
-import { openCropper } from './cropper.js?v=2.1.0';   // round 4 — frame-it crop/reposition (item 2)
+import { ensureConsent, peekConsent } from './consent.js?v=2.1.1';
+import { openCropper } from './cropper.js?v=2.1.1';   // round 4 — frame-it crop/reposition (item 2)
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.1.0';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.1.1';
 // mega-run C3 — Constellation Wrapped (the member's year as a star map; lazy)
-import { initWrapped } from './wrapped.js?v=2.1.0';
+import { initWrapped } from './wrapped.js?v=2.1.1';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with script.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.1.0';
+import { initNavDrawer } from './nav-drawer.js?v=2.1.1';
 initNavDrawer();   // inert ≥1201; owns the ≤1200 drawer (same ids as index)
 
 

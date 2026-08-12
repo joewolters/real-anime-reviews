@@ -20,6 +20,17 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-08-12 -->
+## v2.1.1 — PATCH (2026-08-12)
+
+**Your half-written reply stops disappearing.** Until now, every time anything changed in a comment section — someone posting, someone voting, a sort changing — the whole list was thrown away and rebuilt. So if you were partway through writing a reply and somebody else commented, your text vanished and your open reply panel snapped shut. The list now updates only the rows that actually changed and leaves everything else exactly where it was, including whatever you're typing and where your cursor is.
+
+**The search box has its ✕ back.** The header search filters as you type, and an earlier change had removed the only way to clear it without selecting the text and deleting it. It's there again whenever there's something to clear — and deliberately stays out of the way on the narrowest phones, where the box needs every pixel for your actual words.
+
+**Smaller things.** Review notifications now find their target even when a rating filter is hiding it. Behind the scenes, two admin pages that had grown their own private copies of the same pop-up dialog now share one, and the admin menu shows counts for new suggestions, open reports and unread letters.
+
+---
+
 <!-- author: Code | date: 2026-08-10 -->
 ## v2.1.0 — MINOR (2026-08-10)
 

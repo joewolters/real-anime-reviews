@@ -24,7 +24,7 @@ import { collection, query, orderBy, getDocs, getDoc, doc, setDoc, updateDoc, de
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
 import { ref as storRef, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js'; // gate 14 — image-report previews
-import { confirmModal, noticeModal } from './admin-modals.js?v=2.1.0';   // PATCH QUEUE 2 — the shared dialogs
+import { confirmModal, noticeModal } from './admin-modals.js?v=2.1.1';   // PATCH QUEUE 2 — the shared dialogs
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 
