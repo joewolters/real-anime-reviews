@@ -30,7 +30,7 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/fi
 import { collection, query, orderBy, getDoc, getDocs, doc, updateDoc, deleteDoc, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
-import { confirmModal, noticeModal } from './admin-modals.js?v=2.1.1';   // PATCH QUEUE 2 — the shared dialogs
+import { confirmModal, noticeModal } from './admin-modals.js?v=2.2.0';   // PATCH QUEUE 2 — the shared dialogs
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const SKELETON_COUNT = 3;

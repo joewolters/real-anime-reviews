@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="2.1.1"</script>
+  <script>window.APP_VERSION="2.2.0"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -59,10 +59,10 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=2.1.1">
-  <link rel="stylesheet" href="mobile.css?v=2.1.1" media="(max-width: 900px)">
-  <link rel="stylesheet" href="frames.css?v=2.1.1">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
-  <link rel="stylesheet" href="admin-fab.css?v=2.1.1">
+  <link rel="stylesheet" href="style.css?v=2.2.0">
+  <link rel="stylesheet" href="mobile.css?v=2.2.0" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=2.2.0">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
+  <link rel="stylesheet" href="admin-fab.css?v=2.2.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -267,11 +267,25 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v2.1.1</span>
-     Hotfix
+      <span class="changelog-tag" id="changelog-version">v2.2.0</span>
+     Feature Update
     </div>
 
     <div class="changelog-content">
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v2.2.0</span></div>
+          <span class="vs-tier">Feature Update</span>
+          <div class="version-header">08/12/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li><strong>&ldquo;While you were away.&rdquo;</strong> The welcome door used to interrupt itself a second after opening with a strip of what you&rsquo;d missed. That&rsquo;s gone. Press <em>Enter</em> and you land on a proper page instead: what&rsquo;s airing from your watchlist on one side, who replied to you and who wrote to you on the other, and anything newly reviewed across the top. Every row takes you to that exact anime or that exact comment. If nothing&rsquo;s waiting, you go straight in &mdash; no page telling you there&rsquo;s nothing.</li>
+          <li><strong>An anime you&rsquo;ve been shown now opens the right page.</strong> Clicking a title from your airing list takes you to the full review when there is one, and to the currently-airing page when there isn&rsquo;t. It used to always do the second.</li>
+          <li><strong>Phones show more, not less.</strong> Cards in the rails were the same fixed size on a phone as on a desktop monitor &mdash; one card could take up two thirds of your screen, and you&rsquo;d see one or two. They&rsquo;re now sized for the screen they&rsquo;re actually on, so several fit and scroll. The Top&nbsp;10 keeps its full-size card.</li>
+          <li><strong>Search reaches past the reviews.</strong> Look something up in the box at the top and the reviews come first, then everything else that matches underneath, under <em>Not reviewed yet</em>. It works even when nothing here matches at all &mdash; which is exactly when you needed it.</li>
+          <li>Behind the scenes: the admin menu is a grid of tiles that scrolls instead of a list that ran off the top of the screen.</li>
+        </ul>
+      </div>
       <div class="version-section" data-tier="hotfix">
         <div class="vs-head">
           <div class="version-chips"><span class="version-chip">v2.1.1</span></div>

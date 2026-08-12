@@ -21,6 +21,21 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-12 -->
+## v2.2.0 — MINOR (2026-08-12)
+
+**"While you were away."** The welcome door used to interrupt itself: a second or so after it opened, a strip appeared over it listing what you'd missed. That's gone entirely, on phones and on desktop. Press *Enter* and you land on a proper page instead — what's airing from your watchlist on one side, who replied to you and who wrote to you on the other, and anything newly reviewed across the top. Every row goes to that exact anime or that exact comment, scrolled to and highlighted. If nothing is waiting for you, the page doesn't appear at all and you go straight in; nobody gets made to click through a screen telling them there's nothing.
+
+**An anime from your list opens the right page now.** Clicking a title in that airing list takes you to the full review when one exists, and to the currently-airing page when it doesn't. Until now it always did the second — so a title that *had* been reviewed still sent you to the generic page instead of the review.
+
+**Phones show more, not less.** Every card in the home rails was a fixed size — the same card on a 320px phone as on a 1440px monitor. That meant one card could occupy about two thirds of the screen and you'd see one or two at a time. Cards are now sized for the screen they're on, so several fit and scroll, and long titles no longer stretch a card to five lines. The Top-10 spotlight deliberately keeps its full-size card.
+
+**Search reaches past the reviews.** Looking something up in the box at the top used to search the reviews here and stop. Now the reviews come first and everything else that matches follows underneath, under *Not reviewed yet*, each clearly marked. It appears even when nothing here matches at all — which is precisely the search where it was missing.
+
+**Admin.** The admin menu is a scrolling grid of tiles, each with a short line saying what it does, centred on the screen on desktop. It had no height limit before, so at eleven tools it ran off the top of the screen — and every tool added made that worse.
+
+---
+
+<!-- author: Code | date: 2026-08-12 -->
 ## v2.1.1 — PATCH (2026-08-12)
 
 **Your half-written reply stops disappearing.** Until now, every time anything changed in a comment section — someone posting, someone voting, a sort changing — the whole list was thrown away and rebuilt. So if you were partway through writing a reply and somebody else commented, your text vanished and your open reply panel snapped shut. The list now updates only the rows that actually changed and leaves everything else exactly where it was, including whatever you're typing and where your cursor is.
