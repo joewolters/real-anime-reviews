@@ -79,24 +79,46 @@
   "so switched together" reads as *squished/crammed*, i.e. cards too large for the space.
 - Net: on phones, the card rails should fit **more entries per screen**.
 
-### ⚠️ Do NOT start this without answering the questions below
-The five screenshots are at different capture scales, so I **cannot** tell from them alone whether
-the Pixel 10 is genuinely rendering a narrower CSS layout or whether that browser is in
-**"Desktop site" mode** (which would explain "looks shrunk" exactly). Guessing here would mean
-rebuilding the phone layout against a target that isn't real.
+### Blake's clarification (2026-08-12), verbatim
+> "Not sure... But no matter what I like the view he has. Its not just one large oversized card
+> looking at me."
+> "Whatever achieves that look I gave you."
+
+### ✅ UNBLOCKED — this is now Code's problem, not Blake's
+He does not know whether the Pixel is in Desktop-site mode and **has explicitly delegated the
+means**: match the LOOK, by whatever route achieves it. So do not go back to him with the
+Desktop-mode question — go and measure.
+
+**What the screenshots actually imply (my analysis, to save the next session the work):** the Pixel
+capture shows roughly **five cards across**; the iPhone 15 shows two or three, much larger. Mobile
+cards are ~275px wide, so five-across cannot be a ~412px phone viewport — the Pixel shot is almost
+certainly rendering at a **desktop-width viewport** (Desktop-site mode or a full-page capture).
+Which means the honest translation of his ask is:
+
+> **On phones, the cards are too big. Shrink them so several fit and the rail scrolls, instead of
+> one oversized card filling the screen.**
+
+That is achievable without desktop mode and without him changing a browser setting.
+
+### ⚠️ The landmine in this item
+`mobile.css`'s `.spotlight-stack .card { width: 275px }` is **the fix that made the Top-10 fit
+phones at all** (PART A item 4), and CODE-HANDOFF says in terms: *don't "unify" it back into the
+fluid grid rule.* Any card-size change here is touching hard-won ground — **measure at 320 / 360 /
+375 / 390 / 430 before and after**, and keep the WebKit track (24 tests) green.
 
 ⚠️ Also relevant: PART A item 4 re-budgeted the header to the pixel for ≤400px, and the WebKit
 track (24 tests, 3 iPhone sizes) pins tap targets, the 16px input floor and every header control
 being on-screen. Any card-size change must keep those green — and the 44px tap-target floor and
 16px-input rule (which stops iOS zooming the page) are **not** negotiable for aesthetics.
 
-### Open questions for Blake
-1. **Is the Pixel 10's Chrome set to "Desktop site"?** (Menu → tick "Desktop site".) This is the
-   single most important question — it decides whether this is a CSS job or a non-issue.
-2. When you say the Pixel looks right — do you mean **more cards per row**, or **the same rail with
-   smaller cards you scroll through faster**?
-3. The Razr Flip 8 — is that screenshot the phone **folded (cover screen)** or **unfolded**?
-4. Is it just the **card rails**, or does everything (headings, spacing, text) need to come down a size?
+### Remaining open question (minor, does not block)
+- The Razr Flip 8 shot — **folded (cover screen) or unfolded?** Affects which width to target for
+  that device specifically. Everything else can proceed without him.
+
+### The acceptance test, in his words
+> "Its not just one large oversized card looking at me."
+
+If a phone screenshot still shows one oversized card filling the view, it isn't done.
 
 ---
 
@@ -160,6 +182,34 @@ must go **propose-only** for that anime — otherwise the site claims coverage B
 1. All **eleven** tools stay, or should some be dropped/merged?
 2. Tiles on **desktop too**, or is this a mobile-only complaint?
 3. Do you want **icons** on the tiles, or text only?
+
+---
+
+## 6. SHELF BUILDING — autopopulate from what they've already watched
+
+### Blake, verbatim (2026-08-12)
+> "Watchlist tracker needs to autopopulic FIRSTly with things the user has either watched or
+> already reviewed when building shelves. it makes the most logical sense."
+
+### My reading
+When a member is **building a shelf** (the collection add-picker), it should lead with the titles
+they have **already watched or already reviewed** — not open cold on the whole catalog. Their own
+history is the most likely source of what they want on a shelf, so it goes first.
+
+### My reading of the ordering (confirm before building)
+1. Anime they have **reviewed** (strongest signal — they finished it and had opinions)
+2. Anime on their **watchlist / marked watched**
+3. Everything else / free search (today's behaviour)
+
+### Why this matters more than it looks
+This is **the same seam as item 5's sync**. If AniList linking ever lands, "things you've watched"
+stops being just this site's watchlist and becomes their real completed list — and this picker is
+exactly where the research says it should surface ("12 completed titles from your AniList — add any
+to a shelf?"). **Build the picker so its source list is swappable**, and the sync feature later
+plugs straight in instead of needing a second picker.
+
+### Code touchpoint
+`account.js` — the collections add-picker (`.col-adder` / `col-adder-list`, style.css ~10703).
 
 ---
 
