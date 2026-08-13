@@ -1400,11 +1400,75 @@ function colSafeCover(src) {
 function colId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
 // candidates for the add-picker: Blake's catalog + the user's saved entries
+// ── v2.2.2 BANKED ITEM 6 — WHAT THE SHELF PICKER LEADS WITH ──────────────────
+// <!-- author: Code | date: 2026-08-12 -->
+// Blake: "Watchlist tracker needs to autopopulic FIRSTly with things the user
+// has either watched or already reviewed when building shelves. it makes the
+// most logical sense."
+//
+// ⚠️ A SOURCE REGISTRY, not a hard-coded order — and that is the point of the
+// design, not decoration. The brief is explicit that this is the SAME SEAM as
+// the streaming-sync work: the day "things you've watched" stops meaning this
+// site's watchlist and starts meaning a real completed list from AniList, that
+// is ONE more entry in this array. Not a second picker, not a second ordering,
+// not a second definition of "watched". Array order IS priority order.
+const COL_SOURCES = [
+  // strongest signal first: they finished it AND had opinions about it
+  { key: 'reviewed', label: 'Anime you’ve reviewed', jp: '感想' },
+  { key: 'saved',    label: 'On your lists',         jp: '棚' },
+  { key: 'catalog',  label: 'Reviewed on this site', jp: '図書' },
+  // ← a future { key: 'synced', label: 'Finished on AniList', jp: '同期' }
+  //   drops in HERE and needs no other change in this file.
+];
+const COL_SOURCE_RANK = new Map(COL_SOURCES.map((s, i) => [s.key, i]));
+
+// Their own reviews live in the `items` collection-group. Loaded once per page,
+// cached, and NEVER blocking: the picker paints instantly from what it already
+// has and repaints if this lands afterwards.
+let colReviewedRows = [];
+let colReviewedLoaded = false;
+let colReviewedPromise = null;
+function loadColReviewed(uid) {
+  if (colReviewedPromise) return colReviewedPromise;
+  colReviewedPromise = (async () => {
+    try {
+      // ⚠️ the `items` CG carries reviews AND comments, so a small limit would
+      // mostly return comments and quietly starve this list (the same trap the
+      // featured-review picker documents). Ask for plenty, then filter.
+      const snap = await getDocs(query(collectionGroup(db, 'items'),
+        where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(200)));
+      const seen = new Map();
+      snap.forEach((d) => {
+        if (!d.ref.path.startsWith('reviews/')) return;
+        const v = d.data() || {};
+        if (v.removed) return;
+        const key = d.ref.path.split('/')[1] || '';
+        if (!key || seen.has(key)) return;
+        seen.set(key, {
+          animeId: String(key).slice(0, 130),
+          title: String(titleById.get(key) || (key.indexOf('al:') === 0 ? 'A season' : key.replace(/-/g, ' '))).slice(0, 120),
+          coverImage: '',
+          src: 'reviewed',
+        });
+      });
+      colReviewedRows = Array.from(seen.values());
+    } catch (_) {
+      // a failed read must never empty the picker — it just means this tier is
+      // absent, and the others still carry it.
+      colReviewedRows = [];
+    }
+    colReviewedLoaded = true;
+    return colReviewedRows;
+  })();
+  return colReviewedPromise;
+}
+
 function colCandidates() {
-  // gate 20 (item 6): the user's OWN saves lead the list (Blake: "should also
-  // include anime that they've already added to their favorites or watchlist
-  // not just my reviewed list"); the 44 follow.
   const out = new Map();
+  // 1 — reviewed by them (strongest signal; may be empty until the load lands)
+  colReviewedRows.forEach((r) => { if (!out.has(r.animeId)) out.set(r.animeId, r); });
+  // 2 — their own saves (Blake, gate 20: "anime that they've already added to
+  //     their favorites or watchlist not just my reviewed list")
   ['watchlist', 'favorites'].forEach((kind) => {
     (savedView[kind].items || []).forEach((it) => {
       if (!out.has(it.animeId)) out.set(it.animeId, {
@@ -1415,15 +1479,38 @@ function colCandidates() {
       });
     });
   });
+  // 3 — everything reviewed on the site
   const arr = (window.__ANIME_DATA__ && Array.isArray(window.__ANIME_DATA__)) ? window.__ANIME_DATA__ : [];
   arr.forEach((a) => {
     const t = a?.Title; if (!t) return;
     const id = slugFromTitle(t); if (!id) return;
     if (!out.has(id)) out.set(id, { animeId: id, title: String(t).slice(0, 120), coverImage: a.image ? 'assets/' + String(a.image) : '', src: 'catalog' });
   });
-  const rows = Array.from(out.values());
-  rows.sort((a, b) => (a.src === b.src ? a.title.localeCompare(b.title) : (a.src === 'saved' ? -1 : 1)));
+  // a title they reviewed carries no cover of its own — borrow the catalog's so
+  // the top group isn't a column of grey placeholders.
+  const covers = new Map(arr.map((a) => [slugFromTitle(a?.Title || ''), a?.image ? 'assets/' + String(a.image) : '']));
+  const rows = Array.from(out.values()).map((r) => (
+    (!r.coverImage && covers.get(r.animeId)) ? { ...r, coverImage: covers.get(r.animeId) } : r));
+  rows.sort((a, b) => {
+    const ra = COL_SOURCE_RANK.has(a.src) ? COL_SOURCE_RANK.get(a.src) : 99;
+    const rb = COL_SOURCE_RANK.has(b.src) ? COL_SOURCE_RANK.get(b.src) : 99;
+    return ra === rb ? a.title.localeCompare(b.title) : ra - rb;
+  });
   return rows;
+}
+
+// Exposed for the spec (the lanternModel / rarFabBadges / rarCatchup precedent).
+// The picker itself needs a signed-in session and live Firestore, which a
+// deterministic run cannot have — but the ORDERING is the promise item 6 makes,
+// and that is pure logic. The seed hook exists so the reviewed tier (the only
+// one that comes over the network) can be exercised without an account.
+if (typeof window !== 'undefined') {
+  window.rarShelfSources = {
+    list: COL_SOURCES,
+    rank: COL_SOURCE_RANK,
+    candidates: () => colCandidates(),
+    _seedReviewed: (rows) => { colReviewedRows = rows || []; colReviewedLoaded = true; },
+  };
 }
 
 async function colWrite(uid, id, data) {
@@ -1447,7 +1534,7 @@ function openColAdder(uid, col) {
   document.body.appendChild(overlay);
   const listEl = overlay.querySelector('.col-adder-list');
   const searchEl = overlay.querySelector('.col-adder-search');
-  const all = colCandidates();
+  let closed = false;
   let extRows = [];        // live wider-world results for the current needle
   let extAbort = null;
   let extTimer = null;
@@ -1483,12 +1570,29 @@ function openColAdder(uid, col) {
   const paint = (q) => {
     const needle = String(q || '').toLowerCase();
     listEl.innerHTML = '';
-    const locals = all.filter((c) => !existing.has(c.animeId) && (!needle || c.title.toLowerCase().includes(needle))).slice(0, 60);
-    if (locals.length) {
-      listEl.appendChild(group("Your lists & the site's reviews", '棚'));
-      locals.forEach((c) => listEl.appendChild(rowFor(c)));
+    // item 6: the tiers render as SEPARATE groups in registry order, so what
+    // they have already watched or reviewed is visibly first rather than merely
+    // sorted first inside one undifferentiated list.
+    const rows = colCandidates();
+    const locals = rows.filter((c) => !existing.has(c.animeId) && (!needle || c.title.toLowerCase().includes(needle)));
+    let shown = 0;
+    COL_SOURCES.forEach((srcDef) => {
+      if (shown >= 60) return;
+      const mine = locals.filter((c) => c.src === srcDef.key).slice(0, 60 - shown);
+      if (!mine.length) return;
+      listEl.appendChild(group(srcDef.label, srcDef.jp));
+      mine.forEach((c) => listEl.appendChild(rowFor(c)));
+      shown += mine.length;
+    });
+    // anything from a source not in the registry still gets shown rather than
+    // silently dropped (a new source that forgets to register is a bug, but a
+    // vanished title is a worse one).
+    const orphans = locals.filter((c) => !COL_SOURCE_RANK.has(c.src)).slice(0, Math.max(0, 60 - shown));
+    if (orphans.length) {
+      listEl.appendChild(group('More', '他'));
+      orphans.forEach((c) => listEl.appendChild(rowFor(c)));
     }
-    const ext = extRows.filter((c) => !existing.has(c.animeId) && !all.some((l) => l.animeId === c.animeId));
+    const ext = extRows.filter((c) => !existing.has(c.animeId) && !rows.some((l) => l.animeId === c.animeId));
     if (needle.length >= 3 && (ext.length || extLoading)) {
       listEl.appendChild(group('From the wider world', '検索'));
       if (extLoading && !ext.length) {
@@ -1522,8 +1626,16 @@ function openColAdder(uid, col) {
     }, 350);
   };
   paint('');
+  // item 6: their reviewed titles need a Firestore read, so the picker opens on
+  // what it already has and fills the top group in when that lands. It is never
+  // awaited before the first paint — a picker that waits on the network to show
+  // a list it already has in memory is a worse picker.
+  if (!colReviewedLoaded) {
+    loadColReviewed(uid).then(() => { if (!closed) paint(searchEl.value); }).catch(() => {});
+  }
   searchEl.addEventListener('input', () => { extSearch(searchEl.value); paint(searchEl.value); });
   const close = () => {
+    closed = true;
     clearTimeout(extTimer);
     if (extAbort) { try { extAbort.abort(); } catch (_) {} }
     try { overlay.remove(); } catch (_) {}
