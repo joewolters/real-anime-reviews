@@ -27,7 +27,8 @@
   had no `max-height` and no `overflow` and ran off-screen.
 - ✅ **Item 2 (mobile) — DONE and LIVE.** Rail cards had NO mobile override: fixed 200×581 at every width. Now 117×307, 3.06 visible, 36% of screen (was 69%). The `.spotlight-stack` 275px landmine is untouched and now test-guarded.
 - ✅ **Header search** now shows a NOT REVIEWED YET shelf (his mid-session ask).
-- ⏳ **Item 6 (shelves) NOT started.** **Item 3 (Mode 2) still wants its own session.**
+- ✅ **Item 6 (shelves) — DONE and LIVE** (v2.2.2). Source registry: reviewed → their lists → catalog; swappable for the AniList sync.
+- ⏳ **ONLY ITEM 3 (Mode 2) REMAINS.** Blake: he wants to clarify some things before it starts. The seven decisions locked 2026-08-09 stand.
 - **New floor: `npm test` 387.** webkit 24 · functions 94 held; rules 218 · cf 94 untouched.
 - Full record: `docs/SHIP-OUTPUT.md` + the newest `docs/v1.10.0-GATE-LOG.md` entry.
 
@@ -205,7 +206,7 @@ must go **propose-only** for that anime — otherwise the site claims coverage B
 
 ---
 
-## 6. SHELF BUILDING — autopopulate from what they've already watched
+## 6. SHELF BUILDING — autopopulate from what they've already watched ✅ SHIPPED v2.2.2
 
 ### Blake, verbatim (2026-08-12)
 > "Watchlist tracker needs to autopopulic FIRSTly with things the user has either watched or
