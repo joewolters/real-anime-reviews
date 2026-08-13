@@ -84,3 +84,36 @@ test('auth: "incorrect email or password" tells you where to look', async ({ pag
   const msg = await page.textContent('#auth-error');
   expect(msg, 'it points at the email box').toMatch(/email box/i);
 });
+
+// ⚠️ v2.2.4 — THE INCIDENT. Adding `authPersistenceReady` to script.js's import
+// list took the whole site down for anyone holding a cached copy of the module:
+// script.js imports './firebase.js' with a BARE specifier (no ?v=), which is a
+// SEPARATE cache entry from the versioned one the page loads. A stale bare copy
+// has no such export, the ES module import throws, and script.js never executes —
+// the static shell renders while nothing dynamic loads. Blake: "it has the admin
+// thing in the bottom left but nothing is loading and I can't access my account."
+// admin-fab.js imports the same bare module but only needs auth+db, which the
+// old copy still exports — which is exactly why the FAB survived alone.
+test('incident guard: script.js must not import new names from the bare firebase module', async ({ request }) => {
+  const js = await (await request.get('/script.js')).text();
+  const m = js.match(/import\s*\{([^}]*)\}\s*from\s*'\.\/firebase\.js'/);
+  expect(m, 'script.js imports the bare module').toBeTruthy();
+  const names = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+  // These four have existed for many releases, so every cached copy has them.
+  // Anything NEW here is a site-wide outage for cached clients.
+  expect(names.sort()).toEqual(['auth', 'db', 'functions', 'storage']);
+});
+
+test('incident guard: the bare-imported modules are never cached stale', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  const fb = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8'));
+  const hs = fb.hosting.headers || [];
+  const bare = hs.find((h) => h.source.includes('firebase|'));
+  expect(bare, 'the bare-specifier modules have their own rule').toBeTruthy();
+  expect(bare.headers[0].value).toMatch(/no-cache/);
+  // and it must come AFTER the generic asset rule, or that rule overrides it
+  const iAsset = hs.findIndex((h) => /js\|css/.test(h.source));
+  const iBare = hs.findIndex((h) => h.source.includes('firebase|'));
+  expect(iBare, 'the no-cache rule wins over the generic asset cache').toBeGreaterThan(iAsset);
+});

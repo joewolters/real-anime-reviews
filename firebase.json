@@ -86,6 +86,15 @@
             "value": "public, max-age=3600"
           }
         ]
+      },
+      {
+        "source": "/@(firebase|animeData|card-render|franchise-fetch|frames|markdown|live-composer|brand-select|modal-scroll-lock|friendly-errors|consent|lantern|nav-drawer|wrapped|reports-model|catalog-model).js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ]
   },

@@ -21,6 +21,15 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-12 -->
+## v2.2.4 — PATCH (2026-08-12)
+
+**Fixes a page that loaded but did nothing.** The previous release could leave the site half-alive for anyone whose browser was holding an older copy of one particular file: the page itself appeared, but nothing on it loaded and the account page was unreachable. The cause was ours — that release started asking one shared file for something only its newest version provides, and browsers are allowed to keep an older copy of that file for an hour. When the two didn't match, the page's main script stopped before it began. The request has been withdrawn, and the handful of files this applies to are no longer allowed to go stale, so the same mistake cannot have the same effect again.
+
+**Updates arrive straight away now.** Separately, every release had been sitting behind an hour of browser caching before anyone saw it — and because the page is what points at the current styles and scripts, a cached page also asked for the *previous* release's files. Pages now check for a newer version on every visit, which is why this fix reaches you immediately.
+
+---
+
+<!-- author: Code | date: 2026-08-12 -->
 ## v2.2.3 — PATCH (2026-08-12)
 
 **Staying signed in on a phone.** This site was keeping your session in a browser store that privacy-focused browsers block, partition or wipe — and when that store is unavailable the sign-in library quietly falls back to keeping the session in memory only, where it does not survive moving to another page. The result, from the outside, was a sign-in that was accepted and then instantly forgotten: you pressed the button, landed back on the home page, and were still signed out, with nothing to tell you why. The session is now written somewhere those browsers allow, chosen explicitly rather than left to a default, and if a browser refuses every option the site says so in the sign-in box instead of closing it and pretending the sign-in worked.

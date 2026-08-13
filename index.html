@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="2.2.3"</script>
+  <script>window.APP_VERSION="2.2.4"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -59,10 +59,10 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=2.2.3">
-  <link rel="stylesheet" href="mobile.css?v=2.2.3" media="(max-width: 900px)">
-  <link rel="stylesheet" href="frames.css?v=2.2.3">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
-  <link rel="stylesheet" href="admin-fab.css?v=2.2.3">
+  <link rel="stylesheet" href="style.css?v=2.2.4">
+  <link rel="stylesheet" href="mobile.css?v=2.2.4" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=2.2.4">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
+  <link rel="stylesheet" href="admin-fab.css?v=2.2.4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -267,11 +267,22 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v2.2.3</span>
+      <span class="changelog-tag" id="changelog-version">v2.2.4</span>
      Hotfix
     </div>
 
     <div class="changelog-content">
+      <div class="version-section" data-tier="hotfix">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v2.2.4</span></div>
+          <span class="vs-tier">Hotfix</span>
+          <div class="version-header">08/12/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li><strong>Fixes a page that loaded but did nothing.</strong> The previous release could leave the site half-alive for anyone whose browser had an older copy of one file cached: the page appeared, but nothing on it loaded and you couldn&rsquo;t reach your account. That was introduced by the last update and is now undone, and the files it affected are no longer allowed to go stale, so it can&rsquo;t happen again.</li>
+          <li><strong>Updates arrive straight away now.</strong> Every release used to sit behind an hour of browser caching before anyone saw it &mdash; which also meant the page could ask for the previous version&rsquo;s styles and scripts. Pages now check for a new version on every visit.</li>
+        </ul>
+      </div>
       <div class="version-section" data-tier="hotfix">
         <div class="vs-head">
           <div class="version-chips"><span class="version-chip">v2.2.3</span></div>

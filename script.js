@@ -17,18 +17,18 @@ import {
   signOut
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 
-import { auth, db, functions, storage, authPersistenceReady } from './firebase.js';
+import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.2.3';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.2.4';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.2.3';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.2.4';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
-import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.2.3';
+import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.2.4';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.2.3';
+import { initNavDrawer } from './nav-drawer.js?v=2.2.4';
 initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals
@@ -1666,6 +1666,20 @@ function stripAccidentalPaste(s) {
     updateScrollLock();
   }
 
+  // v2.2.4 — the persistence tier, read WITHOUT importing anything new from
+  // firebase.js (see the note at the sign-in call: a new named import there
+  // breaks every client holding a stale bare copy of that module). firebase.js
+  // sets the global as soon as it settles; an older cached copy never sets it at
+  // all, which resolves immediately and behaves exactly as it did before.
+  async function waitForAuthPersistence(capMs = 1500) {
+    const started = Date.now();
+    while (typeof window !== 'undefined'
+           && window.__rarAuthPersistence === 'pending'
+           && Date.now() - started < capMs) {
+      await new Promise((r) => setTimeout(r, 40));
+    }
+  }
+
   function prettyAuthError(err, context = 'signin') {
   const code = (err && err.code) ? err.code : '';
 
@@ -2044,9 +2058,20 @@ window.__rarBackfillProfiles = () => httpsCallable(functions, 'backfillProfiles'
           createdAt: serverTimestamp()
         }, { merge: true });
       } else {
-        // ⚠️ v2.2.3 — the persistence tier must be settled BEFORE the credential
-        // call, or the session is written to whatever the SDK defaulted to.
-        try { await authPersistenceReady; } catch (_) {}
+        // ⚠️ v2.2.4 — DO NOT import a new name from './firebase.js' here.
+        // v2.2.3 imported `authPersistenceReady` and that took the whole site
+        // down for anyone holding a cached copy: script.js imports firebase.js
+        // with a BARE specifier (no ?v=), which is a SEPARATE cache entry from
+        // the versioned one the page loads. A stale bare copy has no such
+        // export, the ES module import throws, and script.js never runs at all —
+        // the page renders its static shell while nothing dynamic loads.
+        // (Blake saw exactly this: "it has the admin thing in the bottom left
+        // but nothing is loading" — admin-fab.js imports the same bare module
+        // but only needs auth+db, which the old copy still exports, so the FAB
+        // survived while everything else died.)
+        // The tier is read off the window global instead, which cannot break a
+        // stale client: absent → undefined → treated as durable, same as before.
+        await waitForAuthPersistence();
         await signInWithEmailAndPassword(auth, email, pass);
       }
       // ⚠️ Signing in is not the same as STAYING signed in, and Blake hit exactly

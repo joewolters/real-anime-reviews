@@ -18,7 +18,7 @@ import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs,
   query, orderBy, limit, serverTimestamp, deleteField,
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
-import { friendlyError, showNotice } from '../friendly-errors.js?v=2.2.3';
+import { friendlyError, showNotice } from '../friendly-errors.js?v=2.2.4';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const $ = (id) => document.getElementById(id);
