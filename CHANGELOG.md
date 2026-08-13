@@ -21,6 +21,15 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-12 -->
+## v2.2.3 — PATCH (2026-08-12)
+
+**Staying signed in on a phone.** This site was keeping your session in a browser store that privacy-focused browsers block, partition or wipe — and when that store is unavailable the sign-in library quietly falls back to keeping the session in memory only, where it does not survive moving to another page. The result, from the outside, was a sign-in that was accepted and then instantly forgotten: you pressed the button, landed back on the home page, and were still signed out, with nothing to tell you why. The session is now written somewhere those browsers allow, chosen explicitly rather than left to a default, and if a browser refuses every option the site says so in the sign-in box instead of closing it and pretending the sign-in worked.
+
+**"Incorrect email or password" now tells you where to look.** On a phone the usual cause is not the password — it is the browser filling a *different* saved address into the email box, which you would never notice unless something told you to check. The message now does.
+
+---
+
+<!-- author: Code | date: 2026-08-12 -->
 ## v2.2.2 — PATCH (2026-08-12)
 
 **Signing in tells you what happened.** The previous release stopped your phone filling your saved login into a hidden field, but it left a worse failure behind: if what you typed — or what your password manager filled — wasn't shaped like an email address, the form quietly did nothing at all. No error, no response, nothing to act on. That was ours, and it's gone. Every attempt now answers, the answer appears where you can see it rather than below the fold of a scrolling panel, and an unexpected failure names itself so it can be reported in one line.

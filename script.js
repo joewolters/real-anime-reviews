@@ -17,18 +17,18 @@ import {
   signOut
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 
-import { auth, db, functions, storage } from './firebase.js';
+import { auth, db, functions, storage, authPersistenceReady } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.2.2';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.2.3';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.2.2';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.2.3';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
-import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.2.2';
+import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.2.3';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.2.2';
+import { initNavDrawer } from './nav-drawer.js?v=2.2.3';
 initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals
@@ -1676,7 +1676,12 @@ function stripAccidentalPaste(s) {
     code === 'auth/wrong-password' ||
     code === 'auth/user-not-found'
   ) {
-    return 'Incorrect email or password.';
+    // ⚠️ v2.2.3 — this used to end at "Incorrect email or password." and that
+    // was a dead end on a phone: Blake got it in Arc with credentials that work
+    // on his desktop. The usual cause is not the password — it is the browser
+    // filling a DIFFERENT saved address into the email box, which you never
+    // notice unless you are told to look. The message now says where to look.
+    return 'Incorrect email or password. Check the email box above actually shows the address you signed up with — your browser may have filled in a different one.';
   }
 
   if (code === 'auth/invalid-email') return 'That email address looks invalid.';
@@ -2039,7 +2044,20 @@ window.__rarBackfillProfiles = () => httpsCallable(functions, 'backfillProfiles'
           createdAt: serverTimestamp()
         }, { merge: true });
       } else {
+        // ⚠️ v2.2.3 — the persistence tier must be settled BEFORE the credential
+        // call, or the session is written to whatever the SDK defaulted to.
+        try { await authPersistenceReady; } catch (_) {}
         await signInWithEmailAndPassword(auth, email, pass);
+      }
+      // ⚠️ Signing in is not the same as STAYING signed in, and Blake hit exactly
+      // that on TWO phone browsers: the credential was accepted, the modal
+      // closed, and by the next page he was signed out again. If this browser
+      // refused every durable store, say so HERE — closing the modal would look
+      // like success and send him off to discover the truth on his own.
+      const store = (typeof window !== 'undefined') ? window.__rarAuthPersistence : 'local';
+      if (store === 'memory' || store === 'none') {
+        showAuthError('You are signed in — but this browser is blocking site data, so it will forget you as soon as you change pages. Turn off private/strict browsing for this site, or try a different browser.');
+        return;   // leave the modal open; closing it would be a false success
       }
       closeAuth();
       // gate 20.7 (Blake item 5c) — a mid-session sign-in gets its catch-up

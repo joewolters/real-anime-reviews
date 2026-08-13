@@ -2,7 +2,10 @@
 
 // Use ONE version everywhere
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getAuth, connectAuthEmulator }      from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import {
+  getAuth, connectAuthEmulator, setPersistence,
+  browserLocalPersistence, browserSessionPersistence, inMemoryPersistence,
+} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getFirestore, connectFirestoreEmulator } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getFunctions, connectFunctionsEmulator } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js";
 import { getStorage, connectStorageEmulator } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js"; // v1.10.0 gate 12 — forum image uploads
@@ -21,6 +24,42 @@ const firebaseConfig = {
 // Initialize ONCE
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+
+// ── v2.2.3 — WHERE THE SESSION IS KEPT ──────────────────────────────────────
+// <!-- author: Code | date: 2026-08-12 -->
+// Blake, on his phone, in TWO different browsers (Arc and DuckDuckGo): "after I
+// click enter it brings me to the home page and actually doesn't sign me in."
+// Signing in SUCCEEDS and then the session isn't there.
+//
+// `getAuth()` defaults to persisting the session in **IndexedDB**, and IndexedDB
+// is exactly what privacy-first browsers block, partition or wipe hardest — when
+// it fails the SDK can quietly fall back to IN-MEMORY, which means the session
+// dies the moment the page navigates. That is indistinguishable, to the person
+// using it, from "it didn't sign me in".
+//
+// So the store is chosen EXPLICITLY, strongest-that-actually-works first:
+//   localStorage  → survives navigation and restarts (what we want)
+//   sessionStorage→ survives navigation, dies with the tab (degraded, usable)
+//   in-memory     → dies on navigation (the failure Blake is hitting)
+// The winner is published on `window.__rarAuthPersistence` so the sign-in form
+// can WARN instead of silently failing, and so this is diagnosable from a phone.
+window.__rarAuthPersistence = 'pending';
+const authPersistenceReady = (async () => {
+  const tiers = [
+    ['local', browserLocalPersistence],
+    ['session', browserSessionPersistence],
+    ['memory', inMemoryPersistence],
+  ];
+  for (const [name, mode] of tiers) {
+    try {
+      await setPersistence(auth, mode);
+      window.__rarAuthPersistence = name;
+      return name;
+    } catch (_) { /* blocked — try the next one down */ }
+  }
+  window.__rarAuthPersistence = 'none';
+  return 'none';
+})();
 const db   = getFirestore(app);
 // v1.10.0 gate 3 — Functions SDK so the client can call the `acceptRules`
 // callable (community-rules consent). Region defaults to us-central1, matching
@@ -57,7 +96,7 @@ const storage = getStorage(app);
 })();
 
 // Export for script.js
-export { app, auth, db, functions, storage };
+export { app, auth, db, functions, storage, authPersistenceReady };
 
 window.auth = auth;
 window.db = db;
