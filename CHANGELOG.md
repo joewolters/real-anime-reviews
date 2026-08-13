@@ -21,6 +21,19 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-12 -->
+## v2.2.2 — PATCH (2026-08-12)
+
+**Signing in tells you what happened.** The previous release stopped your phone filling your saved login into a hidden field, but it left a worse failure behind: if what you typed — or what your password manager filled — wasn't shaped like an email address, the form quietly did nothing at all. No error, no response, nothing to act on. That was ours, and it's gone. Every attempt now answers, the answer appears where you can see it rather than below the fold of a scrolling panel, and an unexpected failure names itself so it can be reported in one line.
+
+**Building a shelf starts with what you've already seen.** The add-anime picker leads with the anime *you have reviewed*, then the ones on your lists, then everything else, in labelled groups instead of one long alphabetical run — because your next shelf entry is far more likely to come from what you've already watched than from the middle of the catalogue. A title you've reviewed that's also on the site appears once, at the top, with its cover.
+
+**Anime By Genre reaches the edge of the screen.** On a phone it was penned inside a frame with wide margins on both sides — a small box floating in the middle of the page rather than a rail. It now runs the full width, like the others.
+
+**Less oversized everywhere else on phones.** Latest Drop was taking roughly four fifths of the screen for one title and is now a cover beside its text. The Top-10 card scales with the screen rather than sitting at a fixed size — the same card is a reasonable share of a large phone and most of a small one. Continue Where You Left Off, and the results after you press Enter on a search, are now sized like everything else; both had been missed because they were built from a different container.
+
+---
+
+<!-- author: Code | date: 2026-08-12 -->
 ## v2.2.1 — PATCH (2026-08-12)
 
 **Signing in on an iPhone works now.** If your phone offered to fill in your saved login, it was putting it into a field this page kept hidden — so the box you could actually see stayed empty, and the site answered that your email or password was wrong when it wasn't. The same details always worked on a computer, which is exactly what made it so confusing. The cause was ours: the form told password managers that the hidden field was the account name, and iOS believed it. The visible email box is now the one your password manager fills, the hidden field is switched off entirely while it's out of sight, and the email box no longer lets autocorrect edit what you typed.
