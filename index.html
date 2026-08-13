@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="2.2.4"</script>
+  <script>window.APP_VERSION="2.2.5"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -59,10 +59,10 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=2.2.4">
-  <link rel="stylesheet" href="mobile.css?v=2.2.4" media="(max-width: 900px)">
-  <link rel="stylesheet" href="frames.css?v=2.2.4">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
-  <link rel="stylesheet" href="admin-fab.css?v=2.2.4">
+  <link rel="stylesheet" href="style.css?v=2.2.5">
+  <link rel="stylesheet" href="mobile.css?v=2.2.5" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=2.2.5">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
+  <link rel="stylesheet" href="admin-fab.css?v=2.2.5">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -267,11 +267,23 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v2.2.4</span>
+      <span class="changelog-tag" id="changelog-version">v2.2.5</span>
      Hotfix
     </div>
 
     <div class="changelog-content">
+      <div class="version-section" data-tier="hotfix">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v2.2.5</span></div>
+          <span class="vs-tier">Hotfix</span>
+          <div class="version-header">08/13/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li><strong>The site opens on the Den again.</strong> If your browser reopens tabs where you left them, you could land straight in the full card grid instead of the front page. That grid is a tool you go to, not somewhere you should arrive.</li>
+          <li><strong>The account page is readable on a phone.</strong> Its tabs were in a sideways-scrolling strip that cut labels off mid-word &mdash; &ldquo;Favorites&rdquo; showed as &ldquo;Favor&rdquo;. They&rsquo;re now an even grid of tiles, like the admin menu, with nothing clipped and consistent spacing down the page.</li>
+          <li><strong>A way to check sign-in problems.</strong> If signing in fails on your phone, add <em>?authcheck=1</em> to the address and the page will tell you what your browser is actually allowing.</li>
+        </ul>
+      </div>
       <div class="version-section" data-tier="hotfix">
         <div class="vs-head">
           <div class="version-chips"><span class="version-chip">v2.2.4</span></div>

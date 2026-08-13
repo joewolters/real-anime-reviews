@@ -138,7 +138,22 @@ for (const w of [1440, 1280, 1024, 901]) {
   test(`gD: the catalog grid never clips at ${w}px (the 901-1200 band used to hide cards off-screen)`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: 900 });
     await page.addInitScript(() => { try { sessionStorage.setItem('rar:welcomed', '1'); } catch (_) {} });
-    await page.goto('/#all');
+    // ⚠️ CHANGED 2026-08-12: this used to `goto('/#all')`. Blake: "The website
+    // should open to the Den. Not my anime cards." A browser that restores the
+    // last URL was cold-booting him straight into the grid, so `#all` — a TOOL
+    // view, the one place rarNav lights no nav place — is now normalised away on
+    // a cold load. The grid is reached the way a person reaches it instead.
+    // What this test guards is unchanged: the catalog grid must not clip.
+    await page.goto('/');
+    // ⚠️ at <=1200px the nav lives in the drawer, so the button is not on screen
+    // until it is opened — the reason two of these four widths failed the first
+    // time this was rewritten.
+    const viewAll = page.locator('#view-all-btn');
+    if (!(await viewAll.isVisible())) {
+      await page.click('#nav-drawer-toggle');
+      await viewAll.waitFor({ state: 'visible', timeout: 8000 });
+    }
+    await viewAll.click();
     await page.waitForSelector('.card-container .card', { timeout: 15000 });
     const g = await page.evaluate(() => {
       const cards = Array.from(document.querySelectorAll('.card-container .card'));

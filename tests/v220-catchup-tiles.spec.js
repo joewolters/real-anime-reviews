@@ -742,3 +742,44 @@ test('item 4: a phone width drops to one column rather than shipping cramped lab
   expect(out.widest, 'nothing overflows the viewport horizontally').toBeLessThanOrEqual(out.vw);
   expect(out.menuRight).toBeLessThanOrEqual(out.vw);
 });
+
+// Blake: "The website should open to the Den. Not my anime cards."
+test('routing: a cold load never lands in the card grid', async ({ page }) => {
+  await noDoor(page);
+  for (const url of ['/index.html#all', '/index.html']) {
+    await page.goto(url);
+    await page.waitForTimeout(1200);
+    const r = await page.evaluate(() => ({
+      home: getComputedStyle(document.getElementById('home-view')).display,
+      all: getComputedStyle(document.getElementById('all-anime-view')).display,
+      hash: location.hash,
+    }));
+    expect(r.home, `the Den is what opens from ${url}`).not.toBe('none');
+    expect(r.all, `and the card grid is not`).toBe('none');
+    expect(r.hash, 'the tool-view hash is normalised away').toBe('');
+  }
+});
+
+// Blake: the account nav was clipping "Favorites" mid-word inside a scroller.
+test('account: the nav is an even tile grid, not a clipping scroller', async ({ page }) => {
+  await page.route((url) => url.href.includes('signin=1'), (r) => r.fulfill({ status: 204, body: '' }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/account.html');
+  await page.waitForSelector('.side-link', { timeout: 20000 });
+  const out = await page.evaluate(() => {
+    const nav = document.querySelector('.account-v2 .account-side nav');
+    const links = [...document.querySelectorAll('.side-link')];
+    const vw = document.documentElement.clientWidth;
+    return {
+      overflowX: getComputedStyle(nav).overflowX,
+      clipped: links.filter((l) => l.scrollWidth > l.clientWidth + 1).map((l) => l.textContent.trim()),
+      offscreen: links.filter((l) => l.getBoundingClientRect().right > vw + 1).length,
+      minH: Math.min(...links.map((l) => Math.round(l.getBoundingClientRect().height))),
+      perRow: links.filter((l) => Math.round(l.getBoundingClientRect().y) === Math.round(links[1].getBoundingClientRect().y)).length,
+    };
+  });
+  expect(out.overflowX, 'the horizontal scroller is gone').not.toBe('auto');
+  expect(out.clipped, 'no tab label is cut off mid-word').toEqual([]);
+  expect(out.offscreen, 'nothing runs off the right edge').toBe(0);
+  expect(out.minH, 'every tile clears the 44px tap floor').toBeGreaterThanOrEqual(44);
+});

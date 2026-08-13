@@ -611,3 +611,98 @@ body > main p,
 }
 .featured-card > *:not(.featured-thumb){ grid-column: 2; }
 .featured-rating{ justify-self: start; margin-top: 4px; }
+
+/* ===========================================================================
+   v2.2.5 — THE ACCOUNT PAGE ON PHONES
+   Blake: "account page looks INCREDIBLY squished together and cluttered.
+   Everything needs to be even and look spaced correctly like the admin tiles.
+   You can shrink some things even further but must still be readable."
+   Measured at 390x844 against his screenshots before changing anything.
+   =========================================================================== */
+
+/* --- 1. THE NAV — the single worst offender -------------------------------
+   MEASURED: `.account-side nav` was `display:flex; overflow-x:auto`, i.e. a
+   horizontal scroller inside a 350px card. The tabs ran past the edge and were
+   CLIPPED MID-WORD — his screenshot shows "Favor" with the rest cut off, which
+   is most of the "squished and cluttered" feeling on its own.
+   It becomes what he asked for: an even TILE GRID, like the admin menu. Two
+   equal columns, nothing clipped, groups still labelled. */
+.account-v2 .account-side nav{
+  display: grid;
+  gap: 12px;
+  overflow: visible;              /* ⚠️ this is the fix — it was overflow-x:auto */
+  padding-bottom: 0;
+}
+.account-v2 .side-group{ margin-bottom: 0; }
+.account-v2 .side-group-label{ padding: 0 2px 5px; }
+.account-v2 .side-nav{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.account-v2 .side-link{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  min-height: 44px;               /* the tap-target floor, non-negotiable */
+  padding: 9px 10px 9px 13px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  /* the admin-tile chrome, so the two surfaces read as one system */
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+  border: 1px solid rgba(187, 134, 252, 0.26);
+}
+.account-v2 .side-link.is-active{
+  background: linear-gradient(180deg, rgba(140, 70, 220, 0.22), rgba(70, 0, 110, 0.32));
+  border-color: rgba(187, 134, 252, 0.55);
+}
+.account-v2 .side-link::before{ left: 4px; }   /* the active bar, inside the tile */
+.account-v2 .account-side{ padding: 12px 10px; }
+
+/* --- 2. The greeting was colliding with Sign out ---------------------------
+   MEASURED: the h2 wrapped to two lines and the sign-out pill sat on top of it. */
+.account-hello{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.account-hello h2{
+  font-size: 1.5rem;
+  line-height: 1.1;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;        /* a long display name wraps instead of pushing */
+}
+
+/* --- 3. Even spacing inside the panels ------------------------------------
+   26px of side padding on a 350px card leaves 298px of usable width. The panel
+   keeps a comfortable but honest inset, and every card in the page uses the
+   SAME one so the rhythm is even top to bottom — his "spaced correctly". */
+.account-panel-card{ padding: 16px 14px 18px; min-height: 0; }
+.set-card{ padding: 13px 13px 14px; }
+.set-card-head{ margin-bottom: 8px; }
+.panel-head{ gap: 10px; margin-bottom: 12px; }
+
+/* --- 4. The colour pickers were ragged ------------------------------------
+   MEASURED from his screenshot: SOLIDS wrapped 7-then-3 and GRADIENTS 5-then-1,
+   with the last row half-hidden behind the admin button. Even grids instead of
+   free-flowing wrap — same reasoning as the admin tiles. */
+.acct-swatches, .acct-solids, .acct-gradients{
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  justify-items: center;
+}
+.acct-gradients{ grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* --- 5. The chip rows under BACKGROUNDS read as a ragged pile -------------- */
+.fld-hint{ font-size: 0.7rem; }
+.fld-pill{ font-size: 0.6rem; padding: 3px 9px; }
+
+/* --- 6. Clearance for the admin button, which floats over this page --------
+   It sits bottom-left at 16px and was covering the last row of controls. */
+.account-v2 .account-panel{ padding-bottom: 72px; }

@@ -117,3 +117,22 @@ test('incident guard: the bare-imported modules are never cached stale', async (
   const iBare = hs.findIndex((h) => h.source.includes('firebase|'));
   expect(iBare, 'the no-cache rule wins over the generic asset cache').toBeGreaterThan(iAsset);
 });
+
+test('authcheck: the diagnostic is opt-in and reports the real facts', async ({ page }) => {
+  await page.addInitScript(() => { try { sessionStorage.setItem('rar:welcomed', '1'); } catch (e) {} });
+  // invisible unless asked for
+  await page.goto('/index.html');
+  await page.waitForTimeout(800);
+  expect(await page.locator('text=SIGN-IN CHECK').count(), 'never shown by default').toBe(0);
+
+  await page.goto('/index.html?authcheck=1');
+  await page.waitForSelector('#rar-authcheck', { timeout: 15000 });
+  // it must resolve to a REAL answer, not leave him screenshotting "pending"
+  await page.waitForFunction(
+    () => !/Session store:\s*pending/.test(document.getElementById('rar-authcheck').textContent),
+    null, { timeout: 15000 });
+  const txt = await page.textContent('#rar-authcheck');
+  expect(txt).toContain('Session store');
+  expect(txt).toContain('Can save site data');
+  expect(txt, 'and it reports the tier that was actually chosen').toMatch(/local|session|memory/);
+});

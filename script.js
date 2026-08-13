@@ -21,14 +21,14 @@ import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.2.4';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.2.5';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.2.4';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.2.5';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
-import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.2.4';
+import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.2.5';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.2.4';
+import { initNavDrawer } from './nav-drawer.js?v=2.2.5';
 initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals
@@ -1665,6 +1665,53 @@ function stripAccidentalPaste(s) {
     authModal.classList.remove('active');
     updateScrollLock();
   }
+
+  // ── v2.2.5 — `?authcheck=1`, a diagnostic Blake can read off his own phone ──
+  // Safari and DuckDuckGo still refuse to sign him in after two fixes, and I
+  // have now guessed twice. This stops the guessing: it reports what that
+  // BROWSER actually does, in plain words, on the device where it fails.
+  // Deliberately opt-in via a query string — invisible to everyone else.
+  function maybeAuthCheck() {
+    try {
+      if (new URLSearchParams(location.search).get('authcheck') !== '1') return;
+      const probe = (fn) => { try { return fn() ? 'yes' : 'NO'; } catch (_) { return 'NO (blocked)'; } };
+      const ls = probe(() => { localStorage.setItem('rar:probe', '1'); localStorage.removeItem('rar:probe'); return true; });
+      const ss = probe(() => { sessionStorage.setItem('rar:probe', '1'); sessionStorage.removeItem('rar:probe'); return true; });
+      const idb = probe(() => !!window.indexedDB);
+      const box = document.createElement('div');
+      box.id = 'rar-authcheck';
+      box.setAttribute('role', 'status');
+      box.style.cssText = 'position:fixed;inset:auto 12px 12px 12px;z-index:99999;padding:14px 16px;'
+        + 'border-radius:14px;background:rgba(16,6,32,0.97);border:1px solid rgba(187,134,252,0.5);'
+        + 'color:#efe6ff;font:500 13px/1.5 Montserrat,sans-serif;box-shadow:0 18px 50px rgba(0,0,0,.6);max-height:70vh;overflow:auto';
+      const line = (k, v) => `<div><b style="color:#cbb0ff">${k}:</b> ${v}</div>`;
+      const render = () => {
+        box.innerHTML = '<div style="font-weight:800;letter-spacing:.12em;margin-bottom:8px">SIGN-IN CHECK</div>'
+          + line('Session store', window.__rarAuthPersistence || 'unknown')
+          + line('Can save site data', ls)
+          + line('Tab storage', ss)
+          + line('IndexedDB', idb)
+          + line('Signed in now', auth.currentUser ? ('YES — ' + (auth.currentUser.email || '')) : 'no')
+          + line('Version', window.APP_VERSION || '?')
+          + '<div style="margin-top:10px;color:#b8a8d8;font-style:italic">Screenshot this and send it.</div>';
+      };
+      render();
+      document.body.appendChild(box);
+      // the auth line is the one that changes — repaint when it does
+      onAuthStateChanged(auth, render);
+      // ⚠️ the store tier settles asynchronously; showing Blake "pending" would
+      // be worse than useless, so this repaints until it has a real answer.
+      let tries = 0;
+      const poll = setInterval(() => {
+        render();
+        if (++tries > 40 || (window.__rarAuthPersistence && window.__rarAuthPersistence !== 'pending')) {
+          clearInterval(poll);
+          render();
+        }
+      }, 120);
+    } catch (_) {}
+  }
+  maybeAuthCheck();
 
   // v2.2.4 — the persistence tier, read WITHOUT importing anything new from
   // firebase.js (see the note at the sign-in call: a new named import there
@@ -12554,7 +12601,15 @@ try {
   const h = location.hash || '';
 
   if (h === '#all') {
-    if (typeof showAll === 'function') showAll();
+    // ⚠️ v2.2.5 — Blake: "The website should open to the Den. Not my anime
+    // cards." A browser that restores the last URL (Arc reopens a tab exactly
+    // where it was) would cold-boot straight into the card grid, because #all
+    // was being replayed like a content route. It is NOT content — it is a tool
+    // view, the one place rarNav deliberately lights no nav place. So a COLD
+    // load normalises it away and lands in the Den; every real route
+    // (#anime=, #profile=, #forum, #secondary=, #notif=) is untouched and still
+    // opens exactly what it names.
+    history.replaceState({}, '', location.pathname + location.search);
   } else if (h.startsWith('#notif=')) {
     // gate 6f: a cross-page notification deep-link from the ACCOUNT page. Carry the
     // FULL target here and hand it to the SAME scroll+poll+highlight path used for

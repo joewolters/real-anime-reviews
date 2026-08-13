@@ -20,6 +20,17 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-08-13 -->
+## v2.2.5 — PATCH (2026-08-13)
+
+**The site opens on the Den again.** If your browser reopens tabs exactly where you left them, you could land straight in the full card grid rather than the front page — that grid is a tool you choose to open, not somewhere you should arrive. Every real link still goes where it points: an anime, a profile, a thread, a notification.
+
+**The account page is readable on a phone.** Its tabs sat in a sideways-scrolling strip that cut labels off mid-word — "Favorites" appeared as "Favor" — which was most of why the page felt cramped. They are now an even grid of tiles, the same shape as the admin menu, with nothing clipped, a proper tap size on every one, and consistent spacing down the rest of the page: tighter cards, an even colour picker instead of a ragged one, and room at the bottom so the admin button stops covering the last row.
+
+**A way to check sign-in problems.** If signing in fails on your phone, add `?authcheck=1` to the address. The page will tell you where it is keeping your session, whether your browser is allowing site data at all, and whether you are currently signed in — enough to say what is wrong instead of guessing.
+
+---
+
 <!-- author: Code | date: 2026-08-12 -->
 ## v2.2.4 — PATCH (2026-08-12)
 
