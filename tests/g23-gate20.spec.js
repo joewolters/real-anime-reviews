@@ -143,6 +143,38 @@ test('gate 20 (cherry): the footer wears the kicker vocabulary, copy untouched',
   expect(c.replace(/\s/g, '')).toContain('246,239,255');     // full-bright, never dim
 });
 
+// v2.2.3b — Blake, minutes after a deploy: "my phone still says v2.2.2 do I need
+// to wait a little bit?" He did: Firebase's DEFAULT is `max-age=3600`, and there
+// was no headers config at all, so every returning visitor kept a stale page for
+// up to an hour after every release. Worse, the page is what carries APP_VERSION
+// and every ?v= asset URL — a stale page requests the OLD css/js, so the
+// cache-busting scheme was defeated by the one file it depends on.
+test('deploy: the PAGE always revalidates, or every release is invisible for an hour', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  const fb = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8'));
+  const headers = fb.hosting.headers || [];
+  const cacheFor = (src) => {
+    const e = headers.find((h) => h.source === src);
+    if (!e) return null;
+    const c = (e.headers || []).find((x) => x.key === 'Cache-Control');
+    return c ? c.value : null;
+  };
+  // the bare route and the .html files both matter: cleanUrls means the request
+  // path for the home page is "/" and has no .html on it to match.
+  expect(cacheFor('/'), 'the home route revalidates').toMatch(/no-cache|max-age=0/);
+  expect(cacheFor('**/*.html'), 'and so does every html file').toMatch(/no-cache|max-age=0/);
+  expect(cacheFor('/@(account|suggest|404)'), 'and the other clean routes').toMatch(/no-cache|max-age=0/);
+
+  // ⚠️ assets must NOT be immutable: some modules are requested WITHOUT the ?v=
+  // query (a bare /firebase.js appears in the server logs), and a year-long
+  // immutable cache on those could not be undone without renaming files.
+  const asset = headers.find((h) => /js\|css/.test(h.source));
+  expect(asset, 'assets carry an explicit cache rule').toBeTruthy();
+  const assetVal = asset.headers.find((x) => x.key === 'Cache-Control').value;
+  expect(assetVal, 'assets are cached but never immutable').not.toMatch(/immutable/);
+});
+
 test('gate 20 (leak-class): the firebase ignore mirror covers the new root artifacts', async ({ request }) => {
   // firebase.json itself is hosting-ignored, so fetch it from disk via the test
   // process instead of the server.
