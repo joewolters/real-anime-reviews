@@ -473,3 +473,141 @@ body > main p,
 .hub-post-text{ font-size: 0.86rem; line-height: 1.45; }
 .hub-thread-title{ font-size: 1.12rem; }
 .hub-thread-scroll{ padding: 16px 15px 48px; }
+
+/* ===========================================================================
+   v2.2.2 — BLAKE'S SECOND SIZING PASS (2026-08-12)
+   His list, verbatim: the search results after pressing ENTER · "Latest drop in
+   mobile is huge" · "my top 10 favorite anime also huge. Adjust to fit the
+   layout of the rest" · "continue where you left off also huge" · "anime by
+   genre is especially not looking right. Its because its inside a modal and
+   doesn't go to the edge of the screen."
+   Every one MEASURED at 390x844 before the change; numbers in each block.
+   =========================================================================== */
+
+/* --- 1. The card surfaces the width rule still missed -----------------------
+   MEASURED: these fell through to `.card{width:100%}` above, so in a flex-wrap
+   container each card took the FULL row. That is the "press enter and the sizes
+   get WAY too big" bug: the live-typed grid was already compact, but the
+   NOT REVIEWED YET shelf underneath renders into .discover-results-grid, and
+   those cards were full-width. Same for Continue Where You Left Off. */
+#all-world .card,
+.discover-results-grid .card,
+.continue-row .card,
+.preview-row .card{
+  width: var(--m-rail-card);
+  flex: 0 0 auto;
+}
+
+/* --- 2. THE TOP-10 — Blake reversed his earlier call ------------------------
+   v2.2.0 deliberately kept this card full-size because his own reference
+   screenshot showed it large. On 2026-08-12 he said the opposite: "my top 10
+   favorite anime also huge. Adjust to fit the layout of the rest." So it now
+   scales with everything else. MEASURED BEFORE: card 275x604 in a 630px stack
+   = 72% of the screen.
+   ⚠️ The CUTOVER-EVE constraint still holds and is NOT being undone: the bug
+   that rule fixed was `.card{width:100%}` INFLATING the card to the viewport
+   inside a fixed-height stack. This sets an explicit, smaller width — it does
+   not hand the card back to the fluid rule. The stack's fixed height comes down
+   with it, because the cards centre absolutely inside it and a 630px box around
+   a 400px card is just empty space. */
+/* ⚠️ Height must answer to the SCREEN, not just the width. A fixed 396px block
+   is 47% of an iPhone 15 but 70% of an iPhone SE (320x568) — measured — and "too
+   big" is a fraction of the screen, not a pixel count. The card scales with it;
+   the clamp's MAX is what keeps it explicit (it can never inflate to the stack
+   width, which is the CUTOVER-EVE bug). */
+.spotlight-stack{
+  /* ⚠️ Headroom is not optional: the CUTOVER-EVE spec caught the tallest card
+     (a 3-line title) spilling 4px past the frame at 375px. The stack must clear
+     the TALLEST card, not the average one. */
+  height: clamp(370px, 54vh, 440px);
+  margin-bottom: 30px;
+}
+.spotlight-stack .card{
+  width: clamp(142px, 44vw, 168px);
+  max-width: calc(100vw - 48px);
+}
+/* and it gives up the desktop-text exception on phones — "fit the layout of the
+   rest" means the same text treatment as every other card. */
+.spotlight-stack .card .info{ padding: 8px 7px 9px; min-height: 0; }
+.spotlight-stack .card .info h3{
+  font-size: 0.82rem; line-height: 1.22; margin-bottom: 4px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.spotlight-stack .card .info p{
+  font-size: 0.7rem; line-height: 1.28; margin-bottom: 4px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.spotlight-stack .card .info span{ font-size: 0.74rem; }
+.spotlight-stack .card-corner{
+  top: 6px; left: 6px; padding: 2px 5px; gap: 3px;
+  font-size: 0.5rem; letter-spacing: 0.2px; max-width: calc(100% - 12px);
+}
+
+/* --- 3. LATEST DROP — MEASURED 358x713 = 84% of the screen ------------------
+   The whole widget was taller than the viewport for a single featured title. */
+.featured-drop.in-den{ padding: 12px 12px 14px; margin-top: 22px; }
+.featured-card{ padding: 10px; }
+.featured-thumb{
+  width: 124px; height: 186px; object-fit: cover;
+  margin-left: auto; margin-right: auto; display: block;
+}
+.featured-name{ font-size: 0.88rem; line-height: 1.22; }
+.featured-genre{ font-size: 0.74rem; }
+.featured-rating{ font-size: 0.8rem; }
+
+/* --- 4. ANIME BY GENRE — "inside a modal and doesn't go to the edge" --------
+   MEASURED: #recommended-row carries `padding: 0 40px`, and .rail-viewport is a
+   rounded, dark, inset-shadowed FRAME with its own 16px padding. On a 390px
+   screen that stacked up to a rail only 246px wide starting at x=72 — a small
+   panel floating in the middle of the page, which is exactly what he described.
+   The strip now spans the full screen width (the frame keeps its look, just
+   edge to edge) and the cards carry the inset instead. */
+#recommended-row{
+  padding: 0;
+  /* the enclosing .preview-section is inset 16px, not --m-pad(14) — measured,
+     not assumed; -14 left a 2px sliver on each side. */
+  margin-left: -16px;
+  margin-right: -16px;
+}
+.rail-viewport{
+  border-radius: 0;
+  padding: 10px 0;
+}
+.rail-track{ padding: 0 var(--m-pad); }
+.rail-header{ padding: 0 var(--m-pad); }
+
+/* the glass plate behind the Top-10 is clamp(338px,36vw,372px) x clamp(632px,
+   68vw,672px) — sized for the 275px card. Against the smaller card it framed
+   nothing and overhung the (now 396px) stack by 236px, which is the big empty
+   frost panel. It reframes the card it actually has. */
+.spotlight-stack::before{
+  width: clamp(172px, 50vw, 200px);
+  height: clamp(352px, 51vh, 418px);
+}
+
+/* LATEST DROP, part 2: a centred column wastes the width — a 124px cover in a
+   358px box leaves two empty gutters and pushes the title down. On phones it
+   becomes a ROW (cover left, text right), which is both shorter and reads as a
+   deliberate layout rather than a shrunken desktop one. */
+/* ⚠️ The card's children are FLAT (img + name + romaji + genre + rating), so
+   simply switching to flex-row put every text line in its own column — measured
+   and seen, the title wrapped one word per line. A 2-column GRID with the cover
+   spanning all rows keeps the flat markup and still stacks the text beside it. */
+.featured-card{
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 2px;
+  align-content: start;
+  align-items: start;
+  text-align: left;
+}
+.featured-thumb{
+  width: 96px; height: 144px;
+  margin: 0;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: center;
+}
+.featured-card > *:not(.featured-thumb){ grid-column: 2; }
+.featured-rating{ justify-self: start; margin-top: 4px; }

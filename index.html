@@ -801,7 +801,15 @@
 
 <div class="form-row">
   <label for="auth-email">Email</label>
-  <input id="auth-email" type="email" autocomplete="username" inputmode="email"
+  <!-- ⚠️ type="text", NOT type="email", and this is deliberate. v2.2.1 made this
+       the autofill target; Blake then reported the form doing NOTHING at all on
+       his phone — no error, no response. `type="email"` refuses to submit a
+       value the browser doesn't consider an email, and a password manager that
+       stored a USERNAME for this site fills exactly that. The form silently
+       never submitted. With type="text" the value always reaches our handler,
+       which validates it and says something a human can act on.
+       inputmode="email" keeps the @-key keyboard on phones. -->
+  <input id="auth-email" type="text" autocomplete="username" inputmode="email"
          autocapitalize="none" autocorrect="off" spellcheck="false" required />
 </div>
 

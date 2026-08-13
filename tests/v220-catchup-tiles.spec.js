@@ -285,6 +285,37 @@ test('sign-in: switching to Create account re-arms the fields correctly', async 
   expect(out.passAc, 'so a manager offers to SAVE rather than fill').toBe('new-password');
 });
 
+// Blake, after v2.2.1: "I can press enter but It still doesn't log me in. I
+// don't get an 'wrong password or email' just its sitting there."
+// Cause: v2.2.1 made the identifier the autofill target, but it was type="email"
+// — so a stored USERNAME failed browser validation and the form NEVER SUBMITTED.
+// No request, no error, nothing. Silence is now impossible.
+test('sign-in: the form can never fail silently', async ({ page }) => {
+  await noDoor(page);
+  await page.goto('/index.html');
+  await page.click('#auth-open');
+  await page.waitForSelector('#auth-modal.active', { timeout: 10000 });
+
+  // the identifier must NOT be type="email", or the browser blocks submit itself
+  const type = await page.getAttribute('#auth-email', 'type');
+  expect(type, 'type=email silently refuses to submit a stored username').toBe('text');
+
+  // a username-shaped identifier gets a message that says what to do
+  await page.fill('#auth-email', 'blakewolters');
+  await page.fill('#auth-password', 'somepassword');
+  await page.click('#auth-submit');
+  await page.waitForTimeout(400);
+  const msg = await page.textContent('#auth-error');
+  expect(msg.trim().length, 'it says something').toBeGreaterThan(0);
+  expect(msg, 'and it names the actual problem').toMatch(/EMAIL/i);
+
+  // an empty box says so too, rather than doing nothing
+  await page.fill('#auth-email', '');
+  await page.click('#auth-submit');
+  await page.waitForTimeout(300);
+  expect((await page.textContent('#auth-error')).trim().length).toBeGreaterThan(0);
+});
+
 test('sign-in: the email box is hardened against iOS autocorrect', async ({ page }) => {
   await noDoor(page);
   await page.goto('/index.html');
@@ -500,39 +531,46 @@ test('item 2: the Tavern trims down on phones', async ({ page }) => {
   expect(parseFloat(phone.postText.fontSize), 'post text stays legible').toBeGreaterThanOrEqual(13);
 });
 
-test('item 2 LANDMINE GUARD: the Top-10 spotlight card stays 275px on phones', async ({ page }) => {
-  // ⚠️ `.spotlight-stack .card { width: 275px }` in mobile.css is the CUTOVER-EVE
-  // fix that is the ENTIRE reason the Top-10 fits phones, and CODE-HANDOFF says
-  // in terms: do not "unify" it back into the fluid rule. The item-2 rail work
-  // deliberately did not touch it. This test exists so nobody can, by accident.
+// REWRITTEN 2026-08-12 (second sizing pass). It used to assert the spotlight was
+// exactly 275px with full-size text. **Blake reversed that himself**: "my top 10
+// favorite anime also huge. Adjust to fit the layout of the rest." So the number
+// changed — and pinning HIS preference was the wrong thing to pin anyway.
+// What this guards now is the CUTOVER-EVE constraint, which has NOT changed: the
+// card must carry an EXPLICIT, bounded width and must never be handed back to
+// `.card { width: 100% }`, which is what inflated it to 1382px tall inside a
+// fixed-height stack in the first place. A width that tracks the viewport fails.
+test('item 2 LANDMINE GUARD: the Top-10 card is explicitly sized, never fluid', async ({ page }) => {
   await noDoor(page);
+  const widths = [];
   for (const [w, h] of [[430, 932], [390, 844], [375, 812], [320, 700]]) {
     await page.setViewportSize({ width: w, height: h });
     await page.goto('/index.html');
     await page.waitForSelector('.spotlight-stack .card', { timeout: 25000 });
     const m = await page.evaluate(() => ({
       spotlight: Math.round(document.querySelector('.spotlight-stack .card').getBoundingClientRect().width),
+      stackH: document.querySelector('.spotlight-stack').getBoundingClientRect().height,
+      vh: window.innerHeight,
       docScrollW: document.documentElement.scrollWidth,
       vw: document.documentElement.clientWidth,
     }));
-    // 275 everywhere except the sub-320 guard (max-width: calc(100vw - 32px))
-    const expected = Math.min(275, w - 32);
-    expect(m.spotlight, `the Top-10 card holds its size at ${w}px`).toBe(expected);
+    widths.push({ w, card: m.spotlight });
+    // it must be a real, bounded card — never the full stack width
+    expect(m.spotlight, `the Top-10 card is bounded at ${w}px`).toBeLessThanOrEqual(210);
+    expect(m.spotlight, `and is still a real card at ${w}px`).toBeGreaterThan(120);
     expect(m.docScrollW, `and the page never scrolls sideways at ${w}px`).toBeLessThanOrEqual(m.vw);
-
-    // ⚠️ The compact text rules now apply to `.card` SITE-WIDE, so the spotlight
-    // opts out explicitly. If that opt-out is ever dropped, the Top-10 card
-    // silently shrinks its title and clamps it — the exact drift this guards.
-    const text = await page.evaluate(() => {
-      const h3 = document.querySelector('.spotlight-stack .card .info h3');
-      if (!h3) return null;
-      const cs = getComputedStyle(h3);
-      return { font: cs.fontSize, clamp: cs.webkitLineClamp, display: cs.display };
-    });
-    expect(text, 'the spotlight card has a title').toBeTruthy();
-    expect(text.font, `full-size title at ${w}px (desktop 1rem)`).toBe('16px');
-    expect(text.clamp, `and it is NOT line-clamped at ${w}px`).toBe('none');
+    // it must also not swallow the screen — Blake's "also huge" complaint
+    // "too big" is a FRACTION OF THE SCREEN, not a pixel count — the 320x700
+    // case is what proved that (a fixed block is 47% of an iPhone 15 and 70% of
+    // an SE), so the block scales and this is asserted against the viewport.
+    expect(m.stackH / m.vh, `the Top-10 block is not swallowing the screen at ${w}px`).toBeLessThan(0.55);
+    expect(m.spotlight / m.vw, `nor is the card itself at ${w}px`).toBeLessThan(0.6);
   }
+  // THE CORE INVARIANT, stated correctly: the card is BOUNDED. The CUTOVER-EVE
+  // bug was `.card{width:100%}` letting it inflate to the stack/viewport; a
+  // clamp with a hard max is not that. So what must hold is the ceiling — the
+  // card never grows past its max no matter how wide the screen gets.
+  const widest = Math.max(...widths.map((x) => x.card));
+  expect(widest, 'the card has a hard ceiling and never inflates').toBeLessThanOrEqual(210);
 });
 
 // ---------------------------------------------------------------------------

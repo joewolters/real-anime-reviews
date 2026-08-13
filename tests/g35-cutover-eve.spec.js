@@ -32,7 +32,15 @@ test.describe('CUTOVER-EVE — last-gate pins', () => {
           scrollW: document.documentElement.scrollWidth, innerW: window.innerWidth,
         };
       });
-      expect(r.activeW, `card width at ${w}px`).toBe(275);                 // the desktop portrait, restored
+      // ⚠️ CHANGED 2026-08-12, on Blake's own word: "my top 10 favorite anime
+      // also huge. Adjust to fit the layout of the rest." The card is no longer
+      // the 275px desktop portrait on phones — it scales with the screen under a
+      // hard ceiling. THE FIX THIS TEST GUARDS IS UNCHANGED and is asserted
+      // below: the card must never inflate to fill the stack, overlap the
+      // heading above, spill past the frame, or push the page sideways. That —
+      // not the number — is what CUTOVER-EVE fix 3 was about.
+      expect(r.activeW, `card is bounded, never fluid, at ${w}px`).toBeLessThanOrEqual(210);
+      expect(r.activeW, `card is still a real portrait at ${w}px`).toBeGreaterThan(120);
       expect(r.overlapSubtext, `subtext overlap at ${w}px`).toBeLessThanOrEqual(0);
       expect(r.spillBottom, `bottom spill at ${w}px`).toBeLessThanOrEqual(0);
       expect(r.scrollW, `horizontal overflow at ${w}px`).toBeLessThanOrEqual(r.innerW);

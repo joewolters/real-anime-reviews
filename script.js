@@ -2002,7 +2002,32 @@ window.__rarBackfillProfiles = () => httpsCallable(functions, 'backfillProfiles'
     const uname = userInput.value.trim();
 
     const submitBtn = document.getElementById('auth-submit');
+
+    // ⚠️ v2.2.2 — Blake: "I can press enter but It still doesn't log me in. I
+    // don't get an 'wrong password or email' just its sitting there."
+    // Silence is the worst possible outcome here: he cannot tell a wrong
+    // password from a dead network from a form that never submitted. Every exit
+    // from this handler now SAYS something, and the message is scrolled into
+    // view because #auth-error sits at the bottom of a modal that scrolls on a
+    // phone — a message he cannot see is the same as no message.
+    const showAuthError = (msg) => {
+      authError.textContent = msg;
+      try { authError.scrollIntoView({ block: 'nearest' }); } catch (_) {}
+    };
+
+    // The identifier box is type="text" on purpose (a type="email" box refuses
+    // to submit a stored username and the form dies silently), so the shape is
+    // checked HERE, where we can explain it.
+    if (!email) { showAuthError('Enter your email address.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showAuthError('Sign in with your EMAIL address, not a username — that is what the account was created with.');
+      return;
+    }
+    if (!pass) { showAuthError('Enter your password.'); return; }
+
+    const submitLabel = submitBtn.textContent;
     submitBtn.disabled = true;
+    submitBtn.textContent = authMode === 'signup' ? 'Creating…' : 'Signing in…';
 
     try {
       if (authMode === 'signup') {
@@ -2022,9 +2047,18 @@ window.__rarBackfillProfiles = () => httpsCallable(functions, 'backfillProfiles'
       // nothing is unread or the door is still up.
       try { window._rarSignInCatchup && window._rarSignInCatchup(auth.currentUser); } catch (_) {}
     } catch (err) {
-      authError.textContent = prettyAuthError(err, authMode);
+      // ⚠️ prettyAuthError's FALLBACK used to be the only thing standing between
+      // a member and silence. It now also carries the raw code, because "it just
+      // sits there" cost a whole round trip to diagnose — a code he can read out
+      // turns the next report into a one-line answer.
+      const nice = prettyAuthError(err, authMode);
+      const code = (err && err.code) ? String(err.code).replace('auth/', '') : '';
+      showAuthError(code && nice.startsWith('Something went wrong')
+        ? nice + ' (' + code + ')'
+        : nice);
     } finally {
       submitBtn.disabled = false;
+      submitBtn.textContent = submitLabel;
     }
   });
 
