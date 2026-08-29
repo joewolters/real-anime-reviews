@@ -21,6 +21,15 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-29 -->
+## v2.3.2 — PATCH (2026-08-29)
+
+**The Publish button on Add New Anime does something again.** Pressing it did nothing at all — no save, no error, no spinner. The page was fine; the button was calling a safety check that had been deleted a version earlier, and reaching for a name that is not there stops everything on that line before any of the publishing happens. The check is back, and it now asks the same questions the rest of the site asks before anything is saved, so an incomplete entry is refused in one clear message instead of silently.
+
+**The page stopped calling itself MODE 1.** That heading was left over from the workflow that needed a program on the desktop — the workflow this page no longer uses. It says ADD ANIME now, over the notice explaining that a publish goes straight to the cloud.
+
+**A test that presses the button.** The old test read the button's label and checked the page loaded cleanly, which a dead button passes perfectly. The new one checks that every helper the Publish path names actually exists, and it fails against the broken version.
+
+<!-- author: Code | date: 2026-08-29 -->
 ## v2.3.1 — MINOR (2026-08-29)
 
 **Season reviews can be written for the first time.** Not "again" — for the first time. Writing one required a program running on one particular desktop, and that program stopped being part of how this site works when the catalogue moved online. The site has shipped with zero season reviews ever since, and the reason was never visible: the page simply told you to go and start something that no longer does anything. They are now written and edited from anywhere, stored alongside everything else, and the site reads them from there.

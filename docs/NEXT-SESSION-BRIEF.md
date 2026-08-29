@@ -16,9 +16,25 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-29 — v2.3.1 LIVE)
+## ⚡ STATUS (updated 2026-08-29 — v2.3.2 BUILT, NOT DEPLOYED)
 
-- 🚀 **v2.3.1 IS LIVE.** Tree clean, pushed, `main` in sync. Nothing waiting to deploy.
+- ⚠️ **v2.3.2 IS BUILT AND TESTED BUT NOT DEPLOYED.** It needs Blake's go-signal for
+  `deploy --only hosting`. v2.3.1 is what is live.
+- 🐛 **THE PUBLISH BUTTON WAS DEAD, and v2.3.2 is the fix.** Blake: *"when I go to
+  publish a new review nothing happens."* `admin/new-anime.js` called
+  `validateBeforeGenerate()` — a function **v2.3.0 deleted and whose call it left
+  behind.** It is the first line of the click handler, so every press threw
+  `ReferenceError` before any publishing ran: no write, no error text, nothing. NOT the
+  rules, NOT the network, NOT the slug — the cloud path was simply never reached.
+  Restored (deferring the shared rules to `RarCatalogModel.validate`), plus one reader
+  of the form (`collectCoreFields`), plus the stale `MODE 1` kicker retired to
+  `ADD ANIME`. Full record: `docs/SHIP-OUTPUT.md`.
+- 🧪 **The v2.3.0 test was green over a dead button** because it reads the LABEL and
+  never clicks. `tests/v232-publish-button-alive.spec.js` now guards the call graph, and
+  was verified to FAIL against the pre-fix file.
+- ✅ **The site is otherwise in sync with the cloud.** `catalog-publish --from=rest`
+  (read-only) reports 44 entries, body **identical to what is live**. No drift, nothing
+  stale, no pending publish.
 - ✅ **Items 1, 2, 4 and 6 are all DONE and LIVE** (notification overhaul · mobile sizing ·
   admin tiles · shelf picker). Plus, unbanked but shipped: the header-search
   NOT-REVIEWED shelf, the iPhone sign-in form fix, the cache-header fix, and the
@@ -30,7 +46,9 @@
   **Publish to catalog** on `/admin/new-anime`; then this machine runs `npm run catalog:publish`,
   fetches the cover into `assets/` as `i-made-friends-with-the-second-prettiest-girl-in-my-class.png`,
   and deploys `--only hosting`. That is what makes it public.
-- **Floors: `npm test` 417 · rules 222 · cf 94 · functions 94 · webkit 24.**
+- **Floors: `npm test` 420 (was 417 + 3 new) · rules 222 · cf 94 · functions 94 · webkit 24.**
+  This run: 418 passed + 2 flake-class reds that PASS isolated; webkit 24 ✓; functions 94 ✓.
+  rules/cf NOT run — no `firestore.rules` and no `functions/` code was touched.
 - **STILL OPEN, honestly labelled:** Safari + DuckDuckGo sign-in (TWO failed hypotheses —
   start from `?authcheck=1`, do NOT guess a third) · the ✨ASK drawer still needs `/api/chat`
   (the one deliberate hold-out) · the intermittent review-deep-link highlight, never reproduced.

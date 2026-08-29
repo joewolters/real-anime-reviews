@@ -8,14 +8,14 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script>window.APP_VERSION="2.3.1"</script>
+  <script>window.APP_VERSION="2.3.2"</script>
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="description" content="Admin-only Mode 1 page — not indexed." />
+  <meta name="description" content="Admin-only page — not indexed." />
 
-  <link rel="stylesheet" href="../style.css?v=2.3.1" />
-  <link rel="stylesheet" href="../mobile.css?v=2.3.1" media="(max-width: 900px)" />
-  <link rel="stylesheet" href="../admin-fab.css?v=2.3.1" />
-  <link rel="stylesheet" href="new-anime.css?v=2.3.1" />
+  <link rel="stylesheet" href="../style.css?v=2.3.2" />
+  <link rel="stylesheet" href="../mobile.css?v=2.3.2" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="../admin-fab.css?v=2.3.2" />
+  <link rel="stylesheet" href="new-anime.css?v=2.3.2" />
   <link rel="stylesheet" href="section-editor.css" />
   <style>
     /* Mode notice — mirror of .sr-server-banner (season-reviews.css/quotes.css);
@@ -68,15 +68,15 @@
 
       <div class="admin-header">
         <h2 class="admin-title-line">
-          <span class="admin-kicker-inline">MODE 1 <span class="jp-mini">モード1</span></span>
+          <span class="admin-kicker-inline">ADD ANIME <span class="jp-mini">追加</span></span>
           <span class="admin-divider">·</span>
           <span class="admin-title-text">Add New Anime</span>
         </h2>
         <button type="button" id="chat-summon-btn" class="chat-summon-btn" disabled aria-controls="chat-drawer" aria-expanded="false">✨ ASK</button>
       </div>
 
-      <!-- Mode notice — filled by new-anime.js after detectServerMode() so the
-           silent Generate-mode fallback off-localhost is said out loud. -->
+      <!-- v2.3.1 — the cloud notice. detectServerMode() is gone with the Mode 1
+           desktop server; new-anime.js fills this with where a publish lands. -->
       <div id="mode-notice" class="mode-notice" hidden></div>
 
       <section class="admin-section" aria-labelledby="step1-h">

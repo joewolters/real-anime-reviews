@@ -3,9 +3,8 @@
 // What this does:
 //   1. Gates the page behind admin UID check
 //   2. Form: type title → fetch from AniList → edit fields → review/rating
-//   3. Detects Mode 1 server (localhost) vs deployed:
-//      - Local: Submit & Ship (sends to /api/submit, streams progress)
-//      - Remote: Generate Excel Row (paste workflow)
+//   3. Publishes straight to `catalog/{animeId}` in Firestore (v2.3.0). The old
+//      Mode 1 desktop server and the Excel paste workflow are both retired.
 //   4. Inline AI suggestion panels (open Claude with prompt → paste back)
 //
 // Author: Code | date: 2026-05-10 | Mode 1 baseline (v1.6.0) + server (v1.6.1)
@@ -722,6 +721,56 @@ function combinedWatch() {
 // (RarCatalogModel.slug) — never a local re-implementation. The rules enforce
 // animeId == slug == the doc id, so a mismatch is rejected rather than silently
 // orphaning discussion.
+// The catalog fields the form owns, read straight off the DOM and normalised by
+// the SHARED model so this page, the Cloud editor and the old Excel sync cannot
+// drift apart. Both the pre-flight check and the write below go through here —
+// one reader, so a field can never be validated in one shape and saved in another.
+function collectCoreFields(M) {
+  const fields = {
+    Title: $('title-input').value.trim(),
+    Genre: $('genre-input').value.trim(),
+    Rating: $('rating-input').value.trim(),
+    Seasons: $('seasons-input').value.trim(),
+    Description: $('description-input').value.trim(),
+    Review: reviewValue(),
+    Tags: M.normalizeTags($('tags-input').value.trim()),
+    Studio: $('studio-input').value.trim(),
+    Platforms: M.normalizePlatforms(combinedWatch()),
+    Trailer: M.normalizeTrailer($('trailer-input').value.trim()),
+  };
+  const top10 = $('top10-input').value.trim();
+  if (top10) fields.Top10Rank = Number(top10);
+  return fields;
+}
+
+// ── v2.3.2 — RESTORED. This function was deleted with the Mode 1 Excel pipeline
+// in v2.3.0, but ITS CALL WAS LEFT BEHIND in the Publish click handler. So every
+// press of "Publish to catalog" threw `ReferenceError: validateBeforeGenerate is
+// not defined` BEFORE publishToCatalog() ever ran: no write, no error text, no
+// spinner. Blake: "when I go to publish a new review nothing happens." The page
+// booted clean and the button looked right, which is exactly why the v2.3.0 test
+// (it reads the label but never clicks) went green over a dead button.
+//
+// The shared rules stay in RarCatalogModel.validate — ONE source of truth with
+// the sync and the Cloud editor. Only what the model cannot see lives here: the
+// AniList fetch, and the two fields it does not own (Seasons, Studio) plus the
+// image override, which is a form concern, not a catalog one.
+function validateBeforeGenerate() {
+  const M = window.RarCatalogModel;
+  if (!M || typeof M.validate !== 'function') {
+    return ['The catalog model did not load — reload the page and try again.'];
+  }
+  const errors = [];
+  if (!state.anilist) errors.push('Fetch from AniList first.');
+  errors.push(...M.validate(collectCoreFields(M)));
+  if (!$('seasons-input').value.trim()) errors.push('Seasons is empty.');
+  if (!$('studio-input').value.trim()) errors.push('Studio is empty.');
+  if (state.imageSource === 'override' && !$('image-filename-input').value.trim()) {
+    errors.push('Override image filename is empty.');
+  }
+  return errors;
+}
+
 async function publishToCatalog() {
   const btn = $('generate-btn');
   const err = $('generate-error');
@@ -747,21 +796,7 @@ async function publishToCatalog() {
   // not overridden it we derive one and the deploy step fetches the art.
   const image = state.imageOverride || (animeId + '.png');
 
-  const fields = {
-    Title: title,
-    Genre: $('genre-input').value.trim(),
-    Rating: $('rating-input').value.trim(),
-    image,
-    Seasons: $('seasons-input').value.trim(),
-    Description: $('description-input').value.trim(),
-    Review: review,
-    Tags: M.normalizeTags($('tags-input').value.trim()),
-    Studio: $('studio-input').value.trim(),
-    Platforms: M.normalizePlatforms(combinedWatch()),
-    Trailer: M.normalizeTrailer($('trailer-input').value.trim()),
-  };
-  const top10 = $('top10-input').value.trim();
-  if (top10) fields.Top10Rank = Number(top10);
+  const fields = { ...collectCoreFields(M), image };
   if (a.id) fields.AniListId = Number(a.id);
   if (a.idMal) fields.IdMal = Number(a.idMal);
   if (a.averageScore) fields.AniListScore = Number(a.averageScore);

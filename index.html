@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="2.3.1"</script>
+  <script>window.APP_VERSION="2.3.2"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -59,10 +59,10 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=2.3.1">
-  <link rel="stylesheet" href="mobile.css?v=2.3.1" media="(max-width: 900px)">
-  <link rel="stylesheet" href="frames.css?v=2.3.1">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
-  <link rel="stylesheet" href="admin-fab.css?v=2.3.1">
+  <link rel="stylesheet" href="style.css?v=2.3.2">
+  <link rel="stylesheet" href="mobile.css?v=2.3.2" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=2.3.2">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
+  <link rel="stylesheet" href="admin-fab.css?v=2.3.2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -267,11 +267,22 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v2.3.1</span>
+      <span class="changelog-tag" id="changelog-version">v2.3.2</span>
      Hotfix
     </div>
 
     <div class="changelog-content">
+      <div class="version-section" data-tier="hotfix">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v2.3.2</span></div>
+          <span class="vs-tier">Hotfix</span>
+          <div class="version-header">08/29/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li><strong>Publishing a finished review works again.</strong> The button did nothing at all &mdash; no save, no error, no sign it had been pressed. It was calling a safety check that had been removed a version earlier, which stopped the whole thing before any publishing happened. The check is back, and an incomplete entry now gets told what is missing.</li>
+          <li>That page no longer calls itself by the name of the old desktop workflow it stopped using.</li>
+        </ul>
+      </div>
       <div class="version-section" data-tier="minor">
         <div class="vs-head">
           <div class="version-chips"><span class="version-chip">v2.3.1</span></div>
