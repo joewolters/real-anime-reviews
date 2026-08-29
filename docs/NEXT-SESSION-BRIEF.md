@@ -7,7 +7,8 @@
 > My reading of each is marked separately, and my open questions are at the bottom of each item.
 > **Do not treat my reading as his decision.**
 >
-> State when banked: **v2.1.0 LIVE**, Part A complete, **the patch queue is CLOSED** — items
+> ⚠️ **HISTORY — the state WHEN THIS WAS BANKED (2026-08-12), not now.** For the live
+> state read the STATUS block directly below. State when banked: **v2.1.0 LIVE**, Part A complete, **the patch queue is CLOSED** — items
 > 2/3/5/6 shipped, 7 partial (one gap closed, the intermittent report still unreproduced),
 > 4 closed-as-deliberate by Blake. 1 was already done by PART A item 8b.
 > Floors: **npm test 368** · rules 218 · cf 94 · functions 94 · webkit 24. Nothing is deployed
@@ -15,26 +16,32 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-12, after the items 1 + 4 session)
+## ⚡ STATUS (updated 2026-08-29 — v2.3.1 LIVE)
 
-- 🚀 **v2.2.0 IS LIVE** (deployed 2026-08-12, hosting only, prod-smoked). Items 1, 4 and 2 plus the header-search shelf all reached real people.
-- ✅ **Item 1 — DONE and LIVE.** Blake locked 5 decisions first; they are
-  recorded in the gate log. ⚠️ **This brief's §1 claim that the anime routing "already branches
-  this way" was WRONG** — it did not, and the branch had to be built. Left in place below so the
-  next reader sees what a confident-but-unverified claim looks like.
-- ✅ **Item 4 — DONE and LIVE.** All eleven tools stay; Blake: *"Ill tell
-  you which ones to drop later."* The scroll he asked for turned out to be a real bug — the menu
-  had no `max-height` and no `overflow` and ran off-screen.
-- ✅ **Item 2 (mobile) — DONE and LIVE.** Rail cards had NO mobile override: fixed 200×581 at every width. Now 117×307, 3.06 visible, 36% of screen (was 69%). The `.spotlight-stack` 275px landmine is untouched and now test-guarded.
-- ✅ **Header search** now shows a NOT REVIEWED YET shelf (his mid-session ask).
-- ✅ **Item 6 (shelves) — DONE and LIVE** (v2.2.2). Source registry: reviewed → their lists → catalog; swappable for the AniList sync.
-- ⏳ **ONLY ITEM 3 (Mode 2) REMAINS.** Blake: he wants to clarify some things before it starts. The seven decisions locked 2026-08-09 stand.
-- **New floor: `npm test` 387.** webkit 24 · functions 94 held; rules 218 · cf 94 untouched.
+- 🚀 **v2.3.1 IS LIVE.** Tree clean, pushed, `main` in sync. Nothing waiting to deploy.
+- ✅ **Items 1, 2, 4 and 6 are all DONE and LIVE** (notification overhaul · mobile sizing ·
+  admin tiles · shelf picker). Plus, unbanked but shipped: the header-search
+  NOT-REVIEWED shelf, the iPhone sign-in form fix, the cache-header fix, and the
+  whole admin side coming off the Mode 1 desktop server.
+- ⏳ **ONLY ITEM 3 (MODE 2) REMAINS.** Blake wants to clarify things before it starts.
+  The seven decisions locked 2026-08-09 in `docs/MODE-2-STUDY.md` **stand — do not re-open them.**
+- ⚠️ **WAITING ON BLAKE, not on code:** he has a finished review for *I Made Friends with
+  the Second Prettiest Girl in My Class* (AniList 169580) in the Curator Studio. He presses
+  **Publish to catalog** on `/admin/new-anime`; then this machine runs `npm run catalog:publish`,
+  fetches the cover into `assets/` as `i-made-friends-with-the-second-prettiest-girl-in-my-class.png`,
+  and deploys `--only hosting`. That is what makes it public.
+- **Floors: `npm test` 417 · rules 222 · cf 94 · functions 94 · webkit 24.**
+- **STILL OPEN, honestly labelled:** Safari + DuckDuckGo sign-in (TWO failed hypotheses —
+  start from `?authcheck=1`, do NOT guess a third) · the ✨ASK drawer still needs `/api/chat`
+  (the one deliberate hold-out) · the intermittent review-deep-link highlight, never reproduced.
+- **⚠️ TWO TRAPS:** `admin/edit.js`'s own `slugify()` STRIPS apostrophes and is **not** the
+  catalog doc id — use `RarCatalogModel.slug`. And **never add a new named import from the bare
+  `./firebase.js`** — that took the site down in v2.2.3; put the value on `window` instead.
 - Full record: `docs/SHIP-OUTPUT.md` + the newest `docs/v1.10.0-GATE-LOG.md` entry.
 
 ---
 
-## 1. NOTIFICATION SYSTEM OVERHAUL — replace the enter-page UI ✅ BUILT 2026-08-12 (not deployed)
+## 1. NOTIFICATION SYSTEM OVERHAUL — replace the enter-page UI ✅ SHIPPED + LIVE (2026-08-12)
 
 ### Blake, verbatim
 > "Currently: when users have an item on a watchlist, whenever they first visit the website, they
@@ -80,7 +87,7 @@
 
 ---
 
-## 2. MOBILE ENHANCEMENTS — the layout differs wildly per phone ✅ BUILT 2026-08-12 (not deployed)
+## 2. MOBILE ENHANCEMENTS — the layout differs wildly per phone ✅ SHIPPED + LIVE (2026-08-12)
 
 ### Blake, verbatim
 > "(context: first and second image are from a pixel 10, 3rd image is from a razr flip 8, 4th is
@@ -169,7 +176,7 @@ must go **propose-only** for that anime — otherwise the site claims coverage B
 
 ---
 
-## 4. ADMIN MENU UI — tiles, not a list ✅ BUILT 2026-08-12 (not deployed)
+## 4. ADMIN MENU UI — tiles, not a list ✅ SHIPPED + LIVE (2026-08-12)
 
 ### Blake, verbatim
 > "The current mobile or admin look is that in the bottom left corner, I click a little thing that
@@ -206,7 +213,7 @@ must go **propose-only** for that anime — otherwise the site claims coverage B
 
 ---
 
-## 6. SHELF BUILDING — autopopulate from what they've already watched ✅ SHIPPED v2.2.2
+## 6. SHELF BUILDING — autopopulate from what they've already watched ✅ SHIPPED + LIVE (v2.2.2)
 
 ### Blake, verbatim (2026-08-12)
 > "Watchlist tracker needs to autopopulic FIRSTly with things the user has either watched or
