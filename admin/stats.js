@@ -11,7 +11,7 @@ import { auth, db, functions } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js';
-import { friendlyError } from '../friendly-errors.js?v=2.2.5';
+import { friendlyError } from '../friendly-errors.js?v=2.3.0';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const $ = (id) => document.getElementById(id);

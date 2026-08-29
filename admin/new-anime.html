@@ -8,14 +8,14 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
-  <script>window.APP_VERSION="2.2.5"</script>
+  <script>window.APP_VERSION="2.3.0"</script>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Admin-only Mode 1 page — not indexed." />
 
-  <link rel="stylesheet" href="../style.css?v=2.2.5" />
-  <link rel="stylesheet" href="../mobile.css?v=2.2.5" media="(max-width: 900px)" />
-  <link rel="stylesheet" href="../admin-fab.css?v=2.2.5" />
-  <link rel="stylesheet" href="new-anime.css?v=2.2.5" />
+  <link rel="stylesheet" href="../style.css?v=2.3.0" />
+  <link rel="stylesheet" href="../mobile.css?v=2.3.0" media="(max-width: 900px)" />
+  <link rel="stylesheet" href="../admin-fab.css?v=2.3.0" />
+  <link rel="stylesheet" href="new-anime.css?v=2.3.0" />
   <link rel="stylesheet" href="section-editor.css" />
   <style>
     /* Mode notice — mirror of .sr-server-banner (season-reviews.css/quotes.css);
@@ -249,49 +249,24 @@
         </div>
 
         <div class="admin-row">
-          <button type="button" id="generate-btn" class="inline-header-btn generate-btn">Generate Excel Row</button>
+          <button type="button" id="generate-btn" class="inline-header-btn generate-btn">Publish to catalog</button>
           <p id="generate-error" class="error" hidden></p>
         </div>
       </section>
 
-      <section class="admin-section" id="progress-section" aria-labelledby="progress-h" hidden>
-        <div class="admin-section-head">
-          <span class="step-num running" id="progress-num">⟳</span>
-          <h3 id="progress-h">Shipping…</h3>
-        </div>
-        <ul class="progress-list" id="progress-list"></ul>
-        <p id="progress-error" class="error" hidden></p>
-        <div class="admin-row" id="deploy-confirm-row" hidden>
-          <p class="muted">All steps before deploy passed. Push to <strong>realanimereviews.com</strong>?</p>
-          <div style="display:flex;gap:10px;">
-            <button type="button" id="confirm-deploy-btn" class="inline-header-btn generate-btn">Yes, deploy now</button>
-            <button type="button" id="cancel-deploy-btn" class="inline-header-btn small">Cancel</button>
-          </div>
-        </div>
-      </section>
+      <!-- v2.3.0 - the Mode 1 "Shipping..." progress panel and its deploy
+           confirmation were removed with the desktop server they drove. -->
 
       <section class="admin-section admin-output" id="output-section" aria-labelledby="output-h" hidden>
         <div class="admin-section-head">
-          <span class="step-num done">✓</span>
-          <h3 id="output-h">Ready to ship</h3>
+          <span class="step-num done">&#10003;</span>
+          <h3 id="output-h">Published</h3>
         </div>
 
-        <div class="admin-row">
-          <label>Excel row <span class="hint">(tab-separated — paste into the next empty row of <code>Anime_Master_Table.xlsx</code>)</span></label>
-          <div class="copy-block">
-            <pre id="excel-row-output" class="copy-target" tabindex="0"></pre>
-            <button type="button" class="copy-btn" data-copy-target="excel-row-output">Copy</button>
-          </div>
-        </div>
-
-        <div class="admin-row">
-          <label>Local commands to run <span class="hint">(after pasting the row in Excel + saving)</span></label>
-          <div class="copy-block">
-            <pre id="commands-output" class="copy-target" tabindex="0"></pre>
-            <button type="button" class="copy-btn" data-copy-target="commands-output">Copy</button>
-          </div>
-          <p class="muted small">See <code>docs/SKILLS/release-skill.md</code> for the full release workflow.</p>
-        </div>
+        <!-- v2.3.0 - the Excel row and the "local commands to run" block lived
+             here. Both described a workflow that no longer exists: the catalog
+             is the source of truth and the spreadsheet is an export. -->
+        <div class="admin-row" id="publish-result"></div>
 
         <div class="admin-row">
           <button type="button" id="reset-btn" class="inline-header-btn">Add another anime</button>
@@ -344,6 +319,10 @@
     document.write(`<script src="brand-select.js?v=${v}"><\/script>`);
     document.write(`<script src="section-editor.js?v=${v}"><\/script>`);
     document.write(`<script src="modal-scroll-lock.js?v=${v}"><\/script>`);
+    // v2.3.0 - the shared catalog model: the SAME slug + normalisers + validator
+    // the Cloud editor uses, so a review published here is byte-identical in
+    // shape to one edited there. Classic script -> window.RarCatalogModel.
+    document.write(`<script src="catalog-model.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="../firebase.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="new-anime.js?v=${v}"><\/script>`);
     document.write(`<script type="module" src="../admin-fab.js?v=${v}"><\/script>`);

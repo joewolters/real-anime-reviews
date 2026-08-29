@@ -1,4 +1,4 @@
-// admin/new-anime.js — Mode 1 baseline form logic
+// admin/new-anime.js — the Add Anime form (publishes straight to the catalog)
 // =============================================================================
 // What this does:
 //   1. Gates the page behind admin UID check
@@ -11,8 +11,11 @@
 // Author: Code | date: 2026-05-10 | Mode 1 baseline (v1.6.0) + server (v1.6.1)
 // =============================================================================
 
-import { auth } from '../firebase.js';
+import { auth, db } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+import {
+  doc, getDoc, setDoc, collection, getDocs, serverTimestamp,
+} from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
@@ -121,7 +124,6 @@ const state = {
   anilist: null,
   imageSource: 'anilist',
   imageOverride: '',
-  serverMode: 'remote',
   // v1.7.3 — watched-set: the multi-hop franchise entries, the checked id Set,
   // and the full visible id list (KnownAniListIds snapshot for Mode 2's future diff).
   watchedEntries: [],
@@ -137,19 +139,8 @@ let _previewDebounceTimer = null;
 let _searchResultsCache = [];
 let _searchSelectedIndex = -1;
 
-// ---- Detect Mode 1 server (localhost only) -------------------------------
-async function detectServerMode() {
-  const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-  if (!isLocal) return 'remote';
-  try {
-    const res = await fetch('/api/health', { method: 'GET' });
-    if (res.ok) {
-      const body = await res.json();
-      if (body?.ok && body?.server === 'mode1') return 'local';
-    }
-  } catch { /* server not running */ }
-  return 'remote';
-}
+// ---- v2.3.0 - the desktop-server probe is gone: there is no server to
+//      detect. The page has one mode, and it is the cloud.
 
 // ---- Helpers -------------------------------------------------------------
 function $(id) { return document.getElementById(id); }
@@ -168,7 +159,7 @@ function setStatus(message, kind = 'info') {
 
 function showStep(n) { $('step' + n).hidden = false; }
 function hideAllSteps() {
-  for (const id of ['step2', 'step3', 'step4', 'step5', 'output-section', 'progress-section']) {
+  for (const id of ['step2', 'step3', 'step4', 'step5', 'output-section']) {
     $(id).hidden = true;
   }
 }
@@ -546,7 +537,6 @@ function populateForm(media) {
 
   showStep(2); showStep(3); showStep(4); showStep(5);
   $('output-section').hidden = true;
-  $('progress-section').hidden = true;
 
   // v1.6.7 — warn if fetched entry has a PREQUEL (likely Season 2+;
   // single-hop aggregation will be partial — recommend fetch Season 1).
@@ -715,272 +705,147 @@ function combinedWatch() {
   return out.join(', ');
 }
 
-function buildExcelRow() {
+// ── v2.3.0 — PUBLISH TO THE CATALOG (the cloud path) ────────────────────────
+// <!-- author: Code | date: 2026-08-13 -->
+// Blake, with a finished review he could not post: "the website posting anime
+// admin section thinks we need mode 1 to publish the excel role... We have moved
+// onto the cloud."
+//
+// He was right, and it was worse than a stale banner: this page could only ship
+// through the Mode 1 desktop server or an Excel row, and BOTH were retired by the
+// cloud migration (`npm run sync` refuses to write from the spreadsheet now).
+// Adding a new anime has been impossible since. This is the replacement: one
+// write to `catalog/{animeId}`, from any device, no desktop server.
+//
+// ⚠️ THE SLUG IS THE ONE THING THAT CANNOT BE WRONG. It is the document id AND
+// the key every live comment room hangs off, so it comes from the SHARED model
+// (RarCatalogModel.slug) — never a local re-implementation. The rules enforce
+// animeId == slug == the doc id, so a mismatch is rejected rather than silently
+// orphaning discussion.
+async function publishToCatalog() {
+  const btn = $('generate-btn');
+  const err = $('generate-error');
+  const say = (m) => { if (err) { err.textContent = m; err.hidden = !m; } };
+  say('');
+
+  const M = window.RarCatalogModel;
+  if (!M || typeof M.slug !== 'function') {
+    say('The catalog model did not load — reload the page and try again.');
+    return;
+  }
+
   const title = $('title-input').value.trim();
-  const rating = $('rating-input').value.trim();
-  const seasons = $('seasons-input').value.trim();
-  const genre = $('genre-input').value.trim();
-  const description = $('description-input').value.trim();
   const review = reviewValue();
-  const tags = $('tags-input').value.trim();
-  const watch = combinedWatch();
-  const studio = $('studio-input').value.trim();
-  const trailer = $('trailer-input').value.trim();
-  const top10 = $('top10-input').value.trim();
+  if (!title) { say('A title is required.'); return; }
+  if (!review) { say('The review is empty.'); return; }
+
+  const animeId = M.slug(title);
+  if (!animeId) { say('That title does not make a usable id.'); return; }
 
   const a = state.anilist || {};
-  const aniListId = a.id || '';
-  const idMal = a.idMal || '';
-  const aniListScore = a.averageScore || '';
-  const aniListColor = a.coverImage?.color || '';
-  // v1.7.3 — title variants (fills the pre-existing paste-row gap) + watched-set
-  // columns, so the pasted row matches the full Excel header order through col 21.
-  const titleEnglish = a.title?.english || '';
-  const titleRomaji = a.title?.romaji || '';
-  const titleNative = a.title?.native || '';
-  const watchedIds = getWatchedAniListIds();
-  const knownIds = getKnownAniListIds();
+  // the cover stays a FILENAME (every card builds `assets/<file>`); when he has
+  // not overridden it we derive one and the deploy step fetches the art.
+  const image = state.imageOverride || (animeId + '.png');
 
-  const cols = [
-    title, rating, seasons, genre, description, review, tags, watch, studio, trailer,
-    '', '',
-    top10, aniListId, idMal, aniListScore, aniListColor,
-    titleEnglish, titleRomaji, titleNative,
-    watchedIds, knownIds,
-  ];
-  return cols.map(v => String(v).replace(/[\t\r\n]+/g, ' ')).join('\t');
-}
-
-function buildCommands() {
-  const title = $('title-input').value.trim();
-  const imageStep = state.imageSource === 'anilist'
-    ? `# 0. Save the AniList cover image into assets/ (download from the URL on this page).\n#    Use a slug filename like ${slugify(title)}.png — match the format of existing images.\n\n`
-    : `# 0. Confirm your override image file already exists at assets/${state.imageOverride}.\n\n`;
-  return imageStep +
-`cd "C:\\Users\\Owner\\PROJECTS\\Real Anime Reviews\\Current Version"
-npm run sync
-npm test
-node scripts/bump-version.js --check
-# bump version (this is a PATCH per project convention for new-anime adds):
-# node scripts/bump-version.js <next-version>
-git add -A
-git commit -m "Add anime: ${title}"
-git push
-firebase hosting:channel:deploy add-${slugify(title).slice(0, 24)}
-# verify the preview URL, then:
-firebase deploy --only hosting`;
-}
-
-function validateBeforeGenerate() {
-  const errors = [];
-  if (!state.anilist) errors.push('Fetch from AniList first.');
-  if (!$('title-input').value.trim()) errors.push('Title is empty.');
-  if (!/^\d+(\.\d+)?\/10$/.test($('rating-input').value.trim())) errors.push('Rating must be X/10 or X.Y/10.');
-  if (!$('description-input').value.trim()) errors.push('Description is empty.');
-  if (!reviewValue()) errors.push('Review is empty.');
-  if (!$('genre-input').value.trim()) errors.push('Genre is empty.');
-  if (!$('seasons-input').value.trim()) errors.push('Seasons is empty.');
-  if (!$('tags-input').value.trim()) errors.push('Tags is empty.');
-  if (!combinedWatch()) errors.push('Where to watch is empty.');
-  if (!$('studio-input').value.trim()) errors.push('Studio is empty.');
-  const trailer = $('trailer-input').value.trim();
-  if (!/^https:\/\/www\.youtube\.com\/embed\/[\w-]+$/.test(trailer)) {
-    errors.push('Trailer must be a https://www.youtube.com/embed/<id> URL.');
-  }
-  if (state.imageSource === 'override' && !state.imageOverride.trim()) {
-    errors.push('Override image filename is empty.');
-  }
-  const top10 = $('top10-input').value.trim();
-  if (top10 && (!/^\d+$/.test(top10) || +top10 < 1 || +top10 > 10)) {
-    errors.push('Top10Rank must be 1–10 if provided.');
-  }
-  return errors;
-}
-
-function showOutput() {
-  $('excel-row-output').textContent = buildExcelRow();
-  $('commands-output').textContent = buildCommands();
-  $('output-section').hidden = false;
-  $('output-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-// ---- Submit & Ship (Mode 1 server) ---------------------------------------
-function buildSubmitPayload() {
-  const a = state.anilist || {};
-  return {
-    title: $('title-input').value.trim(),
-    rating: $('rating-input').value.trim(),
-    seasons: $('seasons-input').value.trim(),
-    genre: $('genre-input').value.trim(),
-    description: $('description-input').value.trim(),
-    review: reviewValue(),
-    tags: $('tags-input').value.trim(),
-    watchOfficial: $('watch-official-input').value.trim(),
-    studio: $('studio-input').value.trim(),
-    trailer: $('trailer-input').value.trim(),
-    top10Rank: $('top10-input').value.trim(),
-    aniListId: a.id,
-    idMal: a.idMal,
-    aniListScore: a.averageScore,
-    aniListColor: a.coverImage?.color,
-    titleEnglish: a.title?.english || '',
-    titleRomaji: a.title?.romaji || '',
-    titleNative: a.title?.native || '',
-    watchedAniListIds: getWatchedAniListIds(),
-    knownAniListIds: getKnownAniListIds(),
-    imageSource: state.imageSource,
-    imageUrl: a.coverImage?.extraLarge || a.coverImage?.large || '',
-    imageOverrideFilename: state.imageOverride,
-    customBullets: null,
+  const fields = {
+    Title: title,
+    Genre: $('genre-input').value.trim(),
+    Rating: $('rating-input').value.trim(),
+    image,
+    Seasons: $('seasons-input').value.trim(),
+    Description: $('description-input').value.trim(),
+    Review: review,
+    Tags: M.normalizeTags($('tags-input').value.trim()),
+    Studio: $('studio-input').value.trim(),
+    Platforms: M.normalizePlatforms(combinedWatch()),
+    Trailer: M.normalizeTrailer($('trailer-input').value.trim()),
   };
-}
-
-function setProgressHeader(text, kind) {
-  $('progress-h').textContent = text;
-  const num = $('progress-num');
-  num.className = 'step-num';
-  if (kind === 'running') { num.classList.add('running'); num.textContent = '⟳'; }
-  else if (kind === 'done') { num.classList.add('done'); num.textContent = '✓'; }
-  else if (kind === 'failed') { num.classList.add('failed'); num.textContent = '✗'; }
-}
-
-function appendProgressStep(id, label, status) {
-  const list = $('progress-list');
-  let li = list.querySelector(`[data-step="${id}"]`);
-  if (!li) {
-    li = document.createElement('li');
-    li.className = `progress-step ${status}`;
-    li.dataset.step = id;
-    li.innerHTML = `<span class="icon"></span><span class="label"></span>`;
-    list.appendChild(li);
+  const top10 = $('top10-input').value.trim();
+  if (top10) fields.Top10Rank = Number(top10);
+  if (a.id) fields.AniListId = Number(a.id);
+  if (a.idMal) fields.IdMal = Number(a.idMal);
+  if (a.averageScore) fields.AniListScore = Number(a.averageScore);
+  if (a.coverImage && a.coverImage.color) fields.AniListColor = a.coverImage.color;
+  if (a.title) {
+    if (a.title.english) fields.TitleEnglish = a.title.english;
+    if (a.title.romaji) fields.TitleRomaji = a.title.romaji;
+    if (a.title.native) fields.TitleNative = a.title.native;
   }
-  li.className = `progress-step ${status}`;
-  li.querySelector('.label').textContent = label;
-  const icon = { running: '⟳', done: '✓', failed: '✗', pending: '·' }[status] || '·';
-  li.querySelector('.icon').textContent = icon;
-}
+  const watched = getWatchedAniListIds();
+  const known = getKnownAniListIds();
+  if (watched) fields.WatchedAniListIds = String(watched).split(',').map(Number).filter(Boolean);
+  if (known) fields.KnownAniListIds = String(known).split(',').map(Number).filter(Boolean);
 
-async function streamSse(url, payload) {
-  setProgressHeader('Shipping…', 'running');
-  $('progress-section').hidden = false;
-  $('progress-error').hidden = true;
-  $('progress-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // the sync's own rules, applied BEFORE the write — same validator the Cloud
+  // editor uses, so what saves here is what would have shipped from Excel.
+  if (typeof M.validate === 'function') {
+    const problems = M.validate(fields);
+    if (problems && problems.length) { say(problems.join(' · ')); return; }
+  }
 
-  let res;
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = 'Publishing…';
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const ref = doc(db, 'catalog', animeId);
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      say('That anime is already in the catalog — use Edit a Review instead.');
+      return;
+    }
+    // `order` goes on the end. Read the count rather than guess: a wrong order
+    // silently reshuffles the whole grid.
+    const all = await getDocs(collection(db, 'catalog'));
+    const order = all.size;
+
+    await setDoc(ref, {
+      animeId, slug: animeId, order,
+      ...fields,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-  } catch (err) {
-    setProgressHeader('Network error', 'failed');
-    $('progress-error').hidden = false;
-    $('progress-error').textContent = `Could not reach Mode 1 server: ${err.message}. Is it still running?`;
-    return;
-  }
-  if (!res.ok) {
-    setProgressHeader('Server error', 'failed');
-    $('progress-error').hidden = false;
-    $('progress-error').textContent = `HTTP ${res.status} from Mode 1 server.`;
-    return;
-  }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf('\n\n')) !== -1) {
-        const block = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        const lines = block.split('\n');
-        let event = 'message';
-        // Per SSE spec: multiple `data:` lines join with '\n', and only one
-        // optional leading space is stripped (not a full trim).
-        const dataParts = [];
-        for (const line of lines) {
-          if (line.startsWith('event:')) {
-            event = line.slice(6).trim();
-          } else if (line.startsWith('data:')) {
-            const after = line.slice(5);
-            dataParts.push(after.startsWith(' ') ? after.slice(1) : after);
-          }
-        }
-        const data = dataParts.join('\n');
-        let pl;
-        try { pl = JSON.parse(data); } catch { continue; }
-        handleSseEvent(event, pl);
-      }
-    }
-  } catch (err) {
-    setProgressHeader('Connection lost', 'failed');
-    $('progress-error').hidden = false;
-    $('progress-error').textContent = `Stream interrupted: ${err.message}. Check the server terminal for what happened.`;
+    state.published = { animeId, image, hasOverride: !!state.imageOverride,
+                        cover: (a.coverImage && (a.coverImage.extraLarge || a.coverImage.large)) || '' };
+    showPublished();
+  } catch (e) {
+    say('Could not save: ' + (e && e.message ? e.message : 'unknown error'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
   }
 }
 
-function handleSseEvent(event, data) {
-  if (event === 'step') {
-    appendProgressStep(data.id, data.label, data.status);
-  } else if (event === 'log') {
-    appendLogLine(data.line);
-  } else if (event === 'error') {
-    setProgressHeader('Failed', 'failed');
-    $('progress-error').hidden = false;
-    $('progress-error').textContent = data.message;
-  } else if (event === 'done') {
-    if (data.awaitingDeploy) {
-      setProgressHeader('Ready to deploy', 'running');
-      $('deploy-confirm-row').hidden = false;
-    } else {
-      setProgressHeader(`Shipped v${data.newVersion || '—'} 🎉`, 'done');
-    }
-  }
+// what he sees when it worked — honest about the one remaining manual step.
+function showPublished() {
+  const out = $('output-section');
+  const box = $('publish-result');
+  if (!out || !box) return;
+  const p = state.published || {};
+  box.innerHTML = '';
+  const h = document.createElement('p');
+  h.innerHTML = '<strong>Saved to the catalog.</strong> It is stored in the cloud now — '
+    + 'your words are safe from here.';
+  const n = document.createElement('p');
+  n.className = 'muted';
+  n.textContent = p.hasOverride
+    ? 'Cover: assets/' + p.image + ' (your own file).'
+    : 'Cover: assets/' + p.image + ' — the art is fetched from AniList when the site is rebuilt.';
+  const s2 = document.createElement('p');
+  s2.className = 'muted';
+  s2.textContent = 'The public site is built from a generated file, so it appears once the site is rebuilt and deployed.';
+  box.appendChild(h); box.appendChild(n); box.appendChild(s2);
+  $('step5').hidden = true;
+  out.hidden = false;
+  out.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// Append a server log line to the streaming details panel (auto-creates it
-// if not already present). Useful when a step takes >5s — gives the user
-// confidence that something is actually happening.
-function appendLogLine(line) {
-  let panel = document.getElementById('progress-log-panel');
-  if (!panel) {
-    panel = document.createElement('details');
-    panel.id = 'progress-log-panel';
-    panel.className = 'progress-log-panel';
-    panel.innerHTML = `
-      <summary>Show server output</summary>
-      <pre id="progress-log-pre" class="progress-log-pre"></pre>
-    `;
-    $('progress-list').after(panel);
-  }
-  const pre = document.getElementById('progress-log-pre');
-  if (pre) {
-    pre.textContent += line + '\n';
-    pre.scrollTop = pre.scrollHeight;
-  }
-}
-
-function submitAndShip() {
-  const payload = buildSubmitPayload();
-  $('progress-list').innerHTML = '';
-  $('progress-error').hidden = true;
-  $('progress-error').textContent = '';
-  $('deploy-confirm-row').hidden = true;
-  // Clear any previous log panel
-  document.getElementById('progress-log-panel')?.remove();
-  $('progress-section').hidden = false;
-  // Default flags — Blake or Code can append &skipPush=1 manually for tests
-  const params = new URLSearchParams(window.location.search);
-  const queryFlags = ['skipDeploy=1'];
-  if (params.has('skipPush')) queryFlags.push('skipPush=1');
-  if (params.has('dryRun')) queryFlags.push('dryRun=1');
-  streamSse('/api/submit?' + queryFlags.join('&'), payload);
-}
+// ---- v2.3.0 - the Excel row builder, the 'commands to run' block, and the
+//      whole Mode 1 Submit and Ship pipeline (the payload builder, the SSE
+//      stream and its progress UI) were DELETED with the workflow they
+//      served. The catalog is the source of truth; publishToCatalog above is
+//      the one path. Kept out rather than commented out - dead code that
+//      reaches for removed DOM ids is a trap for the next reader.
 
 // ---- Helpers -------------------------------------------------------------
 // v1.7.3 — the paste-back AI panel (buildAiPrompt / openAiPanel) was removed;
@@ -1133,7 +998,7 @@ function wire() {
       const media = await fetchAniList(title);
       if (!media) { setStatus(`No match on AniList for "${title}". Try a different spelling?`, 'error'); return; }
       populateForm(media);
-      setStatus(`Loaded "${media.title?.romaji || title}" — review and edit fields below, then ${state.serverMode === 'local' ? 'Submit & Ship' : 'Generate'}.`);
+      setStatus(`Loaded "${media.title?.romaji || title}" — review and edit fields below, then Publish.`);
     } catch (err) {
       setStatus(`AniList error: ${err.message}`, 'error');
     }
@@ -1265,18 +1130,10 @@ function wire() {
     }
     $('generate-error').hidden = true;
     clearChatForCurrent(); // v1.7.3 — auto-clear the chat on publish
-    if (state.serverMode === 'local') submitAndShip();
-    else showOutput();
+    publishToCatalog();
   });
 
-  $('confirm-deploy-btn')?.addEventListener('click', () => {
-    $('deploy-confirm-row').hidden = true;
-    streamSse('/api/deploy', {});
-  });
-  $('cancel-deploy-btn')?.addEventListener('click', () => {
-    $('deploy-confirm-row').hidden = true;
-    setProgressHeader('Deploy cancelled', 'failed');
-  });
+  // v2.3.0 - the deploy-confirm buttons went with the Mode 1 pipeline.
 
   // Copy buttons (for paste-workflow output blocks)
   document.addEventListener('click', async (e) => {
@@ -1408,7 +1265,6 @@ function wire() {
 
 // ---- UID gate + init -----------------------------------------------------
 async function init() {
-  state.serverMode = await detectServerMode();
 
   onAuthStateChanged(auth, (user) => {
     if (!user || user.uid !== ADMIN_UID) {
@@ -1422,7 +1278,6 @@ async function init() {
     // v1.6.11 — Suggestion Box handoff: if `?suggest=<title>` is present (the
     // admin clicked "Add this anime" on the /admin/suggestions queue), prefill
     // the title input. Coexists with `?skipPush=1` / `?dryRun=1` submit-time
-    // flags handled in submitAndShip() — different params, different lifecycle.
     const handoffParams = new URLSearchParams(window.location.search);
     const suggestTitle = handoffParams.get('suggest');
     if (suggestTitle) {
@@ -1466,29 +1321,20 @@ async function init() {
       }
     } catch (_) { /* a malformed draft just means no prefill */ }
 
-    if (state.serverMode === 'local') {
-      $('generate-btn').textContent = 'Submit & Ship';
-      $('server-mode-label').textContent = 'Mode 1 server · 一発';
-      $('server-mode-label').className = 'admin-section-aside local';
-    } else {
-      $('generate-btn').textContent = 'Generate Excel Row';
-      $('server-mode-label').textContent = 'Paste workflow · ペースト';
-      $('server-mode-label').className = 'admin-section-aside remote';
-    }
+    // v2.3.0 — ONE path now: straight to the catalog in the cloud. The Mode 1
+    // desktop server and the Excel paste workflow are both gone (the migration
+    // retired them; `npm run sync` refuses to write from the spreadsheet), and
+    // leaving their labels here was telling Blake to go and start a server that
+    // no longer exists.
+    $('generate-btn').textContent = 'Publish to catalog';
+    $('server-mode-label').textContent = 'Cloud - 雲';
+    $('server-mode-label').className = 'admin-section-aside local';
 
-    // v1.10.2 — say the mode out loud. Off-localhost detectServerMode() silently
-    // forces 'remote', which reads as "the page is broken" without a notice.
     const modeNotice = $('mode-notice');
     if (modeNotice) {
-      if (state.serverMode === 'local') {
-        modeNotice.textContent = 'Mode 1 connected — full Submit & Ship available.';
-        modeNotice.className = 'mode-notice local';
-      } else {
-        // copy is location-neutral (adversarial LOW): 'remote' also happens on
-        // localhost sandboxes where the Mode-1 probe fails — never claim "live site"
-        modeNotice.textContent = 'Generate mode — the Mode 1 desktop server is not connected. To submit and ship directly, use Mode 1 (double-click MODE 1), then reload.';
-        modeNotice.className = 'mode-notice';
-      }
+      modeNotice.textContent = 'Saves straight to the catalog in the cloud. '
+        + 'It goes public when the site is next rebuilt and deployed.';
+      modeNotice.className = 'mode-notice local';
       modeNotice.hidden = false;
     }
 

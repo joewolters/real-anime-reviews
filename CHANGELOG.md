@@ -21,6 +21,17 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-13 -->
+## v2.3.0 — MINOR (2026-08-13)
+
+**New reviews can be published again.** Adding an anime had quietly become impossible. The form could only finish in one of two ways — hand the review to a desktop program running on one machine, or print a spreadsheet row to paste in by hand — and the cloud migration retired both: the catalogue in the database became the source of truth, and the spreadsheet became an export that the site refuses to be rebuilt from. Nothing announced that. The page simply told you to start a program that no longer does anything, and the only button left produced a row for a file nobody reads any more. It was found the way these things usually are: by sitting down to publish a finished review and discovering there was no way to do it.
+
+It now saves straight to the catalogue, from any device, with no desktop program involved. The review is stored the moment you press publish. It uses the same address-name the discussion rooms are keyed on, so comments stay attached to the right anime, and the same checks the rest of the catalogue editor uses, so what is saved here is shaped exactly like everything already in there.
+
+**The old workflow is gone from that page** — the spreadsheet row, the list of commands to run afterwards, the shipping progress panel and the desktop-server notices. All of it described a way of working that no longer exists.
+
+---
+
+<!-- author: Code | date: 2026-08-13 -->
 ## v2.2.5 — PATCH (2026-08-13)
 
 **The site opens on the Den again.** If your browser reopens tabs exactly where you left them, you could land straight in the full card grid rather than the front page — that grid is a tool you choose to open, not somewhere you should arrive. Every real link still goes where it points: an anime, a profile, a thread, a notification.
