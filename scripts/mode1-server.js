@@ -121,7 +121,7 @@ const { backupExcel, checkExcelLock } = require('./lib/excel-backup');
 // v1.8.1 (gate 4) — the edit page's "fix platforms" one-click reuses the CLI's
 // mapping/allowlist/override rules + AniList streaming fetch.
 const franchiseFetch = require('../franchise-fetch.js');
-const { proposePlatformsForRow } = require('./lib/platform-map');
+const { proposePlatformsForRow } = require('../admin/platform-map');
 
 // Pre-flight: check the existing animeData.js for a duplicate Title BEFORE
 // mutating Excel. Sync would catch it later, but by then Excel is already

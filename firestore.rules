@@ -1108,5 +1108,45 @@ service cloud.firestore {
       allow get: if isAdmin();
       allow list, create, update, delete: if false;
     }
+
+    // =========================================================================
+    // v2.3.1 — SITE CONTENT THAT USED TO BE FILES ON ONE DESKTOP.
+    // <!-- author: Code | date: 2026-08-13 -->
+    // The door quotes and the per-season reviews were written by the Mode 1
+    // desktop server into /quotes.json and /season-reviews/*.md. That server was
+    // retired by the cloud migration, which left Blake unable to edit either —
+    // there are ZERO season reviews on the site because writing one has never
+    // been possible without it. These two collections are where they live now.
+    //
+    // PUBLIC READ is deliberate and required: the welcome door renders quotes
+    // for signed-OUT visitors, and season reviews are public content. Neither
+    // holds anything private. WRITES ARE ADMIN-ONLY.
+    // =========================================================================
+    match /siteContent/{docId} {
+      allow get: if true;
+      allow list: if false;                    // one known doc; a list only widens it
+      allow create, update: if isAdmin();
+      allow delete: if false;                  // clearing is an update to an empty list
+    }
+
+    // A season review is split in two ON PURPOSE: the parent doc is LIGHT
+    // (id + title + timestamp) because the site lists every one of them to know
+    // which seasons carry a review, and the prose lives in a child fetched only
+    // when that season is actually opened. One list read stays cheap however
+    // long the reviews get, and there is no separate index to drift out of date.
+    match /seasonReviews/{seasonId} {
+      allow get, list: if true;
+      allow create, update: if isAdmin()
+        && request.resource.data.id is int
+        && request.resource.data.title is string;
+      allow delete: if isAdmin();
+
+      match /content/{part} {
+        allow get: if true;
+        allow list: if false;
+        allow create, update: if isAdmin() && request.resource.data.body is string;
+        allow delete: if isAdmin();
+      }
+    }
   }
 }

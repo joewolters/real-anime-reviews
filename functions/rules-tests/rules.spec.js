@@ -412,6 +412,52 @@ test('curator: curatorNotes are PRIVATE — admin-only read AND write', async ()
   await assertFails(setDoc(doc(as('alice'), 'curatorNotes/frieren'), { note: 'hi', updatedAt: serverTimestamp() }));
 });
 
+// ---------------- v2.3.1: the content that used to be FILES ----------------
+// (this file re-requires per section — see the collectionGroup block below)
+const { collection: coll231, getDocs: getDocs231 } = require('firebase/firestore');
+
+// The door quotes and the season reviews were written by the Mode 1 desktop
+// server into /quotes.json and /season-reviews/*.md. That server is gone, so
+// they live here now — and these rules are the only thing standing between a
+// signed-in stranger and the front door of the site.
+
+test('siteContent: public read, admin-only write', async () => {
+  await seed((db) => setDoc(doc(db, 'siteContent/quotes'), { quotes: [{ quote: 'a', source: 'b' }] }));
+  // the welcome door renders for SIGNED-OUT visitors — this read must work
+  await assertSucceeds(getDoc(doc(anon(), 'siteContent/quotes')));
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'siteContent/quotes'), { quotes: [] }));
+  await assertFails(setDoc(doc(as('alice'), 'siteContent/quotes'), { quotes: [{ quote: 'hostile' }] }));
+  await assertFails(setDoc(doc(anon(), 'siteContent/quotes'), { quotes: [] }));
+});
+
+test('siteContent: cannot be deleted, and cannot be enumerated', async () => {
+  await seed((db) => setDoc(doc(db, 'siteContent/quotes'), { quotes: [] }));
+  // clearing the list is an UPDATE to an empty array; deleting the doc would
+  // take the door's content away with no way back from the admin page.
+  await assertFails(deleteDoc(doc(as(ADMIN), 'siteContent/quotes')));
+  await assertFails(getDocs231(coll231(anon(), 'siteContent')));
+});
+
+test('seasonReviews: public read, admin-only write, shape enforced', async () => {
+  await seed((db) => setDoc(doc(db, 'seasonReviews/101922'), { id: 101922, title: 'S1' }));
+  await assertSucceeds(getDoc(doc(anon(), 'seasonReviews/101922')));
+  // the site LISTS them to know which seasons carry a review
+  await assertSucceeds(getDocs231(coll231(anon(), 'seasonReviews')));
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'seasonReviews/21087'), { id: 21087, title: 'S2' }));
+  await assertFails(setDoc(doc(as('alice'), 'seasonReviews/21087'), { id: 21087, title: 'hostile' }));
+  // a missing/!int id would break the listing that keys off the doc id
+  await assertFails(setDoc(doc(as(ADMIN), 'seasonReviews/21386'), { title: 'no id' }));
+  await assertFails(setDoc(doc(as(ADMIN), 'seasonReviews/21386'), { id: '21386', title: 'string id' }));
+});
+
+test('seasonReviews: the prose child is public to read, admin to write', async () => {
+  await seed((db) => setDoc(doc(db, 'seasonReviews/101922/content/body'), { body: 'the prose' }));
+  await assertSucceeds(getDoc(doc(anon(), 'seasonReviews/101922/content/body')));
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'seasonReviews/101922/content/body'), { body: 'edited' }));
+  await assertFails(setDoc(doc(as('alice'), 'seasonReviews/101922/content/body'), { body: 'hostile' }));
+  await assertFails(setDoc(doc(as(ADMIN), 'seasonReviews/101922/content/body'), { body: 42 }));
+});
+
 // ---------------- CLOUD MIGRATION: the catalog ----------------
 test('catalog: PUBLIC-readable, admin-only writes', async () => {
   await seed((db) => setDoc(doc(db, 'catalog/one-punch-man'),

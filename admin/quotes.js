@@ -3,11 +3,13 @@
 // v1.8.4 (gate 8 + 8b). Mirrors admin/season-reviews.js's auth gate + server-probe pattern, but
 // edits a FLAT list (no per-id files): each quote is { quote, source }. Edit inline, reorder by
 // ▲▼ OR by dragging the ⋮⋮ grip, add/delete, live-search, then Save writes the WHOLE array to the
-// local mode1 server's PUT /api/quotes, which persists the public /quotes.json the door fetches.
+// v2.3.1: saves to `siteContent/quotes` in Firestore. The shipped /quotes.json
+// remains only as a first-run seed and as the door's offline fallback.
 // THE DOM IS THE MODEL — readRows() re-derives the array at Save from live DOM order, so drag,
 // ▲▼, and search-by-hide all "just work" with no parallel state. The ✨ ASK chat drawer is mounted.
-import { auth } from '../firebase.js';
+import { auth, db } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const $ = (id) => document.getElementById(id);
@@ -20,7 +22,6 @@ function escapeHtml(s) {
 }
 
 // ---- State -----------------------------------------------------------------
-let serverUp = false;
 let chat = null;
 let dirty = false;
 let draggedRow = null;
@@ -34,19 +35,29 @@ function rowQuote(li) { return li.querySelector('.q-quote').value.replace(/[\r\n
 function touch(li) { if (li) li.classList.add('q-row--touched'); }   // mark a row changed-since-save
 
 // ---- Server probe ----------------------------------------------------------
-async function probeServer() {
-  try {
-    const r = await fetch('/api/health', { cache: 'no-cache' });
-    serverUp = r.ok;
-  } catch (_) { serverUp = false; }
+// v2.3.1 - there is no desktop server to probe: quotes live in Firestore now.
+function hideLegacyServerBanner() {
   const banner = $('q-server-banner');
-  if (banner) banner.hidden = serverUp;
+  if (banner) banner.hidden = true;
 }
 
 // ---- Load ------------------------------------------------------------------
-// Read the static /quotes.json — the canonical file the door reads (always works, even with
-// mode1 down). Saving writes back through /api/quotes, which rewrites this same file.
+// v2.3.1 — quotes live in `siteContent/quotes` now. The shipped /quotes.json is
+// kept as a SEED: on the very first visit the cloud doc does not exist yet, and
+// reading the file means Blake opens this page to his real quotes instead of an
+// empty list he might then save over the top of.
 async function loadQuotes() {
+  try {
+    const snap = await getDoc(doc(db, 'siteContent', 'quotes'));
+    if (snap.exists()) {
+      const arr = (snap.data() || {}).quotes;
+      if (Array.isArray(arr)) {
+        return arr
+          .filter((q) => q && typeof q.quote === 'string')
+          .map((q) => ({ quote: String(q.quote || ''), source: String(q.source || '') }));
+      }
+    }
+  } catch (_) { /* fall through to the seed file */ }
   try {
     const r = await fetch('/quotes.json', { cache: 'no-cache' });
     const j = r.ok ? await r.json() : null;
@@ -149,22 +160,17 @@ function markDirty() {
 
 // ---- Save (whole-array replace) --------------------------------------------
 async function saveQuotes() {
-  if (!serverUp) { await probeServer(); }   // re-check: the initial probe may not have resolved before a fast click
-  if (!serverUp) {
-    $('q-status').textContent = 'Saving needs Mode 1 — double-click MODE 1 on the desktop, then try again.';
-    return;
-  }
   const quotes = readRows();
   $('q-save').disabled = true;
   $('q-status').textContent = 'Saving…';
   try {
-    const r = await fetch('/api/quotes', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quotes }),
+    // v2.3.1 — one document holds the whole ordered list, which is what the
+    // editor edits: reordering is the point, and a doc-per-quote would make the
+    // order a second thing to keep in step.
+    await setDoc(doc(db, 'siteContent', 'quotes'), {
+      quotes, updatedAt: serverTimestamp(),
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json().catch(() => ({}));
+    const j = { count: quotes.length };
     dirty = false;
     document.querySelectorAll('.q-row--touched').forEach(li => li.classList.remove('q-row--touched'));
     const n = (j && typeof j.count === 'number') ? j.count : quotes.length;
@@ -282,7 +288,7 @@ function init() {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
   });
 
-  probeServer();
+  hideLegacyServerBanner();
 }
 
 // ---- Auth gate -------------------------------------------------------------

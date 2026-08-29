@@ -1,17 +1,25 @@
-// admin/edit.js — Admin "Edit a Review" page (v1.8.1).
-// <!-- author: Code | date: 2026-06-04 -->
+// admin/edit.js — Admin "Edit a Review" page.
+// <!-- author: Code | date: 2026-08-13 -->
 // Lists every catalog review (cover + title, searchable) → an editable form loaded
-// straight from animeData.js (no server needed to BROWSE). Saving (Tier-1) hits the
-// local mode1 server's PUT /api/anime/:slug → updateExcelRow → sync. Mirrors
-// season-reviews.js's auth gate + server probe. Slug is LOCKED (Title read-only).
-import { auth } from '../firebase.js';
+// straight from animeData.js. v2.3.1: SAVING GOES TO THE CLOUD. It used to PUT to
+// the Mode 1 desktop server, which the cloud migration retired — so editing a
+// review had the same dead end as adding one.
+//
+// ⚠️ THE DOCUMENT ID IS NOT slugify(). This page's slugify() strips apostrophes
+// (it had to match the old server's row lookup); catalog ids turn them into a
+// dash. For "An Archdemon's Dilemma" that is `an-archdemons-...` vs
+// `an-archdemon-s-...` — a silent miss on 8 titles, and the id is also the key
+// every live comment room hangs off. The id therefore comes from the SHARED
+// RarCatalogModel.slug, and slugify() stays ONLY as this page's internal list key.
+import { auth, db } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const $ = (id) => document.getElementById(id);
 
-// MUST match scripts/mode1-server.js slugify() exactly (apostrophes stripped, not
-// turned into dashes) — else updateExcelRow won't find the row to write.
+// This page's INTERNAL list key only. It is NOT the catalog document id — see the
+// warning at the top of this file. catalogIdFor() below is what addresses a doc.
 function slugify(title) {
   return String(title)
     .toLowerCase()
@@ -29,7 +37,6 @@ function escapeHtml(s) {
 }
 
 // ---- State -----------------------------------------------------------------
-let serverUp = false;
 let catalog = [];          // [{ slug, anime }]
 let currentSlug = null;
 let currentAnime = null;
@@ -58,14 +65,22 @@ function getCatalog() {
     .sort((x, y) => x.anime.Title.toLowerCase().localeCompare(y.anime.Title.toLowerCase()));
 }
 
-async function probeServer() {
-  try { const r = await fetch('/api/health', { cache: 'no-cache' }); serverUp = r.ok; }
-  catch (_) { serverUp = false; }
+// v2.3.1 — the desktop-server probe is gone: saving writes to the catalog in the
+// cloud, so there is nothing to be up or down. The "start the local server"
+// banner it drove is hidden for good.
+function hideLegacyServerBanner() {
   const banner = $('edit-server-banner');
-  if (banner) banner.hidden = serverUp;
+  if (banner) banner.hidden = true;
 }
 
 // ---- List ------------------------------------------------------------------
+// v2.3.1 — the one true document id for a catalog row.
+function catalogIdFor(anime) {
+  const M = window.RarCatalogModel;
+  if (!M || typeof M.slug !== 'function') return null;
+  return M.slug(anime && anime.Title ? anime.Title : '');
+}
+
 function renderList() {
   const q = ($('edit-search').value || '').trim().toLowerCase();
   const root = $('edit-list');
@@ -315,16 +330,46 @@ function collectFields() {
   };
 }
 
-// Tier-1 write (used by Save AND the Ship flow's save-first). Throws on failure.
+// v2.3.1 — the write goes to the catalog in Firestore. Throws on failure.
+// ⚠️ update(), not set-with-merge: set-with-merge CREATES a document that is not
+// there, so a wrong id would silently mint a ghost anime instead of failing. This
+// project has been bitten by exactly that (see CLAUDE.md, redactAuthored). An
+// edit must only ever modify a row that already exists.
 async function doSave() {
-  const r = await fetch('/api/anime/' + encodeURIComponent(currentSlug), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: collectFields() }),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-  return j;
+  const M = window.RarCatalogModel;
+  if (!M) throw new Error('The catalog model did not load — reload the page.');
+  const id = catalogIdFor(currentAnime);
+  if (!id) throw new Error('Could not work out which catalog row this is.');
+
+  const raw = collectFields();
+  const fields = {
+    Title: raw.Title !== undefined ? raw.Title : currentAnime.Title,
+    Genre: raw.Genre, Rating: raw.Rating, Seasons: raw.Seasons,
+    Description: raw.Description, Review: raw.Review,
+    Studio: raw.Studio, Trailer: M.normalizeTrailer(raw.Trailer || ''),
+    Tags: M.normalizeTags(raw.Tags || ''),
+    Platforms: M.normalizePlatforms(raw.Platforms || raw.Watch || ''),
+  };
+  Object.keys(fields).forEach((k) => { if (fields[k] === undefined) delete fields[k]; });
+
+  // Top10Rank: blank clears it rather than storing an empty string.
+  const top = String(raw.Top10Rank || '').trim();
+  if (top) fields.Top10Rank = Number(top);
+
+  // the watched set drives the "REVIEWED" badge across the site
+  const watched = String(raw.WatchedAniListIds || '').trim();
+  if (watched) fields.WatchedAniListIds = watched.split(',').map(Number).filter(Boolean);
+
+  const problems = (typeof M.validate === 'function') ? M.validate(fields) : null;
+  if (problems && problems.length) throw new Error(problems.join(' · '));
+
+  const ref = doc(db, 'catalog', id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error('No catalog entry with the id "' + id + '" — nothing was changed.');
+  }
+  await updateDoc(ref, { ...fields, updatedAt: serverTimestamp() });
+  return { ok: true, id };
 }
 
 // ---- Change diff (before → after, platforms-backfill dry-run vocabulary) ----
@@ -422,7 +467,6 @@ function syncCurrentAnimeFromForm() {
 // ---- Save (Tier-1) — change-diff confirm gates the write ----
 function save() {
   if (!currentSlug) return;
-  if (!serverUp) { $('edit-status').textContent = 'Local server not running — start `npm run mode1`.'; return; }
   const changes = computeChanges();
   if (!changes.length) { $('edit-status').textContent = 'No changes to save.'; return; }
   renderDiff($('edit-save-diff'), changes);
@@ -474,17 +518,24 @@ async function fixPlatforms() {
   const id = Number(currentAnime.AniListId) || null;
   fixProposed = null;
   if (!id) { showFixMsg("This row has no AniList id, so platforms can't be auto-suggested."); return; }
-  if (!serverUp) { showFixMsg("The local server isn't running — start `npm run mode1`, then try again."); return; }
+  // v2.3.1 — this used to POST to the Mode 1 server. It now runs HERE, on the
+  // SAME allowlist/override module the backfill CLI uses (admin/platform-map.js,
+  // moved out of scripts/ so a page can load it). One set of rules, so the
+  // suggestion here can never drift from what the CLI would do.
+  const PM = window.RarPlatformMap;
+  const ff = window.franchiseFetch;
+  if (!PM || !ff || typeof ff.fetchMediaDetail !== 'function') {
+    showFixMsg('The platform rules did not load — reload the page and try again.');
+    return;
+  }
   const btn = $('edit-fix-platforms');
   btn.disabled = true; const prev = btn.textContent; btn.textContent = 'Checking AniList…';
   try {
-    const r = await fetch('/api/anime/' + encodeURIComponent(currentSlug) + '/platforms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ aniListId: id, title: currentAnime.Title, current: $('f-platforms').value.trim() }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    const detail = await ff.fetchMediaDetail(id);
+    if (!detail) throw new Error('AniList did not answer — try again in a moment.');
+    const j = PM.proposePlatformsForRow(
+      currentAnime.Title || '', detail.externalLinks, $('f-platforms').value.trim());
+    j.current = String($('f-platforms').value.trim() || '');
     fixProposed = j.proposed || '';
     $('edit-fix-current').textContent = j.current || '(blank)';
     $('edit-fix-proposed').textContent = j.proposed || '(blank)';
@@ -511,78 +562,11 @@ function applyFixPlatforms() {
 }
 function dismissFixPlatforms() { $('edit-fix-panel').hidden = true; }
 
-// ---- Tier-2 Ship (publish live) -------------------------------------------
-function openShipConfirm() {
-  if (!serverUp) { $('edit-status').textContent = 'Local server not running — start `npm run mode1`.'; return; }
-  renderDiff($('edit-ship-diff'), computeChanges());   // show what's about to publish
-  $('edit-ship-confirm').hidden = false;
-}
-function closeShipConfirm() { $('edit-ship-confirm').hidden = true; }
-
-const shipStepEls = {};
-function setShipStep(id, label, status) {
-  let li = shipStepEls[id];
-  if (!li) { li = document.createElement('li'); li.className = 'edit-ship-step'; $('edit-ship-steps').appendChild(li); shipStepEls[id] = li; }
-  li.dataset.status = status;
-  li.innerHTML = `<span class="edit-ship-dot" aria-hidden="true"></span><span class="edit-ship-step-label">${escapeHtml(label)}</span>`;
-}
-
-async function shipGo() {
-  closeShipConfirm();
-  Object.keys(shipStepEls).forEach(k => delete shipStepEls[k]);
-  $('edit-ship-steps').innerHTML = '';
-  $('edit-ship-close').hidden = true;
-  $('edit-ship-heading').textContent = 'Shipping…';
-  $('edit-ship-progress').hidden = false;
-  // Save first — never ship stale form state.
-  setShipStep('save', 'Save changes', 'running');
-  try { await doSave(); setShipStep('save', 'Save changes', 'done'); }
-  catch (err) {
-    setShipStep('save', 'Save failed: ' + err.message, 'error');
-    $('edit-ship-heading').textContent = 'Ship aborted';
-    $('edit-ship-close').hidden = false;
-    return;
-  }
-  await streamShip();
-}
-
-// Consume the POST SSE stream (EventSource is GET-only, so read the body manually).
-async function streamShip() {
-  try {
-    const resp = await fetch('/api/anime/' + encodeURIComponent(currentSlug) + '/ship', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: $('f-title').value }),
-    });
-    if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '', failed = false;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let i;
-      while ((i = buf.indexOf('\n\n')) >= 0) {
-        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
-        let ev = 'message', data = '';
-        for (const line of chunk.split('\n')) {
-          if (line.startsWith('event:')) ev = line.slice(6).trim();
-          else if (line.startsWith('data:')) data += line.slice(5).trim();
-        }
-        let p = {}; try { p = JSON.parse(data); } catch (_) {}
-        if (ev === 'step') setShipStep(p.id, p.label, p.status);
-        else if (ev === 'done') $('edit-ship-heading').textContent = 'Shipped live ✓ — v' + (p.newVersion || '');
-        else if (ev === 'error') { failed = true; setShipStep('err', 'Error: ' + (p.message || 'unknown'), 'error'); $('edit-ship-heading').textContent = 'Ship failed'; }
-      }
-    }
-    if (!failed && $('edit-ship-heading').textContent === 'Shipping…') $('edit-ship-heading').textContent = 'Done';
-  } catch (err) {
-    setShipStep('err', 'Stream error: ' + err.message, 'error');
-    $('edit-ship-heading').textContent = 'Ship failed';
-  }
-  $('edit-ship-close').hidden = false;
-}
+// ---- v2.3.1 - the Tier-2 'Ship' flow was REMOVED. It streamed a git commit
+//      and a deploy out of the Mode 1 desktop server, which no longer exists.
+//      Publishing is now a deliberate step taken from the machine, exactly as
+//      it is for Add Anime: the page's job is to get the change into the
+//      catalog safely, not to push the site.
 
 // ---- Live preview (the REAL homepage modal stack via #anime=<slug>) ---------
 function openPreview() {
@@ -645,10 +629,7 @@ function init() {
   $('edit-fix-dismiss').addEventListener('click', dismissFixPlatforms);
   $('f-top10-up').addEventListener('click', () => stepTop10(1));
   $('f-top10-down').addEventListener('click', () => stepTop10(-1));
-  $('edit-ship').addEventListener('click', openShipConfirm);
-  $('edit-ship-cancel').addEventListener('click', closeShipConfirm);
-  $('edit-ship-go').addEventListener('click', shipGo);
-  $('edit-ship-close').addEventListener('click', () => { $('edit-ship-progress').hidden = true; });
+  // v2.3.1 - the Ship buttons went with the deploy pipeline they drove.
   $('edit-preview-btn').addEventListener('click', openPreview);
   $('edit-preview-close').addEventListener('click', closePreview);
   // Section-aware Review editor — its onChange drives the live preview.
@@ -683,12 +664,12 @@ function init() {
     if (chat && chat.isOpen && chat.isOpen()) { chat.close(); return; }
     if (!$('edit-save-confirm').hidden) { closeSaveConfirm(); return; }
     if (!$('edit-revert-confirm').hidden) { closeRevertConfirm(); return; }
-    if (!$('edit-ship-confirm').hidden) { closeShipConfirm(); return; }
     if (!$('edit-preview-overlay').hidden) { closePreview(); return; }
     if (!$('edit-form-view').hidden) returnToOrigin();
   });
 
-  probeServer().then(() => {
+  hideLegacyServerBanner();
+  Promise.resolve().then(() => {
     // Deep-link: edit.html?slug=<slug>&from=modal (the inline ✎ on the site modal).
     // `from=modal` makes Cancel/back return to that anime's modal, not the list.
     try {

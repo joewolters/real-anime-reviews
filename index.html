@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="2.3.0"</script>
+  <script>window.APP_VERSION="2.3.1"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -59,10 +59,10 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=2.3.0">
-  <link rel="stylesheet" href="mobile.css?v=2.3.0" media="(max-width: 900px)">
-  <link rel="stylesheet" href="frames.css?v=2.3.0">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
-  <link rel="stylesheet" href="admin-fab.css?v=2.3.0">
+  <link rel="stylesheet" href="style.css?v=2.3.1">
+  <link rel="stylesheet" href="mobile.css?v=2.3.1" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=2.3.1">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
+  <link rel="stylesheet" href="admin-fab.css?v=2.3.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -267,11 +267,23 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v2.3.0</span>
+      <span class="changelog-tag" id="changelog-version">v2.3.1</span>
      Hotfix
     </div>
 
     <div class="changelog-content">
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v2.3.1</span></div>
+          <span class="vs-tier">Feature Update</span>
+          <div class="version-header">08/29/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li><strong>Season reviews can be written for the first time.</strong> Writing one has never actually been possible &mdash; it needed a program running on one particular computer, and that stopped existing when the catalogue moved online. There are none on the site for exactly that reason. They can now be written and edited from anywhere.</li>
+          <li><strong>Editing a review, and changing the door quotes, work again too.</strong> Both had the same dead end. Neither needs that program any more.</li>
+          <li>Nothing on the admin side depends on a desktop computer now. The last piece of the old way of working is gone.</li>
+        </ul>
+      </div>
       <div class="version-section" data-tier="minor">
         <div class="vs-head">
           <div class="version-chips"><span class="version-chip">v2.3.0</span></div>

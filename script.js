@@ -21,14 +21,14 @@ import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.3.0';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.3.1';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.3.0';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.3.1';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
-import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.3.0';
+import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.3.1';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.3.0';
+import { initNavDrawer } from './nav-drawer.js?v=2.3.1';
 initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals
@@ -9898,9 +9898,18 @@ function closeModal() {
   function getSeasonReviewIndex() {
     if (_seasonReviewIndex) return Promise.resolve(_seasonReviewIndex);
     if (_seasonReviewIndexPromise) return _seasonReviewIndexPromise;
-    _seasonReviewIndexPromise = fetch('/season-reviews/index.json', { cache: 'no-cache' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(j => { _seasonReviewIndex = new Set(((j && j.ids) || []).map(Number)); return _seasonReviewIndex; })
+    // v2.3.1 — season reviews live in Firestore now. They were .md files written
+    // by the Mode 1 desktop server, which the cloud migration retired; there are
+    // ZERO of them on the site because writing one has never been possible
+    // without that machine. The parent docs are LIGHT (title + rating), so this
+    // list read stays cheap however long the prose gets.
+    _seasonReviewIndexPromise = getDocs(collection(db, 'seasonReviews'))
+      .then((snap) => {
+        const ids = [];
+        snap.forEach((d) => { const n = Number(d.id); if (Number.isFinite(n)) ids.push(n); });
+        _seasonReviewIndex = new Set(ids);
+        return _seasonReviewIndex;
+      })
       .catch(() => { _seasonReviewIndex = new Set(); return _seasonReviewIndex; });
     return _seasonReviewIndexPromise;
   }
@@ -9911,8 +9920,18 @@ function closeModal() {
     if (_seasonReviewCache.has(key)) return _seasonReviewCache.get(key);
     let parsed = null;
     try {
-      const r = await fetch('/season-reviews/' + key + '.md', { cache: 'no-cache' });
-      if (r.ok) parsed = parseSeasonReviewText(await r.text());
+      // the prose is a CHILD doc, fetched only when this season is opened.
+      const [head, body] = await Promise.all([
+        getDoc(doc(db, 'seasonReviews', String(key))),
+        getDoc(doc(db, 'seasonReviews', String(key), 'content', 'body')),
+      ]);
+      if (head.exists()) {
+        const meta = head.data() || {};
+        parsed = {
+          meta: { title: meta.title || '', rating: meta.rating || '' },
+          body: body.exists() ? ((body.data() || {}).body || '') : '',
+        };
+      }
     } catch (_) {}
     _seasonReviewCache.set(key, parsed);
     return parsed;
@@ -11863,8 +11882,21 @@ function onScrollHeader() {
     // seeded fallback, so it never waits on the network and never goes quoteless. If/when this
     // resolves, later bubbles pick up the live list (launchQuote re-reads WELCOME_QUOTES). The
     // door renders via .textContent, so quotes.json content is escaped (XSS-safe).
-    fetch('/quotes.json', { cache: 'no-cache' })
-      .then(r => (r.ok ? r.json() : null))
+    // v2.3.1 — quotes come from `siteContent/quotes` now (the admin page can no
+    // longer write a file: the desktop server that did is gone). The shipped
+    // /quotes.json stays as the FALLBACK, so a blocked read, an empty database
+    // or an offline visitor still gets a door full of quotes rather than a bare
+    // one. Three tiers: cloud, then the file, then the seeded list in this file.
+    getDoc(doc(db, 'siteContent', 'quotes'))
+      .then((snap) => {
+        const arr = snap.exists() ? (snap.data() || {}).quotes : null;
+        if (Array.isArray(arr) && arr.length) return arr;
+        return fetch('/quotes.json', { cache: 'no-cache' })
+          .then((r) => (r.ok ? r.json() : null));
+      })
+      .catch(() => fetch('/quotes.json', { cache: 'no-cache' })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null))
       .then(list => {
         const arr = Array.isArray(list) ? list : (list && Array.isArray(list.quotes) ? list.quotes : null);
         const clean = (arr || [])

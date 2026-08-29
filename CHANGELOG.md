@@ -20,6 +20,17 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-08-29 -->
+## v2.3.1 — MINOR (2026-08-29)
+
+**Season reviews can be written for the first time.** Not "again" — for the first time. Writing one required a program running on one particular desktop, and that program stopped being part of how this site works when the catalogue moved online. The site has shipped with zero season reviews ever since, and the reason was never visible: the page simply told you to go and start something that no longer does anything. They are now written and edited from anywhere, stored alongside everything else, and the site reads them from there.
+
+**Editing an existing review works again, and so do the door quotes.** Both ended in the same dead end for the same reason. Editing now saves straight to the catalogue, and the quotes that drift across the welcome door are edited and stored the same way — with the shipped copy kept as a fallback, so the door never ends up empty if anything goes wrong.
+
+**Nothing on the admin side needs a desktop program any more.** That was the last of it.
+
+---
+
 <!-- author: Code | date: 2026-08-13 -->
 ## v2.3.0 — MINOR (2026-08-13)
 

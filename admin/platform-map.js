@@ -1,5 +1,19 @@
 'use strict';
-// scripts/lib/platform-map.js
+// admin/platform-map.js
+// <!-- author: Code | date: 2026-08-13 -->
+// MOVED here from scripts/lib/ in v2.3.1, and made dual-mode. Reason: the
+// "fix platforms" helper on the Edit page used to run on the Mode 1 desktop
+// server. With that server gone the same rules have to run in the BROWSER — and
+// `scripts/**` is firebase-ignored, so nothing under it can be loaded by a page.
+// Moving beats copying: two copies of an allowlist drift, and a drift here means
+// the edit page proposes different platforms than the backfill CLI does.
+// Node still requires it (scripts/backfill-platforms.js); the page gets
+// window.RarPlatformMap.
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.RarPlatformMap = api;
+}(typeof self !== 'undefined' ? self : null, function () {
 // <!-- author: Code | date: 2026-06-04 -->
 // v1.8.1 (gate 4) — the platforms mapping/allowlist logic, EXTRACTED from
 // scripts/backfill-platforms.js so two consumers share ONE source of truth:
@@ -104,4 +118,5 @@ function proposePlatformsForRow(title, externalLinks, current) {
   return { platforms, proposed, filtered, flags, action };
 }
 
-module.exports = { PLATFORM_MAP, KNOWN_EXCLUDED, MANUAL_OVERRIDES, normTitle, proposePlatforms, proposePlatformsForRow };
+  return { PLATFORM_MAP, KNOWN_EXCLUDED, MANUAL_OVERRIDES, normTitle, proposePlatforms, proposePlatformsForRow };
+}));

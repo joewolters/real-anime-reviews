@@ -28,7 +28,7 @@ const { backupExcel, checkExcelLock } = require('./lib/excel-backup');
 const franchiseFetch = require('../franchise-fetch.js');
 // v1.8.1 (gate 4) — mapping/allowlist/override + propose logic now lives in a
 // shared lib so the edit page's "fix platforms" one-click reuses the SAME rules.
-const { PLATFORM_MAP, proposePlatformsForRow } = require('./lib/platform-map');
+const { PLATFORM_MAP, proposePlatformsForRow } = require('../admin/platform-map');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const EXCEL_PATH = path.resolve(PROJECT_ROOT, '..', 'Master List', 'Anime_Master_Table.xlsx');

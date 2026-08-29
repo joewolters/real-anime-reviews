@@ -4,9 +4,13 @@
 // every catalog entry + its watched-but-not-primary AniListIds (accordion;
 // AniList cover/title/format/year fetched lazily per group via window.franchiseFetch).
 // Each row → a branded markdown editor (textarea + live preview). Save/Delete hit
-// the local mode1 server's /api/season-review CRUD (writes the .md + regens index.json).
-import { auth } from '../firebase.js';
+// v2.3.1: reads and writes `seasonReviews/{id}` in Firestore (head) plus its
+// `content/body` child (prose). No desktop server, no .md files, no index file.
+import { auth, db } from '../firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+import {
+  doc, getDoc, setDoc, deleteDoc, collection, getDocs, serverTimestamp,
+} from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const $ = (id) => document.getElementById(id);
@@ -25,7 +29,6 @@ function renderMarkdown(md) {
 
 // ---- State -----------------------------------------------------------------
 let reviewIndex = new Set();          // ids with a written review
-let serverUp = false;                 // mode1 reachable?
 let editorId = null;                  // id currently in the editor
 let srEditor = null;                  // v1.8.2 — section-aware Review editor (window.RarSectionEditor)
 let srFilter = 'all';                 // gate 31 — list filter (was the native #sr-filter's .value)
@@ -47,20 +50,21 @@ function reviewableIds(catalog) {
 }
 
 // ---- Server probe ----------------------------------------------------------
-async function probeServer() {
-  try {
-    const r = await fetch('/api/health', { cache: 'no-cache' });
-    serverUp = r.ok;
-  } catch (_) { serverUp = false; }
-  const banner = $('sr-server-banner');
-  if (banner) banner.hidden = serverUp;
+// v2.3.1 - nothing to probe: season reviews are written to Firestore.
+function hideLegacyServerBanner() {
+  const banner = document.getElementById('sr-server-banner');
+  if (banner) banner.hidden = true;
 }
 
+
+// v2.3.1 — which seasons already have a review. One LIST read of the light
+// parent docs; there is no index file to regenerate and therefore none to drift.
 async function loadIndex() {
   try {
-    const r = await fetch('/season-reviews/index.json', { cache: 'no-cache' });
-    const j = r.ok ? await r.json() : null;
-    reviewIndex = new Set(((j && j.ids) || []).map(Number));
+    const snap = await getDocs(collection(db, 'seasonReviews'));
+    const ids = [];
+    snap.forEach((d) => { const n = Number(d.id); if (Number.isFinite(n)) ids.push(n); });
+    reviewIndex = new Set(ids);
   } catch (_) { reviewIndex = new Set(); }
 }
 
@@ -147,15 +151,21 @@ function openEditor(id, presetTitle) {
   $('sr-editor-delete').hidden = true;
   updatePreview();
   $('sr-editor').hidden = false;
-  // Load existing content (GET) — needs the local server.
-  fetch('/api/season-review/' + editorId).then(r => r.ok ? r.json() : null).then(j => {
-    if (!j || !j.exists) return;
-    $('sr-editor-title').value = j.title || presetTitle || '';
-    $('sr-editor-rating').value = j.rating || '';
-    if (srEditor) srEditor.load(j.body || '');
-    $('sr-editor-delete').hidden = false;
-    updatePreview();
-  }).catch(() => {});
+  // v2.3.1 — load from Firestore. The parent doc is the light half (title +
+  // rating); the prose lives in a child so the LIST read stays cheap.
+  (async () => {
+    try {
+      const head = await getDoc(doc(db, 'seasonReviews', String(editorId)));
+      if (!head.exists()) return;
+      const meta = head.data() || {};
+      $('sr-editor-title').value = meta.title || presetTitle || '';
+      $('sr-editor-rating').value = meta.rating || '';
+      const body = await getDoc(doc(db, 'seasonReviews', String(editorId), 'content', 'body'));
+      if (srEditor) srEditor.load(body.exists() ? ((body.data() || {}).body || '') : '');
+      $('sr-editor-delete').hidden = false;
+      updatePreview();
+    } catch (_) { /* a failed read just means an empty editor */ }
+  })();
   if (srEditor) srEditor.focus();
 }
 function closeEditor() { $('sr-editor').hidden = true; editorId = null; }
@@ -170,16 +180,21 @@ async function saveReview() {
   if (!editorId) return;
   const body = reviewMarkdown().trim();
   if (!body) { $('sr-editor-status').textContent = 'Write something first.'; return; }
-  if (!serverUp) { $('sr-editor-status').textContent = 'Saving needs Mode 1 — double-click MODE 1 on the desktop, then try again.'; return; }
   $('sr-editor-save').disabled = true;
   $('sr-editor-status').textContent = 'Saving…';
   try {
-    const r = await fetch('/api/season-review/' + editorId, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: $('sr-editor-title').value.trim(), rating: $('sr-editor-rating').value.trim(), body }),
+    // ⚠️ the HEAD goes in first. If the body write fails the season still shows
+    // as having a review and opens to nothing — annoying — whereas the reverse
+    // (orphan prose under no head) is invisible and unfixable from this page.
+    await setDoc(doc(db, 'seasonReviews', String(editorId)), {
+      id: Number(editorId),
+      title: $('sr-editor-title').value.trim(),
+      rating: $('sr-editor-rating').value.trim(),
+      updatedAt: serverTimestamp(),
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await setDoc(doc(db, 'seasonReviews', String(editorId), 'content', 'body'), {
+      body, updatedAt: serverTimestamp(),
+    });
     reviewIndex.add(editorId);
     $('sr-editor-status').textContent = 'Saved ✓';
     await refresh();
@@ -190,10 +205,13 @@ async function saveReview() {
 }
 
 async function deleteReview() {
-  if (!editorId || !serverUp) return;
+  if (!editorId) return;
   $('sr-editor-status').textContent = 'Deleting…';
   try {
-    await fetch('/api/season-review/' + editorId, { method: 'DELETE' });
+    // body first, then the head: the head is what makes it visible, so removing
+    // it last means a half-failure leaves nothing dangling in the listing.
+    await deleteDoc(doc(db, 'seasonReviews', String(editorId), 'content', 'body'));
+    await deleteDoc(doc(db, 'seasonReviews', String(editorId)));
     reviewIndex.delete(editorId);
     await refresh();
     closeEditor();
@@ -256,7 +274,8 @@ function init() {
   $('sr-editor').addEventListener('click', (e) => { if (e.target === $('sr-editor')) closeEditor(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('sr-editor').hidden) closeEditor(); });
 
-  Promise.all([probeServer(), loadIndex()]).then(() => {
+  hideLegacyServerBanner();
+  Promise.all([loadIndex()]).then(() => {
     renderStats(_catalog);
     renderList(_catalog);
     // Deep-link: /admin/season-reviews.html?id=NNN (e.g. the secondary modal's
