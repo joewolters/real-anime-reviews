@@ -1,7 +1,7 @@
 <!-- author: Code | date: 2026-08-29 -->
 # SHIP-OUTPUT — v2.3.2: the Publish button was dead
 
-**⚠️ BUILT AND TESTED — NOT DEPLOYED.** Waiting on Blake's go-signal for `deploy --only hosting`.
+**🚀 LIVE.** Deployed 2026-08-29 on Blake's go-signal (hosting only — no rules changed). Prod-verified, not assumed: the live `/admin/new-anime` serves `APP_VERSION 2.3.2`, its kicker reads **ADD ANIME**, and the live `new-anime.js` contains `function validateBeforeGenerate`.
 
 ## What Blake said
 

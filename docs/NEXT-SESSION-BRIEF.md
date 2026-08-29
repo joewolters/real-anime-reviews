@@ -16,10 +16,11 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-29 — v2.3.2 BUILT, NOT DEPLOYED)
+## ⚡ STATUS (updated 2026-08-29 — v2.3.2 LIVE)
 
-- ⚠️ **v2.3.2 IS BUILT AND TESTED BUT NOT DEPLOYED.** It needs Blake's go-signal for
-  `deploy --only hosting`. v2.3.1 is what is live.
+- 🚀 **v2.3.2 IS LIVE** (deployed 2026-08-29, hosting only). Tree clean, pushed, `main`
+  in sync. Prod-verified: live `/admin/new-anime` serves 2.3.2, kicker reads ADD ANIME,
+  and the live `new-anime.js` declares `validateBeforeGenerate`.
 - 🐛 **THE PUBLISH BUTTON WAS DEAD, and v2.3.2 is the fix.** Blake: *"when I go to
   publish a new review nothing happens."* `admin/new-anime.js` called
   `validateBeforeGenerate()` — a function **v2.3.0 deleted and whose call it left
