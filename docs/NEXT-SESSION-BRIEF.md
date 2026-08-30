@@ -16,10 +16,13 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-30 — v2.3.5 BUILT, NOT DEPLOYED)
+## ⚡ STATUS (updated 2026-08-30 — v2.3.5 LIVE)
 
-- ⚠️ **v2.3.5 IS BUILT AND TESTED, NOT DEPLOYED.** ❗ functions FIRST (the NEW
-  `/season/**` rewrite points at `animePreview`), then hosting.
+- 🚀 **v2.3.5 IS LIVE** (deployed 2026-08-30, functions FIRST then hosting). Tree
+  clean, pushed, `main` in sync. Prod-verified: `/season/21386` returns that season's
+  own title, AniList cover and `twitter:card=summary`; `/anime/<slug>` still returns
+  its card; the site reports 2.3.5.
+- **Floors: `npm test` 445 · rules 222 · cf 94 · functions 94 · webkit 24.**
 - ⛔ **A CLIPBOARD TRAP WORTH INHERITING:** `navigator.clipboard.writeText` does NOT
   always settle — with the document unfocused some browsers leave the promise
   **pending forever** instead of rejecting. `await`ing it means no confirmation, no

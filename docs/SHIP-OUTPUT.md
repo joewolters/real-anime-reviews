@@ -1,8 +1,13 @@
 <!-- author: Code | date: 2026-08-30 -->
 # SHIP-OUTPUT — v2.3.5: the share button, straightened, and seasons can share too
 
-**⚠️ BUILT AND TESTED — NOT DEPLOYED.** Functions FIRST (the `/season/**` rewrite is
-new and points at `animePreview`), then hosting.
+**🚀 LIVE.** Deployed 2026-08-30, functions FIRST then hosting.
+
+**Prod-verified.** `https://realanimereviews.com/season/21386` returns
+`og:title` = *One-Punch Man: Road to Hero — Real Anime Reviews*, an AniList cover as
+`og:image`, `twitter:card` = `summary`, and a canonical on `/season/`. The HTML
+synopsis came back with tags stripped and entities intact. `/anime/<slug>` still
+returns its own card, and the site reports `APP_VERSION 2.3.5`.
 
 ## What Blake said
 
