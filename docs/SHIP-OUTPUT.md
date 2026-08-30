@@ -1,8 +1,18 @@
 <!-- author: Code | date: 2026-08-30 -->
 # SHIP-OUTPUT — v2.3.4: publishing is one step, and a shared review shows the review
 
-**⚠️ BUILT AND TESTED — NOT DEPLOYED.** Needs a FUNCTIONS deploy before the hosting
-deploy (the `/anime/**` rewrite points at a function that must exist first).
+**🚀 LIVE.** Deployed 2026-08-30 on Blake's go, functions FIRST then hosting.
+
+**Prod-verified, not assumed.** The live `/anime/<slug>` returns per-anime tags
+(`og:title` = the review's title, `og:image` = its cover, `twitter:card` = `summary`);
+an unknown slug returns **200**, not a 404. The live `animeData.js` carries
+`RAR_CATALOG_PUBLISHED_AT` and all 22 shipped field names; the live `script.js` carries
+`catalogTopUp` and `card-render.js` carries `data-fallback`. A real browser load of the
+home page shows 45 entries, the correct Latest Drop and **zero console errors** — the
+top-up ran and correctly found nothing. And the query itself was proven end-to-end
+against production over the public REST API, unauthenticated: with an early `since` it
+returns rows, so the rules permit it and the shape is right; with the real stamp it
+returns none, which is the zero-work normal case.
 
 ## What Blake asked for
 

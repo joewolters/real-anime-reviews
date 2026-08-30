@@ -16,12 +16,15 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-30 — v2.3.4 BUILT, NOT DEPLOYED)
+## ⚡ STATUS (updated 2026-08-30 — v2.3.4 LIVE)
 
-- ⚠️ **v2.3.4 IS BUILT AND TESTED, NOT DEPLOYED.** ❗ **DEPLOY ORDER IS NOT
-  INTERCHANGEABLE: `npm run deploy:functions` FIRST, then hosting.** The new
-  `/anime/**` rewrite points at the `animePreview` function; hosting-first would
-  route live traffic at a function that does not exist yet.
+- 🚀 **v2.3.4 IS LIVE** (deployed 2026-08-30, functions FIRST then hosting). Tree
+  clean, pushed, `main` in sync. Prod-verified: `/anime/<slug>` returns per-anime tags
+  and 200 on an unknown slug; the live files carry the stamp, `catalogTopUp` and
+  `data-fallback`; a real browser load shows 45 entries and ZERO console errors.
+  ❗ **If you ever redeploy this pair, functions go FIRST** — the `/anime/**` rewrite
+  points at `animePreview`, so hosting-first routes live traffic at a missing function.
+- **Floors: `npm test` 435 · rules 222 · cf 94 · functions 94 · webkit 24.**
 - 🚀 **PUBLISHING IS ONE STEP NOW.** The site tops itself up: after first paint it
   asks Firestore `where('updatedAt','>', RAR_CATALOG_PUBLISHED_AT)` — empty on a
   normal visit, one row right after Blake publishes. The static file still boots the
