@@ -21,14 +21,14 @@ import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.3.2';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.3.3';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.3.2';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.3.3';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
-import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.3.2';
+import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.3.3';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.3.2';
+import { initNavDrawer } from './nav-drawer.js?v=2.3.3';
 initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals
@@ -3635,6 +3635,10 @@ function hideForYou() {
 // surface only when it's the active view; the compact For-You-on-home only when home
 // is the active view (lazy — no work when it's not on screen).
 function onForYouSavesChanged() {
+  // v2.3.3 — the featured slot no longer depends on saves (it is always the newest
+  // review), so this rebuild is now only about re-measuring its position. Kept
+  // rather than removed: positionFeaturedDrop still has to run when the For You
+  // surfaces around it change height.
   try { buildFeaturedDrop(); requestAnimationFrame(positionFeaturedDrop); } catch (_) {}
   try { if (foryouView && foryouView.style.display !== 'none') buildForYou(); } catch (_) {}
   try { if (homeView && homeView.style.display !== 'none' && homeForyouBuilt) buildHomeForYou(); } catch (_) {}
@@ -3761,16 +3765,24 @@ function setFolioDate() {
 }
 
 // ---------- FEATURED (Latest Review) ----------
-// v1.8.4 gate 4 — the featured pick: signed-in => most-recent favorite, else most-
-// recent watchlist, else a recent his-card from history; signed-out => latest drop.
-// Catalog entries only (al:<id> outside saves have no local card to feature).
+// v2.3.3 — LATEST DROP MEANS LATEST, for everyone.
+//
+// v1.8.4 gate 4 had made this slot personalized when signed in: most-recent
+// favorite, else most-recent watchlist, else a recent card from history, and only
+// then the newest review. The widget is labelled "LATEST DROP 最新 / Now Featuring",
+// so for every signed-in member — Blake included — the label was describing
+// something the slot was not doing.
+//
+// He published a new review and it did not appear there: he was signed in, and his
+// saved favorite won the pick. His words: "when it does I need it to show up on
+// latest drop." So the pick is now the newest catalog entry, unconditionally.
+//
+// `animeData` is emitted by scripts/catalog-publish.js sorted by the catalog's
+// `order` field, and a newly added anime takes the highest order — so the tail IS
+// the newest review. The personalized surfaces (FOR YOU, Continue) still do the
+// personalizing; this slot does not.
 function pickFeaturedAnime() {
   if (!Array.isArray(animeData) || !animeData.length) return null;
-  if (auth.currentUser) {
-    const bySlug = catalogBySlug();
-    const firstCatalog = (ids) => { for (const id of (ids || [])) { const a = bySlug.get(id); if (a) return a; } return null; };
-    return firstCatalog([...favoritesSet]) || firstCatalog([...watchlistSet]) || firstCatalog(readContinue()) || animeData[animeData.length - 1];
-  }
   return animeData[animeData.length - 1];
 }
 function buildFeaturedDrop() {

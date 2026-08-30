@@ -16,11 +16,30 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-29 — v2.3.2 LIVE)
+## ⚡ STATUS (updated 2026-08-29 — v2.3.3 BUILT, NOT DEPLOYED)
 
-- 🚀 **v2.3.2 IS LIVE** (deployed 2026-08-29, hosting only). Tree clean, pushed, `main`
-  in sync. Prod-verified: live `/admin/new-anime` serves 2.3.2, kicker reads ADD ANIME,
-  and the live `new-anime.js` declares `validateBeforeGenerate`.
+- ⚠️ **v2.3.3 IS BUILT AND TESTED, AWAITING DEPLOY.** v2.3.2 is what is live and its
+  fix is prod-verified (live `/admin/new-anime` serves 2.3.2, kicker reads ADD ANIME,
+  live `new-anime.js` declares `validateBeforeGenerate`).
+- 🎉 **BLAKE'S REVIEW IS PUBLISHED AND THE CATALOG IS 45.** He pressed Publish, it saved
+  — the v2.3.2 fix held. `catalog-publish --from=rest --write` has regenerated
+  `animeData.js` (44 → 45, backup taken) and the AniList cover (id 169580) is in
+  `assets/i-made-friends-with-the-second-prettiest-girl-in-my-class.png` (400×600 PNG,
+  92KB, matching the other 44). **It goes public on the next hosting deploy.**
+- ⚠️ **REMEMBER THE SECOND HALF OF PUBLISHING.** The site does not read Firestore live
+  (by design). A saved review is invisible until `catalog:publish` + deploy. Blake hit
+  exactly this: *"I posted it but I don't see it on the website?"* Nothing was broken.
+- 📌 **LATEST DROP NOW MEANS LATEST, and this was a real trap.** `pickFeaturedAnime()`
+  showed signed-in members their most-recent **favorite** (→ watchlist → history) and only
+  fell back to the newest review. The widget says "LATEST DROP 最新", so for every signed-in
+  member the label lied — and **the publish alone would NOT have put his new review in
+  that slot for him.** Blake was asked and chose "always newest, for everyone"; the pick
+  is now unconditionally the catalog tail. FOR YOU and Continue still personalize.
+- ⚠️ **A TEST TRAP WORTH INHERITING:** `favoritesSet`/`watchlistSet` are module-scoped
+  (`script.js:229`) and NOT on `window`. A test that mutates `window.favoritesSet` to
+  prove the featured pick ignores saves proves NOTHING — it passes against the old code
+  too. `tests/v233-latest-drop-is-latest.spec.js` reads the LIVE function body via
+  `Function.prototype.toString()` instead. Do not "simplify" it back.
 - 🐛 **THE PUBLISH BUTTON WAS DEAD, and v2.3.2 is the fix.** Blake: *"when I go to
   publish a new review nothing happens."* `admin/new-anime.js` called
   `validateBeforeGenerate()` — a function **v2.3.0 deleted and whose call it left
@@ -47,9 +66,11 @@
   **Publish to catalog** on `/admin/new-anime`; then this machine runs `npm run catalog:publish`,
   fetches the cover into `assets/` as `i-made-friends-with-the-second-prettiest-girl-in-my-class.png`,
   and deploys `--only hosting`. That is what makes it public.
-- **Floors: `npm test` 420 (was 417 + 3 new) · rules 222 · cf 94 · functions 94 · webkit 24.**
-  This run: 418 passed + 2 flake-class reds that PASS isolated; webkit 24 ✓; functions 94 ✓.
-  rules/cf NOT run — no `firestore.rules` and no `functions/` code was touched.
+- **Floors: `npm test` 424 (417 + 3 in v2.3.2 + 4 in v2.3.3) · rules 222 · cf 94 ·
+  functions 94 · webkit 24.** No test hard-codes a catalog count — grepped for 44/45 and
+  `animeData.length` assertions before publishing, so growing to 45 breaks nothing.
+  rules/cf NOT run in v2.3.2 or v2.3.3 — no `firestore.rules` and no `functions/` code
+  was touched in either.
 - **STILL OPEN, honestly labelled:** Safari + DuckDuckGo sign-in (TWO failed hypotheses —
   start from `?authcheck=1`, do NOT guess a third) · the ✨ASK drawer still needs `/api/chat`
   (the one deliberate hold-out) · the intermittent review-deep-link highlight, never reproduced.

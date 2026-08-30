@@ -1,4 +1,98 @@
 <!-- author: Code | date: 2026-08-29 -->
+# SHIP-OUTPUT — v2.3.3: the review is on the site, and LATEST DROP means latest
+
+## What Blake said
+
+> "okay well I posted it but I don't see it on the website? and when it does I need it
+> to show up on latest drop."
+
+Two separate things, and both were real.
+
+## 1. The review saved. The site had not been rebuilt.
+
+His press of **Publish to catalog** worked — the v2.3.2 fix held. Confirmed read-only
+against production before touching anything:
+
+```
+node scripts/catalog-publish.js --from=rest      # dry run
+CATALOG: 45 entries
+shrink tripwire: 22406 -> 24102 chars (+1696)
+  · new entry: "I Made Friends with the Second Prettiest Girl in My Class"
+```
+
+The site does **not** read Firestore live — by design (cloud-migration study §3: static
+publish, not live reads). It loads a generated `animeData.js`. So a saved review is
+invisible until that file is regenerated and deployed. Nothing was broken; the second
+half of the publish had not been run yet.
+
+Done: `catalog-publish --from=rest --write` (45 entries, backup taken), cover art
+fetched from AniList (id 169580) to
+`assets/i-made-friends-with-the-second-prettiest-girl-in-my-class.png` — 400×600 PNG,
+92KB, matching the other 44 covers exactly.
+
+## 2. LATEST DROP was not showing the latest — for him
+
+**This is the part he could not have known, and it would have wasted his evening.**
+The publish alone would NOT have put the review in that slot for him.
+
+`pickFeaturedAnime()` (`script.js`) had two behaviours:
+
+| Who | What the slot showed |
+|---|---|
+| signed out | `animeData[animeData.length - 1]` — the newest review ✅ |
+| **signed in** | most-recent **favorite** → watchlist → recent history → *then* newest ❌ |
+
+v1.8.4 gate 4 personalized it. But the widget is labelled **"LATEST DROP 最新 / Now
+Featuring"**, so for every signed-in member the label described something the slot was
+not doing. Blake is signed in as admin, his most-recent favorite is Black Clover, and
+that is exactly what his screenshot showed. A brand-new review could go up and never
+appear in the one panel on the page that promises new things.
+
+**Asked, not assumed.** He chose: always show the newest review, for everyone.
+`pickFeaturedAnime()` is now unconditionally the catalog tail. The personalized picks
+stay on the surfaces that are actually about the member — FOR YOU and Continue.
+
+`animeData` is emitted sorted by the catalog `order` field and a new anime takes the
+highest order, so the tail IS the newest review. Verified on the real file: entry 45 is
+the new one.
+
+## 3. Small tidy
+
+`admin/catalog.html` said **"Import 44 anime"** on the one-time seed. It counted, so it
+went stale the moment there were 45. It no longer names a number.
+
+## The new test — `tests/v233-latest-drop-is-latest.spec.js` (4 tests)
+
+⚠️ **One trap avoided, and worth recording.** The obvious test is "stuff
+`window.favoritesSet` with a decoy and re-pick". That proves **nothing**: `favoritesSet`
+is module-scoped (`script.js:229`) and never exported, so the mutation silently does
+nothing and the assertion passes against the OLD code too — the same green-over-nothing
+that hid the dead Publish button one version ago. The spec instead reads the **live**
+function via `Function.prototype.toString()` (stronger than fetching the file, because
+it is what is actually running) and asserts the body never names `favoritesSet`,
+`watchlistSet`, `readContinue`, `currentUser` or `catalogBySlug`. It also asserts those
+sets are genuinely unreachable, so nobody "improves" the test later into a fake one.
+Verified against the pre-change function body: it contains those names, so this fails on
+the old code.
+
+Plus: the pick equals the tail, it does not drift across calls, and the rendered widget
+shows the newest title with a real `assets/` cover.
+
+## Gates
+
+| Suite | Result |
+|---|---|
+| `npm test` | see the gate log line below |
+| `npm run test:webkit` | 24 — floor |
+| `npm run test:functions` | 94 — floor |
+| rules 222 / cf 94 | **not run.** No `firestore.rules` and no `functions/` code changed. |
+
+Checked and clean: **no test hard-codes a catalog count** (grepped for 44/45 and
+`animeData.length` assertions), so growing to 45 breaks nothing.
+
+---
+
+<!-- author: Code | date: 2026-08-29 -->
 # SHIP-OUTPUT — v2.3.2: the Publish button was dead
 
 **🚀 LIVE.** Deployed 2026-08-29 on Blake's go-signal (hosting only — no rules changed). Prod-verified, not assumed: the live `/admin/new-anime` serves `APP_VERSION 2.3.2`, its kicker reads **ADD ANIME**, and the live `new-anime.js` contains `function validateBeforeGenerate`.

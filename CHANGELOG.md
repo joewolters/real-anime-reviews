@@ -21,6 +21,15 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-29 -->
+## v2.3.3 — MINOR (2026-08-29)
+
+**A new review is on the site: *I Made Friends with the Second Prettiest Girl in My Class*.** The first anime added since the Publish button was fixed, and the first one added at all since the catalogue moved online.
+
+**Latest Drop now means latest, for everyone.** The panel labelled LATEST DROP was showing signed-in members their own most-recent saved anime instead of the newest review — so a brand-new review could go up and never appear in the one place on the page that promises to show new things. It now shows the newest review whether you are signed in or not. The personalised picks are still on the surfaces that are actually about you: For You, and Continue Where You Left Off.
+
+**Small tidy:** the one-time catalogue import on the admin side said "Import 44 anime". It counted, so it went stale the moment there were 45. It no longer names a number.
+
+<!-- author: Code | date: 2026-08-29 -->
 ## v2.3.2 — PATCH (2026-08-29)
 
 **The Publish button on Add New Anime does something again.** Pressing it did nothing at all — no save, no error, no spinner. The page was fine; the button was calling a safety check that had been deleted a version earlier, and reaching for a name that is not there stops everything on that line before any of the publishing happens. The check is back, and it now asks the same questions the rest of the site asks before anything is saved, so an incomplete entry is refused in one clear message instead of silently.
