@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <script>window.APP_VERSION="2.3.3"</script>
+  <script>window.APP_VERSION="2.3.4"</script>
   <!-- v1.8.3 — kill the split-second homepage flash before the welcome door. On a
        first-visit-of-session (no sessionStorage rar:welcomed), set a curtain class
        SYNCHRONOUSLY in <head> so a dark cover paints over content immediately; the
@@ -59,10 +59,10 @@
 <meta name="twitter:image" content="https://realanimereviews.com/assets/og-preview.jpg">
 <meta property="og:site_name" content="Real Anime Reviews">
 
-  <link rel="stylesheet" href="style.css?v=2.3.3">
-  <link rel="stylesheet" href="mobile.css?v=2.3.3" media="(max-width: 900px)">
-  <link rel="stylesheet" href="frames.css?v=2.3.3">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
-  <link rel="stylesheet" href="admin-fab.css?v=2.3.3">
+  <link rel="stylesheet" href="style.css?v=2.3.4">
+  <link rel="stylesheet" href="mobile.css?v=2.3.4" media="(max-width: 900px)">
+  <link rel="stylesheet" href="frames.css?v=2.3.4">   <!-- gate 20.5 — frame themes render for VIEWERS too -->
+  <link rel="stylesheet" href="admin-fab.css?v=2.3.4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=Sora:wght@400;500;600&family=Kanit:wght@500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -267,11 +267,23 @@
   <!-- EDIT THIS ANYTIME: version title + bullet points -->
   <div class="changelog-box">
     <div class="changelog-title">
-      <span class="changelog-tag" id="changelog-version">v2.3.3</span>
+      <span class="changelog-tag" id="changelog-version">v2.3.4</span>
      Feature Update
     </div>
 
     <div class="changelog-content">
+      <div class="version-section" data-tier="minor">
+        <div class="vs-head">
+          <div class="version-chips"><span class="version-chip">v2.3.4</span></div>
+          <span class="vs-tier">Feature Update</span>
+          <div class="version-header">08/30/2026</div>
+        </div>
+        <ul class="changelog-list">
+          <li><strong>New reviews appear the moment they are posted.</strong> A review used to sit invisible until the whole site was rebuilt by hand. The site now notices new and edited reviews on its own. It still loads from its fast local copy first, so nothing got slower.</li>
+          <li><strong>Sharing a review actually shows the review.</strong> Pasting a review link into Discord or a message used to show the generic site card. Every review now has its own address and a <strong>Copy share link</strong> button &mdash; paste that and you get the cover, title and rating.</li>
+          <li>Every review now carries a backup cover image, so a brand-new one is never sitting there pictureless.</li>
+        </ul>
+      </div>
       <div class="version-section" data-tier="minor">
         <div class="vs-head">
           <div class="version-chips"><span class="version-chip">v2.3.3</span></div>

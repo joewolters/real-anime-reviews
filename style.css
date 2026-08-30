@@ -11160,3 +11160,34 @@ html[data-surface="account"] .side-link.is-active {
     pointer-events: auto;
   }
 }
+
+/* v2.3.4 — "Copy share link" on the review modal.
+   The address bar shows #anime=<slug>, and a fragment never reaches a server, so
+   pasting it can only ever unfurl as the generic site card. This button hands over
+   the /anime/<slug> path, which the server answers with that anime's own preview.
+   Quiet by default: it is a utility, not a call to action. */
+.modal-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  margin: 0 0 .9rem;
+  padding: .34rem .7rem;
+  font: inherit;
+  font-size: .78rem;
+  letter-spacing: .02em;
+  color: var(--rar-muted, #b9a8d8);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease, background-color .18s ease;
+}
+.modal-share-btn::before { content: "🔗"; font-size: .8em; }
+.modal-share-btn:hover,
+.modal-share-btn:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, .09);
+  border-color: rgba(255, 255, 255, .32);
+}
+.modal-share-btn:focus-visible { outline: 2px solid #b98bff; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .modal-share-btn { transition: none; } }

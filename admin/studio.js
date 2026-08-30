@@ -15,7 +15,7 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/fi
 import {
   doc, getDoc, setDoc, deleteDoc, collection, getDocs, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
-import { friendlyError } from '../friendly-errors.js?v=2.3.3';
+import { friendlyError } from '../friendly-errors.js?v=2.3.4';
 
 const ADMIN_UID = 'G2jGRa14u8bzGAmeBTkvXy8PKmr1';
 const $ = (id) => document.getElementById(id);

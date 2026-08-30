@@ -21,14 +21,14 @@ import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.3.3';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.3.4';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.3.3';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.3.4';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
-import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.3.3';
+import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.3.4';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.3.3';
+import { initNavDrawer } from './nav-drawer.js?v=2.3.4';
 initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals
@@ -3764,6 +3764,25 @@ function setFolioDate() {
   catch (_) {}
 }
 
+// v2.3.4 — "Copy share link" on the review modal. Delegated at document level so
+// it survives every modal repaint, and registered once.
+// The URL it copies is the PATH form, never the `#anime=` one the address bar
+// shows: a fragment never reaches the server, so only the path can carry the
+// anime into a Discord/iMessage/Slack preview.
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest && e.target.closest('[data-share-anime]');
+  if (!btn) return;
+  e.preventDefault();
+  const url = location.origin + '/anime/' + encodeURIComponent(btn.dataset.shareAnime || '');
+  const done = (msg) => {
+    const was = btn.textContent;
+    btn.textContent = msg;
+    setTimeout(() => { btn.textContent = was; }, 1400);
+  };
+  try { await navigator.clipboard.writeText(url); done('Link copied ✓'); }
+  catch (_) { done(url); }   // no clipboard (http, or denied): show it to copy by hand
+});
+
 // ---------- FEATURED (Latest Review) ----------
 // v2.3.3 — LATEST DROP MEANS LATEST, for everyone.
 //
@@ -3804,7 +3823,8 @@ function buildFeaturedDrop() {
     <img class="featured-thumb" src="assets/${escapeHtml(a.image || '')}"
       alt="${escapeHtml(a.Title || '')}"
       loading="lazy" decoding="async"
-      onerror="this.onerror=null;this.src='assets/placeholder.png';" />
+      ${a.AniListCover ? `data-fallback="${escapeHtml(a.AniListCover)}"` : ''}
+      onerror="var f=this.getAttribute('data-fallback');if(f&&this.getAttribute('data-fb')!=='1'){this.setAttribute('data-fb','1');this.src=f;}else{this.onerror=null;this.src='assets/placeholder.png';}" />
 
     <div class="featured-name">${escapeHtml(a.Title || '')}</div>
     ${fRomaji}
@@ -9696,6 +9716,14 @@ function openModal(anime) {
       trailerBlock +
       '<h2 class="modal-title">' + anime.Title + '</h2>' +
       modalRomaji +
+      // v2.3.4 — the share affordance. The address bar says `#anime=<slug>`, and
+      // a `#` fragment is NEVER sent to a server, so pasting that into Discord can
+      // only ever produce the generic site card — which is exactly what happened
+      // to Blake. This hands over `/anime/<slug>` instead: a real path the server
+      // answers with THIS anime's cover, title and rating. Reviewed titles only —
+      // an unreviewed one has no catalog doc to preview.
+      '<button type="button" class="modal-share-btn" data-share-anime="' +
+        escapeHtml(slug(anime.Title)) + '">Copy share link</button>' +
       officialVotesMarkup(anime) +
       underVoteBar +
       '<div class="modal-meta">' +
@@ -12521,6 +12549,80 @@ function onScrollHeader() {
     els.forEach((el) => io.observe(el));
   }
 
+  // ---------- LIVE TOP-UP (v2.3.4) ------------------------------------------
+  // Blake: "publishing is two steps" — he pressed Publish and the review was not
+  // on the site, because the site ships a generated animeData.js and that file
+  // knew nothing about the new row until it was rebuilt and deployed.
+  //
+  // This closes that gap WITHOUT touching the boot path. The static file still
+  // loads first and still renders everything (cloud-migration study §3: static
+  // publish, not live reads — zero per-visitor reads, no async before first
+  // paint). Only AFTER the page is up does it ask Firestore one question:
+  //
+  //     "anything in the catalog changed since this file was built?"
+  //
+  // On a normal visit the answer is nothing, which is a single empty query. It is
+  // only ever non-empty in the window between a publish and the next rebuild.
+  //
+  // ⚠️ THE TRAP THIS IS BUILT AROUND. `animeData` is a top-level `const` in a
+  // CLASSIC script — a global LEXICAL binding, not `window.animeData`. It cannot
+  // be reassigned. And assigning `window.animeData` would be worse than useless:
+  // script.js has 8 dual-source read sites with INCONSISTENT precedence (five
+  // check window first, three check the bare const first) and ~25 more that read
+  // the bare const with no fallback at all. A second array would give a
+  // split-brain catalog where the grid shows 45 and the deep-link router shows 46.
+  // So this MUTATES THE ONE ARRAY IN PLACE. Same object, every reader agrees.
+  //
+  // Failure is silent by design: if the query is blocked, offline or slow, the
+  // page is exactly the page it is today. This is an addition, never a dependency.
+  async function catalogTopUp() {
+    // the generator stamps these into animeData.js. An older file has neither, in
+    // which case there is nothing to compare against — do nothing.
+    if (typeof RAR_CATALOG_PUBLISHED_AT === 'undefined') return;
+    if (typeof RAR_CATALOG_FIELDS === 'undefined' || !Array.isArray(RAR_CATALOG_FIELDS)) return;
+    const since = new Date(RAR_CATALOG_PUBLISHED_AT);
+    if (!(since instanceof Date) || !isFinite(since.getTime())) return;
+
+    const snap = await getDocs(query(collection(db, 'catalog'), where('updatedAt', '>', since)));
+    if (snap.empty) return;                       // the normal case, every visit
+
+    // Apply in `order` so several new titles land in the sequence the rebuild
+    // would have produced — the array tail is the Latest Drop, so this matters.
+    const rows = [];
+    snap.forEach((d) => rows.push(d.data()));
+    rows.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    const bySlug = new Map(animeData.map((a) => [slug(a.Title || ''), a]));
+    let added = 0, updated = 0;
+    for (const row of rows) {
+      if (!row || !row.Title) continue;
+      // copy by the SAME field list the generator emitted (shipped in the file),
+      // so a live doc becomes byte-equivalent to a rebuilt entry.
+      const entry = {};
+      for (const f of RAR_CATALOG_FIELDS) if (row[f] !== undefined && row[f] !== null) entry[f] = row[f];
+      if (!entry.Title) continue;
+      const s = slug(entry.Title);
+      const existing = bySlug.get(s);
+      if (existing) { Object.assign(existing, entry); updated++; }
+      else { animeData.push(entry); bySlug.set(s, entry); added++; }
+    }
+    if (!added && !updated) return;
+
+    // the two memoized catalog maps would otherwise keep answering from the
+    // pre-merge array — a new anime's deep link and REVIEWED pill depend on these.
+    _catalogBySlug = null;
+    _primaryIdToSlug = null;
+    _watchedIds = null;
+
+    // Re-render only the catalog-derived surfaces. None of these bind listeners
+    // (checked), so re-running them is idempotent — and none of it runs at all on
+    // a normal visit, because we returned above.
+    try { renderGrid(); } catch (_) {}
+    try { buildSpotlight(); } catch (_) {}
+    try { buildGenreRails(); } catch (_) {}
+    try { buildFeaturedDrop(); requestAnimationFrame(positionFeaturedDrop); } catch (_) {}
+  }
+
   function init() {
     if (typeof animeData === "undefined") {
       console.error("animeData.js not loaded. Include it before script.js.");
@@ -12545,6 +12647,11 @@ function onScrollHeader() {
     document.getElementById('home-airing-more')?.addEventListener('click', (e) => { e.preventDefault(); showDiscover(); });
     showHome();
     loadCuratorStatus();   // milestone B — paint Blake's per-anime status on the cards (public read; cached)
+    // v2.3.4 — ask for anything published since this file was built. Deliberately
+    // NOT awaited and swallowing its own errors: the static file is the contract,
+    // and a page that renders 45 reviews must never be held up (or broken) by a
+    // question whose answer is almost always "nothing new".
+    catalogTopUp().catch(() => {});
     // gate 6d item 7: the account page's For You / Discover nav links land here via
     // ?place=… — honor it after the default home is set.
     try {

@@ -88,6 +88,103 @@ exports.ping = onRequest((req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// animePreview (v2.3.4) — per-review link previews.
+// -----------------------------------------------------------------------------
+// Blake pasted a review link into Discord and got the generic site card. That was
+// not a broken tag: the link was `/#anime=<slug>`, and EVERYTHING AFTER A `#` IS
+// NEVER SENT TO THE SERVER. Discord asked for `/`, so it got the homepage's tags.
+// No amount of tag editing can fix a fragment — the URL has to carry the anime on
+// the server side, which is what `/anime/<slug>` (a hosting rewrite to this) does.
+//
+// Reads the catalog doc live, so a review published seconds ago already previews
+// correctly — no rebuild, same as the site's own top-up.
+//
+// Humans are bounced into the app; crawlers do not run JavaScript, so they keep
+// the tags. The <noscript> link means a person without JS still gets through.
+const PREVIEW_ORIGIN = 'https://realanimereviews.com';
+const htmlEscape = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+// First real sentence(s) of the review, tags stripped, for the card blurb.
+function previewBlurb(row) {
+  const src = String(row.Description || row.Review || '').trim();
+  const flat = src
+    .replace(/^#{1,6}\s+.*$/gm, ' ')        // markdown headings ("## Intro")
+    .replace(/[*_`>#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (flat.length <= 200) return flat;
+  const cut = flat.slice(0, 200);
+  const stop = cut.lastIndexOf('. ');
+  return (stop > 80 ? cut.slice(0, stop + 1) : cut.trim() + '…');
+}
+
+exports.animePreview = onRequest({ cors: false }, async (req, res) => {
+  // /anime/<slug> — take the last non-empty path segment.
+  const parts = String(req.path || '').split('/').filter(Boolean);
+  const slug = decodeURIComponent(parts[parts.length - 1] || '').toLowerCase();
+  const appUrl = PREVIEW_ORIGIN + '/#anime=' + encodeURIComponent(slug);
+
+  let row = null;
+  if (/^[a-z0-9-]{1,120}$/.test(slug)) {
+    try {
+      const snap = await admin.firestore().collection('catalog').doc(slug).get();
+      if (snap.exists) row = snap.data();
+    } catch (_) { /* fall through to the site-level card */ }
+  }
+
+  // Unknown slug: still a valid page, just the generic card. Never a hard 404 —
+  // a stale shared link should land someone on the site, not on an error.
+  const title = row ? `${row.Title} — Real Anime Reviews` : 'Real Anime Reviews';
+  const desc = row
+    ? `${row.Rating ? row.Rating + ' · ' : ''}${row.Genre ? row.Genre + ' — ' : ''}${previewBlurb(row)}`
+    : "A late-night anime den — one person's honest takes, ranked, reviewed, and watched in full.";
+  // The local cover is the fast path; AniListCover covers the window before the
+  // art is deployed; og-preview.jpg is the last resort. A crawler cannot follow an
+  // onerror, so the choice has to be made HERE.
+  const image = row
+    ? (row.AniListCover || `${PREVIEW_ORIGIN}/assets/${row.image || 'og-preview.jpg'}`)
+    : `${PREVIEW_ORIGIN}/assets/og-preview.jpg`;
+  const canonical = row ? `${PREVIEW_ORIGIN}/anime/${slug}` : PREVIEW_ORIGIN + '/';
+  // Blake asked for "the thumbnail of the review", and that is also the correct
+  // card type: an anime cover is a 2:3 PORTRAIT, and summary_large_image crops to
+  // a 1.91:1 letterbox — it would slice the top and bottom off every cover. The
+  // small `summary` card shows a portrait thumbnail beside the text intact.
+  // og-preview.jpg IS 1200x630, so the no-anime case keeps the large card.
+  const card = row ? 'summary' : 'summary_large_image';
+
+  res.set('Cache-Control', 'public, max-age=300, s-maxage=600');
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${htmlEscape(title)}</title>
+<link rel="canonical" href="${htmlEscape(canonical)}">
+<meta name="description" content="${htmlEscape(desc)}">
+<meta property="og:site_name" content="Real Anime Reviews">
+<meta property="og:type" content="${row ? 'article' : 'website'}">
+<meta property="og:title" content="${htmlEscape(title)}">
+<meta property="og:description" content="${htmlEscape(desc)}">
+<meta property="og:url" content="${htmlEscape(canonical)}">
+<meta property="og:image" content="${htmlEscape(image)}">
+<meta property="og:image:alt" content="${htmlEscape(row ? row.Title + ' cover' : 'Real Anime Reviews')}">
+<meta name="twitter:card" content="${card}">
+<meta name="twitter:title" content="${htmlEscape(title)}">
+<meta name="twitter:description" content="${htmlEscape(desc)}">
+<meta name="twitter:image" content="${htmlEscape(image)}">
+<meta http-equiv="refresh" content="0; url=${htmlEscape(appUrl)}">
+</head>
+<body>
+<script>location.replace(${JSON.stringify(appUrl)});</script>
+<noscript><p><a href="${htmlEscape(appUrl)}">Continue to ${htmlEscape(row ? row.Title : 'Real Anime Reviews')}</a></p></noscript>
+</body>
+</html>`);
+});
+
+// -----------------------------------------------------------------------------
 // Idempotency (M6): CF delivery is at-least-once. Create a per-event marker;
 // if it already exists, this is a retry/duplicate — skip. `.create()` fails if
 // the doc exists, which makes the check atomic.

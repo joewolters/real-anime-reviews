@@ -801,6 +801,14 @@ async function publishToCatalog() {
   if (a.idMal) fields.IdMal = Number(a.idMal);
   if (a.averageScore) fields.AniListScore = Number(a.averageScore);
   if (a.coverImage && a.coverImage.color) fields.AniListColor = a.coverImage.color;
+  // v2.3.4 — the remote cover, stored so the anime is NEVER pictureless. The
+  // local assets/<image> file is still the fast path and still what a publish
+  // requires; this is the stand-in for the window between pressing Publish and
+  // that file being deployed, which is exactly when a new review is most likely
+  // to be looked at and shared.
+  if (a.coverImage && (a.coverImage.extraLarge || a.coverImage.large)) {
+    fields.AniListCover = a.coverImage.extraLarge || a.coverImage.large;
+  }
   if (a.title) {
     if (a.title.english) fields.TitleEnglish = a.title.english;
     if (a.title.romaji) fields.TitleRomaji = a.title.romaji;
@@ -852,27 +860,65 @@ async function publishToCatalog() {
 }
 
 // what he sees when it worked — honest about the one remaining manual step.
-function showPublished() {
+// Does assets/<file> actually exist? An <img> probe rather than fetch(), because
+// it needs no CORS and answers the same question the CARD will ask.
+function coverExists(file) {
+  return new Promise((resolve) => {
+    if (!file) { resolve(false); return; }
+    const img = new Image();
+    let done = false;
+    const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
+    setTimeout(() => finish(false), 6000);   // a hung request is a "no"
+    img.src = '../assets/' + file + '?probe=' + Date.now();
+  });
+}
+
+// v2.3.4 — what he sees when it worked. Two things changed here and both were
+// lies-in-waiting otherwise:
+//   1. It used to say the review only appeared after a rebuild and a deploy.
+//      Since the live top-up (script.js catalogTopUp) that is no longer true —
+//      it is on the site within seconds, with no rebuild.
+//   2. It used to state the cover filename as though it existed. Nothing checked.
+//      A wrong or missing file shipped a broken image with no warning, so now the
+//      page actually looks, and says which of the two situations he is in.
+async function showPublished() {
   const out = $('output-section');
   const box = $('publish-result');
   if (!out || !box) return;
   const p = state.published || {};
   box.innerHTML = '';
+
   const h = document.createElement('p');
-  h.innerHTML = '<strong>Saved to the catalog.</strong> It is stored in the cloud now — '
-    + 'your words are safe from here.';
+  h.innerHTML = '<strong>Published.</strong> It is on the site now — no rebuild, no deploy. '
+    + 'Open the Den and it is the Latest Drop.';
+
   const n = document.createElement('p');
   n.className = 'muted';
-  n.textContent = p.hasOverride
-    ? 'Cover: assets/' + p.image + ' (your own file).'
-    : 'Cover: assets/' + p.image + ' — the art is fetched from AniList when the site is rebuilt.';
+  n.textContent = 'Checking the cover art…';
+
   const s2 = document.createElement('p');
   s2.className = 'muted';
-  s2.textContent = 'The public site is built from a generated file, so it appears once the site is rebuilt and deployed.';
+  s2.textContent = 'Share it with: ' + location.origin + '/anime/' + p.animeId;
+
   box.appendChild(h); box.appendChild(n); box.appendChild(s2);
   $('step5').hidden = true;
   out.hidden = false;
   out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const ok = await coverExists(p.image);
+  if (ok) {
+    n.textContent = 'Cover: assets/' + p.image + ' — already on the site. ✓';
+  } else if (p.cover) {
+    n.textContent = 'Cover: assets/' + p.image + ' is not uploaded yet, so the site is showing '
+      + 'the AniList picture instead. It looks right either way; adding the file just makes it '
+      + 'load faster. Nothing is broken.';
+  } else {
+    n.className = 'muted publish-warn';
+    n.textContent = 'No cover: assets/' + p.image + ' does not exist and there is no AniList '
+      + 'picture to fall back on, so this one will show the placeholder until the file is added.';
+  }
 }
 
 // ---- v2.3.0 - the Excel row builder, the 'commands to run' block, and the
@@ -1367,8 +1413,12 @@ async function init() {
 
     const modeNotice = $('mode-notice');
     if (modeNotice) {
-      modeNotice.textContent = 'Saves straight to the catalog in the cloud. '
-        + 'It goes public when the site is next rebuilt and deployed.';
+      // v2.3.4 — this used to end "...when the site is next rebuilt and deployed".
+      // Since the live top-up (script.js catalogTopUp) that is no longer true, and
+      // a notice that tells Blake to wait for a step that no longer exists is the
+      // same class of stale instruction as the MODE 1 banner.
+      modeNotice.textContent = 'Saves straight to the catalog in the cloud, '
+        + 'and goes live on the site within seconds. No rebuild, no deploy.';
       modeNotice.className = 'mode-notice local';
       modeNotice.hidden = false;
     }

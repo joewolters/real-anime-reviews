@@ -64,8 +64,30 @@
     return null;
   }
 
+  // v2.3.4 — the cover falls back in TWO steps, not one.
+  //
+  // Before this, a missing assets/<file> went straight to the placeholder, and
+  // nothing anywhere warned that the file was absent. That mattered the moment
+  // publishing stopped needing a rebuild: a review is on the site seconds after
+  // Blake presses Publish, but its cover art is not deployed until later. Without
+  // this, a brand-new review — the one most likely to be looked at and shared —
+  // would wear a grey placeholder.
+  //
+  // Step 1 is the AniList cover stored on the anime (AniListCover); step 2 is the
+  // placeholder. The `data-fb` latch makes it loop-proof: if the remote image also
+  // fails, the second error takes the else branch and clears the handler.
+  const COVER_ONERROR = "var f=this.getAttribute('data-fallback');"
+    + "if(f&&this.getAttribute('data-fb')!=='1'){this.setAttribute('data-fb','1');this.src=f;}"
+    + "else{this.onerror=null;this.src='PLACEHOLDER';}";
+  const attrEsc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;');
+
   function renderAnimeCardMarkup(anime, { animeId, assetBase = 'assets/', reviewed = true, pinned = false, newlyReviewed = false } = {}) {
     animeId = animeId || slug(anime.Title);
+    const coverFallbackAttr = anime.AniListCover
+      ? `\n       data-fallback="${attrEsc(anime.AniListCover)}"`
+      : '';
     const card = document.createElement("div");
     // v1.8.3 gate 4 — `reviewed` modifier scaffold. Every catalog card is one of
     // Blake's reviews (reviewed=true, the default). v1.8.4's discovery/For-You cards
@@ -130,8 +152,8 @@
   </div>
 
   <img src="${assetBase}${anime.image}" alt="${anime.Title}" loading="lazy"
-       decoding="async" width="400" height="600"
-       onerror="this.onerror=null;this.src='${assetBase}placeholder.png';" />
+       decoding="async" width="400" height="600"${coverFallbackAttr}
+       onerror="${COVER_ONERROR.replace(/PLACEHOLDER/g, assetBase + 'placeholder.png')}" />
 
   <div class="info">
     <h3 class="title-text">${anime.Title}</h3>

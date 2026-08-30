@@ -41,6 +41,15 @@
         "type": 301
       }
     ],
+    "rewrites": [
+      {
+        "source": "/anime/**",
+        "function": {
+          "functionId": "animePreview",
+          "region": "us-central1"
+        }
+      }
+    ],
     "headers": [
       {
         "source": "/",

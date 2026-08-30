@@ -1,3 +1,122 @@
+<!-- author: Code | date: 2026-08-30 -->
+# SHIP-OUTPUT — v2.3.4: publishing is one step, and a shared review shows the review
+
+**⚠️ BUILT AND TESTED — NOT DEPLOYED.** Needs a FUNCTIONS deploy before the hosting
+deploy (the `/anime/**` rewrite points at a function that must exist first).
+
+## What Blake asked for
+
+Three things, from two messages:
+
+> "Can we fix both those issues." — (1) publishing always takes two steps; (2) the
+> publish script never checks the cover art exists.
+
+> "I posted a link with a review. Can the thumbnail of the review show up instead of
+> the entire page?"
+
+## 1. Publishing is one step — the live top-up
+
+The site loads a generated `animeData.js`. Firestore is the authoring store. So a
+saved review was invisible until someone regenerated that file and deployed.
+
+**The boundary I had to respect.** `docs/CLOUD-MIGRATION-STUDY.md` §3 chose static
+publish over live reads deliberately, and the table is emphatic — live reads mean
+"44 doc reads **per visitor**", an "extra round-trip before first paint", ~20
+catalog-coupled specs reworked, and "a boot-path rewrite on a live site with real
+members" as HIGH risk. That decision stands. Blake picked the option that keeps it.
+
+**What ships instead.** The static file still boots the site, unchanged. AFTER first
+paint, one query asks Firestore *"anything changed since this file was built?"* —
+`where('updatedAt', '>', RAR_CATALOG_PUBLISHED_AT)`. On a normal visit that is a
+single empty result; it is only ever non-empty between a publish and the next
+rebuild. It is not awaited and swallows its own errors, so a blocked or slow query
+leaves the page exactly as it is today. Rules needed no change: `firestore.rules:569`
+is already `allow get, list: if true` on `catalog`.
+
+### ⚠️ THE TRAP THAT WOULD HAVE SHIPPED A HALF-WORKING FEATURE
+
+My first design was "put the extended catalog on `window.animeData`". The study
+killed it, and this is worth inheriting:
+
+> `animeData` is a top-level `const` in a CLASSIC script — a global **lexical**
+> binding, **not** `window.animeData`, which is `undefined` on index.html.
+
+Worse, script.js has **8 dual-source read sites with inconsistent precedence** — five
+check `window.animeData` first, three (including `openAnimeFromId`, the primary
+id→modal opener) check the bare const first — plus ~25 that read the bare const with
+no fallback at all. A second array would have produced a **split-brain catalog**: the
+grid showing 45 while the deep-link router showed 46. Half-working, and silent.
+
+The fix is that the binding is const but the **array is not**. `catalogTopUp` mutates
+the ONE array in place (`push` for new, `Object.assign` for edits), so every reader
+agrees by identity. It then drops the three memoized maps (`_catalogBySlug`,
+`_primaryIdToSlug`, `_watchedIds` — all memoized, all would keep answering from the
+pre-merge array) and re-runs only the catalog-derived renders. `renderGrid`,
+`buildSpotlight` and `buildGenreRails` were each checked for listener binding first:
+none bind, so re-running is idempotent. None of it runs on a normal visit.
+
+The generated file now also ships **its own schema**: `RAR_CATALOG_PUBLISHED_AT` (what
+"since" means) and `RAR_CATALOG_FIELDS` (the exact emitted field list, from the same
+`ALWAYS`/`OPTIONAL` the renderer uses), so the top-up copies a live doc by the same
+names a rebuild would. Both sit before the `const animeData = [` marker, so
+`splitAnimeDataFile` puts them in the header and the byte-exact round-trip is untouched.
+
+## 2. Cover art fails loudly
+
+- **`catalog-publish.js` gained a cover tripwire**, in the shrink tripwire's voice and
+  honouring the same `--force`. A missing file **with** an `AniListCover` is a warning
+  (the card renders correctly, just remotely); a missing file with **no** fallback
+  refuses the publish.
+- **`AniListCover` is stored at publish time** and appended LAST to `OPTIONAL` so no
+  existing entry's bytes move.
+- **Cards fall back in two steps** — local file → AniList cover → placeholder — via a
+  `data-fallback` attribute and a `data-fb` latch that makes it loop-proof. This
+  matters *because* of item 1: a review is live seconds after publishing, but its art
+  is not deployed yet, and that is exactly when it is most likely to be looked at.
+- **The Add Anime page now looks** instead of asserting: it probes `assets/<file>` and
+  reports which of the three situations he is in.
+
+## 3. A shared review shows the review
+
+The cause was not a bad tag. The link was `/#anime=<slug>`, and **everything after a
+`#` is never sent to the server** — Discord requested `/` and correctly got the
+homepage's card. No tag edit can fix a fragment.
+
+`/anime/<slug>` is now a real path: a hosting rewrite to a new `animePreview`
+function that reads the catalog doc live (so a review published seconds ago already
+previews) and returns per-anime `og:*` / `twitter:*` tags, then bounces humans into
+the app. Crawlers do not run JS, so they keep the tags; `<noscript>` covers people
+without it. An unknown slug returns the site card at **200, never a 404** — a stale
+shared link should land someone on the site.
+
+Card type is `summary`, not `summary_large_image`: an anime cover is a 2:3 portrait
+and the large card letterboxes to 1.91:1, which would slice the top and bottom off
+every cover. Blake asked for "the thumbnail", which is also the correct answer.
+
+**The part that actually delivers it:** a **Copy share link** button on every review
+modal. The address bar still shows `#anime=`, so without this he would keep pasting
+the un-previewable form and nothing would have changed for him.
+
+## Gates
+
+| Suite | Result |
+|---|---|
+| `tests/v234-publish-once.spec.js` | **11 passed** (new) |
+| `npm test` | see the gate-log line |
+| rules 222 / cf 94 | `firestore.rules` unchanged. `functions/index.js` gained one HTTPS function; the cf suites do not cover it. |
+
+⚠️ **Two test traps hit while writing this, both recorded in the spec:** the deep-link
+route runs at LOAD ONLY (there is no `hashchange` listener), and `page.goto('/#x')`
+from `/` is a SAME-DOCUMENT navigation that never reloads — so the route never fires
+and the test fails while the app is fine. The spec forces a real load with a query param.
+
+## Deploy order (NOT interchangeable)
+
+1. `npm run deploy:functions` — the rewrite target must exist first.
+2. `npx firebase deploy --only hosting`.
+
+---
+
 <!-- author: Code | date: 2026-08-29 -->
 # SHIP-OUTPUT — v2.3.3: the review is on the site, and LATEST DROP means latest
 

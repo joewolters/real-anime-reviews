@@ -32,8 +32,20 @@ function slug(s) {
 
 /** Fields the generator always emits, in emission order. */
 const ALWAYS = ['Title', 'Genre', 'Rating', 'image', 'Seasons', 'Description', 'Review', 'Tags', 'Studio', 'Platforms', 'Trailer'];
-/** Fields emitted only when present. */
-const OPTIONAL = ['Top10Rank', 'AniListId', 'IdMal', 'AniListScore', 'AniListColor', 'TitleEnglish', 'TitleRomaji', 'TitleNative', 'WatchedAniListIds', 'KnownAniListIds'];
+/**
+ * Fields emitted only when present.
+ *
+ * v2.3.4 — `AniListCover` is APPENDED, never inserted. renderBody emits the
+ * optional fields in this order, and the round-trip test compares the generated
+ * body byte-for-byte with the shipped one, so moving an existing name here would
+ * rewrite all 45 entries for nothing. New names go on the end.
+ *
+ * AniListCover is the remote cover URL. It exists so an anime ALWAYS has a
+ * picture: the local `assets/<image>` file is the fast path, and this is what the
+ * card falls back to when that file is not there yet — which is exactly the
+ * window between Blake pressing Publish and the art being deployed.
+ */
+const OPTIONAL = ['Top10Rank', 'AniListId', 'IdMal', 'AniListScore', 'AniListColor', 'TitleEnglish', 'TitleRomaji', 'TitleNative', 'WatchedAniListIds', 'KnownAniListIds', 'AniListCover'];
 
 /** Parse an animeData.js source string into the array. */
 function parseAnimeData(text) {
@@ -96,6 +108,8 @@ function renderBody(docs) {
     if (a.TitleNative != null) lines.push(`    ,TitleNative: ${esc(a.TitleNative)}`);
     if (Array.isArray(a.WatchedAniListIds) && a.WatchedAniListIds.length) lines.push(`    ,WatchedAniListIds: ${arr(a.WatchedAniListIds)}`);
     if (Array.isArray(a.KnownAniListIds) && a.KnownAniListIds.length) lines.push(`    ,KnownAniListIds: ${arr(a.KnownAniListIds)}`);
+    // v2.3.4 — LAST, so every existing entry's bytes are unchanged (see OPTIONAL).
+    if (a.AniListCover != null) lines.push(`    ,AniListCover: ${esc(a.AniListCover)}`);
     lines.push('  },');
   }
   lines.push('];');

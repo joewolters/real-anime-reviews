@@ -16,8 +16,42 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-29 — v2.3.3 LIVE)
+## ⚡ STATUS (updated 2026-08-30 — v2.3.4 BUILT, NOT DEPLOYED)
 
+- ⚠️ **v2.3.4 IS BUILT AND TESTED, NOT DEPLOYED.** ❗ **DEPLOY ORDER IS NOT
+  INTERCHANGEABLE: `npm run deploy:functions` FIRST, then hosting.** The new
+  `/anime/**` rewrite points at the `animePreview` function; hosting-first would
+  route live traffic at a function that does not exist yet.
+- 🚀 **PUBLISHING IS ONE STEP NOW.** The site tops itself up: after first paint it
+  asks Firestore `where('updatedAt','>', RAR_CATALOG_PUBLISHED_AT)` — empty on a
+  normal visit, one row right after Blake publishes. The static file still boots the
+  site (study §3 stands: zero per-visitor reads, no async before first paint). The
+  call is not awaited and swallows its errors, so a failure leaves today's behaviour.
+- ⛔⛔ **THE TRAP THAT ALMOST SHIPPED — READ BEFORE TOUCHING THE TOP-UP.**
+  `animeData` is a top-level `const` in a CLASSIC script: a global **lexical** binding,
+  **NOT** `window.animeData` (undefined on index.html). script.js has **8 dual-source
+  read sites with INCONSISTENT precedence** (five window-first; three const-first,
+  including `openAnimeFromId`) plus ~25 bare-const sites. Assigning `window.animeData`
+  gives a **SPLIT-BRAIN catalog** — grid at 45, deep-link router at 46. `catalogTopUp`
+  therefore **MUTATES THE ONE ARRAY IN PLACE** and invalidates `_catalogBySlug`,
+  `_primaryIdToSlug`, `_watchedIds` (all memoized). Do NOT "clean this up" into a
+  reassignment. `tests/v234-publish-once.spec.js` pins it.
+- 🔗 **A SHARED REVIEW PREVIEWS PROPERLY.** The cause was never a bad tag: `#anime=`
+  is a FRAGMENT and **a fragment is never sent to the server**, so Discord asked for
+  `/` and got the homepage card. New `/anime/<slug>` path → `animePreview` function
+  (reads the catalog live, so a fresh publish previews at once) → per-anime og tags,
+  then bounces humans into the app. Card type is `summary`, not `summary_large_image`:
+  a cover is 2:3 portrait and the large card would letterbox-crop it. **The address bar
+  still shows `#anime=`, so there is a "Copy share link" button on the modal** — that
+  button is what actually delivers this; tell Blake to use it.
+- 🖼️ **COVER ART FAILS LOUDLY.** `catalog-publish` refuses a missing cover with no
+  fallback (warns when there is one), `AniListCover` is stored per anime, and cards
+  fall back local → AniList → placeholder. The Add Anime page probes the file and says
+  which case he is in.
+- ⚠️ **TWO TEST TRAPS, both cost time:** the deep-link route runs at LOAD ONLY (no
+  `hashchange` listener anywhere in script.js), and `page.goto('/#x')` from `/` is a
+  SAME-DOCUMENT navigation that never reloads — the route never fires and the test
+  fails while the app is fine. Force a real load with a query param.
 - 🚀 **v2.3.3 IS LIVE** (deployed 2026-08-29, hosting only). Tree clean, pushed, `main`
   in sync. Prod-verified in a real browser: live `animeData.js` has 45 entries with the
   new review last, the cover returns 200 / decodes 400×600, the live `pickFeaturedAnime()`

@@ -20,6 +20,15 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 
 ---
 
+<!-- author: Code | date: 2026-08-30 -->
+## v2.3.4 — MINOR (2026-08-30)
+
+**Publishing a review is one step now.** Pressing Publish used to put the review in the database, where it sat invisible until the site was rebuilt and re-uploaded by hand. The site now checks for itself whether anything has been published since it was last built, so a new review is on the page within seconds of you posting it. Fixing a typo in an old review reaches the site the same way. The site still loads from its fast local copy first — that has not changed, and if the check ever fails nothing breaks, you simply see what the file already had.
+
+**Sharing a review now shows the review.** Pasting a review link into Discord or a message showed the generic site card, because the part of the link that names the anime came after a `#` — and everything after a `#` never leaves your browser. Reviews now have a real address of their own, and there is a **Copy share link** button on every review. Paste that and you get the anime's cover, title and rating.
+
+**A missing cover can no longer sneak through.** Nothing used to check that a review's cover image actually existed; a wrong filename shipped a broken picture with nothing to warn you. Now the cover is checked, the Add Anime page tells you where it stands, and every review carries a backup image so a brand-new one is never pictureless while its art is still being added.
+
 <!-- author: Code | date: 2026-08-29 -->
 ## v2.3.3 — MINOR (2026-08-29)
 

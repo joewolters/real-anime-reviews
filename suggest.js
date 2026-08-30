@@ -19,7 +19,7 @@ import { db, auth } from './firebase.js';
 import { collection, addDoc, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 // Part C — the ONE branded-error module (parity with every other write path)
-import { friendlyError } from './friendly-errors.js?v=2.3.3';
+import { friendlyError } from './friendly-errors.js?v=2.3.4';
 
 // ---- Constants -------------------------------------------------------------
 
