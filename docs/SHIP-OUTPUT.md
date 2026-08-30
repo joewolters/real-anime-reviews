@@ -1,6 +1,22 @@
 <!-- author: Code | date: 2026-08-29 -->
 # SHIP-OUTPUT — v2.3.3: the review is on the site, and LATEST DROP means latest
 
+**🚀 LIVE.** Deployed 2026-08-29 on Blake's go ("deploy it once the tests pass"), hosting
+only — no rules changed. **Prod-verified in a real browser, not assumed:** the live
+`animeData.js` carries 45 entries with the new review last; the cover returns 200 at
+94,704 bytes and decodes 400×600; the live `pickFeaturedAnime()` body is the two-line
+tail version; and the rendered LATEST DROP panel's accessibility tree reads
+*I Made Friends with the Second Prettiest Girl in My Class* / *Class de 2-banme ni
+Kawaii Onnanoko to Tomodachi ni Natta* / Comedy / Romance / 7.5/10. Clicking it opens
+the modal at `#anime=i-made-friends-with-the-second-prettiest-girl-in-my-class` (the
+shared-model slug, so the comment room is the right one) with all 2,631 characters of
+the review, the studio and the platform.
+
+⚠️ Note for whoever verifies next: the in-app browser pane returns a BLANK WHITE
+screenshot of this site whenever the page is scrolled (the fixed background layers do
+not composite into its capture). The page is fine — do not chase it. Verify through the
+DOM / accessibility tree instead, as was done here.
+
 ## What Blake said
 
 > "okay well I posted it but I don't see it on the website? and when it does I need it

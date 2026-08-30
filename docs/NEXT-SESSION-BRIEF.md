@@ -16,11 +16,16 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-29 — v2.3.3 BUILT, NOT DEPLOYED)
+## ⚡ STATUS (updated 2026-08-29 — v2.3.3 LIVE)
 
-- ⚠️ **v2.3.3 IS BUILT AND TESTED, AWAITING DEPLOY.** v2.3.2 is what is live and its
-  fix is prod-verified (live `/admin/new-anime` serves 2.3.2, kicker reads ADD ANIME,
-  live `new-anime.js` declares `validateBeforeGenerate`).
+- 🚀 **v2.3.3 IS LIVE** (deployed 2026-08-29, hosting only). Tree clean, pushed, `main`
+  in sync. Prod-verified in a real browser: live `animeData.js` has 45 entries with the
+  new review last, the cover returns 200 / decodes 400×600, the live `pickFeaturedAnime()`
+  is the two-line tail version, and the rendered LATEST DROP panel reads the new title.
+  The modal opens at the shared-model slug with the full 2,631-character review.
+- ⚠️ **THE IN-APP BROWSER PANE SCREENSHOTS THIS SITE AS BLANK WHITE once the page is
+  scrolled** — its capture does not composite the fixed background layers. The page is
+  fine. Do NOT chase it; verify through the DOM / accessibility tree.
 - 🎉 **BLAKE'S REVIEW IS PUBLISHED AND THE CATALOG IS 45.** He pressed Publish, it saved
   — the v2.3.2 fix held. `catalog-publish --from=rest --write` has regenerated
   `animeData.js` (44 → 45, backup taken) and the AniList cover (id 169580) is in
