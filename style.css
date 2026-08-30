@@ -8499,6 +8499,53 @@ main.account-wrap{ min-height: calc(100vh - var(--header-h) - 260px); }
   .secondary-edit-review:hover { transform: none !important; }
 }
 
+/* v2.3.5 — "Copy share link" in the season/secondary header bar.
+   Shaped exactly like .secondary-edit-review (same 38px pill, same collapse to an
+   icon on narrow screens) so the bar stays one row of matching controls. Neutral
+   purple, NOT the gold the Edit button uses: gold is Blake's own voice on this
+   site and a utility control must not borrow it. */
+.secondary-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(14,3,28,0.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(187,134,252,0.45);
+  color: #d9c2ff;
+  font: 800 0.74rem/1 'Montserrat', sans-serif;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, transform .12s ease;
+}
+.secondary-share:hover,
+.secondary-share:focus-visible {
+  background: rgba(187,134,252,0.18);
+  border-color: rgba(187,134,252,0.85);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.secondary-share:focus-visible { outline: 2px solid #b98bff; outline-offset: 2px; }
+.secondary-share-icon { font-size: 0.92rem; line-height: 1; }
+
+@media (max-width: 900px) {
+  /* collapse to the icon, same as the Edit pill beside it */
+  .secondary-share { padding: 0; width: 38px; justify-content: center; }
+  .secondary-share-label { display: none; }
+  /* ...EXCEPT while confirming. The label is what says "Link copied", so hiding it
+     on phones would make the button look like it did nothing. */
+  .secondary-share.is-copied { width: auto; padding: 0 14px; }
+  .secondary-share.is-copied .secondary-share-label { display: inline; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .secondary-share:hover { transform: none !important; }
+  .secondary-share { transition: none; }
+}
+
 /* ============================================================================
    v1.7.4 (gate 3, Surface 3) — TERTIARY character / staff detail layer.
    A third drill-down drawer above the secondary (z-index 7000). Same cosmos,
@@ -11167,11 +11214,19 @@ html[data-surface="account"] .side-link.is-active {
    the /anime/<slug> path, which the server answers with that anime's own preview.
    Quiet by default: it is a utility, not a call to action. */
 .modal-share-btn {
-  display: inline-flex;
+  /* ⚠️ display:flex + width:fit-content + auto side margins, NOT inline-flex.
+     An inline box only centres if its PARENT is text-align:center, and this modal
+     does not centre its children — .modal-title and .modal-romaji each carry their
+     own text-align. So inline-flex left-aligned the button under a centred title
+     and read as crooked. Centring itself is the house pattern here. */
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
   align-items: center;
+  justify-content: center;
   gap: .4rem;
-  margin: 0 0 .9rem;
-  padding: .34rem .7rem;
+  margin: 0 auto 1.1rem;
+  padding: .42rem .85rem;
   font: inherit;
   font-size: .78rem;
   letter-spacing: .02em;
@@ -11191,3 +11246,16 @@ html[data-surface="account"] .side-link.is-active {
 }
 .modal-share-btn:focus-visible { outline: 2px solid #b98bff; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .modal-share-btn { transition: none; } }
+
+/* Phones: the button is a real tap target (Apple/Material both want ~44px) and
+   never a source of sideways scroll on a 360px screen. The label can wrap rather
+   than push the modal wide. */
+@media (max-width: 600px) {
+  .modal-share-btn {
+    min-height: 44px;
+    padding: .5rem 1rem;
+    font-size: .82rem;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+}

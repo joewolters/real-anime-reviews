@@ -160,7 +160,10 @@ test.describe('link previews — a shared review shows the review', () => {
   test('the modal offers the shareable URL, not the fragment one', async ({ page }) => {
     const js = read('script.js');
     expect(js, 'the button exists on reviewed titles').toContain('data-share-anime');
-    const i = js.indexOf("closest('[data-share-anime]')");
+    // v2.3.5 widened this selector to serve the season button from the SAME
+    // handler, so match the prefix rather than the old exact string — the point of
+    // the assertion is that the review button is wired, not how many kinds it serves.
+    const i = js.indexOf("closest('[data-share-anime]");
     expect(i, 'and it is wired').toBeGreaterThan(-1);
     // Assert on the URL-CONSTRUCTION LINE itself, not a slice around it: the
     // comment above this handler necessarily says "#anime=" (it explains why that

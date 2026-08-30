@@ -16,8 +16,27 @@
 
 ---
 
-## ⚡ STATUS (updated 2026-08-30 — v2.3.4 LIVE)
+## ⚡ STATUS (updated 2026-08-30 — v2.3.5 BUILT, NOT DEPLOYED)
 
+- ⚠️ **v2.3.5 IS BUILT AND TESTED, NOT DEPLOYED.** ❗ functions FIRST (the NEW
+  `/season/**` rewrite points at `animePreview`), then hosting.
+- ⛔ **A CLIPBOARD TRAP WORTH INHERITING:** `navigator.clipboard.writeText` does NOT
+  always settle — with the document unfocused some browsers leave the promise
+  **pending forever** instead of rejecting. `await`ing it means no confirmation, no
+  error, a button that looks dead. A phone-width test caught it; a browser check had
+  missed it because clipboard was *denied* there (which rejects fast). Use
+  `copyToClipboard()` in script.js — it races a 1200ms timeout, falls back to
+  `execCommand('copy')`, and always returns a boolean. Feedback is shown immediately
+  and corrected after, never awaited.
+- 📐 **Share button centring is a GEOMETRY test, not a CSS-string one.** It was
+  `inline-flex`, which only centres if the PARENT is `text-align:center` — and this
+  modal centres each child individually instead. `toContain('display:flex')` would
+  pass against the broken version; the spec compares button-centre to title-centre
+  within 2px at 1280 and 360.
+- 🗓️ **Seasons share too:** `/season/<aniListId>` → the same `animePreview`. A
+  season review stores NO cover, so the function fetches AniList art server-side and
+  overlays Blake's title/rating/prose. AniList synopses are HTML — the blurb builder
+  strips tags, or a literal `<br>` renders in the card.
 - 🚀 **v2.3.4 IS LIVE** (deployed 2026-08-30, functions FIRST then hosting). Tree
   clean, pushed, `main` in sync. Prod-verified: `/anime/<slug>` returns per-anime tags
   and 200 on an unknown slug; the live files carry the stamp, `catalogTopUp` and

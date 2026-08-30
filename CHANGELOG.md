@@ -21,6 +21,15 @@ For what's coming next, see [ROADMAP.md](ROADMAP.md).
 ---
 
 <!-- author: Code | date: 2026-08-30 -->
+## v2.3.5 — PATCH (2026-08-30)
+
+**The share button sits straight now, and works properly on a phone.** It was tucked against the left edge under a centred title, which looked crooked, and it was too small to tap comfortably. It now lines up with the title and is a full-size tap target on mobile.
+
+**Season reviews can be shared too.** Individual seasons have their own share link, sitting in the row of buttons at the top of the season panel. Paste one and you get that season's cover, title and rating — the same as a full review.
+
+**The button always tells you what happened.** Copying could leave it sitting there silently doing nothing, because browsers sometimes never answer a copy request at all when the page is not in focus. It now confirms straight away, falls back to an older copying method when the normal one is blocked, and if it genuinely could not copy it shows you the link to take by hand.
+
+<!-- author: Code | date: 2026-08-30 -->
 ## v2.3.4 — MINOR (2026-08-30)
 
 **Publishing a review is one step now.** Pressing Publish used to put the review in the database, where it sat invisible until the site was rebuilt and re-uploaded by hand. The site now checks for itself whether anything has been published since it was last built, so a new review is on the page within seconds of you posting it. Fixing a typo in an old review reaches the site the same way. The site still loads from its fast local copy first — that has not changed, and if the check ever fails nothing breaks, you simply see what the file already had.

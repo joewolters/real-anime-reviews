@@ -1,4 +1,83 @@
 <!-- author: Code | date: 2026-08-30 -->
+# SHIP-OUTPUT — v2.3.5: the share button, straightened, and seasons can share too
+
+**⚠️ BUILT AND TESTED — NOT DEPLOYED.** Functions FIRST (the `/season/**` rewrite is
+new and points at `animePreview`), then hosting.
+
+## What Blake said
+
+> "looks uneven. Make sure it looks good on mobile too. Also make sure this is
+> possible with seasonal reviews."
+
+All three were real.
+
+## 1. It WAS crooked — and for a specific reason
+
+`.modal-share-btn` was `display:inline-flex`. An inline-level box only centres if
+its **parent** is `text-align:center`, and this modal does not centre its children:
+`.modal-title` (style.css:1381) and `.modal-romaji` (7373) each carry their own
+`text-align:center`. So the button sat hard against the left of the text column
+under a centred title. Now `display:flex; width:fit-content; margin:0 auto` — it
+centres itself, which is this modal's actual house pattern.
+
+**Measured, not assumed.** The spec asserts button-centre vs title-centre within
+2px at 1280 AND 360 wide. A CSS-string check (`toContain('display:flex')`) would
+have passed against the broken version too.
+
+## 2. Mobile
+
+It was ~28px tall. Apple's HIG and Material both want ~44px. Now `min-height:44px`
+on phones with `max-width:100%`, and the spec pins both the height and that the
+document never scrolls sideways because of it.
+
+## 3. Seasons
+
+The secondary layer is keyed by AniList id (`#secondary=<id>`), so its path is
+`/season/<id>` — a second rewrite onto the SAME `animePreview` function.
+
+A season review (`seasonReviews/{id}`) stores only `id`, `title`, `rating` and its
+prose in `content/body`. **It stores no cover**, and a crawler cannot follow an
+`onerror`, so the function resolves the art from AniList server-side and overlays
+Blake's own title/rating/prose on top. AniList synopses are HTML, so the blurb
+builder now strips tags and entities — otherwise a literal `<br>` renders in the card.
+
+The button matches `.secondary-edit-review` exactly (38px pill, collapses to an
+icon ≤900px) but in neutral purple, **not** the Edit button's gold: gold is Blake's
+own voice on this site and a utility control must not borrow it.
+
+## ⚠️ THE BUG THIS UNCOVERED — the button could sit dead on a phone
+
+A phone-width test failed with the confirmation never appearing. The click arrived,
+the handler ran, `closest()` matched — and nothing happened.
+
+**`navigator.clipboard.writeText` does not always settle.** When the document is not
+focused, some browsers leave the promise **pending forever** rather than rejecting.
+The handler was `await`ing it, so `done()` was never reached: no confirmation, no
+error, a button that looks broken. My first browser check had missed it precisely
+because clipboard was *denied* there, which rejects fast and took the catch branch.
+
+Fixed in three parts:
+- `copyToClipboard()` races the write against a 1200ms timeout, then falls back to
+  the legacy select-and-`execCommand('copy')`, which still works when the async API
+  is blocked. It always returns a boolean.
+- Feedback is **immediate and then corrected**, not awaited — a button inert for a
+  second after a tap reads as broken, which is the complaint that started this.
+- `_shareTimer`/`_shareWas` on the element, so a second click or the correction
+  cannot strand a half-reverted label.
+
+Also: ≤900px the season pill hides its label, which would have hidden the
+confirmation itself — `.is-copied` re-expands it for the moment it speaks.
+
+## Gates
+
+| Suite | Result |
+|---|---|
+| `tests/v235-share-layout-and-seasons.spec.js` | **10 passed** (new) |
+| `npm test` | see the gate-log line |
+
+---
+
+<!-- author: Code | date: 2026-08-30 -->
 # SHIP-OUTPUT — v2.3.4: publishing is one step, and a shared review shows the review
 
 **🚀 LIVE.** Deployed 2026-08-30 on Blake's go, functions FIRST then hosting.

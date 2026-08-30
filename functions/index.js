@@ -111,6 +111,12 @@ function previewBlurb(row) {
   const src = String(row.Description || row.Review || '').trim();
   const flat = src
     .replace(/^#{1,6}\s+.*$/gm, ' ')        // markdown headings ("## Intro")
+    // v2.3.5 — AniList synopses are HTML (<br>, <i>, <b>), and a season preview
+    // falls back to one when Blake has not written that season up yet. Raw tags in
+    // an og:description render as literal "<br>" in the Discord card.
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, ' ')
     .replace(/[*_`>#]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -120,14 +126,64 @@ function previewBlurb(row) {
   return (stop > 80 ? cut.slice(0, stop + 1) : cut.trim() + '…');
 }
 
+// v2.3.5 — a SEASON review (seasonReviews/{aniListId}) stores id/title/rating and
+// its prose in content/body. It stores NO COVER, and a crawler cannot follow an
+// onerror, so the picture has to be resolved here. AniList is the only source, and
+// this is a cheap one-shot query behind a 5-10 minute cache. If it fails we still
+// have Blake's own title and rating, which is a real card — just without art.
+async function aniListSeason(id) {
+  const body = JSON.stringify({
+    query: 'query($id:Int){Media(id:$id,type:ANIME){title{english romaji} '
+      + 'coverImage{extraLarge large} description(asHtml:false) genres seasonYear}}',
+    variables: { id: Number(id) },
+  });
+  const r = await fetch('https://graphql.anilist.co', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body,
+  });
+  if (!r.ok) throw new Error('anilist ' + r.status);
+  const j = await r.json();
+  return (j && j.data && j.data.Media) || null;
+}
+
 exports.animePreview = onRequest({ cors: false }, async (req, res) => {
-  // /anime/<slug> — take the last non-empty path segment.
+  // Routed here by TWO rewrites: /anime/<catalog-slug> and /season/<aniListId>.
   const parts = String(req.path || '').split('/').filter(Boolean);
-  const slug = decodeURIComponent(parts[parts.length - 1] || '').toLowerCase();
-  const appUrl = PREVIEW_ORIGIN + '/#anime=' + encodeURIComponent(slug);
+  const isSeason = parts[0] === 'season' || String(req.path || '').indexOf('/season/') === 0;
+  const raw = decodeURIComponent(parts[parts.length - 1] || '');
+  const slug = raw.toLowerCase();
+  const appUrl = isSeason
+    ? PREVIEW_ORIGIN + '/#secondary=' + encodeURIComponent(slug)
+    : PREVIEW_ORIGIN + '/#anime=' + encodeURIComponent(slug);
 
   let row = null;
-  if (/^[a-z0-9-]{1,120}$/.test(slug)) {
+  if (isSeason) {
+    // seasonReviews/{id} + its content/body child, plus AniList for the art.
+    if (/^[0-9]{1,12}$/.test(slug)) {
+      const db = admin.firestore();
+      const [headSnap, bodySnap, media] = await Promise.all([
+        db.collection('seasonReviews').doc(slug).get().catch(() => null),
+        db.collection('seasonReviews').doc(slug).collection('content').doc('body').get().catch(() => null),
+        aniListSeason(slug).catch(() => null),
+      ]);
+      const head = headSnap && headSnap.exists ? headSnap.data() : null;
+      const prose = bodySnap && bodySnap.exists ? (bodySnap.data() || {}).body : '';
+      if (head || media) {
+        row = {
+          Title: (head && head.title)
+            || (media && media.title && (media.title.english || media.title.romaji))
+            || 'Season review',
+          Rating: (head && head.rating) || '',
+          Genre: (media && (media.genres || []).slice(0, 2).join(' / ')) || '',
+          // Blake's own words lead; AniList's synopsis is the fallback.
+          Description: prose || (media && media.description) || '',
+          AniListCover: (media && media.coverImage
+            && (media.coverImage.extraLarge || media.coverImage.large)) || '',
+        };
+      }
+    }
+  } else if (/^[a-z0-9-]{1,120}$/.test(slug)) {
     try {
       const snap = await admin.firestore().collection('catalog').doc(slug).get();
       if (snap.exists) row = snap.data();
@@ -146,7 +202,7 @@ exports.animePreview = onRequest({ cors: false }, async (req, res) => {
   const image = row
     ? (row.AniListCover || `${PREVIEW_ORIGIN}/assets/${row.image || 'og-preview.jpg'}`)
     : `${PREVIEW_ORIGIN}/assets/og-preview.jpg`;
-  const canonical = row ? `${PREVIEW_ORIGIN}/anime/${slug}` : PREVIEW_ORIGIN + '/';
+  const canonical = row ? `${PREVIEW_ORIGIN}/${isSeason ? 'season' : 'anime'}/${slug}` : PREVIEW_ORIGIN + '/';
   // Blake asked for "the thumbnail of the review", and that is also the correct
   // card type: an anime cover is a 2:3 PORTRAIT, and summary_large_image crops to
   // a 1.91:1 letterbox — it would slice the top and bottom off every cover. The

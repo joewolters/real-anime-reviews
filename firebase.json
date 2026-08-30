@@ -48,6 +48,13 @@
           "functionId": "animePreview",
           "region": "us-central1"
         }
+      },
+      {
+        "source": "/season/**",
+        "function": {
+          "functionId": "animePreview",
+          "region": "us-central1"
+        }
       }
     ],
     "headers": [

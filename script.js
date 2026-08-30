@@ -21,14 +21,14 @@ import { auth, db, functions, storage } from './firebase.js';
 // account-overhaul round 2 — the ONE consent implementation (shared with account.js)
 // (?v= wired at the v1.10.0 cutover — later changes to these once-bare module
 // imports must cache-bust; bump-version.js carries the import targets now.)
-import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.3.4';
+import { consentGateDecision, showConsentModal, showSuspendedModal, ensureConsent } from './consent.js?v=2.3.5';
 // v1.10.1 hotfix — the ONE branded-error module (no raw SDK strings in UI, ever)
-import { friendlyError, showNotice } from './friendly-errors.js?v=2.3.4';
+import { friendlyError, showNotice } from './friendly-errors.js?v=2.3.5';
 // mega-run gate A0 — THE Lantern is ONE module now (the old in-file twin had
 // drifted); index hands it the in-page router + chrome hooks at init.
-import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.3.4';
+import { initLantern, openLanternCenter, markAllNotifsRead } from './lantern.js?v=2.3.5';
 // mega-run milestone D — the ONE nav-drawer implementation (shared with account.js)
-import { initNavDrawer } from './nav-drawer.js?v=2.3.4';
+import { initNavDrawer } from './nav-drawer.js?v=2.3.5';
 initNavDrawer();   // inert ≥1201 (the toggle is display:none); owns the ≤1200 drawer
 
 // Wrap in IIFE to avoid leaking globals
@@ -3769,19 +3769,82 @@ function setFolioDate() {
 // The URL it copies is the PATH form, never the `#anime=` one the address bar
 // shows: a fragment never reaches the server, so only the path can carry the
 // anime into a Discord/iMessage/Slack preview.
+// v2.3.5 — ONE handler for BOTH share buttons: the review modal (`/anime/<slug>`)
+// and the season/secondary layer (`/season/<aniListId>`). Two copies would drift,
+// and the only real difference is which path prefix the id belongs to.
 document.addEventListener('click', async (e) => {
-  const btn = e.target.closest && e.target.closest('[data-share-anime]');
+  if (!e.target.closest) return;
+  const btn = e.target.closest('[data-share-anime], [data-share-season]');
   if (!btn) return;
   e.preventDefault();
-  const url = location.origin + '/anime/' + encodeURIComponent(btn.dataset.shareAnime || '');
+  const season = btn.dataset.shareSeason;
+  const id = season || btn.dataset.shareAnime || '';
+  if (!id) return;
+  const url = location.origin + (season ? '/season/' : '/anime/') + encodeURIComponent(id);
+  // the season button holds an icon + a label span, so swap the LABEL when there
+  // is one — replacing textContent would delete the icon element.
+  const label = btn.querySelector('.secondary-share-label') || btn;
+
+  // Feedback is IMMEDIATE and then corrected, rather than awaited. The clipboard
+  // call can take up to its timeout to settle (see copyToClipboard), and a button
+  // that sits inert for a second after a tap reads as broken — which is the same
+  // complaint that started this. So: say it copied now, and only if the copy truly
+  // failed swap in the URL for the reader to take by hand.
+  //
+  // `_shareTimer`/`_shareWas` live on the element so a second click (or the
+  // correction below) cannot strand a half-reverted label: the pending revert is
+  // cancelled and the ORIGINAL text is always what comes back.
   const done = (msg) => {
-    const was = btn.textContent;
-    btn.textContent = msg;
-    setTimeout(() => { btn.textContent = was; }, 1400);
+    if (btn._shareTimer) clearTimeout(btn._shareTimer);
+    if (btn._shareWas == null) btn._shareWas = label.textContent;
+    label.textContent = msg;
+    // ≤900px the season pill collapses to an icon and hides its label, so without
+    // this the confirmation would be invisible on a phone and the button would
+    // look like it did nothing. `.is-copied` re-expands it while it says so.
+    btn.classList.add('is-copied');
+    btn._shareTimer = setTimeout(() => {
+      label.textContent = btn._shareWas;
+      btn._shareWas = null;
+      btn._shareTimer = null;
+      btn.classList.remove('is-copied');
+    }, 1600);
   };
-  try { await navigator.clipboard.writeText(url); done('Link copied ✓'); }
-  catch (_) { done(url); }   // no clipboard (http, or denied): show it to copy by hand
+
+  done('Link copied ✓');
+  if (!await copyToClipboard(url)) done(url);   // honest correction if it did not
 });
+
+// ⚠️ `navigator.clipboard.writeText` does NOT always settle. When the document
+// is not focused some browsers leave the promise PENDING FOREVER rather than
+// rejecting — so a bare `await` gives the user no confirmation, no error, and a
+// button that looks broken. (Caught here by a phone-width test: the click
+// arrived, the handler ran, and nothing ever happened.)
+//
+// So: race it against a timeout, then fall back to the legacy select-and-copy,
+// which still works when the async API is blocked. Whatever happens, the caller
+// gets a boolean and the user gets feedback.
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await Promise.race([
+        navigator.clipboard.writeText(text),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('clipboard timeout')), 1200)),
+      ]);
+      return true;
+    }
+  } catch (_) { /* blocked, denied, or hung — try the old way */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return !!ok;
+  } catch (_) { return false; }
+}
 
 // ---------- FEATURED (Latest Review) ----------
 // v2.3.3 — LATEST DROP MEANS LATEST, for everyone.
@@ -10687,6 +10750,17 @@ function closeModal() {
           '<span class="secondary-edit-label">Edit review</span></a>'
       : '';
 
+    // v2.3.5 — the same share affordance the review modal got, for seasons.
+    // Blake: "make sure this is possible with seasonal reviews." This layer is
+    // addressed by AniList id (`#secondary=<id>`), so its shareable path is
+    // /season/<id> — again a real path, because the `#` form never reaches the
+    // server and can only ever unfurl as the generic site card.
+    const shareSeasonBtn =
+      '<button type="button" class="secondary-share" data-share-season="' +
+        escapeHtml(String(detail.id)) + '" title="Copy a link to this season">' +
+        '<span class="secondary-share-icon" aria-hidden="true">🔗</span>' +
+        '<span class="secondary-share-label">Copy share link</span></button>';
+
     // v1.7.5 (gate 1) — Watchlist + Favorite save pills. State is read FREE from
     // the homepage's existing watchlistSet/favoritesSet via the `al:` doc-id (no
     // new listener). The click handler (onSecondaryClick → handleSecondarySave)
@@ -10710,7 +10784,7 @@ function closeModal() {
       '<div class="secondary-header"' + (accent ? ' style="--accent:' + escapeHtml(accent) + '"' : '') + '>' +
         '<div class="secondary-banner"' + (banner ? ' style="background-image:url(\'' + escapeHtml(banner) + '\')"' : '') + '></div>' +
         '<div class="secondary-banner-scrim"></div>' +
-        buildHeaderBar(editReviewBtn + requestBtn + infoReqBtn + commReviewBtn + saveBtns) +
+        buildHeaderBar(editReviewBtn + shareSeasonBtn + requestBtn + infoReqBtn + commReviewBtn + saveBtns) +
         '<div class="secondary-header-body">' +
           // gate 20.7 (Blake item 4): the cover rides a COLUMN so the 👁
           // demand chip can dock neatly under the thumbnail (visible, not
